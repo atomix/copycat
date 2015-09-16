@@ -9,7 +9,7 @@
 
   <groupId>net.kuujo.catalog</groupId>
   <artifactId>catalog-parent</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.0-alpha1</version>
   <packaging>pom</packaging>
   <name>Catalog</name>
   <description>Feature complete implementation of the Raft consensus algorithm.</description>
