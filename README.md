@@ -27,4 +27,4 @@ to verify it maintains linearizability in a number of different failure scenario
 [servers]: http://kuujo.github.io/copycat/user-manual/raft-internals/#servers
 [Website]: http://kuujo.github.io/copycat/user-manual/raft-framework/
 [Google group]: https://groups.google.com/forum/#!forum/copycat
-[Javadoc]: http://kuujo.github.io/catalog/api/1.0.0/
+[Javadoc]: http://kuujo.github.io/catalog/api/1.0.0-SNAPSHOT/
