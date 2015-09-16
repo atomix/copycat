@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-net.kuujo.catalog.protocol.request.CommandRequest
-net.kuujo.catalog.protocol.response.CommandResponse
-net.kuujo.catalog.protocol.request.KeepAliveRequest
-net.kuujo.catalog.protocol.response.KeepAliveResponse
-net.kuujo.catalog.protocol.request.PublishRequest
-net.kuujo.catalog.protocol.response.PublishResponse
-net.kuujo.catalog.protocol.request.QueryRequest
-net.kuujo.catalog.protocol.response.QueryResponse
-net.kuujo.catalog.protocol.request.RegisterRequest
-net.kuujo.catalog.protocol.response.RegisterResponse
+net.kuujo.catalog.client.request.CommandRequest
+net.kuujo.catalog.client.response.CommandResponse
+net.kuujo.catalog.client.request.KeepAliveRequest
+net.kuujo.catalog.client.response.KeepAliveResponse
+net.kuujo.catalog.client.request.PublishRequest
+net.kuujo.catalog.client.response.PublishResponse
+net.kuujo.catalog.client.request.QueryRequest
+net.kuujo.catalog.client.response.QueryResponse
+net.kuujo.catalog.client.request.RegisterRequest
+net.kuujo.catalog.client.response.RegisterResponse

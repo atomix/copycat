@@ -13,20 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-net.kuujo.catalog.protocol.request.AppendRequest
-net.kuujo.catalog.protocol.response.AppendResponse
-net.kuujo.catalog.protocol.request.JoinRequest
-net.kuujo.catalog.protocol.response.JoinResponse
-net.kuujo.catalog.protocol.request.LeaveRequest
-net.kuujo.catalog.protocol.response.LeaveResponse
-net.kuujo.catalog.protocol.request.PollRequest
-net.kuujo.catalog.protocol.response.PollResponse
-net.kuujo.catalog.protocol.request.VoteRequest
-net.kuujo.catalog.protocol.response.VoteResponse
+net.kuujo.catalog.server.request.AppendRequest
+net.kuujo.catalog.server.response.AppendResponse
+net.kuujo.catalog.server.request.JoinRequest
+net.kuujo.catalog.server.response.JoinResponse
+net.kuujo.catalog.server.request.LeaveRequest
+net.kuujo.catalog.server.response.LeaveResponse
+net.kuujo.catalog.server.request.PollRequest
+net.kuujo.catalog.server.response.PollResponse
+net.kuujo.catalog.server.request.VoteRequest
+net.kuujo.catalog.server.response.VoteResponse
 
-net.kuujo.catalog.storage.CommandEntry
-net.kuujo.catalog.storage.ConfigurationEntry
-net.kuujo.catalog.storage.KeepAliveEntry
-net.kuujo.catalog.storage.NoOpEntry
-net.kuujo.catalog.storage.QueryEntry
-net.kuujo.catalog.storage.RegisterEntry
+net.kuujo.catalog.server.storage.CommandEntry
+net.kuujo.catalog.server.storage.ConfigurationEntry
+net.kuujo.catalog.server.storage.KeepAliveEntry
+net.kuujo.catalog.server.storage.NoOpEntry
+net.kuujo.catalog.server.storage.QueryEntry
+net.kuujo.catalog.server.storage.RegisterEntry

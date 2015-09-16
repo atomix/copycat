@@ -210,7 +210,7 @@
             <version>${maven.javadoc.plugin.version}</version>
             <configuration>
               <show>public</show>
-              <excludePackageNames>*.state:net.kuujo.catalog.util</excludePackageNames>
+              <excludePackageNames>*.state:net.kuujo.catalog.server.util</excludePackageNames>
               <doctitle>Catalog API Reference (${jv})</doctitle>
               <windowtitle>Catalog API Reference (${jv})</windowtitle>
               <reportOutputDirectory>target/docs</reportOutputDirectory>
@@ -219,6 +219,10 @@
               <additionalparam>
                 -Xdoclint:none
                 -link http://docs.oracle.com/javase/8/docs/api/
+
+                -group "Raft client" net.kuujo.catalog.client*
+                -group "Raft server" net.kuujo.catalog.server:net.kuujo.catalog.server.request:net.kuujo.catalog.server.response:net.kuujo.catalog.server.session
+                -group "Raft log" net.kuujo.catalog.server.storage
               </additionalparam>
             </configuration>
           </plugin>
