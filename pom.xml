@@ -69,6 +69,8 @@
 
   <modules>
     <module>protocol</module>
+    <module>server</module>
+    <module>storage</module>
   </modules>
 
   <dependencies>
