@@ -35,7 +35,7 @@
     <dependency>
       <groupId>net.kuujo.catalyst</groupId>
       <artifactId>catalyst-transport</artifactId>
-      <version>${project.version}</version>
+      <version>${catalyst.version}</version>
     </dependency>
   </dependencies>
 </project>
