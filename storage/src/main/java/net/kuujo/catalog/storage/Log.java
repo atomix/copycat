@@ -17,7 +17,7 @@ package net.kuujo.catalog.storage;
 
 import net.kuujo.catalyst.serializer.Serializer;
 import net.kuujo.catalyst.util.Assert;
-import net.kuujo.catalyst.util.concurrent.CopycatThreadFactory;
+import net.kuujo.catalyst.util.concurrent.CatalystThreadFactory;
 
 import java.util.concurrent.Executors;
 
@@ -37,7 +37,7 @@ public class Log implements AutoCloseable {
    */
   protected Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.cleaner = new Cleaner(segments, Executors.newScheduledThreadPool(storage.cleanerThreads(), new CopycatThreadFactory("copycat-log-cleaner-%d")));
+    this.cleaner = new Cleaner(segments, Executors.newScheduledThreadPool(storage.cleanerThreads(), new CatalystThreadFactory("copycat-log-cleaner-%d")));
   }
 
   /**
@@ -193,7 +193,7 @@ public class Log implements AutoCloseable {
    * If the given index is outside of the bounds of the log then a {@link IndexOutOfBoundsException} will be
    * thrown. If the entry at the given index has been compacted from the then the returned entry will be {@code null}.
    * <p>
-   * Entries returned by this method are pooled and {@link net.kuujo.copycat.util.ReferenceCounted}. In order to ensure
+   * Entries returned by this method are pooled and {@link net.kuujo.catalyst.util.ReferenceCounted}. In order to ensure
    * the entry is released back to the internal entry pool call {@link Entry#close()} or load the entry in a
    * try-with-resources statement.
    * <pre>
