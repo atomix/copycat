@@ -15,9 +15,9 @@
  */
 
 /**
- * Provides base interfaces for Copycat's implementation of the <a href="https://raftconsensus.github.io/">Raft consensus algorithm</a>.
+ * Provides base interfaces for Catalog's implementation of the <a href="https://raftconsensus.github.io/">Raft consensus algorithm</a>.
  * <p>
- * The classes and interfaces in this package are shared both by Copycat's Raft client and server implementations.
+ * The classes and interfaces in this package are shared both by Catalog's Raft client and server implementations.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

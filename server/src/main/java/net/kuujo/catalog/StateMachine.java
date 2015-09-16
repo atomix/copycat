@@ -32,7 +32,7 @@ import java.time.Instant;
  * <p>
  * State machines are responsible for handling {@link Operation operations} submitted to the Raft
  * cluster and filtering {@link Commit committed} operations out of the Raft log. The most
- * important rule of state machines is that <em>state machines must be deterministic</em> in order to maintain Copycat's
+ * important rule of state machines is that <em>state machines must be deterministic</em> in order to maintain Catalog's
  * consistency guarantees. That is, state machines must not change their behavior based on external influences and have
  * no side effects. Users should <em>never</em> use {@code System} time to control behavior within a state machine.
  * <p>

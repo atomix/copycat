@@ -476,23 +476,24 @@ public class ServerContext implements Managed<Void> {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public synchronized CompletableFuture<Void> open() {
     if (open)
       return CompletableFuture.completedFuture(null);
 
-    context = new SingleThreadContext("copycat-server-" + address, serializer);
+    context = new SingleThreadContext("catalog-server-" + address, serializer);
 
     openFuture = new CompletableFuture<>();
     context.executor().execute(() -> {
 
       // Open the log.
-      log = storage.open("copycat");
+      log = storage.open("catalog");
 
       // Configure the cluster.
       cluster.configure(0, members.values(), Collections.EMPTY_LIST);
 
       // Create a state machine executor and configure the state machine.
-      Context stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", serializer.clone());
+      Context stateContext = new SingleThreadContext("catalog-server-" + address + "-state-%d", serializer.clone());
       stateMachine = new ServerStateMachine(userStateMachine, log::clean, stateContext);
 
       // Setup the server and connection manager.

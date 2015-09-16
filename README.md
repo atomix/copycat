@@ -4,12 +4,9 @@
 
 ### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc]
 
-Catalog is a feature complete implementation of the [Raft consensus algorithm][Raft] designed for use in
-[Copycat][Copycat].
-* Fully asynchronous APIs built on `CompletableFuture`
-* Requires Java 8
-
-This Raft implementation provides a fully featured [client][clients] and [server][servers] and includes:
+Catalog is a feature complete, fully asynchronous implementation of the [Raft consensus algorithm][Raft] in Java 8
+designed for use in [Copycat][Copycat]. The implementation provides a fully featured [client][clients] and [server][servers]
+and includes:
 * Pre-vote election protocol ([4.2.3][dissertation])
 * Session-based linearizable writes ([6.3][dissertation])
 * Lease-based reads from leaders ([6.4.1][dissertation])
@@ -21,7 +18,7 @@ This Raft implementation provides a fully featured [client][clients] and [server
 Additionally, this implementation has undergone [Jepsen testing](http://github.com/jhalterman/copycat-jepsen)
 to verify it maintains linearizability in a number of different failure scenarios.
 
-For more information on the Raft implementation itself, see [Raft internals](http://kuujo.github.io/copycat/user-manual/raft-internals/)
+*For more information on the Raft implementation itself, see [Raft internals](http://kuujo.github.io/copycat/user-manual/raft-internals/)*
 
 [Raft]: https://raft.github.io/
 [dissertation]: https://ramcloud.stanford.edu/~ongaro/thesis.pdf

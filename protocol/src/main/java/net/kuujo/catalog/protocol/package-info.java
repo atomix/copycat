@@ -22,7 +22,7 @@
  * client-facing request types necessary to participate in consensus via the Raft consensus protocol.
  * <p>
  * All {@link net.kuujo.catalog.protocol.request.Request} and {@link net.kuujo.catalog.protocol.response.Response} objects are
- * {@link net.kuujo.catalyst.serializer.CopycatSerializable} and {@link net.kuujo.copycat.util.ReferenceCounted}. This reduces
+ * {@link net.kuujo.catalyst.serializer.CatalystSerializable} and {@link net.kuujo.catalyst.util.ReferenceCounted}. This reduces
  * garbage by allowing {@link net.kuujo.catalyst.serializer.Serializer} to pool requests and responses during deserialization.
  * <p>
  * All {@link net.kuujo.catalog.protocol.request.Request}s and {@link net.kuujo.catalog.protocol.response.Response}s provide

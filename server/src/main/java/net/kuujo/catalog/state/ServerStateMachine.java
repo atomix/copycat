@@ -98,7 +98,7 @@ class ServerStateMachine implements AutoCloseable {
   private Context getContext() {
     Context context = Context.currentContext();
     if (context == null)
-      throw new IllegalStateException("must be called from a Copycat thread");
+      throw new IllegalStateException("must be called from a Catalyst thread");
     return context;
   }
 

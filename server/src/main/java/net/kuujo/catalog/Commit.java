@@ -41,7 +41,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * Returns the commit index.
    * <p>
    * This is the index at which the committed {@link Operation} was written in the Raft log.
-   * Copycat guarantees that this index will be the same for all instances of the given operation on all nodes in the
+   * Catalog guarantees that this index will be the same for all instances of the given operation on all nodes in the
    * cluster.
    * <p>
    * Note that for {@link Query} operations, the returned {@code index} may actually represent
