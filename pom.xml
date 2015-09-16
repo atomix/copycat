@@ -219,10 +219,6 @@
               <additionalparam>
                 -Xdoclint:none
                 -link http://docs.oracle.com/javase/8/docs/api/
-
-                -group "Raft protocol" net.kuujo.catalog.protocol*
-                -group "Raft server" net.kuujo.catalog.RaftServer:net.kuujo.catalog.Commit:net.kuujo.catalog.StateMachine:net.kuujo.catalog.StateMachineContext:net.kuujo.catalog.StateMachineExecutor
-                -group "Raft client" net.kuujo.catalog.RaftClient
               </additionalparam>
             </configuration>
           </plugin>
