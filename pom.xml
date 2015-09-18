@@ -13,7 +13,7 @@
   <packaging>pom</packaging>
   <name>Catalog</name>
   <description>Feature complete implementation of the Raft consensus algorithm.</description>
-  <url>http://github.com/kuujo/catalog</url>
+  <url>http://github.com/atomix/catalog</url>
   <inceptionYear>2013</inceptionYear>
 
   <properties>
@@ -47,14 +47,14 @@
   </developers>
 
   <scm>
-    <connection>scm:git:git@github.com:kuujo/catalog.git</connection>
-    <developerConnection>scm:git:git@github.com:kuujo/catalog.git</developerConnection>
-    <url>git@github.com:kuujo/catalog.git</url>
+    <connection>scm:git:git@github.com:atomix/catalog.git</connection>
+    <developerConnection>scm:git:git@github.com:atomix/catalog.git</developerConnection>
+    <url>git@github.com:atomix/catalog.git</url>
   </scm>
 
   <issueManagement>
     <system>GitHub</system>
-    <url>http://github.com/kuujo/catalog/issues</url>
+    <url>http://github.com/atomix/catalog/issues</url>
   </issueManagement>
 
   <distributionManagement>
