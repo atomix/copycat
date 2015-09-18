@@ -7,9 +7,9 @@
     <version>7</version>
   </parent>
 
-  <groupId>net.kuujo.catalog</groupId>
+  <groupId>io.atomix.catalog</groupId>
   <artifactId>catalog-parent</artifactId>
-  <version>1.0.0-alpha2-SNAPSHOT</version>
+  <version>1.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Catalog</name>
   <description>Feature complete implementation of the Raft consensus algorithm.</description>
@@ -19,7 +19,7 @@
   <properties>
     <slf4j.version>1.7.7</slf4j.version>
     <logback.version>1.1.2</logback.version>
-    <catalyst.version>1.0.0-beta1</catalyst.version>
+    <catalyst.version>1.0.0-SNAPSHOT</catalyst.version>
 
     <maven.source.plugin.version>2.2.1</maven.source.plugin.version>
     <maven.compiler.plugin.version>3.0</maven.compiler.plugin.version>
@@ -209,7 +209,7 @@
             <version>${maven.javadoc.plugin.version}</version>
             <configuration>
               <show>public</show>
-              <excludePackageNames>*.state:net.kuujo.catalog.server.util</excludePackageNames>
+              <excludePackageNames>*.state:io.atomix.catalog.server.util</excludePackageNames>
               <doctitle>Catalog API Reference (${jv})</doctitle>
               <windowtitle>Catalog API Reference (${jv})</windowtitle>
               <reportOutputDirectory>target/docs</reportOutputDirectory>
@@ -219,9 +219,9 @@
                 -Xdoclint:none
                 -link http://docs.oracle.com/javase/8/docs/api/
 
-                -group "Raft client" net.kuujo.catalog.client*
-                -group "Raft server" net.kuujo.catalog.server:net.kuujo.catalog.server.request:net.kuujo.catalog.server.response:net.kuujo.catalog.server.session
-                -group "Raft log" net.kuujo.catalog.server.storage
+                -group "Raft client" io.atomix.catalog.client*
+                -group "Raft server" io.atomix.catalog.server:io.atomix.catalog.server.request:io.atomix.catalog.server.response:io.atomix.catalog.server.session
+                -group "Raft log" io.atomix.catalog.server.storage
               </additionalparam>
             </configuration>
           </plugin>

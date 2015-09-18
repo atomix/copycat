@@ -1,6 +1,6 @@
 # Catalog
 
-[![Build Status](https://travis-ci.org/kuujo/catalog.png)](https://travis-ci.org/kuujo/catalog)
+[![Build Status](https://travis-ci.org/atomix/catalog.png)](https://travis-ci.org/atomix/catalog)
 
 ### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc]
 
@@ -18,13 +18,13 @@ and includes:
 Additionally, this implementation has undergone [Jepsen testing](http://github.com/jhalterman/copycat-jepsen)
 to verify it maintains linearizability in a number of different failure scenarios.
 
-*For more information on the Raft implementation itself, see [Raft internals](http://kuujo.github.io/copycat/user-manual/raft-internals/)*
+*For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/raft-internals/)*
 
 [Raft]: https://raft.github.io/
 [dissertation]: https://ramcloud.stanford.edu/~ongaro/thesis.pdf
-[Copycat]: http://github.com/kuujo/copycat
-[clients]: http://kuujo.github.io/copycat/user-manual/raft-internals/#clients
-[servers]: http://kuujo.github.io/copycat/user-manual/raft-internals/#servers
-[Website]: http://kuujo.github.io/copycat/user-manual/raft-framework/
+[Copycat]: http://github.com/atomix/copycat
+[clients]: http://atomix.github.io/copycat/user-manual/raft-internals/#clients
+[servers]: http://atomix.github.io/copycat/user-manual/raft-internals/#servers
+[Website]: http://kuatomixujo.github.io/copycat/user-manual/raft-framework/
 [Google group]: https://groups.google.com/forum/#!forum/copycat
-[Javadoc]: http://kuujo.github.io/catalog/api/1.0.0-SNAPSHOT/
+[Javadoc]: http://atomix.github.io/catalog/api/1.0.0-SNAPSHOT/
