@@ -33,13 +33,13 @@ import java.util.function.Consumer;
  * Sessions represent a connection between a single client and all servers in a Raft cluster. Session information
  * is replicated via the Raft consensus algorithm, and clients can safely switch connections between servers without
  * losing their session. Session implementations guarantee linearizability for session messages by coordinating
- * between the client and a single server at any given time. This means messages {@link #publish(Object) published}
+ * between the client and a single server at any given time. This means messages {@link #publish(String, Object) published}
  * via the {@link Session} are guaranteed to arrive on the other side of the connection exactly once and in the order
  * in which they are sent. In the event of a server-to-client message being lost, the message will be resent so long
  * as at least one Raft server is able to communicate with the client and the client's session does not {@link #isExpired()
  * expire} while switching between servers.
  * <p>
- * Messages are sent to the other side of the session using the {@link #publish(Object)} method:
+ * Messages are sent to the other side of the session using the {@link #publish(String, Object)} method:
  * <pre>
  *   {@code
  *     session.publish("Hello world!");
@@ -48,7 +48,7 @@ import java.util.function.Consumer;
  * When the message is published, it will be queued to be sent to the other side of the connection. Catalog guarantees
  * that the message will arrive within the session timeout unless the session itself times out.
  * <p>
- * To listen for events on a session register a {@link Consumer} via {@link #onEvent(Consumer)}:
+ * To listen for events on a session register a {@link Consumer} via {@link #onEvent(String, Consumer)}:
  * <pre>
  *   {@code
  *     session.onEvent(message -> System.out.println("Received: " + message));
@@ -105,9 +105,10 @@ public interface Session {
    * failure, the message may be resent.
    *
    * @param event The event to publish.
+   * @param message The event message.
    * @return A completable future to be called once the event has been published.
    */
-  CompletableFuture<Void> publish(Object event);
+  CompletableFuture<Void> publish(String event, Object message);
 
   /**
    * Registers an event listener.
@@ -117,12 +118,13 @@ public interface Session {
    * always called in the same thread for the session. Therefore, no two events will be received concurrently
    * by the session.
    *
+   * @param event The event to which to listen.
    * @param listener The session receive listener.
    * @param <T> The session event type.
    * @return The listener context.
    * @throws NullPointerException if {@code listener} is null
    */
-  <T> Listener<T> onEvent(Consumer<T> listener);
+  <T> Listener<T> onEvent(String event, Consumer<T> listener);
 
   /**
    * Sets a session close listener.

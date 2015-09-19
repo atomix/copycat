@@ -26,6 +26,7 @@ import io.atomix.catalyst.util.Listeners;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -34,7 +35,6 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSession implements Session {
-  protected final Listeners<Object> listeners = new Listeners<>();
   private final long id;
   private final UUID connectionId;
   private final ServerStateMachineContext context;
@@ -55,6 +55,7 @@ class ServerSession implements Session {
   private final Queue<EventHolder> eventsPool = new ArrayDeque<>();
   private boolean expired;
   private boolean closed;
+  private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
   private final Listeners<Session> openListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
 
@@ -262,7 +263,7 @@ class ServerSession implements Session {
   }
 
   @Override
-  public CompletableFuture<Void> publish(Object event) {
+  public CompletableFuture<Void> publish(String event, Object message) {
     // If the client acked a version greater than the current state machine version then immediately return.
     if (eventAckVersion > context.version())
       return CompletableFuture.completedFuture(null);
@@ -289,6 +290,7 @@ class ServerSession implements Session {
     holder.previousVersion = previousVersion;
     holder.previousSequence = previousSequence;
     holder.event = event;
+    holder.message = message;
 
     events.add(holder);
 
@@ -300,8 +302,9 @@ class ServerSession implements Session {
 
   @Override
   @SuppressWarnings("unchecked")
-  public Listener onEvent(Consumer listener) {
-    return listeners.add(Assert.notNull(listener, "listener"));
+  public Listener onEvent(String event, Consumer listener) {
+    return eventListeners.computeIfAbsent(Assert.notNull(event, "event"), e -> new Listeners<>())
+      .add(Assert.notNull(listener, "listener"));
   }
 
   /**
@@ -352,7 +355,8 @@ class ServerSession implements Session {
         .withEventSequence(event.eventSequence)
         .withPreviousVersion(event.previousVersion)
         .withPreviousSequence(event.previousSequence)
-        .withMessage(event.event)
+        .withEvent(event.event)
+        .withMessage(event.message)
         .build()).whenComplete((response, error) -> {
         if (isOpen() && error == null) {
           if (response.status() == Response.Status.OK) {
@@ -374,8 +378,11 @@ class ServerSession implements Session {
    */
   @SuppressWarnings("unchecked")
   protected CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
-    for (Listener listener : listeners) {
-      listener.accept(request.message());
+    Listeners<Object> listeners = eventListeners.get(request.event());
+    if (listeners != null) {
+      for (Listener listener : listeners) {
+        listener.accept(request.message());
+      }
     }
 
     return CompletableFuture.completedFuture(PublishResponse.builder()
@@ -446,7 +453,8 @@ class ServerSession implements Session {
     private long eventSequence;
     private long previousVersion;
     private long previousSequence;
-    private Object event;
+    private String event;
+    private Object message;
   }
 
 }

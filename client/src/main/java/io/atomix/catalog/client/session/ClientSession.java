@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -74,8 +75,8 @@ public class ClientSession implements Session, Managed<Session> {
   private Scheduled retryFuture;
   private final List<Runnable> retries = new ArrayList<>();
   private Scheduled keepAliveFuture;
+  private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
   private final Listeners<Session> openListeners = new Listeners<>();
-  private final Listeners<Object> receiveListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
   private long requestSequence;
   private long responseSequence;
@@ -578,11 +579,14 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   @Override
-  public CompletableFuture<Void> publish(Object event) {
+  public CompletableFuture<Void> publish(String event, Object message) {
     Assert.notNull(event, "event");
     return CompletableFuture.runAsync(() -> {
-      for (Consumer<Object> listener : receiveListeners) {
-        listener.accept(event);
+      Listeners<Object> listeners = eventListeners.get(event);
+      if (listeners != null) {
+        for (Consumer<Object> listener : listeners) {
+          listener.accept(message);
+        }
       }
     }, context.executor());
   }
@@ -609,8 +613,11 @@ public class ClientSession implements Session, Managed<Session> {
     eventVersion = request.eventVersion();
     eventSequence = request.eventSequence();
 
-    for (Consumer listener : receiveListeners) {
-      listener.accept(request.message());
+    Listeners<Object> listeners = eventListeners.get(request.event());
+    if (listeners != null) {
+      for (Consumer listener : listeners) {
+        listener.accept(request.message());
+      }
     }
 
     request.release();
@@ -624,8 +631,9 @@ public class ClientSession implements Session, Managed<Session> {
 
   @Override
   @SuppressWarnings("unchecked")
-  public Listener<?> onEvent(Consumer listener) {
-    return receiveListeners.add(Assert.notNull(listener, "listener"));
+  public Listener<?> onEvent(String event, Consumer listener) {
+    return eventListeners.computeIfAbsent(Assert.notNull(event, "event"), e -> new Listeners<>())
+      .add(Assert.notNull(listener, "listener"));
   }
 
   @Override

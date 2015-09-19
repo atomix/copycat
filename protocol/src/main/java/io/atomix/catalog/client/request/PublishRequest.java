@@ -64,6 +64,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   private long eventSequence;
   private long previousVersion;
   private long previousSequence;
+  private String event;
   private Object message;
 
   /**
@@ -115,6 +116,15 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   }
 
   /**
+   * Returns the request event.
+   *
+   * @return The request event.
+   */
+  public String event() {
+    return event;
+  }
+
+  /**
    * Returns the request message.
    *
    * @return The request message.
@@ -130,6 +140,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     eventSequence = buffer.readLong();
     previousVersion = buffer.readLong();
     previousSequence = buffer.readLong();
+    event = buffer.readString();
     message = serializer.readObject(buffer);
   }
 
@@ -140,12 +151,13 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     buffer.writeLong(eventSequence);
     buffer.writeLong(previousVersion);
     buffer.writeLong(previousSequence);
+    buffer.writeString(event);
     serializer.writeObject(message, buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, eventVersion, eventSequence, previousVersion, previousSequence, message);
+    return Objects.hash(getClass(), session, eventVersion, eventSequence, previousVersion, previousSequence, event, message);
   }
 
   @Override
@@ -157,6 +169,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
         && request.eventSequence == eventSequence
         && request.previousVersion == previousVersion
         && request.previousSequence == previousSequence
+        && request.event.equals(event)
         && request.message.equals(message);
     }
     return false;
@@ -164,7 +177,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, eventVersion=%d, eventSequence=%d, previousVersion=%d, previousSequence=%d, message=%s]", getClass().getSimpleName(), session, eventVersion, eventSequence, previousVersion, previousSequence, message);
+    return String.format("%s[session=%d, eventVersion=%d, eventSequence=%d, previousVersion=%d, previousSequence=%d, event=%s, message=%s]", getClass().getSimpleName(), session, eventVersion, eventSequence, previousVersion, previousSequence, event, message);
   }
 
   /**
@@ -185,6 +198,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
       request.eventSequence = 0;
       request.previousVersion = -1;
       request.previousSequence = -1;
+      request.event = null;
       request.message = null;
     }
 
@@ -237,6 +251,17 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     }
 
     /**
+     * Sets the request event.
+     *
+     * @param event The request event.
+     * @return The publish request builder.
+     */
+    public Builder withEvent(String event) {
+      request.event = Assert.notNull(event, "event");
+      return this;
+    }
+
+    /**
      * Sets the request message.
      *
      * @param message The request message.
@@ -258,6 +283,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
       Assert.stateNot(request.eventSequence < 1, "eventSequence cannot be less than 1");
       Assert.stateNot(request.previousVersion < 0, "previousVersion cannot be less than 0");
       Assert.stateNot(request.previousSequence < 0, "previousSequence cannot be less than 0");
+      Assert.stateNot(request.event == null, "event cannot be null");
       Assert.stateNot(request.message == null, "message cannot be null");
       return request;
     }
