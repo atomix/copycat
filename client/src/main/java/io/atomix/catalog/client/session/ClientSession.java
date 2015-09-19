@@ -192,7 +192,7 @@ public class ClientSession implements Session, Managed<Session> {
 
       QueryRequest request = QueryRequest.builder()
         .withSession(id)
-        .withVersion(responseSequence)
+        .withVersion(version)
         .withQuery(query)
         .build();
 
