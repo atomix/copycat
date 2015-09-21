@@ -18,6 +18,7 @@ package io.atomix.catalog.client.response;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalyst.util.*;
 
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -140,6 +141,21 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
       Assert.stateNot(response.status == null, "status cannot be null");
       close();
       return response;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(response);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      return getClass().isAssignableFrom(object.getClass()) && ((Builder) object).response.equals(response);
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
     }
   }
 

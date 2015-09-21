@@ -15,19 +15,15 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.StateMachine;
-import net.jodah.concurrentunit.ConcurrentTestCase;
 import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Query;
-import io.atomix.catalog.server.storage.CommandEntry;
-import io.atomix.catalog.server.storage.KeepAliveEntry;
-import io.atomix.catalog.server.storage.QueryEntry;
-import io.atomix.catalog.server.storage.RegisterEntry;
 import io.atomix.catalog.client.session.Session;
-import io.atomix.catalog.server.storage.Entry;
+import io.atomix.catalog.server.StateMachine;
+import io.atomix.catalog.server.storage.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
@@ -148,7 +144,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
       .setTerm(1)
       .setSession(session.id())
       .setTimestamp(timestamp)
-      .setSequence(sequence)
+      .setSequence(1)
       .setCommand(command);
 
     return apply(entry);
@@ -167,7 +163,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
       .setTerm(1)
       .setSession(session.id())
       .setTimestamp(timestamp)
-      .setVersion(0)
+      .setSequence(0)
       .setQuery(query);
 
     return apply(entry);

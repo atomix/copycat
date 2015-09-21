@@ -15,10 +15,13 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.storage.*;
-import io.atomix.catalog.server.StateMachine;
+import io.atomix.catalog.client.Command;
+import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.error.InternalException;
+import io.atomix.catalog.client.error.ReadException;
 import io.atomix.catalog.client.error.UnknownSessionException;
+import io.atomix.catalog.server.StateMachine;
+import io.atomix.catalog.server.storage.*;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Futures;
@@ -84,9 +87,6 @@ class ServerStateMachine implements AutoCloseable {
       throw new IllegalArgumentException("lastApplied index must be greater than previous lastApplied index");
     } else if (lastApplied > this.lastApplied) {
       this.lastApplied = lastApplied;
-      for (ServerSession session : executor.context().sessions().sessions.values()) {
-        session.setVersion(lastApplied);
-      }
     }
   }
 
@@ -201,7 +201,7 @@ class ServerStateMachine implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   private CompletableFuture<Object> apply(CommandEntry entry) {
-    final CompletableFuture<Object> future;
+    final CompletableFuture<Object> future = new CompletableFuture<>();
 
     // First check to ensure that the session exists.
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
@@ -210,21 +210,12 @@ class ServerStateMachine implements AutoCloseable {
     // Return with an UnknownSessionException.
     if (session == null) {
       LOGGER.warn("Unknown session: " + entry.getSession());
-      future = Futures.exceptionalFuture(new UnknownSessionException("unknown session " + entry.getSession()));
-    }
-    // If the command's sequence number is greater than the next session sequence number then that indicates that
-    // we've received the command out of sequence. Queue the command to be applied in the correct order.
-    else if (entry.getSequence() > session.nextSequence()) {
-      future = new CompletableFuture<>();
-      Context context = getContext();
-      session.registerCommand(entry.getSequence(), () -> executeCommand(entry, session, future, context));
+      future.completeExceptionally(new UnknownSessionException("unknown session: " + entry.getSession()));
     }
     // If the command's sequence number is less than the next session sequence number then that indicates that
     // we've received a command that was previously applied to the state machine. Ensure linearizability by
     // returning the cached response instead of applying it to the user defined state machine.
     else if (entry.getSequence() < session.nextSequence()) {
-      future = new CompletableFuture<>();
-
       // Ensure the response check is executed in the state machine thread in order to ensure the
       // command was applied, otherwise there will be a race condition and concurrent modification issues.
       Context context = getContext();
@@ -241,10 +232,20 @@ class ServerStateMachine implements AutoCloseable {
         }
       });
     }
+    // If the command's consistency is CAUSAL and the command has not yet been completed, immediately apply the command
+    // to the state machine.
+    else if (entry.getCommand().consistency() == Command.ConsistencyLevel.CAUSAL) {
+      executeCommand(entry, session, future, getContext());
+    }
+    // If the command's sequence number is greater than the next session sequence number then that indicates that
+    // we've received the command out of sequence. Queue the command to be applied in the correct order.
+    else if (entry.getSequence() > session.nextSequence()) {
+      Context context = getContext();
+      session.registerLinearizableCommand(entry.getSequence(), () -> executeCommand(entry, session, future, context));
+    }
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.
     else {
-      future = new CompletableFuture<>();
       executeCommand(entry, session, future, getContext());
     }
 
@@ -273,7 +274,12 @@ class ServerStateMachine implements AutoCloseable {
 
     // Update the session timestamp and command sequence number. This is done in the caller's thread since all
     // timestamp/version/sequence checks are done in this thread prior to executing operations on the state machine thread.
-    session.setTimestamp(entry.getTimestamp()).setSequence(sequence);
+    session.setTimestamp(entry.getTimestamp());
+
+    // If the command's consistency is LINEARIZABLE, update the session command sequence number.
+    if (entry.getCommand().consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
+      session.setSequence(entry.getSequence());
+    }
 
     // Allow the executor to execute any scheduled events.
     executor.tick(entry.getTimestamp());
@@ -297,33 +303,53 @@ class ServerStateMachine implements AutoCloseable {
       LOGGER.warn("Unknown session: " + entry.getSession());
       return Futures.exceptionalFuture(new UnknownSessionException("unknown session " + entry.getSession()));
     }
-    // If the session version is less than the request version, we have to wait for the state machine to catch
-    // up to the last version that the client saw. Queue the request to be executed once the state is caught up.
-    else if (session.getVersion() < entry.getVersion()) {
-      ComposableFuture<Object> future = new ComposableFuture<>();
+    // Queries with CAUSAL consistency are handled by ensuring only that the state machine's command sequence has caught up
+    // to the query's sequence. If the query's sequence number is greater than the command sequence number, queue the query to
+    // be executed once the state machine catches up.
+    else if (entry.getQuery().consistency() == Query.ConsistencyLevel.CAUSAL) {
+      if (entry.getSequence() > session.getSequence()) {
+        ComposableFuture<Object> future = new ComposableFuture<>();
 
-      // Get the caller's context.
-      Context context = getContext();
+        // Get the caller's context.
+        Context context = getContext();
 
-      // Override the configured query timestamp with the deterministic executor timestamp.
-      ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
-      session.registerQuery(entry.getVersion(), () -> {
-        context.checkThread();
-        executeQuery(commit, future, context);
-      });
-      return future;
+        // Override the configured query timestamp with the deterministic executor timestamp.
+        session.registerCausalQuery(entry.getSequence(), () -> {
+          context.checkThread();
+          executeQuery(entry, future, context);
+        });
+        return future;
+      } else {
+        return executeQuery(entry, new CompletableFuture<>(), getContext());
+      }
     }
-    // Execute the query immediately if the state is caught up.
+    // All queries with stronger consistency levels must be executed in program order. This means the state machine state must
+    // not have advanced past the index provided by the client. If the query sequence number (index) is greater than the state
+    // machine version, queue the query to be executed once the state machine catches up.
     else {
-      return executeQuery(commits.acquire(entry.setTimestamp(executor.timestamp())), new CompletableFuture<>(), getContext());
+      if (entry.getSequence() > session.getVersion()) {
+        ComposableFuture<Object> future = new ComposableFuture<>();
+
+        // Get the caller's context.
+        Context context = getContext();
+
+        // Override the configured query timestamp with the deterministic executor timestamp.
+        session.registerSequentialQuery(entry.getSequence(), () -> {
+          context.checkThread();
+          executeQuery(entry, future, context);
+        });
+        return future;
+      } else {
+        return executeQuery(entry, new CompletableFuture<>(), getContext());
+      }
     }
   }
 
   /**
    * Executes a state machine query.
    */
-  private CompletableFuture<Object> executeQuery(ServerCommit commit, CompletableFuture<Object> future, Context context) {
-    executor.execute(commit).whenComplete((result, error) -> {
+  private CompletableFuture<Object> executeQuery(QueryEntry entry, CompletableFuture<Object> future, Context context) {
+    executor.execute(commits.acquire(entry.setTimestamp(executor.timestamp()))).whenComplete((result, error) -> {
       if (error == null) {
         context.execute(() -> future.complete(result));
       } else {

@@ -88,8 +88,7 @@ public class RaftServer implements Managed<RaftServer> {
   /**
    * Returns a new Raft server builder.
    * <p>
-   * The provided set of members will be used to connect to the other members in the Raft cluster. The {@code memberId}
-   * must be the {@link Member#id()} of a member listed in the provided members list.
+   * The provided set of members will be used to connect to the other members in the Raft cluster.
    *
    * @param address The local server member ID. This must be the ID of a member listed in the provided members list.
    * @param cluster The cluster members to which to connect.
@@ -102,8 +101,7 @@ public class RaftServer implements Managed<RaftServer> {
   /**
    * Returns a new Raft server builder.
    * <p>
-   * The provided set of members will be used to connect to the other members in the Raft cluster. The {@code memberId}
-   * must be the {@link Member#id()} of a member listed in the provided members list.
+   * The provided set of members will be used to connect to the other members in the Raft cluster.
    *
    * @param address The local server member ID. This must be the ID of a member listed in the provided members list.
    * @param cluster The cluster members to which to connect.

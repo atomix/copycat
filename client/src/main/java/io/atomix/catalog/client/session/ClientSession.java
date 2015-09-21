@@ -78,11 +78,14 @@ public class ClientSession implements Session, Managed<Session> {
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
   private final Listeners<Session> openListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
+  private final Map<Long, Runnable> responses = new ConcurrentHashMap<>();
+  private long commandRequest;
+  private long commandResponse;
   private long requestSequence;
   private long responseSequence;
+  private long responseVersion;
   private long eventVersion;
   private long eventSequence;
-  private long version;
 
   public ClientSession(Transport transport, Collection<Address> members, Serializer serializer) {
     UUID id = UUID.randomUUID();
@@ -135,11 +138,21 @@ public class ClientSession implements Session, Managed<Session> {
     CompletableFuture<T> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
-      CommandRequest request = CommandRequest.builder()
-        .withSession(id)
-        .withSequence(++requestSequence)
-        .withCommand(command)
-        .build();
+      // LINEARIZABLE commands are submitted with a sequence number.
+      CommandRequest request;
+      if (command.consistency() == Command.ConsistencyLevel.CAUSAL) {
+        request = CommandRequest.builder()
+          .withSession(id)
+          .withSequence(0)
+          .withCommand(command)
+          .build();
+      } else {
+        request = CommandRequest.builder()
+          .withSession(id)
+          .withSequence(++commandRequest)
+          .withCommand(command)
+          .build();
+      }
 
       submit(request, future);
     });
@@ -156,18 +169,16 @@ public class ClientSession implements Session, Managed<Session> {
       return future;
     }
 
+    long sequence = ++requestSequence;
+
     request.acquire();
     this.<CommandRequest, CommandResponse>request(request).whenComplete((response, error) -> {
       if (error == null) {
-        if (response.status() == Response.Status.OK) {
-          responseSequence = Math.max(responseSequence, request.sequence());
-          version = Math.max(version, response.version());
-          future.complete((T) response.result());
-          resetMembers();
-        } else {
-          future.completeExceptionally(response.error().createException());
-        }
-        response.release();
+        long responseSequence = request.sequence();
+        sequenceResponse(response, sequence, () -> {
+          commandResponse = responseSequence;
+          completeResponse(response, future);
+        });
       } else {
         future.completeExceptionally(error);
       }
@@ -190,11 +201,20 @@ public class ClientSession implements Session, Managed<Session> {
     CompletableFuture<T> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
-      QueryRequest request = QueryRequest.builder()
-        .withSession(id)
-        .withVersion(version)
-        .withQuery(query)
-        .build();
+      QueryRequest request;
+      if (query.consistency() == Query.ConsistencyLevel.CAUSAL) {
+        request = QueryRequest.builder()
+          .withSession(id)
+          .withSequence(commandResponse)
+          .withQuery(query)
+          .build();
+      } else {
+        request = QueryRequest.builder()
+          .withSession(id)
+          .withSequence(responseVersion)
+          .withQuery(query)
+          .build();
+      }
 
       submit(request, future);
     });
@@ -211,23 +231,73 @@ public class ClientSession implements Session, Managed<Session> {
       return future;
     }
 
+    long sequence = ++requestSequence;
+
     request.acquire();
     this.<QueryRequest, QueryResponse>request(request).whenComplete((response, error) -> {
       if (error == null) {
-        if (response.status() == Response.Status.OK) {
-          version = Math.max(version, response.version());
-          future.complete((T) response.result());
-          resetMembers();
-        } else {
-          future.completeExceptionally(response.error().createException());
+        // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
+        if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
+          sequenceResponse(response, sequence, () -> {
+            responseVersion = Math.max(responseVersion, response.version());
+            completeResponse(response, future);
+          });
         }
-        response.release();
+        // If the query consistency level is strong, the query must be executed sequentially. In order to ensure responses
+        // are received in a sequential manner, we compare the response version number with the highest version for which
+        // we've received a response and resubmit queries with output resulting from stale (prior) versions.
+        else {
+          sequenceResponse(response, sequence, () -> {
+            if (response.version() > 0 && response.version() < responseVersion) {
+              submit(request, future);
+            } else {
+              responseVersion = Math.max(responseVersion, response.version());
+              completeResponse(response, future);
+            }
+          });
+        }
       } else {
         future.completeExceptionally(error);
       }
       request.release();
     });
     return future;
+  }
+
+  /**
+   * Sequences a query response.
+   */
+  private void sequenceResponse(OperationResponse response, long sequence, Runnable callback) {
+    // If the response is for the next sequence number (the response is received in order),
+    // complete the future as appropriate. Note that some prior responses may have been received
+    // out of order, so once this response is completed, complete any following responses that
+    // are in sequence.
+    if (sequence == responseSequence + 1) {
+      responseSequence++;
+
+      callback.run();
+
+      // Iterate through responses in sequence if available and trigger completion callbacks that are in sequence.
+      while (responses.containsKey(responseSequence + 1)) {
+        responses.remove(++responseSequence).run();
+      }
+    } else {
+      responses.put(sequence, callback);
+    }
+  }
+
+  /**
+   * Completes the given operation response.
+   */
+  @SuppressWarnings("unchecked")
+  private void completeResponse(OperationResponse response, CompletableFuture future) {
+    if (response.status() == Response.Status.OK) {
+      future.complete(response.result());
+      resetMembers();
+    } else {
+      future.completeExceptionally(response.error().createException());
+    }
+    response.release();
   }
 
   /**
@@ -518,7 +588,7 @@ public class ClientSession implements Session, Managed<Session> {
 
         KeepAliveRequest request = KeepAliveRequest.builder()
           .withSession(id)
-          .withCommandSequence(responseSequence)
+          .withCommandSequence(commandResponse)
           .withEventVersion(eventVersion)
           .withEventSequence(eventSequence)
           .build();

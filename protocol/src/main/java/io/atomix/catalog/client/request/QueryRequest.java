@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.client.request;
 
+import io.atomix.catalog.client.Operation;
 import io.atomix.catalog.client.Query;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -32,7 +33,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=270)
-public class QueryRequest extends SessionRequest<QueryRequest> {
+public class QueryRequest extends OperationRequest<QueryRequest> {
 
   /**
    * The unique identifier for the query request type.
@@ -61,7 +62,6 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     return POOL.acquire(Assert.notNull(request, "request"));
   }
 
-  private long version;
   private Query query;
 
   /**
@@ -77,15 +77,6 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
   }
 
   /**
-   * Returns the query version number.
-   *
-   * @return The query version number.
-   */
-  public long version() {
-    return version;
-  }
-
-  /**
    * Returns the query.
    *
    * @return The query.
@@ -95,22 +86,25 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
   }
 
   @Override
+  public Operation operation() {
+    return query;
+  }
+
+  @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    version = buffer.readLong();
     query = serializer.readObject(buffer);
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(version);
     serializer.writeObject(query, buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, version, query);
+    return Objects.hash(getClass(), session, sequence, query);
   }
 
   @Override
@@ -118,7 +112,7 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     if (object instanceof QueryRequest) {
       QueryRequest request = (QueryRequest) object;
       return request.session == session
-        && request.version == version
+        && request.sequence == sequence
         && request.query.equals(query);
     }
     return false;
@@ -126,13 +120,14 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, version=%d, query=%s]", getClass().getSimpleName(), session, version, query);
+    return String.format("%s[session=%d, sequence=%d, query=%s]", getClass().getSimpleName(), session, sequence, query);
   }
 
   /**
    * Query request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, QueryRequest> {
+  public static class Builder extends OperationRequest.Builder<Builder, QueryRequest> {
+
     /**
      * @throws NullPointerException if {@code pool} is null
      */
@@ -143,20 +138,7 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     @Override
     protected void reset() {
       super.reset();
-      request.version = 0;
       request.query = null;
-    }
-
-    /**
-     * Sets the query version number.
-     *
-     * @param version The query version number.
-     * @return The request builder.
-     * @throws IllegalArgumentException if {@code version} is less than 1
-     */
-    public Builder withVersion(long version) {
-      request.version = Assert.argNot(version, version < 0, "version cannot be less than 1");
-      return this;
     }
 
     /**
@@ -177,25 +159,10 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     @Override
     public QueryRequest build() {
       super.build();
+      Assert.stateNot(request.sequence < 0, "sequence cannot be less than 0");
       Assert.stateNot(request.query == null, "query cannot be null");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }
