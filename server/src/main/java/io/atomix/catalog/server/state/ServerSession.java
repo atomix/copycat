@@ -65,7 +65,7 @@ class ServerSession implements Session {
       throw new NullPointerException("connection cannot be null");
 
     this.id = id;
-    this.version = id;
+    this.version = id - 1;
     this.connectionId = connectionId;
     this.context = context;
     this.timeout = timeout;
@@ -208,7 +208,7 @@ class ServerSession implements Session {
    * @param runnable The command to execute.
    * @return The server session.
    */
-  ServerSession registerLinearizableCommand(long sequence, Runnable runnable) {
+  ServerSession registerCommand(long sequence, Runnable runnable) {
     commands.put(sequence, runnable);
     return this;
   }
@@ -220,7 +220,7 @@ class ServerSession implements Session {
    * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession registerCausalQuery(long sequence, Runnable query) {
+  ServerSession registerSequenceQuery(long sequence, Runnable query) {
     List<Runnable> queries = this.causalQueries.computeIfAbsent(sequence, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
@@ -236,7 +236,7 @@ class ServerSession implements Session {
    * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession registerSequentialQuery(long version, Runnable query) {
+  ServerSession registerVersionQuery(long version, Runnable query) {
     List<Runnable> queries = this.sequentialQueries.computeIfAbsent(version, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);

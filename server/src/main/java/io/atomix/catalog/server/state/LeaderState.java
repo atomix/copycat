@@ -409,6 +409,7 @@ final class LeaderState extends ActiveState {
         .setTimestamp(timestamp)
         .setSession(request.session())
         .setSequence(request.sequence())
+        .setVersion(request.version())
         .setQuery(query);
 
       Query.ConsistencyLevel consistency = query.consistency();

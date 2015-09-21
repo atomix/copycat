@@ -62,6 +62,7 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
     return POOL.acquire(Assert.notNull(request, "request"));
   }
 
+  private long version;
   private Query query;
 
   /**
@@ -74,6 +75,15 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
   @Override
   public byte type() {
     return TYPE;
+  }
+
+  /**
+   * Returns the query version.
+   *
+   * @return The query version.
+   */
+  public long version() {
+    return version;
   }
 
   /**
@@ -93,18 +103,20 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
+    version = buffer.readLong();
     query = serializer.readObject(buffer);
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
+    buffer.writeLong(version);
     serializer.writeObject(query, buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, query);
+    return Objects.hash(getClass(), session, sequence, version, query);
   }
 
   @Override
@@ -120,7 +132,7 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, query=%s]", getClass().getSimpleName(), session, sequence, query);
+    return String.format("%s[session=%d, sequence=%d, version=%d, query=%s]", getClass().getSimpleName(), session, sequence, version, query);
   }
 
   /**
@@ -138,7 +150,20 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
     @Override
     protected void reset() {
       super.reset();
+      request.version = 0;
       request.query = null;
+    }
+
+    /**
+     * Sets the request version.
+     *
+     * @param version The request version.
+     * @return The request builder.
+     * @throws IllegalArgumentException if {@code version} is less than {@code 0}
+     */
+    public Builder withVersion(long version) {
+      request.version = Assert.argNot(version, version < 0, "version cannot be less than 0");
+      return this;
     }
 
     /**
@@ -159,7 +184,7 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
     @Override
     public QueryRequest build() {
       super.build();
-      Assert.stateNot(request.sequence < 0, "sequence cannot be less than 0");
+      Assert.stateNot(request.version < 0, "version cannot be less than 0");
       Assert.stateNot(request.query == null, "query cannot be null");
       return request;
     }

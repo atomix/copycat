@@ -85,7 +85,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       KeepAliveEntry entry = new KeepAliveEntry()
-        .setIndex(3)
+        .setIndex(2)
         .setTerm(1)
         .setSession(1)
         .setTimestamp(timestamp + 1000)
@@ -320,6 +320,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setSession(1)
         .setTimestamp(timestamp + 200)
         .setSequence(0)
+        .setVersion(0)
         .setQuery(new TestQuery());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {

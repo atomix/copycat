@@ -206,12 +206,14 @@ public class ClientSession implements Session, Managed<Session> {
         request = QueryRequest.builder()
           .withSession(id)
           .withSequence(commandResponse)
+          .withVersion(responseVersion)
           .withQuery(query)
           .build();
       } else {
         request = QueryRequest.builder()
           .withSession(id)
-          .withSequence(responseVersion)
+          .withSequence(commandRequest)
+          .withVersion(responseVersion)
           .withQuery(query)
           .build();
       }

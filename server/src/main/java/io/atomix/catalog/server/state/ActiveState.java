@@ -282,6 +282,7 @@ abstract class ActiveState extends PassiveState {
       .setTimestamp(System.currentTimeMillis())
       .setSession(request.session())
       .setSequence(request.sequence())
+      .setVersion(request.version())
       .setQuery(request.query());
 
     // For CAUSAL queries, the state machine version is the last index applied to the state machine. For other consistency

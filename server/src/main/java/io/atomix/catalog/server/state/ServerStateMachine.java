@@ -18,7 +18,6 @@ package io.atomix.catalog.server.state;
 import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.error.InternalException;
-import io.atomix.catalog.client.error.ReadException;
 import io.atomix.catalog.client.error.UnknownSessionException;
 import io.atomix.catalog.server.StateMachine;
 import io.atomix.catalog.server.storage.*;
@@ -87,6 +86,10 @@ class ServerStateMachine implements AutoCloseable {
       throw new IllegalArgumentException("lastApplied index must be greater than previous lastApplied index");
     } else if (lastApplied > this.lastApplied) {
       this.lastApplied = lastApplied;
+
+      for (ServerSession session : executor.context().sessions().sessions.values()) {
+        session.setVersion(lastApplied);
+      }
     }
   }
 
@@ -241,7 +244,7 @@ class ServerStateMachine implements AutoCloseable {
     // we've received the command out of sequence. Queue the command to be applied in the correct order.
     else if (entry.getSequence() > session.nextSequence()) {
       Context context = getContext();
-      session.registerLinearizableCommand(entry.getSequence(), () -> executeCommand(entry, session, future, context));
+      session.registerCommand(entry.getSequence(), () -> executeCommand(entry, session, future, context));
     }
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.
@@ -303,45 +306,43 @@ class ServerStateMachine implements AutoCloseable {
       LOGGER.warn("Unknown session: " + entry.getSession());
       return Futures.exceptionalFuture(new UnknownSessionException("unknown session " + entry.getSession()));
     }
-    // Queries with CAUSAL consistency are handled by ensuring only that the state machine's command sequence has caught up
-    // to the query's sequence. If the query's sequence number is greater than the command sequence number, queue the query to
-    // be executed once the state machine catches up.
-    else if (entry.getQuery().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      if (entry.getSequence() > session.getSequence()) {
-        ComposableFuture<Object> future = new ComposableFuture<>();
+    // Query execution is determined by the sequence and version supplied for the query. All queries are queued until the state
+    // machine advances at least until the provided sequence and version.
+    // If the query sequence number is greater than the current sequence number for the session, queue the query.
+    else if (entry.getSequence() > session.getSequence()) {
+      CompletableFuture<Object> future = new CompletableFuture<>();
 
-        // Get the caller's context.
-        Context context = getContext();
+      // Get the caller's context.
+      Context context = getContext();
 
-        // Override the configured query timestamp with the deterministic executor timestamp.
-        session.registerCausalQuery(entry.getSequence(), () -> {
-          context.checkThread();
+      // Once the query has met its sequence requirement, check whether it has also met its version requirement. If the version
+      // requirement is not yet met, queue the query for the state machine to catch up to the required version.
+      session.registerSequenceQuery(entry.getSequence(), () -> {
+        context.checkThread();
+        if (entry.getVersion() > session.getVersion()) {
+          session.registerVersionQuery(entry.getVersion(), () -> {
+            context.checkThread();
+            executeQuery(entry, future, context);
+          });
+        } else {
           executeQuery(entry, future, context);
-        });
-        return future;
-      } else {
-        return executeQuery(entry, new CompletableFuture<>(), getContext());
-      }
+        }
+      });
+      return future;
     }
-    // All queries with stronger consistency levels must be executed in program order. This means the state machine state must
-    // not have advanced past the index provided by the client. If the query sequence number (index) is greater than the state
-    // machine version, queue the query to be executed once the state machine catches up.
-    else {
-      if (entry.getSequence() > session.getVersion()) {
-        ComposableFuture<Object> future = new ComposableFuture<>();
+    // If the query version number is greater than the current version number for the session, queue the query.
+    else if (entry.getVersion() > session.getVersion()) {
+      CompletableFuture<Object> future = new CompletableFuture<>();
 
-        // Get the caller's context.
-        Context context = getContext();
+      Context context = getContext();
 
-        // Override the configured query timestamp with the deterministic executor timestamp.
-        session.registerSequentialQuery(entry.getSequence(), () -> {
-          context.checkThread();
-          executeQuery(entry, future, context);
-        });
-        return future;
-      } else {
-        return executeQuery(entry, new CompletableFuture<>(), getContext());
-      }
+      session.registerVersionQuery(entry.getVersion(), () -> {
+        context.checkThread();
+        executeQuery(entry, future, context);
+      });
+      return future;
+    } else {
+      return executeQuery(entry, new CompletableFuture<>(), getContext());
     }
   }
 

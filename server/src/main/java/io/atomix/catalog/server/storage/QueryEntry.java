@@ -31,6 +31,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  */
 @SerializeWith(id=307)
 public class QueryEntry extends OperationEntry<QueryEntry> {
+  private long version;
   private Query query;
 
   public QueryEntry() {
@@ -43,6 +44,26 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
   @Override
   public Operation getOperation() {
     return query;
+  }
+
+  /**
+   * Returns the query version.
+   *
+   * @return The query version.
+   */
+  public long getVersion() {
+    return version;
+  }
+
+  /**
+   * Sets the query version.
+   *
+   * @param version The query version.
+   * @return The query entry.
+   */
+  public QueryEntry setVersion(long version) {
+    this.version = version;
+    return this;
   }
 
   /**
@@ -69,18 +90,20 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
+    buffer.writeLong(version);
     serializer.writeObject(query, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
+    version = buffer.readLong();
     query = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, version=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), query);
+    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, version=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getVersion(), getTimestamp(), query);
   }
 
 }

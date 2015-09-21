@@ -52,18 +52,18 @@ public interface Query<T> extends Operation<T> {
   enum ConsistencyLevel {
 
     /**
-     * Enforces causal (read your writes) query consistency.
+     * Enforces causal query consistency.
      * <p>
-     * Causal consistency requires that clients always see the state as of their last write. This constraint allows
-     * reads from followers. When an RYW {@link Query} is submitted to the cluster, the first server that receives the query
-     * will attempt to handle it. If the server that receives the query is more than a heartbeat behind the leader, the query
-     * will be forwarded to the leader. If the server that receives the query has not advanced past the client's last write,
-     * the read will be queued until it can be satisfied.
+     * Causal consistency requires that clients always see non-overlapping state progress monotonically. This constraint allows
+     * reads from followers. When a causally consistent {@link Query} is submitted to the cluster, the first server that
+     * receives the query will attempt to handle it. If the server that receives the query is more than a heartbeat behind the
+     * leader, the query will be forwarded to the leader. If the server that receives the query has not advanced past the
+     * client's last write, the read will be queued until it can be satisfied.
      */
     CAUSAL,
 
     /**
-     * Enforces sequential (monotonic read) query consistency.
+     * Enforces sequential query consistency.
      * <p>
      * Sequential read consistency requires that clients always see state progress in monotonically increasing order. Note that
      * this constraint allows reads from followers. When a sequential {@link Query} is submitted to the cluster, the first

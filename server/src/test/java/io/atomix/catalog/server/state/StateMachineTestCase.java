@@ -164,6 +164,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
       .setSession(session.id())
       .setTimestamp(timestamp)
       .setSequence(0)
+      .setVersion(0)
       .setQuery(query);
 
     return apply(entry);
