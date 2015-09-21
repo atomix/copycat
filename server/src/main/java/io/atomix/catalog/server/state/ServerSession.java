@@ -49,8 +49,8 @@ class ServerSession implements Session {
   private long eventAckVersion;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
-  private final Map<Long, List<Runnable>> causalQueries = new HashMap<>();
-  private final Map<Long, List<Runnable>> sequentialQueries = new HashMap<>();
+  private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
+  private final Map<Long, List<Runnable>> versionQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, Object> responses = new HashMap<>();
   private final Queue<EventHolder> events = new ArrayDeque<>();
@@ -173,18 +173,16 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setSequence(long sequence) {
-    if (sequence != nextSequence())
-      throw new IllegalStateException("inconsistent state sequence: " + sequence);
-
-    this.sequence++;
-
-    List<Runnable> queries = this.causalQueries.remove(sequence);
-    if (queries != null) {
-      for (Runnable query : queries) {
-        query.run();
+    for (long i = this.sequence + 1; i <= sequence; i++) {
+      this.sequence = i;
+      List<Runnable> queries = this.sequenceQueries.remove(this.sequence);
+      if (queries != null) {
+        for (Runnable query : queries) {
+          query.run();
+        }
+        queries.clear();
+        queriesPool.add(queries);
       }
-      queries.clear();
-      queriesPool.add(queries);
     }
 
     return this;
@@ -215,19 +213,18 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setVersion(long version) {
-    if (version != nextVersion())
-      throw new IllegalStateException("inconsistent state version: " + version);
-
-    List<Runnable> queries = this.sequentialQueries.remove(sequence);
-    if (queries != null) {
-      for (Runnable query : queries) {
-        query.run();
+    for (long i = this.version + 1; i <= version; i++) {
+      this.version = i;
+      List<Runnable> queries = this.versionQueries.remove(this.version);
+      if (queries != null) {
+        for (Runnable query : queries) {
+          query.run();
+        }
+        queries.clear();
+        queriesPool.add(queries);
       }
-      queries.clear();
-      queriesPool.add(queries);
     }
 
-    this.version++;
     return this;
   }
 
@@ -251,7 +248,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession registerSequenceQuery(long sequence, Runnable query) {
-    List<Runnable> queries = this.causalQueries.computeIfAbsent(sequence, v -> {
+    List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
     });
@@ -267,7 +264,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession registerVersionQuery(long version, Runnable query) {
-    List<Runnable> queries = this.sequentialQueries.computeIfAbsent(version, v -> {
+    List<Runnable> queries = this.versionQueries.computeIfAbsent(version, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
     });
