@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.client.request;
 
+import io.atomix.catalog.client.Operation;
 import io.atomix.catalog.client.Query;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -32,7 +33,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=270)
-public class QueryRequest extends SessionRequest<QueryRequest> {
+public class QueryRequest extends OperationRequest<QueryRequest> {
 
   /**
    * The unique identifier for the query request type.
@@ -77,9 +78,9 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
   }
 
   /**
-   * Returns the query version number.
+   * Returns the query version.
    *
-   * @return The query version number.
+   * @return The query version.
    */
   public long version() {
     return version;
@@ -91,6 +92,11 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
    * @return The query.
    */
   public Query query() {
+    return query;
+  }
+
+  @Override
+  public Operation operation() {
     return query;
   }
 
@@ -110,7 +116,7 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, version, query);
+    return Objects.hash(getClass(), session, sequence, version, query);
   }
 
   @Override
@@ -118,7 +124,7 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     if (object instanceof QueryRequest) {
       QueryRequest request = (QueryRequest) object;
       return request.session == session
-        && request.version == version
+        && request.sequence == sequence
         && request.query.equals(query);
     }
     return false;
@@ -126,13 +132,14 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, version=%d, query=%s]", getClass().getSimpleName(), session, version, query);
+    return String.format("%s[session=%d, sequence=%d, version=%d, query=%s]", getClass().getSimpleName(), session, sequence, version, query);
   }
 
   /**
    * Query request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, QueryRequest> {
+  public static class Builder extends OperationRequest.Builder<Builder, QueryRequest> {
+
     /**
      * @throws NullPointerException if {@code pool} is null
      */
@@ -148,14 +155,14 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     }
 
     /**
-     * Sets the query version number.
+     * Sets the request version.
      *
-     * @param version The query version number.
+     * @param version The request version.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code version} is less than 1
+     * @throws IllegalArgumentException if {@code version} is less than {@code 0}
      */
     public Builder withVersion(long version) {
-      request.version = Assert.argNot(version, version < 0, "version cannot be less than 1");
+      request.version = Assert.argNot(version, version < 0, "version cannot be less than 0");
       return this;
     }
 
@@ -177,25 +184,10 @@ public class QueryRequest extends SessionRequest<QueryRequest> {
     @Override
     public QueryRequest build() {
       super.build();
+      Assert.stateNot(request.version < 0, "version cannot be less than 0");
       Assert.stateNot(request.query == null, "query cannot be null");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }

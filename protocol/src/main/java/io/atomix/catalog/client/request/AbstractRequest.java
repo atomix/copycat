@@ -17,6 +17,7 @@ package io.atomix.catalog.client.request;
 
 import io.atomix.catalyst.util.*;
 
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -102,6 +103,21 @@ public abstract class AbstractRequest<T extends Request<T>> implements Request<T
     public U build() {
       close();
       return request;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(request);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      return getClass().isAssignableFrom(object.getClass()) && ((Builder) object).request.equals(request);
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
     }
   }
 

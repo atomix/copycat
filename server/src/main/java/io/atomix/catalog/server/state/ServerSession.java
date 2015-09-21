@@ -40,15 +40,16 @@ class ServerSession implements Session {
   private final ServerStateMachineContext context;
   private final long timeout;
   private Connection connection;
+  private long sequence;
   private long version;
-  private long command;
   private long commandLowWaterMark;
   private long eventVersion;
   private long eventSequence;
   private long eventAckVersion;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
-  private final Map<Long, List<Runnable>> queries = new HashMap<>();
+  private final Map<Long, List<Runnable>> causalQueries = new HashMap<>();
+  private final Map<Long, List<Runnable>> sequentialQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, Object> responses = new HashMap<>();
   private final Queue<EventHolder> events = new ArrayDeque<>();
@@ -64,7 +65,7 @@ class ServerSession implements Session {
       throw new NullPointerException("connection cannot be null");
 
     this.id = id;
-    this.version = id;
+    this.version = id - 1;
     this.connectionId = connectionId;
     this.context = context;
     this.timeout = timeout;
@@ -114,34 +115,89 @@ class ServerSession implements Session {
   }
 
   /**
-   * Returns the session command version.
+   * Returns the session operation sequence number.
    *
-   * @return The session command version.
+   * @return The session operation sequence number.
+   */
+  long getSequence() {
+    return sequence;
+  }
+
+  /**
+   * Returns the next operation sequence number.
+   *
+   * @return The next operation sequence number.
+   */
+  long nextSequence() {
+    return sequence + 1;
+  }
+
+  /**
+   * Sets the session operation sequence number.
+   *
+   * @param sequence The session operation sequence number.
+   * @return The server session.
+   */
+  ServerSession setSequence(long sequence) {
+    if (sequence != nextSequence())
+      throw new IllegalStateException("inconsistent state sequence: " + sequence);
+
+    List<Runnable> queries = this.causalQueries.remove(sequence);
+    if (queries != null) {
+      for (Runnable query : queries) {
+        query.run();
+      }
+      queries.clear();
+      queriesPool.add(queries);
+    }
+
+    this.sequence++;
+
+    Runnable command = this.commands.remove(nextSequence());
+    if (command != null) {
+      command.run();
+    }
+    return this;
+  }
+
+  /**
+   * Returns the session version.
+   *
+   * @return The session version.
    */
   long getVersion() {
     return version;
   }
 
   /**
-   * Sets the session command version.
+   * Returns the next session version.
    *
-   * @param version The session command version.
+   * @return The next session version.
+   */
+  long nextVersion() {
+    return version + 1;
+  }
+
+  /**
+   * Sets the session version.
+   *
+   * @param version The session version.
    * @return The server session.
    */
   ServerSession setVersion(long version) {
-    if (version > this.version) {
-      for (long i = this.version + 1; i <= version; i++) {
-        List<Runnable> queries = this.queries.remove(i);
-        if (queries != null) {
-          for (Runnable query : queries) {
-            query.run();
-          }
-          queries.clear();
-          queriesPool.add(queries);
-        }
-        this.version = i;
+    if (version != nextVersion())
+      throw new IllegalStateException("inconsistent state version: " + version);
+
+    List<Runnable> queries = this.sequentialQueries.remove(sequence);
+    if (queries != null) {
+      for (Runnable query : queries) {
+        query.run();
       }
+      queries.clear();
+      queriesPool.add(queries);
     }
+
+    this.version++;
     return this;
   }
 
@@ -158,51 +214,30 @@ class ServerSession implements Session {
   }
 
   /**
-   * Returns the command sequence number.
+   * Registers a causal session query.
    *
-   * @return The command sequence number.
-   */
-  long getSequence() {
-    return command;
-  }
-
-  /**
-   * Returns the next session sequence number.
-   *
-   * @return The next session sequence number.
-   */
-  long nextSequence() {
-    return command + 1;
-  }
-
-  /**
-   * Sets the session sequence number.
-   *
-   * @param sequence The session command sequence number.
+   * @param sequence The session sequence number at which to execute the query.
+   * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession setSequence(long sequence) {
-    if (sequence > this.command) {
-      for (long i = 0; i < sequence - this.command; i++) {
-        this.command++;
-        Runnable command = commands.remove(this.command + 1);
-        if (command != null) {
-          command.run();
-        }
-      }
-    }
+  ServerSession registerSequenceQuery(long sequence, Runnable query) {
+    List<Runnable> queries = this.causalQueries.computeIfAbsent(sequence, v -> {
+      List<Runnable> q = queriesPool.poll();
+      return q != null ? q : new ArrayList<>(128);
+    });
+    queries.add(query);
     return this;
   }
 
   /**
-   * Registers a session query.
+   * Registers a sequential session query.
    *
-   * @param version The session version.
-   * @param query The session query.
+   * @param version The state machine version (index) at which to execute the query.
+   * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession registerQuery(long version, Runnable query) {
-    List<Runnable> queries = this.queries.computeIfAbsent(version, v -> {
+  ServerSession registerVersionQuery(long version, Runnable query) {
+    List<Runnable> queries = this.sequentialQueries.computeIfAbsent(version, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
     });
@@ -225,12 +260,12 @@ class ServerSession implements Session {
   /**
    * Clears command responses up to the given version.
    *
-   * @param version The version to clear.
+   * @param sequence The sequence to clear.
    * @return The server session.
    */
-  ServerSession clearResponses(long version) {
-    if (version > commandLowWaterMark) {
-      for (long i = commandLowWaterMark + 1; i <= version; i++) {
+  ServerSession clearResponses(long sequence) {
+    if (sequence > commandLowWaterMark) {
+      for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
         responses.remove(i);
         commandLowWaterMark = i;
       }

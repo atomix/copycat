@@ -31,7 +31,6 @@ import io.atomix.catalyst.util.ReferenceManager;
  */
 @SerializeWith(id=306)
 public class CommandEntry extends OperationEntry<CommandEntry> {
-  private long sequence;
   private Command command;
 
   public CommandEntry() {
@@ -39,26 +38,6 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   public CommandEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
-  }
-
-  /**
-   * Returns the command sequence number.
-   *
-   * @return The command sequence number.
-   */
-  public long getSequence() {
-    return sequence;
-  }
-
-  /**
-   * Sets the command sequence number.
-   *
-   * @param sequence The command sequence number.
-   * @return The command entry.
-   */
-  public CommandEntry setSequence(long sequence) {
-    this.sequence = sequence;
-    return this;
   }
 
   @Override
@@ -90,14 +69,12 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(sequence);
     serializer.writeObject(command, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    sequence = buffer.readLong();
     command = serializer.readObject(buffer);
   }
 

@@ -16,6 +16,9 @@
 package io.atomix.catalog.server.storage;
 
 import io.atomix.catalog.client.Operation;
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
@@ -24,6 +27,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class OperationEntry<T extends OperationEntry<T>> extends SessionEntry<T> {
+  private long sequence;
 
   protected OperationEntry() {
   }
@@ -38,5 +42,38 @@ public abstract class OperationEntry<T extends OperationEntry<T>> extends Sessio
    * @return The entry operation.
    */
   public abstract Operation getOperation();
+
+  /**
+   * Returns the operation sequence number.
+   *
+   * @return The operation sequence number.
+   */
+  public long getSequence() {
+    return sequence;
+  }
+
+  /**
+   * Sets the operation sequence number.
+   *
+   * @param sequence The operation sequence number.
+   * @return The operation entry.
+   */
+  @SuppressWarnings("unchecked")
+  public T setSequence(long sequence) {
+    this.sequence = sequence;
+    return (T) this;
+  }
+
+  @Override
+  public void writeObject(BufferOutput buffer, Serializer serializer) {
+    super.writeObject(buffer, serializer);
+    buffer.writeLong(sequence);
+  }
+
+  @Override
+  public void readObject(BufferInput buffer, Serializer serializer) {
+    super.readObject(buffer, serializer);
+    sequence = buffer.readLong();
+  }
 
 }

@@ -15,16 +15,10 @@
  */
 package io.atomix.catalog.client.response;
 
-import io.atomix.catalog.client.error.RaftError;
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.catalyst.util.ReferenceManager;
-
-import java.util.Objects;
 
 /**
  * Protocol query response.
@@ -32,7 +26,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=271)
-public class QueryResponse extends SessionResponse<QueryResponse> {
+public class QueryResponse extends OperationResponse<QueryResponse> {
 
   /**
    * The unique identifier for the query response type.
@@ -61,9 +55,6 @@ public class QueryResponse extends SessionResponse<QueryResponse> {
     return POOL.acquire(Assert.notNull(request, "request"));
   }
 
-  private long version;
-  private Object result;
-
   /**
    * @throws NullPointerException if {@code referenceManager} is null
    */
@@ -77,125 +68,12 @@ public class QueryResponse extends SessionResponse<QueryResponse> {
   }
 
   /**
-   * Returns the query version.
-   *
-   * @return The query version.
-   */
-  public long version() {
-    return version;
-  }
-
-  /**
-   * Returns the query result.
-   *
-   * @return The query result.
-   */
-  public Object result() {
-    return result;
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    status = Status.forId(buffer.readByte());
-    if (status == Status.OK) {
-      error = null;
-      version = buffer.readLong();
-      result = serializer.readObject(buffer);
-    } else {
-      version = buffer.readLong();
-      error = RaftError.forId(buffer.readByte());
-    }
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    buffer.writeByte(status.id());
-    if (status == Status.OK) {
-      buffer.writeLong(version);
-      serializer.writeObject(result, buffer);
-    } else {
-      buffer.writeLong(version);
-      buffer.writeByte(error.id());
-    }
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status, result);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof QueryResponse) {
-      QueryResponse response = (QueryResponse) object;
-      return response.status == status
-        && response.version == version
-        && ((response.result == null && result == null)
-        || response.result != null && result != null && response.result.equals(result));
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, version=%d, result=%s]", getClass().getSimpleName(), status, version, result);
-  }
-
-  /**
    * Query response builder.
    */
-  public static class Builder extends SessionResponse.Builder<Builder, QueryResponse> {
-
+  public static class Builder extends OperationResponse.Builder<Builder, QueryResponse> {
     protected Builder(BuilderPool<Builder, QueryResponse> pool) {
       super(pool, QueryResponse::new);
     }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.version = 0;
-      response.result = null;
-    }
-
-    /**
-     * Sets the query version number.
-     *
-     * @param version The query version number.
-     * @return The response builder
-     * @throws IllegalArgumentException if {@code version} is less than 0
-     */
-    public Builder withVersion(long version) {
-      response.version = Assert.argNot(version, version < 0, "version cannot be negative");
-      return this;
-    }
-
-    /**
-     * Sets the query response result.
-     *
-     * @param result The response result.
-     * @return The response builder.
-     * @throws NullPointerException if {@code result} is null
-     */
-    public Builder withResult(Object result) {
-      response.result = result;
-      return this;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

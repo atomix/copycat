@@ -164,22 +164,6 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
       Assert.stateNot(response.status == Status.OK && response.members == null, "members cannot be null");
       return response;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

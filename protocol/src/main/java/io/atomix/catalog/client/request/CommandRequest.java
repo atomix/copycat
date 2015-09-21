@@ -16,6 +16,7 @@
 package io.atomix.catalog.client.request;
 
 import io.atomix.catalog.client.Command;
+import io.atomix.catalog.client.Operation;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -32,7 +33,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=258)
-public class CommandRequest extends SessionRequest<CommandRequest> {
+public class CommandRequest extends OperationRequest<CommandRequest> {
 
   /**
    * The unique identifier for the command request type.
@@ -61,7 +62,6 @@ public class CommandRequest extends SessionRequest<CommandRequest> {
     return POOL.acquire(Assert.notNull(request, "request"));
   }
 
-  private long sequence;
   private Command command;
 
   /**
@@ -77,15 +77,6 @@ public class CommandRequest extends SessionRequest<CommandRequest> {
   }
 
   /**
-   * Returns the request sequence number.
-   *
-   * @return The request sequence number.
-   */
-  public long sequence() {
-    return sequence;
-  }
-
-  /**
    * Returns the command.
    *
    * @return The command.
@@ -95,16 +86,19 @@ public class CommandRequest extends SessionRequest<CommandRequest> {
   }
 
   @Override
+  public Operation operation() {
+    return command;
+  }
+
+  @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    sequence = buffer.readLong();
     command = serializer.readObject(buffer);
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(sequence);
     serializer.writeObject(command, buffer);
   }
 
@@ -132,7 +126,7 @@ public class CommandRequest extends SessionRequest<CommandRequest> {
   /**
    * Write request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, CommandRequest> {
+  public static class Builder extends OperationRequest.Builder<Builder, CommandRequest> {
     
     /**
      * @throws NullPointerException if {@code pool} is null
@@ -144,20 +138,7 @@ public class CommandRequest extends SessionRequest<CommandRequest> {
     @Override
     protected void reset() {
       super.reset();
-      request.sequence = 0;
       request.command = null;
-    }
-
-    /**
-     * Sets the command sequence number.
-     *
-     * @param sequence The command sequence number.
-     * @return The request builder.
-     * @throws IllegalArgumentException if {@code sequence} is less than 1
-     */
-    public Builder withSequence(long sequence) {
-      request.sequence = Assert.argNot(sequence, sequence < 1, "sequence cannot be less than 1");
-      return this;
     }
 
     /**
@@ -178,27 +159,9 @@ public class CommandRequest extends SessionRequest<CommandRequest> {
     @Override
     public CommandRequest build() {
       super.build();
-      Assert.stateNot(request.session < 1, "session cannot be less than 1");
-      Assert.stateNot(request.sequence < 1, "sequence cannot be less than 1");
       Assert.stateNot(request.command == null, "command cannot be null");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }
