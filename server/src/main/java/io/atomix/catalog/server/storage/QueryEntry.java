@@ -103,7 +103,7 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, version=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getVersion(), getTimestamp(), query);
+    return String.format("%s[index=%d, term=%d, session=%d, version=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), query);
   }
 
 }

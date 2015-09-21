@@ -29,6 +29,7 @@ import io.atomix.catalog.server.request.*;
 import io.atomix.catalog.server.response.*;
 import io.atomix.catalog.server.storage.*;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
 import java.time.Duration;
@@ -324,23 +325,43 @@ final class LeaderState extends ActiveState {
 
   @Override
   protected CompletableFuture<CommandResponse> command(final CommandRequest request) {
-    CompletableFuture<CommandResponse> future = new CompletableFuture<>();
+    context.checkThread();
+    logRequest(request);
+
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    if (session == null) {
+      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    }
+
+    ComposableFuture<CommandResponse> future = new ComposableFuture<>();
 
     Command command = request.command();
+
+    // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
+    // sequence number, queue this request for handling later. We want to handle command requests in the order in which
+    // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
+    // sequence number. In that case, it's likely that the command was submitted more than once to the
+    // cluster, and the command will be deduplicated once applied to the state machine.
+    if (command.consistency() == Command.ConsistencyLevel.LINEARIZABLE && request.sequence() > session.nextRequest()) {
+      session.registerRequest(request.sequence(), () -> command(request).whenComplete(future));
+      return future;
+    }
 
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final long index;
 
     try {
-      context.checkThread();
-      logRequest(request);
 
       // Create a CommandEntry and append it to the log.
       try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
         entry.setTerm(term)
-          .setTimestamp(timestamp)
           .setSession(request.session())
+          .setTimestamp(timestamp)
           .setSequence(request.sequence())
           .setCommand(command);
         index = context.getLog().append(entry);
@@ -387,6 +408,12 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+
+    // If the command is LINEARIZABLE, update the session sequence number. CAUSAL commands do not have a sequence number
+    // and so aren't sequenced through the leader.
+    if (command.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
+      session.setRequest(request.sequence());
+    }
 
     return future;
   }

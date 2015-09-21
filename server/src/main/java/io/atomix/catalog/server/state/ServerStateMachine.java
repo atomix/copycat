@@ -16,7 +16,6 @@
 package io.atomix.catalog.server.state;
 
 import io.atomix.catalog.client.Command;
-import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.error.InternalException;
 import io.atomix.catalog.client.error.UnknownSessionException;
 import io.atomix.catalog.server.StateMachine;
@@ -234,17 +233,6 @@ class ServerStateMachine implements AutoCloseable {
           context.executor().execute(() -> future.complete(response));
         }
       });
-    }
-    // If the command's consistency is CAUSAL and the command has not yet been completed, immediately apply the command
-    // to the state machine.
-    else if (entry.getCommand().consistency() == Command.ConsistencyLevel.CAUSAL) {
-      executeCommand(entry, session, future, getContext());
-    }
-    // If the command's sequence number is greater than the next session sequence number then that indicates that
-    // we've received the command out of sequence. Queue the command to be applied in the correct order.
-    else if (entry.getSequence() > session.nextSequence()) {
-      Context context = getContext();
-      session.registerCommand(entry.getSequence(), () -> executeCommand(entry, session, future, context));
     }
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.

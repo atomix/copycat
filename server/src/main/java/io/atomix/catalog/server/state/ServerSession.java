@@ -40,6 +40,7 @@ class ServerSession implements Session {
   private final ServerStateMachineContext context;
   private final long timeout;
   private Connection connection;
+  private long request;
   private long sequence;
   private long version;
   private long commandLowWaterMark;
@@ -115,6 +116,39 @@ class ServerSession implements Session {
   }
 
   /**
+   * Returns the session request number.
+   *
+   * @return The session request number.
+   */
+  long getRequest() {
+    return request;
+  }
+
+  /**
+   * Returns the next session request number.
+   *
+   * @return The next session request number.
+   */
+  long nextRequest() {
+    return request + 1;
+  }
+
+  /**
+   * Sets the session request number.
+   *
+   * @param request The session request number.
+   * @return The server session.
+   */
+  ServerSession setRequest(long request) {
+    this.request = request;
+    Runnable command = this.commands.remove(nextRequest());
+    if (command != null) {
+      command.run();
+    }
+    return this;
+  }
+
+  /**
    * Returns the session operation sequence number.
    *
    * @return The session operation sequence number.
@@ -142,6 +176,8 @@ class ServerSession implements Session {
     if (sequence != nextSequence())
       throw new IllegalStateException("inconsistent state sequence: " + sequence);
 
+    this.sequence++;
+
     List<Runnable> queries = this.causalQueries.remove(sequence);
     if (queries != null) {
       for (Runnable query : queries) {
@@ -151,12 +187,6 @@ class ServerSession implements Session {
       queriesPool.add(queries);
     }
 
-    this.sequence++;
-
-    Runnable command = this.commands.remove(nextSequence());
-    if (command != null) {
-      command.run();
-    }
     return this;
   }
 
@@ -208,7 +238,7 @@ class ServerSession implements Session {
    * @param runnable The command to execute.
    * @return The server session.
    */
-  ServerSession registerCommand(long sequence, Runnable runnable) {
+  ServerSession registerRequest(long sequence, Runnable runnable) {
     commands.put(sequence, runnable);
     return this;
   }
