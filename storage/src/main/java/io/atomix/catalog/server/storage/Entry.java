@@ -74,6 +74,13 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   public abstract long getAddress();
 
   /**
+   * Returns a boolean value indicating whether the command is a tombstone.
+   *
+   * @return Indicates whether the command is a tombstone.
+   */
+  public abstract boolean isTombstone();
+
+  /**
    * Returns the entry index.
    *
    * @return The entry index.

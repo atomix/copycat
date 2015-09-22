@@ -17,6 +17,7 @@ package io.atomix.catalog.server.storage;
 
 import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Operation;
+import io.atomix.catalog.client.PersistentCommand;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -44,6 +45,11 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   @Override
   public long getAddress() {
     return command.address();
+  }
+
+  @Override
+  public boolean isTombstone() {
+    return command instanceof PersistentCommand;
   }
 
   /**

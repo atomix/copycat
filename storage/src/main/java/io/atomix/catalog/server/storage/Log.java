@@ -218,13 +218,24 @@ public class Log implements AutoCloseable {
    * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
    */
   public <T extends Entry> T get(long index) {
+    return get(index, false);
+  }
+
+  /**
+   * Gets an entry from the log.
+   *
+   * @param index The entry index to read.
+   * @param includeDeleted Whether to include entries marked for deletion.
+   * @return The entry.
+   */
+  private <T extends Entry> T get(long index, boolean includeDeleted) {
     assertIsOpen();
     assertValidIndex(index);
 
     Segment segment = segments.segment(index);
     if (segment == null)
       throw new IndexOutOfBoundsException("invalid index: " + index);
-    T entry = segment.get(index);
+    T entry = segment.get(index, includeDeleted);
     return entry != null ? entry : null;
   }
 
@@ -292,15 +303,28 @@ public class Log implements AutoCloseable {
   }
 
   /**
+   * Sets the log commit index.
+   *
+   * @param index The log commit index.
+   * @return The log.
+   */
+  public Log commit(long index) {
+    assertIsOpen();
+    segments.commitIndex(index);
+    return this;
+  }
+
+  /**
    * Marks entries up to the given index for compaction.
    *
    * @param index The index up to which to compact entries.
    * @return The log.
    */
   public Log compact(long index) {
+    assertIsOpen();
     for (long i = segments.compactIndex() + 1; i <= index; i++) {
       if (validIndex(i)) {
-        try (Entry entry = get(i)) {
+        try (Entry entry = get(i, true)) {
           if (entry != null) {
             cleaner.tree().add(entry);
           }
@@ -361,22 +385,6 @@ public class Log implements AutoCloseable {
         segments.removeSegment(segment);
       }
     }
-    return this;
-  }
-
-  /**
-   * Sets the log commit index.
-   * <p>
-   * The commit index indicates the index before which entries can be cleaned from the log. Entries that have
-   * been {@link #clean(long) cleaned} but whose index is not less than or equal to the commit index will still
-   * be visible to log readers.
-   *
-   * @param index The log commit index.
-   * @return The log.
-   */
-  public Log commit(long index) {
-    assertIsOpen();
-    segments.commitIndex(index);
     return this;
   }
 

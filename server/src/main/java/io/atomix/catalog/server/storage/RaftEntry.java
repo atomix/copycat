@@ -32,6 +32,11 @@ public abstract class RaftEntry<T extends RaftEntry<T>> extends Entry<T> {
     return id;
   }
 
+  @Override
+  public boolean isTombstone() {
+    return false;
+  }
+
   /**
    * Sets the entry ID.
    *

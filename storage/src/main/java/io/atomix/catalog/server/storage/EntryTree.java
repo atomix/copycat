@@ -24,29 +24,40 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 class EntryTree {
+  private final Map<Long, Entry> tombstones = new ConcurrentHashMap<>();
   private final Map<Long, Entry> entries = new ConcurrentHashMap<>();
   private final Map<Long, Long> trees = new ConcurrentHashMap<>();
 
   /**
    * Adds an entry to the tree.
+   * <p>
+   * When an entry is added to the tree, if the entry is a tombstone and its index is greater than the previous
+   * tombstone, store the tombstone in memory.
    *
    * @param entry The entry to add.
    * @return The entry tree.
    */
   EntryTree add(Entry entry) {
-    Entry previous = entries.get(entry.getAddress());
-    if (previous != null) {
-      if (previous.getIndex() < entry.getIndex()) {
-        entry.acquire();
-        entries.put(entry.getAddress(), entry);
-        update(previous.getAddress(), previous.getId());
-        previous.release();
+    if (entry.isTombstone()) {
+      Entry tombstone = tombstones.get(entry.getAddress());
+      if (tombstone != null) {
+        if (entry.getIndex() > tombstone.getIndex()) {
+          entry.acquire();
+          tombstones.put(entry.getAddress(), entry);
+          update(tombstone.getAddress(), tombstone.getId());
+          tombstone.release();
+        } else {
+          update(entry.getAddress(), entry.getId());
+        }
       } else {
-        update(entry.getAddress(), entry.getId());
+        entry.acquire();
+        tombstones.put(entry.getAddress(), entry);
       }
     } else {
-      entry.acquire();
-      entries.put(entry.getAddress(), entry);
+      Entry tombstone = tombstones.remove(entry.getAddress());
+      if (tombstone != null)
+        tombstone.release();
+      update(entry.getAddress(), entry.getId());
     }
     return this;
   }
@@ -58,11 +69,10 @@ class EntryTree {
    * @return Indicates whether the given entry can be deleted.
    */
   boolean canDelete(Entry entry) {
-    Entry previous = entries.get(entry.getAddress());
-    if (previous == null)
+    Entry tombstone = tombstones.get(entry.getAddress());
+    if (tombstone == null) {
       return true;
-
-    if (previous.getIndex() == entry.getIndex()) {
+    } else if (tombstone.getIndex() == entry.getIndex()) {
       Long tree = trees.get(entry.getAddress());
       return tree == null || tree == 0;
     }
@@ -76,15 +86,17 @@ class EntryTree {
    * @return The entry tree.
    */
   EntryTree delete(Entry entry) {
-    Entry previous = entries.get(entry.getAddress());
-    if (previous != null) {
-      if (previous.getIndex() == entry.getIndex()) {
-        entries.remove(entry.getAddress());
+    Entry tombstone = tombstones.get(entry.getAddress());
+    if (tombstone != null) {
+      if (tombstone.getIndex() == entry.getIndex()) {
+        tombstones.remove(entry.getAddress());
         trees.remove(entry.getAddress());
-        previous.release();
+        tombstone.release();
       } else {
         update(entry.getAddress(), entry.getId());
       }
+    } else {
+      update(entry.getAddress(), entry.getId());
     }
     return this;
   }

@@ -42,6 +42,11 @@ public class TestEntry extends Entry<TestEntry> {
     return 1;
   }
 
+  @Override
+  public boolean isTombstone() {
+    return true;
+  }
+
   /**
    * Sets the entry ID.
    *
