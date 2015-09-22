@@ -13,29 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.entry;
 
-import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.catalog.client.Operation;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
- * No-op entry.
+ * Operation entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=300)
-public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
+public abstract class OperationEntry<T extends OperationEntry<T>> extends SessionEntry<T> {
 
-  public NoOpEntry() {
+  protected OperationEntry() {
   }
 
-  public NoOpEntry(ReferenceManager<Entry<?>> referenceManager) {
+  protected OperationEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
   }
 
-  @Override
-  public String toString() {
-    return String.format("%s[index=%d, term=%d, timestamp=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getTimestamp());
-  }
+  /**
+   * Returns the entry operation.
+   *
+   * @return The entry operation.
+   */
+  public abstract Operation getOperation();
 
 }

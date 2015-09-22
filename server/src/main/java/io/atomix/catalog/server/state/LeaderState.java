@@ -28,7 +28,7 @@ import io.atomix.catalog.client.response.*;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.*;
 import io.atomix.catalog.server.response.*;
-import io.atomix.catalog.server.storage.*;
+import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
@@ -800,7 +800,7 @@ final class LeaderState extends ActiveState {
     /**
      * Gets the previous entry.
      */
-    private RaftEntry getPrevEntry(MemberState member, long prevIndex) {
+    private Entry getPrevEntry(MemberState member, long prevIndex) {
       if (prevIndex > 0) {
         return context.getLog().get(prevIndex);
       }
@@ -813,7 +813,7 @@ final class LeaderState extends ActiveState {
     @SuppressWarnings("unchecked")
     private void emptyCommit(MemberState member) {
       long prevIndex = getPrevIndex(member);
-      RaftEntry prevEntry = getPrevEntry(member, prevIndex);
+      Entry prevEntry = getPrevEntry(member, prevIndex);
 
       AppendRequest.Builder builder = AppendRequest.builder()
         .withTerm(context.getTerm())
@@ -831,7 +831,7 @@ final class LeaderState extends ActiveState {
      */
     private void entriesCommit(MemberState member) {
       long prevIndex = getPrevIndex(member);
-      RaftEntry prevEntry = getPrevEntry(member, prevIndex);
+      Entry prevEntry = getPrevEntry(member, prevIndex);
 
       AppendRequest.Builder builder = AppendRequest.builder()
         .withTerm(context.getTerm())
@@ -846,7 +846,7 @@ final class LeaderState extends ActiveState {
 
         int size = 0;
         while (size < MAX_BATCH_SIZE && index <= context.getLog().lastIndex()) {
-          RaftEntry entry = context.getLog().get(index);
+          Entry entry = context.getLog().get(index);
           if (entry != null && size + entry.size() <= MAX_BATCH_SIZE) {
             size += entry.size();
             builder.addEntry(entry);

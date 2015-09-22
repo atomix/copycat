@@ -16,7 +16,7 @@
 package io.atomix.catalog.server.state;
 
 import io.atomix.catalog.server.Commit;
-import io.atomix.catalog.server.storage.OperationEntry;
+import io.atomix.catalog.server.storage.entry.OperationEntry;
 import io.atomix.catalog.client.Operation;
 import io.atomix.catalog.client.session.Session;
 

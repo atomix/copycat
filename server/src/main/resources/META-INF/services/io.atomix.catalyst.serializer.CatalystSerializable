@@ -24,9 +24,9 @@ io.atomix.catalog.server.response.PollResponse
 io.atomix.catalog.server.request.VoteRequest
 io.atomix.catalog.server.response.VoteResponse
 
-io.atomix.catalog.server.storage.CommandEntry
-io.atomix.catalog.server.storage.ConfigurationEntry
-io.atomix.catalog.server.storage.KeepAliveEntry
-io.atomix.catalog.server.storage.NoOpEntry
-io.atomix.catalog.server.storage.QueryEntry
-io.atomix.catalog.server.storage.RegisterEntry
+io.atomix.catalog.server.storage.entry.CommandEntry
+io.atomix.catalog.server.storage.entry.ConfigurationEntry
+io.atomix.catalog.server.storage.entry.KeepAliveEntry
+io.atomix.catalog.server.storage.entry.NoOpEntry
+io.atomix.catalog.server.storage.entry.QueryEntry
+io.atomix.catalog.server.storage.entry.RegisterEntry

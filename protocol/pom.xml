@@ -27,11 +27,6 @@
 
   <dependencies>
     <dependency>
-      <groupId>io.atomix.catalog</groupId>
-      <artifactId>catalog-storage</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>io.atomix.catalyst</groupId>
       <artifactId>catalyst-transport</artifactId>
       <version>${catalyst.version}</version>

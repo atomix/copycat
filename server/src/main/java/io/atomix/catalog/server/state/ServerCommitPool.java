@@ -15,7 +15,7 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.storage.OperationEntry;
+import io.atomix.catalog.server.storage.entry.OperationEntry;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;

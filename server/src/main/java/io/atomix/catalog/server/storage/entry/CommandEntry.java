@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.entry;
 
 import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Operation;

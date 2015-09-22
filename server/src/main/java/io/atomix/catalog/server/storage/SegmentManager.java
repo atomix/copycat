@@ -277,7 +277,7 @@ public class SegmentManager implements AutoCloseable {
    * @param index The index to move.
    * @param segment The segment to move.
    */
-  synchronized void moveSegment(long index, Segment segment) {
+  public synchronized void moveSegment(long index, Segment segment) {
     segments.remove(index);
     if (!segment.isEmpty())
       segments.put(segment.index(), segment);

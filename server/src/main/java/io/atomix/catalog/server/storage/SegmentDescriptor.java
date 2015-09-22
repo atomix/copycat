@@ -178,7 +178,7 @@ public final class SegmentDescriptor implements AutoCloseable {
   /**
    * Writes an update to the descriptor.
    */
-  void update(long timestamp) {
+  public void update(long timestamp) {
     if (!locked) {
       buffer.writeLong(35, timestamp);
       this.updated = timestamp;
@@ -200,7 +200,7 @@ public final class SegmentDescriptor implements AutoCloseable {
   /**
    * Locks the segment.
    */
-  void lock() {
+  public void lock() {
     buffer.writeBoolean(43, true).flush();
     locked = true;
   }

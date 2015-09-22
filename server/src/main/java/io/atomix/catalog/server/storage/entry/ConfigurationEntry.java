@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -31,7 +31,7 @@ import java.util.Collection;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=308)
-public class ConfigurationEntry extends RaftEntry<ConfigurationEntry> {
+public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   private static final long ADDRESS = 1;
   private Collection<Address> active;
   private Collection<Address> passive;

@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.server.storage;
 
+import io.atomix.catalog.server.storage.entry.Entry;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;

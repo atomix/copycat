@@ -15,6 +15,9 @@
  */
 package io.atomix.catalog.server.storage;
 
+import io.atomix.catalog.server.storage.cleaner.Cleaner;
+import io.atomix.catalog.server.storage.entry.Entry;
+import io.atomix.catalog.server.storage.entry.TypedEntryPool;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;

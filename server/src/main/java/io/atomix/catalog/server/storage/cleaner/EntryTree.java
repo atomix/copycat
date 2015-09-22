@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.cleaner;
+
+import io.atomix.catalog.server.storage.entry.Entry;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class EntryTree {
+public final class EntryTree {
   private final Map<Long, Entry> tombstones = new ConcurrentHashMap<>();
   private final Map<Long, Entry> entries = new ConcurrentHashMap<>();
   private final Map<Long, Long> trees = new ConcurrentHashMap<>();
@@ -37,7 +39,7 @@ class EntryTree {
    * @param entry The entry to add.
    * @return The entry tree.
    */
-  EntryTree add(Entry entry) {
+  public EntryTree add(Entry entry) {
     if (entry.isTombstone()) {
       Entry tombstone = tombstones.get(entry.getAddress());
       if (tombstone != null) {

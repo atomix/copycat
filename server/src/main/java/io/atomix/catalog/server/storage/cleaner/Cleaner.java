@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.cleaner;
 
+import io.atomix.catalog.server.storage.Segment;
+import io.atomix.catalog.server.storage.SegmentManager;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
@@ -59,7 +61,7 @@ public class Cleaner implements AutoCloseable {
    *
    * @return The log cleaner entry tree.
    */
-  EntryTree tree() {
+  public EntryTree tree() {
     return tree;
   }
 

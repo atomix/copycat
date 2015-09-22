@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.server.storage;
 
+import io.atomix.catalog.server.storage.entry.Entry;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
@@ -118,7 +119,7 @@ public class Segment implements AutoCloseable {
    *
    * @return The count of all entries in the segment.
    */
-  int count() {
+  public int count() {
     return offsetIndex.lastOffset() + 1;
   }
 
@@ -127,7 +128,7 @@ public class Segment implements AutoCloseable {
    *
    * @return The count of entries in the segment minus deletes.
    */
-  int deleteCount() {
+  public int deleteCount() {
     return offsetIndex.lastOffset() + 1 - offsetIndex.deletes();
   }
 
@@ -193,7 +194,7 @@ public class Segment implements AutoCloseable {
 
   /**
    * Checks the range of the given index.
-   * 
+   *
    * @throws IndexOutOfBoundsException if the {@code index} is invalid for the segment
    */
   private void checkRange(long index) {
@@ -204,7 +205,7 @@ public class Segment implements AutoCloseable {
 
   /**
    * Commits an entry to the segment.
-   * 
+   *
    * @throws NullPointerException if {@code entry} is null
    * @throws IllegalStateException if the segment is full
    * @throws IndexOutOfBoundsException if the {@code entry} index does not match the next index
@@ -261,7 +262,7 @@ public class Segment implements AutoCloseable {
    * @return The entry at the given index.
    * @throws IllegalStateException if the segment is not open or {@code index} is inconsistent with the entry
    */
-  synchronized <T extends Entry> T get(long index, boolean includeDeleted) {
+  public synchronized <T extends Entry> T get(long index, boolean includeDeleted) {
     assertSegmentOpen();
     checkRange(index);
 

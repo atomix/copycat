@@ -15,10 +15,6 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.request.VoteRequest;
-import io.atomix.catalog.server.response.AppendResponse;
-import io.atomix.catalog.server.storage.QueryEntry;
-import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.client.ConsistencyLevel;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.error.RaftException;
@@ -28,11 +24,15 @@ import io.atomix.catalog.client.request.Request;
 import io.atomix.catalog.client.response.CommandResponse;
 import io.atomix.catalog.client.response.QueryResponse;
 import io.atomix.catalog.client.response.Response;
+import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.AppendRequest;
 import io.atomix.catalog.server.request.PollRequest;
+import io.atomix.catalog.server.request.VoteRequest;
+import io.atomix.catalog.server.response.AppendResponse;
 import io.atomix.catalog.server.response.PollResponse;
 import io.atomix.catalog.server.response.VoteResponse;
-import io.atomix.catalog.server.storage.RaftEntry;
+import io.atomix.catalog.server.storage.entry.Entry;
+import io.atomix.catalog.server.storage.entry.QueryEntry;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -185,7 +185,7 @@ abstract class ActiveState extends PassiveState {
       // Otherwise, load the last entry in the log. The last entry should be
       // at least as up to date as the candidates entry and term.
       long lastIndex = context.getLog().lastIndex();
-      RaftEntry entry = context.getLog().get(lastIndex);
+      Entry entry = context.getLog().get(lastIndex);
       if (entry == null) {
         LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
         return true;

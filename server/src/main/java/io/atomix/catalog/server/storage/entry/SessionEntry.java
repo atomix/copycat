@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -21,56 +21,56 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
- * Timestamped entry.
+ * Session entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class TimestampedEntry<T extends TimestampedEntry<T>> extends RaftEntry<T> {
-  private long timestamp;
+public abstract class SessionEntry<T extends SessionEntry<T>> extends TimestampedEntry<T> {
+  private long session;
 
-  protected TimestampedEntry() {
+  protected SessionEntry() {
   }
 
-  protected TimestampedEntry(ReferenceManager<Entry<?>> referenceManager) {
+  protected SessionEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
   }
 
-  /**
-   * Returns the entry timestamp.
-   *
-   * @return The entry timestamp.
-   */
-  public long getTimestamp() {
-    return timestamp;
+  @Override
+  public long getAddress() {
+    return session;
   }
 
   /**
-   * Sets the entry timestamp.
+   * Sets the session ID.
    *
-   * @param timestamp The entry timestamp.
-   * @return The entry.
+   * @param session The session ID.
+   * @return The session entry.
    */
   @SuppressWarnings("unchecked")
-  public T setTimestamp(long timestamp) {
-    this.timestamp = timestamp;
+  public T setSession(long session) {
+    this.session = session;
     return (T) this;
+  }
+
+  /**
+   * Returns the session ID.
+   *
+   * @return The session ID.
+   */
+  public long getSession() {
+    return session;
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(timestamp);
+    buffer.writeLong(session);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    timestamp = buffer.readLong();
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[index=%d, term=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), timestamp);
+    session = buffer.readLong();
   }
 
 }

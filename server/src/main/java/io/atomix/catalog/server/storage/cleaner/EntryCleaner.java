@@ -13,8 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.cleaner;
 
+import io.atomix.catalog.server.storage.Segment;
+import io.atomix.catalog.server.storage.SegmentDescriptor;
+import io.atomix.catalog.server.storage.SegmentManager;
+import io.atomix.catalog.server.storage.entry.Entry;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Context;
 import org.slf4j.Logger;

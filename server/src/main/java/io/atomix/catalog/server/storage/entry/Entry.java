@@ -13,9 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.storage;
+package io.atomix.catalog.server.storage.entry;
 
+import io.atomix.catalog.server.storage.Log;
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceCounted;
 import io.atomix.catalyst.util.ReferenceManager;
@@ -39,6 +43,8 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   private final ReferenceManager<Entry<?>> referenceManager;
   private final AtomicInteger references = new AtomicInteger();
   private long index;
+  private long id;
+  private long term;
   private int size = -1;
 
   protected Entry() {
@@ -58,27 +64,6 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
     this.size = -1;
     return (T) this;
   }
-
-  /**
-   * Returns the entry ID.
-   *
-   * @return The entry ID.
-   */
-  public abstract long getId();
-
-  /**
-   * Returns the entry address.
-   *
-   * @return The entry address.
-   */
-  public abstract long getAddress();
-
-  /**
-   * Returns a boolean value indicating whether the command is a tombstone.
-   *
-   * @return Indicates whether the command is a tombstone.
-   */
-  public abstract boolean isTombstone();
 
   /**
    * Returns the entry index.
@@ -102,6 +87,66 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   }
 
   /**
+   * Returns the entry ID.
+   *
+   * @return The entry ID.
+   */
+  public long getId() {
+    return id;
+  }
+
+  /**
+   * Sets the entry ID.
+   *
+   * @param id The entry ID.
+   * @return The entry entry.
+   */
+  @SuppressWarnings("unchecked")
+  public T setId(long id) {
+    this.id = id;
+    return (T) this;
+  }
+
+  /**
+   * Returns the entry address.
+   *
+   * @return The entry address.
+   */
+  public long getAddress() {
+    return 0;
+  }
+
+  /**
+   * Returns a boolean value indicating whether the command is a tombstone.
+   *
+   * @return Indicates whether the command is a tombstone.
+   */
+  public boolean isTombstone() {
+    return false;
+  }
+
+  /**
+   * Returns the entry term.
+   *
+   * @return The entry term.
+   */
+  public long getTerm() {
+    return term;
+  }
+
+  /**
+   * Sets the entry term.
+   *
+   * @param term The entry term.
+   * @return The entry.
+   */
+  @SuppressWarnings("unchecked")
+  public T setTerm(long term) {
+    this.term = term;
+    return (T) this;
+  }
+
+  /**
    * Returns the entry size.
    *
    * @return The entry size.
@@ -119,9 +164,21 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
    * @return The entry.
    */
   @SuppressWarnings("unchecked")
-  T setSize(int size) {
+  public T setSize(int size) {
     this.size = size;
     return (T) this;
+  }
+
+  @Override
+  public void writeObject(BufferOutput buffer, Serializer serializer) {
+    buffer.writeLong(id);
+    buffer.writeLong(term);
+  }
+
+  @Override
+  public void readObject(BufferInput buffer, Serializer serializer) {
+    id = buffer.readLong();
+    term = buffer.readLong();
   }
 
   @Override

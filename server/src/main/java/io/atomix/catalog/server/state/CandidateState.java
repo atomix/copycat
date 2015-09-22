@@ -15,13 +15,13 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.client.response.Response;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.AppendRequest;
 import io.atomix.catalog.server.request.VoteRequest;
 import io.atomix.catalog.server.response.AppendResponse;
-import io.atomix.catalog.server.storage.RaftEntry;
-import io.atomix.catalog.client.response.Response;
 import io.atomix.catalog.server.response.VoteResponse;
+import io.atomix.catalog.server.storage.entry.Entry;
 import io.atomix.catalog.server.util.Quorum;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
@@ -120,7 +120,7 @@ final class CandidateState extends ActiveState {
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
     long lastIndex = context.getLog().lastIndex();
-    RaftEntry lastEntry = lastIndex != 0 ? context.getLog().get(lastIndex) : null;
+    Entry lastEntry = lastIndex != 0 ? context.getLog().get(lastIndex) : null;
 
     final long lastTerm;
     if (lastEntry != null) {
