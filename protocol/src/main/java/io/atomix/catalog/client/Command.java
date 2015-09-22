@@ -30,6 +30,15 @@ import io.atomix.catalyst.util.BuilderPool;
 public interface Command<T> extends Operation<T> {
 
   /**
+   * Returns the memory address of the command.
+   *
+   * @return The memory address of the command.
+   */
+  default long address() {
+    return 0;
+  }
+
+  /**
    * Base builder for commands.
    */
   abstract class Builder<T extends Builder<T, U, V>, U extends Command<V>, V> extends Operation.Builder<T, U, V> {

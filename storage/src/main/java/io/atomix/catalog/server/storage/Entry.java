@@ -60,6 +60,20 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   }
 
   /**
+   * Returns the entry ID.
+   *
+   * @return The entry ID.
+   */
+  public abstract long getId();
+
+  /**
+   * Returns the entry address.
+   *
+   * @return The entry address.
+   */
+  public abstract long getAddress();
+
+  /**
    * Returns the entry index.
    *
    * @return The entry index.
@@ -130,11 +144,7 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
 
   @Override
   public void close() {
-    if (references.get() == 0)
-      throw new IllegalStateException("cannot close non-referenced object");
-    references.set(0);
-    if (referenceManager != null)
-      referenceManager.release(this);
+    release();
   }
 
 }

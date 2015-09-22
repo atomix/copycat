@@ -15,14 +15,14 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.StateMachine;
-import io.atomix.catalog.server.request.*;
-import io.atomix.catalog.server.storage.Log;
-import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.client.request.CommandRequest;
 import io.atomix.catalog.client.request.KeepAliveRequest;
 import io.atomix.catalog.client.request.QueryRequest;
 import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.server.RaftServer;
+import io.atomix.catalog.server.StateMachine;
+import io.atomix.catalog.server.request.*;
+import io.atomix.catalog.server.storage.Log;
 import io.atomix.catalog.server.storage.Storage;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
@@ -358,7 +358,6 @@ public class ServerContext implements Managed<Void> {
     if (globalIndex < 0)
       throw new IllegalArgumentException("global index must be positive");
     this.globalIndex = Math.max(this.globalIndex, globalIndex);
-    log.commit(this.globalIndex);
     return this;
   }
 

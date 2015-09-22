@@ -19,6 +19,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import org.testng.annotations.Test;
 
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 
 import static org.testng.Assert.*;
@@ -30,6 +31,7 @@ import static org.testng.Assert.*;
  */
 @Test
 public class CleanerTest extends AbstractLogTest {
+  private final Random random = new Random();
 
   protected Log createLog() {
     return tempStorageBuilder()
@@ -73,6 +75,8 @@ public class CleanerTest extends AbstractLogTest {
   private void writeEntries(int entries) {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
+        entry.setAddress(1);
+        entry.setId(random.nextLong());
         entry.setTerm(1);
         entry.setRemove(false);
         log.append(entry);

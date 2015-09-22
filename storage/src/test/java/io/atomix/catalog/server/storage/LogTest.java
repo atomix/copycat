@@ -20,6 +20,7 @@ import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.util.Random;
 
 import static org.testng.Assert.*;
 
@@ -30,6 +31,7 @@ import static org.testng.Assert.*;
  */
 @Test
 public class LogTest extends AbstractLogTest {
+  private final Random random = new Random();
 
   /**
    * Creates a new log.
@@ -190,6 +192,8 @@ public class LogTest extends AbstractLogTest {
 
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
+      entry.setAddress(1);
+      entry.setId(random.nextLong());
       entry.setTerm(1);
       entry.setRemove(true);
       index = log.append(entry);
@@ -197,7 +201,8 @@ public class LogTest extends AbstractLogTest {
 
     assertEquals(log.length(), 111);
 
-    try (TestEntry entry = log.commit(111).get(101)) {
+    log.commit(111);
+    try (TestEntry entry = log.get(101)) {
       assertNull(entry);
     }
 
@@ -271,7 +276,9 @@ public class LogTest extends AbstractLogTest {
         assertFalse(log.contains(i));
       }
     }
-    log.commit(2049).cleaner().clean().join();
+
+    log.commit(1024).compact(1024).cleaner().clean().join();
+    log.commit(2048).compact(2048).cleaner().clean().join();
 
     try (Log log = createLog()) {
       assertEquals(log.length(), 2048);
@@ -291,6 +298,8 @@ public class LogTest extends AbstractLogTest {
   private void appendEntries(Log log, int entries) {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
+        entry.setAddress(1);
+        entry.setId(random.nextLong());
         entry.setTerm(1);
         entry.setRemove(true);
         log.append(entry);

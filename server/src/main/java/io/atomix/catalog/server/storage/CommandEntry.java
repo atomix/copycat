@@ -41,6 +41,11 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
     super(referenceManager);
   }
 
+  @Override
+  public long getAddress() {
+    return command.address();
+  }
+
   /**
    * Returns the command sequence number.
    *
@@ -103,7 +108,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), command);
+    return String.format("%s[index=%d, id=%d, term=%d, session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), getIndex(), getId(), getTerm(), getSession(), getSequence(), getTimestamp(), command);
   }
 
 }

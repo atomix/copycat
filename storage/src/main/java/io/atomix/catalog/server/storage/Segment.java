@@ -114,11 +114,20 @@ public class Segment implements AutoCloseable {
   }
 
   /**
-   * Returns the count of entries in the segment.
+   * Returns the count of all entries in the segment.
    *
-   * @return The count of entries in the segment.
+   * @return The count of all entries in the segment.
    */
-  public int count() {
+  int count() {
+    return offsetIndex.lastOffset() + 1;
+  }
+
+  /**
+   * Returns the count of entries in the segment minus deletes.
+   *
+   * @return The count of entries in the segment minus deletes.
+   */
+  int deleteCount() {
     return offsetIndex.lastOffset() + 1 - offsetIndex.deletes();
   }
 
@@ -241,6 +250,18 @@ public class Segment implements AutoCloseable {
    * @throws IllegalStateException if the segment is not open or {@code index} is inconsistent with the entry
    */
   public synchronized <T extends Entry> T get(long index) {
+    return get(index, false);
+  }
+
+  /**
+   * Reads the entry at the given index.
+   *
+   * @param index The index from which to read the entry.
+   * @param includeDeleted Whether to include deleted entries.
+   * @return The entry at the given index.
+   * @throws IllegalStateException if the segment is not open or {@code index} is inconsistent with the entry
+   */
+  synchronized <T extends Entry> T get(long index, boolean includeDeleted) {
     assertSegmentOpen();
     checkRange(index);
 
@@ -249,7 +270,7 @@ public class Segment implements AutoCloseable {
 
     // Return null if the offset has been committed and has been marked for deletion from the segment.
     // Offsets that are not committed can still be read regardless of whether they've been marked for deletion.
-    if (index <= manager.commitIndex() && offsetIndex.deleted(offset)) {
+    if (!includeDeleted && index <= manager.commitIndex() && offsetIndex.deleted(offset)) {
       return null;
     }
 

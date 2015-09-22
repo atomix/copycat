@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Cleaner implements AutoCloseable {
   private static final double CLEAN_THRESHOLD = 0.5;
   private final SegmentManager manager;
+  private final EntryTree tree = new EntryTree();
   private final ScheduledExecutorService executor;
   private CompletableFuture<Void> cleanFuture;
 
@@ -50,7 +51,16 @@ public class Cleaner implements AutoCloseable {
    * @return The cleaner index.
    */
   public long index() {
-    return manager.commitIndex();
+    return manager.compactIndex();
+  }
+
+  /**
+   * Returns the log cleaner entry tree.
+   *
+   * @return The log cleaner entry tree.
+   */
+  EntryTree tree() {
+    return tree;
   }
 
   /**
@@ -75,7 +85,7 @@ public class Cleaner implements AutoCloseable {
     List<List<Segment>> cleanSegments = getCleanSegments();
     if (!cleanSegments.isEmpty()) {
       for (List<Segment> segments : cleanSegments) {
-        EntryCleaner cleaner = new EntryCleaner(manager, new ThreadPoolContext(executor, manager.serializer()));
+        EntryCleaner cleaner = new EntryCleaner(manager, tree, new ThreadPoolContext(executor, manager.serializer()));
         executor.execute(() -> cleaner.clean(segments).whenComplete((result, error) -> {
           if (counter.incrementAndGet() == cleanSegments.size()) {
             if (context != null) {
@@ -142,10 +152,10 @@ public class Cleaner implements AutoCloseable {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.lastIndex() < index() && segment.isFull()) {
+      if (segment.lastIndex() <= index() && segment.isFull()) {
 
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
-        double cleanPercentage = (segment.length() - segment.count()) / (double) segment.length();
+        double cleanPercentage = (segment.length() - segment.deleteCount()) / (double) segment.length();
 
         // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
         // add the segment to the segments list for cleaning.

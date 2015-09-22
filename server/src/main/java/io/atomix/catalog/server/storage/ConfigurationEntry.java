@@ -32,6 +32,7 @@ import java.util.Collection;
  */
 @SerializeWith(id=308)
 public class ConfigurationEntry extends RaftEntry<ConfigurationEntry> {
+  private static final long ADDRESS = 1;
   private Collection<Address> active;
   private Collection<Address> passive;
 
@@ -40,6 +41,11 @@ public class ConfigurationEntry extends RaftEntry<ConfigurationEntry> {
 
   public ConfigurationEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
+  }
+
+  @Override
+  public long getAddress() {
+    return ADDRESS;
   }
 
   /**

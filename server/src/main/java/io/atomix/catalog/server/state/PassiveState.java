@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.request.*;
 import io.atomix.catalog.client.response.*;
 import io.atomix.catalog.server.RaftServer;
@@ -23,7 +24,6 @@ import io.atomix.catalog.server.response.*;
 import io.atomix.catalog.server.storage.ConfigurationEntry;
 import io.atomix.catalog.server.storage.Entry;
 import io.atomix.catalog.server.storage.RaftEntry;
-import io.atomix.catalog.client.error.RaftError;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -130,6 +130,9 @@ class PassiveState extends AbstractState {
    */
   @SuppressWarnings("unchecked")
   protected AppendResponse doAppendEntries(AppendRequest request) {
+    // Mark entries up to the request global index as committed to the log.
+    context.getLog().commit(request.globalIndex());
+
     // If the log contains entries after the request's previous log index
     // then remove those entries to be replaced by the request entries.
     if (!request.entries().isEmpty()) {
@@ -178,7 +181,10 @@ class PassiveState extends AbstractState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.getContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> applyIndex(request.globalIndex()));
+    context.getContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
+      context.setGlobalIndex(request.globalIndex());
+      context.getLog().compact(request.globalIndex());
+    });
 
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
@@ -257,15 +263,6 @@ class PassiveState extends AbstractState {
   protected CompletableFuture<?> applyEntry(Entry entry) {
     LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
     return context.getStateMachine().apply(entry);
-  }
-
-  /**
-   * Recycles the log up to the given index.
-   */
-  protected void applyIndex(long globalIndex) {
-    if (globalIndex > 0) {
-      context.setGlobalIndex(globalIndex);
-    }
   }
 
   @Override

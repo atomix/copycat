@@ -35,6 +35,11 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
     super(referenceManager);
   }
 
+  @Override
+  public long getAddress() {
+    return session;
+  }
+
   /**
    * Sets the session ID.
    *

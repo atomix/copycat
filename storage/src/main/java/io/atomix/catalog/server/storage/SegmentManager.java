@@ -42,6 +42,7 @@ public class SegmentManager implements AutoCloseable {
   private final NavigableMap<Long, Segment> segments = new ConcurrentSkipListMap<>();
   private Segment currentSegment;
   private volatile long commitIndex;
+  private volatile long compactIndex;
 
   /**
    * @throws NullPointerException if {@code segments} is null
@@ -79,6 +80,26 @@ public class SegmentManager implements AutoCloseable {
    */
   public long commitIndex() {
     return commitIndex;
+  }
+
+  /**
+   * Sets the log compact index.
+   *
+   * @param index The log compact index.
+   * @return The segment manager.
+   */
+  SegmentManager compactIndex(long index) {
+    this.compactIndex = Math.max(this.compactIndex, index);
+    return this;
+  }
+
+  /**
+   * Returns the log compact index.
+   *
+   * @return The log compact index.
+   */
+  public long compactIndex() {
+    return compactIndex;
   }
 
   /**

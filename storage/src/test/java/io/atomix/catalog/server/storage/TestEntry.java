@@ -28,11 +28,45 @@ import io.atomix.catalyst.util.ReferenceManager;
  */
 @SerializeWith(id=1000)
 public class TestEntry extends Entry<TestEntry> {
+  private long id;
+  private long address;
   private long term;
   private boolean remove;
 
   public TestEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
+  }
+
+  @Override
+  public long getId() {
+    return 1;
+  }
+
+  /**
+   * Sets the entry ID.
+   *
+   * @param id The entry ID.
+   * @return The entry.
+   */
+  public TestEntry setId(long id) {
+    this.id = id;
+    return this;
+  }
+
+  @Override
+  public long getAddress() {
+    return 1;
+  }
+
+  /**
+   * Sets the entry address.
+   *
+   * @param address The entry address.
+   * @return The entry.
+   */
+  public TestEntry setAddress(long address) {
+    this.address = address;
+    return this;
   }
 
   /**
@@ -78,11 +112,13 @@ public class TestEntry extends Entry<TestEntry> {
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
-    buffer.writeLong(term).writeBoolean(remove);
+    buffer.writeLong(address).writeLong(id).writeLong(term).writeBoolean(remove);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
+    address = buffer.readLong();
+    id = buffer.readLong();
     term = buffer.readLong();
     remove = buffer.readBoolean();
   }

@@ -78,7 +78,7 @@ public class Log implements AutoCloseable {
    * Asserts that the index is a valid index.
    */
   private void assertValidIndex(long index) {
-    Assert.index(validIndex(index), "invalid log index: %s", index);
+    Assert.index(validIndex(index), "invalid log index: %d", index);
   }
 
   /**
@@ -184,7 +184,15 @@ public class Log implements AutoCloseable {
     Assert.notNull(entry, "entry");
     assertIsOpen();
     checkRoll();
-    return segments.currentSegment().append(entry);
+
+    // Append the entry to the appropriate segment.
+    long index = segments.currentSegment().append(entry);
+
+    // It's possible that the entry could have already been marked as committed.
+    if (index <= segments.compactIndex()) {
+      cleaner.tree().add(entry);
+    }
+    return index;
   }
 
   /**
@@ -284,6 +292,26 @@ public class Log implements AutoCloseable {
   }
 
   /**
+   * Marks entries up to the given index for compaction.
+   *
+   * @param index The index up to which to compact entries.
+   * @return The log.
+   */
+  public Log compact(long index) {
+    for (long i = segments.compactIndex() + 1; i <= index; i++) {
+      if (validIndex(i)) {
+        try (Entry entry = get(i)) {
+          if (entry != null) {
+            cleaner.tree().add(entry);
+          }
+        }
+      }
+      segments.compactIndex(i);
+    }
+    return this;
+  }
+
+  /**
    * Skips the given number of entries.
    * <p>
    * This method essentially advances the log's {@link Log#lastIndex()} without writing any entries at the interim
@@ -347,6 +375,7 @@ public class Log implements AutoCloseable {
    * @return The log.
    */
   public Log commit(long index) {
+    assertIsOpen();
     segments.commitIndex(index);
     return this;
   }

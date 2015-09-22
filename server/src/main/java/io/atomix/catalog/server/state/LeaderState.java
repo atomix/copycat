@@ -15,11 +15,6 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.client.response.*;
-import io.atomix.catalog.server.request.*;
-import io.atomix.catalog.server.response.*;
-import io.atomix.catalog.server.storage.*;
-import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.ConsistencyLevel;
 import io.atomix.catalog.client.Query;
@@ -29,6 +24,11 @@ import io.atomix.catalog.client.request.CommandRequest;
 import io.atomix.catalog.client.request.KeepAliveRequest;
 import io.atomix.catalog.client.request.QueryRequest;
 import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.client.response.*;
+import io.atomix.catalog.server.RaftServer;
+import io.atomix.catalog.server.request.*;
+import io.atomix.catalog.server.response.*;
+import io.atomix.catalog.server.storage.*;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
@@ -44,6 +44,7 @@ import java.util.concurrent.CompletableFuture;
 final class LeaderState extends ActiveState {
   private static final int MAX_BATCH_SIZE = 1024 * 28;
   private Scheduled currentTimer;
+  private final Random random = new Random();
   private final Replicator replicator = new Replicator();
 
   public LeaderState(ServerContext context) {
@@ -342,6 +343,7 @@ final class LeaderState extends ActiveState {
         entry.setTerm(term)
           .setTimestamp(timestamp)
           .setSession(request.session())
+          .setId(random.nextLong())
           .setSequence(request.sequence())
           .setCommand(command);
         index = context.getLog().append(entry);
@@ -763,6 +765,7 @@ final class LeaderState extends ActiveState {
       if (commitIndex > 0) {
         context.setCommitIndex(commitIndex);
         context.setGlobalIndex(globalIndex);
+        context.getLog().commit(globalIndex).compact(globalIndex);
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());

@@ -31,14 +31,16 @@ import java.util.concurrent.CompletableFuture;
 class EntryCleaner implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(EntryCleaner.class);
   private final SegmentManager manager;
+  private final EntryTree tree;
   private final Context context;
   private CompletableFuture<Void> cleanFuture;
 
   /**
    * @throws NullPointerException if {@code manager} or {@code context} are null
    */
-  public EntryCleaner(SegmentManager manager, Context context) {
+  public EntryCleaner(SegmentManager manager, EntryTree tree, Context context) {
     this.manager = Assert.notNull(manager, "manager");
+    this.tree = Assert.notNull(tree, "tree");
     this.context = Assert.notNull(context, "context");
   }
 
@@ -122,8 +124,20 @@ class EntryCleaner implements AutoCloseable {
       if (entry != null) {
         cleanSegment.append(entry);
       } else {
-        cleanSegment.skip(1);
-        LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
+        try (Entry deleted = segment.get(index, true)) {
+          if (deleted != null) {
+            if (tree.canDelete(deleted)) {
+              tree.delete(deleted);
+              cleanSegment.skip(1);
+              LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
+            } else {
+              cleanSegment.append(deleted);
+              cleanSegment.clean(deleted.getIndex());
+            }
+          } else {
+            cleanSegment.skip(1);
+          }
+        }
       }
     }
 
