@@ -44,7 +44,6 @@ import java.util.concurrent.CompletableFuture;
 final class LeaderState extends ActiveState {
   private static final int MAX_BATCH_SIZE = 1024 * 28;
   private Scheduled currentTimer;
-  private final Random random = new Random();
   private final Replicator replicator = new Replicator();
 
   public LeaderState(ServerContext context) {
@@ -86,7 +85,7 @@ final class LeaderState extends ActiveState {
     final long term = context.getTerm();
     final long index;
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
-      entry.setTerm(term).setTimestamp(System.currentTimeMillis());
+      entry.setId(context.nextEntryId()).setTerm(term).setTimestamp(System.currentTimeMillis());
       index = context.getLog().append(entry);
     }
 
@@ -172,7 +171,8 @@ final class LeaderState extends ActiveState {
       passiveMembers.add(request.member());
 
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(term)
+        entry.setId(context.nextEntryId())
+          .setTerm(term)
           .setActive(activeMembers)
           .setPassive(passiveMembers);
         index = context.getLog().append(entry);
@@ -231,7 +231,8 @@ final class LeaderState extends ActiveState {
       passiveMembers.remove(request.member());
 
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(term)
+        entry.setId(context.nextEntryId())
+          .setTerm(term)
           .setActive(activeMembers)
           .setPassive(passiveMembers);
         index = context.getLog().append(entry);
@@ -343,7 +344,7 @@ final class LeaderState extends ActiveState {
         entry.setTerm(term)
           .setTimestamp(timestamp)
           .setSession(request.session())
-          .setId(random.nextLong())
+          .setId(context.nextEntryId())
           .setSequence(request.sequence())
           .setCommand(command);
         index = context.getLog().append(entry);
@@ -407,6 +408,7 @@ final class LeaderState extends ActiveState {
 
       QueryEntry entry = context.getLog().create(QueryEntry.class)
         .setIndex(index)
+        .setId(0)
         .setTerm(context.getTerm())
         .setTimestamp(timestamp)
         .setSession(request.session())
@@ -516,10 +518,11 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-        entry.setTerm(context.getTerm());
-        entry.setTimestamp(timestamp);
-        entry.setConnection(request.connection());
-        entry.setTimeout(timeout);
+        entry.setId(context.nextEntryId())
+          .setTerm(context.getTerm())
+          .setTimestamp(timestamp)
+          .setConnection(request.connection())
+          .setTimeout(timeout);
         index = context.getLog().append(entry);
         LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
       }
@@ -577,7 +580,8 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-        entry.setTerm(context.getTerm())
+        entry.setId(context.nextEntryId())
+          .setTerm(context.getTerm())
           .setSession(request.session())
           .setCommandSequence(request.commandSequence())
           .setEventVersion(request.eventVersion())
@@ -973,7 +977,8 @@ final class LeaderState extends ActiveState {
         passiveMembers.remove(member.getAddress());
 
         try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-          entry.setTerm(context.getTerm())
+          entry.setId(context.nextEntryId())
+            .setTerm(context.getTerm())
             .setActive(activeMembers)
             .setPassive(passiveMembers);
           long index = context.getLog().append(entry);

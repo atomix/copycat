@@ -55,6 +55,7 @@ import java.util.function.Consumer;
 public class ServerContext implements Managed<Void> {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
   private final Listeners<RaftServer.State> listeners = new Listeners<>();
+  private final Random random;
   private final Serializer serializer;
   private Context context;
   private final StateMachine userStateMachine;
@@ -81,6 +82,7 @@ public class ServerContext implements Managed<Void> {
 
   public ServerContext(Address address, Collection<Address> members, Transport transport, Storage storage, StateMachine stateMachine, Serializer serializer) {
     this.address = Assert.notNull(address, "address");
+    this.random = new Random(address.hashCode());
     this.members = new HashMap<>();
     members.forEach(m -> this.members.put(m.hashCode(), m));
     this.members.put(address.hashCode(), address);
@@ -404,6 +406,15 @@ public class ServerContext implements Managed<Void> {
    */
   public Log getLog() {
     return log;
+  }
+
+  /**
+   * Returns a random entry ID.
+   *
+   * @return A random entry ID.
+   */
+  long nextEntryId() {
+    return random.nextLong();
   }
 
   /**
