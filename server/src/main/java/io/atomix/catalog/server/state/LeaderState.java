@@ -346,7 +346,7 @@ final class LeaderState extends ActiveState {
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
     // sequence number. In that case, it's likely that the command was submitted more than once to the
     // cluster, and the command will be deduplicated once applied to the state machine.
-    if (command.consistency() == Command.ConsistencyLevel.LINEARIZABLE && request.sequence() > session.nextRequest()) {
+    if (request.sequence() > session.nextRequest()) {
       session.registerRequest(request.sequence(), () -> command(request).whenComplete(future));
       return future;
     }
@@ -409,11 +409,8 @@ final class LeaderState extends ActiveState {
       }
     });
 
-    // If the command is LINEARIZABLE, update the session sequence number. CAUSAL commands do not have a sequence number
-    // and so aren't sequenced through the leader.
-    if (command.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
-      session.setRequest(request.sequence());
-    }
+    // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
+    session.setRequest(request.sequence());
 
     return future;
   }

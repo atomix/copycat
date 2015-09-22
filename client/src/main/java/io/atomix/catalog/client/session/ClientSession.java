@@ -138,21 +138,11 @@ public class ClientSession implements Session, Managed<Session> {
     CompletableFuture<T> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
-      // LINEARIZABLE commands are submitted with a sequence number.
-      CommandRequest request;
-      if (command.consistency() == Command.ConsistencyLevel.CAUSAL) {
-        request = CommandRequest.builder()
-          .withSession(id)
-          .withSequence(0)
-          .withCommand(command)
-          .build();
-      } else {
-        request = CommandRequest.builder()
-          .withSession(id)
-          .withSequence(++commandRequest)
-          .withCommand(command)
-          .build();
-      }
+      CommandRequest request = CommandRequest.builder()
+        .withSession(id)
+        .withSequence(++commandRequest)
+        .withCommand(command)
+        .build();
 
       submit(request, future);
     });
@@ -175,7 +165,7 @@ public class ClientSession implements Session, Managed<Session> {
     this.<CommandRequest, CommandResponse>request(request).whenComplete((response, error) -> {
       if (error == null) {
         long responseSequence = request.sequence();
-        sequenceResponse(response, sequence, () -> {
+        sequenceResponse(sequence, () -> {
           commandResponse = responseSequence;
           completeResponse(response, future);
         });
@@ -240,7 +230,7 @@ public class ClientSession implements Session, Managed<Session> {
       if (error == null) {
         // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
         if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-          sequenceResponse(response, sequence, () -> {
+          sequenceResponse(sequence, () -> {
             responseVersion = Math.max(responseVersion, response.version());
             completeResponse(response, future);
           });
@@ -249,7 +239,7 @@ public class ClientSession implements Session, Managed<Session> {
         // are received in a sequential manner, we compare the response version number with the highest version for which
         // we've received a response and resubmit queries with output resulting from stale (prior) versions.
         else {
-          sequenceResponse(response, sequence, () -> {
+          sequenceResponse(sequence, () -> {
             if (response.version() > 0 && response.version() < responseVersion) {
               submit(request, future);
             } else {
@@ -269,7 +259,7 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Sequences a query response.
    */
-  private void sequenceResponse(OperationResponse response, long sequence, Runnable callback) {
+  private void sequenceResponse(long sequence, Runnable callback) {
     // If the response is for the next sequence number (the response is received in order),
     // complete the future as appropriate. Note that some prior responses may have been received
     // out of order, so once this response is completed, complete any following responses that
