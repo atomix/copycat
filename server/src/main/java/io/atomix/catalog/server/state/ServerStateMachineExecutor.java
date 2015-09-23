@@ -16,10 +16,10 @@
 
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.Commit;
-import io.atomix.catalog.server.StateMachineExecutor;
 import io.atomix.catalog.client.Operation;
 import io.atomix.catalog.client.error.ApplicationException;
+import io.atomix.catalog.server.Commit;
+import io.atomix.catalog.server.StateMachineExecutor;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
@@ -295,7 +295,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
      * Returns a boolean value indicating whether the task delay has been met.
      */
     private boolean complete(long timestamp) {
-      return timestamp >= time;
+      return timestamp > time;
     }
 
     /**

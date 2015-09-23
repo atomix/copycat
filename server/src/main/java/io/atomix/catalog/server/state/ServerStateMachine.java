@@ -138,6 +138,12 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Long> apply(RegisterEntry entry) {
     ServerSession session = executor.context().sessions().registerSession(entry.getIndex(), entry.getConnection(), entry.getTimeout()).setTimestamp(entry.getTimestamp());
 
+    // Allow the executor to execute any scheduled events.
+    executor.tick(entry.getTimestamp());
+
+    // Expire any remaining expired sessions.
+    expireSessions(entry.getTimestamp());
+
     Context context = getContext();
     long index = entry.getIndex();
 
@@ -147,12 +153,6 @@ class ServerStateMachine implements AutoCloseable {
       stateMachine.register(session);
       context.execute(() -> future.complete(index));
     });
-
-    // Expire any remaining expired sessions.
-    expireSessions(entry.getTimestamp());
-
-    // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
 
     return future;
   }
@@ -164,6 +164,12 @@ class ServerStateMachine implements AutoCloseable {
    */
   private CompletableFuture<Void> apply(KeepAliveEntry entry) {
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
+
+    // Allow the executor to execute any scheduled events.
+    executor.tick(entry.getTimestamp());
+
+    // Expire any remaining expired sessions.
+    expireSessions(entry.getTimestamp());
 
     CompletableFuture<Void> future;
 
@@ -185,12 +191,6 @@ class ServerStateMachine implements AutoCloseable {
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
     }
-
-    // Expire any remaining expired sessions.
-    expireSessions(entry.getTimestamp());
-
-    // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
 
     return future;
   }
@@ -249,6 +249,9 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, CompletableFuture<Object> future, Context context) {
     context.checkThread();
 
+    // Allow the executor to execute any scheduled events.
+    executor.tick(entry.getTimestamp());
+
     long sequence = entry.getSequence();
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
@@ -271,9 +274,6 @@ class ServerStateMachine implements AutoCloseable {
     if (entry.getCommand().consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
       session.setSequence(entry.getSequence());
     }
-
-    // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
 
     return future;
   }
