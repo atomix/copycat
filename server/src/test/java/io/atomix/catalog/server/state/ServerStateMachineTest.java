@@ -22,8 +22,8 @@ import io.atomix.catalog.server.StateMachine;
 import io.atomix.catalog.server.StateMachineExecutor;
 import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -41,8 +41,8 @@ import static org.testng.Assert.*;
  */
 @Test
 public class ServerStateMachineTest extends ConcurrentTestCase {
-  private Context callerContext;
-  private Context stateContext;
+  private ThreadContext callerContext;
+  private ThreadContext stateContext;
   private ServerStateMachine stateMachine;
   private long timestamp;
   private AtomicLong sequence;

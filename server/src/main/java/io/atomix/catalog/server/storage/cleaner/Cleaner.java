@@ -18,7 +18,7 @@ package io.atomix.catalog.server.storage.cleaner;
 import io.atomix.catalog.server.storage.Segment;
 import io.atomix.catalog.server.storage.SegmentManager;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.Context;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
 
 import java.util.ArrayList;
@@ -75,14 +75,14 @@ public class Cleaner implements AutoCloseable {
       return cleanFuture;
 
     cleanFuture = new CompletableFuture<>();
-    cleanSegments(Context.currentContext());
+    cleanSegments(ThreadContext.currentContext());
     return cleanFuture.whenComplete((result, error) -> cleanFuture = null);
   }
 
   /**
    * Cleans all cleanable segments.
    */
-  private void cleanSegments(Context context) {
+  private void cleanSegments(ThreadContext context) {
     AtomicInteger counter = new AtomicInteger();
     List<List<Segment>> cleanSegments = getCleanSegments();
     if (!cleanSegments.isEmpty()) {

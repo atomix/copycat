@@ -21,8 +21,8 @@ import io.atomix.catalog.client.error.UnknownSessionException;
 import io.atomix.catalog.server.StateMachine;
 import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
-import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Futures;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +42,7 @@ class ServerStateMachine implements AutoCloseable {
   private final ServerCommitPool commits;
   private long lastApplied;
 
-  ServerStateMachine(StateMachine stateMachine, ServerCommitCleaner cleaner, Context context) {
+  ServerStateMachine(StateMachine stateMachine, ServerCommitCleaner cleaner, ThreadContext context) {
     this.stateMachine = stateMachine;
     this.executor = new ServerStateMachineExecutor(context);
     this.commits = new ServerCommitPool(cleaner, executor.context().sessions());
@@ -96,8 +96,8 @@ class ServerStateMachine implements AutoCloseable {
    *
    * @return The current thread context.
    */
-  private Context getContext() {
-    Context context = Context.currentContext();
+  private ThreadContext getContext() {
+    ThreadContext context = ThreadContext.currentContext();
     if (context == null)
       throw new IllegalStateException("must be called from a Catalyst thread");
     return context;
@@ -143,7 +143,7 @@ class ServerStateMachine implements AutoCloseable {
     // Expire any remaining expired sessions.
     expireSessions(entry.getTimestamp());
 
-    Context context = getContext();
+    ThreadContext context = getContext();
     long index = entry.getIndex();
 
     // Set last applied only after the operation has been submitted to the state machine executor.
@@ -180,7 +180,7 @@ class ServerStateMachine implements AutoCloseable {
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
     // managed to receive a keep alive request from the client before it was removed.
     else {
-      Context context = getContext();
+      ThreadContext context = getContext();
 
       // The keep alive request contains the
       session.setTimestamp(entry.getTimestamp())
@@ -219,7 +219,7 @@ class ServerStateMachine implements AutoCloseable {
     else if (entry.getSequence() < session.nextSequence()) {
       // Ensure the response check is executed in the state machine thread in order to ensure the
       // command was applied, otherwise there will be a race condition and concurrent modification issues.
-      Context context = getContext();
+      ThreadContext context = getContext();
       long sequence = entry.getSequence();
 
       executor.executor().execute(() -> {
@@ -245,7 +245,7 @@ class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine command.
    */
-  private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, CompletableFuture<Object> future, Context context) {
+  private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, CompletableFuture<Object> future, ThreadContext context) {
     context.checkThread();
 
     // Allow the executor to execute any scheduled events.
@@ -300,7 +300,7 @@ class ServerStateMachine implements AutoCloseable {
       CompletableFuture<Object> future = new CompletableFuture<>();
 
       // Get the caller's context.
-      Context context = getContext();
+      ThreadContext context = getContext();
 
       // Once the query has met its sequence requirement, check whether it has also met its version requirement. If the version
       // requirement is not yet met, queue the query for the state machine to catch up to the required version.
@@ -321,7 +321,7 @@ class ServerStateMachine implements AutoCloseable {
     else if (entry.getVersion() > session.getVersion()) {
       CompletableFuture<Object> future = new CompletableFuture<>();
 
-      Context context = getContext();
+      ThreadContext context = getContext();
 
       session.registerVersionQuery(entry.getVersion(), () -> {
         context.checkThread();
@@ -336,7 +336,7 @@ class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine query.
    */
-  private CompletableFuture<Object> executeQuery(QueryEntry entry, CompletableFuture<Object> future, Context context) {
+  private CompletableFuture<Object> executeQuery(QueryEntry entry, CompletableFuture<Object> future, ThreadContext context) {
     executor.execute(commits.acquire(entry.setTimestamp(executor.timestamp()))).whenComplete((result, error) -> {
       if (error == null) {
         context.execute(() -> future.complete(result));

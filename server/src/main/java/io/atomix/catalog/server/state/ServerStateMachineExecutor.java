@@ -23,8 +23,8 @@ import io.atomix.catalog.server.StateMachineExecutor;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
-import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Scheduled;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -43,7 +43,7 @@ import java.util.function.Supplier;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 class ServerStateMachineExecutor implements StateMachineExecutor {
-  private final Context executor;
+  private final ThreadContext executor;
   private final ServerStateMachineContext context;
   private final List<ServerScheduledTask> tasks = new ArrayList<>();
   private final List<ServerScheduledTask> complete = new ArrayList<>();
@@ -51,7 +51,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private Function allOperation;
   private long timestamp;
 
-  ServerStateMachineExecutor(Context context) {
+  ServerStateMachineExecutor(ThreadContext context) {
     this.executor = context;
     this.context = new ServerStateMachineContext();
   }
@@ -187,12 +187,12 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   @Override
-  public Scheduled schedule(Runnable callback, Duration delay) {
+  public Scheduled schedule(Duration delay, Runnable callback) {
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
-  public Scheduled schedule(Runnable callback, Duration initialDelay, Duration interval) {
+  public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }
 

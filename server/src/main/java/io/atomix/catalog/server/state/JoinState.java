@@ -51,12 +51,12 @@ final class JoinState extends InactiveState {
    * Sets a join timeout.
    */
   private void startJoinTimeout() {
-    joinFuture = context.getContext().schedule(() -> {
+    joinFuture = context.getContext().schedule(context.getElectionTimeout(), () -> {
       if (isOpen()) {
         context.getCluster().setActive(true);
         transition(RaftServer.State.FOLLOWER);
       }
-    }, context.getElectionTimeout());
+    });
   }
 
   /**

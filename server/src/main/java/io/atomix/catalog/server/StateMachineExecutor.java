@@ -17,7 +17,7 @@
 package io.atomix.catalog.server;
 
 import io.atomix.catalog.client.Operation;
-import io.atomix.catalyst.util.concurrent.Context;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -27,7 +27,7 @@ import java.util.function.Function;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface StateMachineExecutor extends Context {
+public interface StateMachineExecutor extends ThreadContext {
 
   /**
    * Returns the state machine context.

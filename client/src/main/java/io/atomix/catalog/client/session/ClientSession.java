@@ -30,10 +30,10 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.Managed;
-import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +64,7 @@ public class ClientSession implements Session, Managed<Session> {
   private final Random random = new Random();
   private final Client client;
   private Set<Address> members;
-  private final Context context;
+  private final ThreadContext context;
   private List<Address> connectMembers;
   private Connection connection;
   private volatile State state = State.CLOSED;
@@ -105,7 +105,7 @@ public class ClientSession implements Session, Managed<Session> {
    *
    * @return The session context.
    */
-  public Context context() {
+  public ThreadContext context() {
     return context;
   }
 
@@ -358,7 +358,7 @@ public class ClientSession implements Session, Managed<Session> {
       // schedule a retry to attempt to connect to servers again.
       else {
         LOGGER.warn("Failed to communicate with cluster. Retrying");
-        retryFuture = context.schedule(this::retryRequests, Duration.ofMillis(200));
+        retryFuture = context.schedule(Duration.ofMillis(200), this::retryRequests);
         retries.add(() -> resetMembers().request(request, future, true, true));
       }
       return future;
@@ -574,7 +574,7 @@ public class ClientSession implements Session, Managed<Session> {
    * Sends and reschedules keep alive request.
    */
   private void keepAlive(Duration interval) {
-    keepAliveFuture = context.schedule(() -> {
+    keepAliveFuture = context.schedule(interval, () -> {
       if (isOpen()) {
         context.checkThread();
 
@@ -601,7 +601,7 @@ public class ClientSession implements Session, Managed<Session> {
           request.release();
         });
       }
-    }, interval);
+    });
   }
 
   /**

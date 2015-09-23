@@ -135,7 +135,7 @@ final class LeaderState extends ActiveState {
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
     LOGGER.debug("{} - Starting heartbeat timer", context.getAddress());
-    currentTimer = context.getContext().schedule(this::heartbeatMembers, Duration.ZERO, context.getHeartbeatInterval());
+    currentTimer = context.getContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::heartbeatMembers);
   }
 
   /**

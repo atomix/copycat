@@ -24,8 +24,8 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Managed;
-import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Futures;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -85,14 +85,14 @@ public class RaftClient implements Managed<RaftClient> {
    * <p>
    * The execution context is the event loop that this client uses to communicate Raft servers.
    * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
-   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.Context}.
+   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
    * <p>
-   * The {@link io.atomix.catalyst.util.concurrent.Context} can also be used to access the Raft client's internal
-   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link Context#serializer()}.
+   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft client's internal
+   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}.
    *
    * @return The Raft context.
    */
-  public Context context() {
+  public ThreadContext context() {
     return session != null ? session.context() : null;
   }
 
@@ -160,8 +160,8 @@ public class RaftClient implements Managed<RaftClient> {
    * Submits a query to the Raft cluster.
    * <p>
    * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
-   * query's {@link ConsistencyLevel}. For {@link ConsistencyLevel#LINEARIZABLE}
-   * and {@link ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
+   * query's {@link io.atomix.catalog.client.Query.ConsistencyLevel}. For {@link io.atomix.catalog.client.Query.ConsistencyLevel#LINEARIZABLE}
+   * and {@link io.atomix.catalog.client.Query.ConsistencyLevel#BOUNDED_LINEARIZABLE} consistency levels, queries will be forwarded
    * to the Raft leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
    * by applying queries to an internal server state machine.
    * <p>

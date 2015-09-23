@@ -20,7 +20,7 @@ import io.atomix.catalog.server.storage.SegmentDescriptor;
 import io.atomix.catalog.server.storage.SegmentManager;
 import io.atomix.catalog.server.storage.entry.Entry;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.Context;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,13 +36,13 @@ class EntryCleaner implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(EntryCleaner.class);
   private final SegmentManager manager;
   private final EntryTree tree;
-  private final Context context;
+  private final ThreadContext context;
   private CompletableFuture<Void> cleanFuture;
 
   /**
    * @throws NullPointerException if {@code manager} or {@code context} are null
    */
-  public EntryCleaner(SegmentManager manager, EntryTree tree, Context context) {
+  public EntryCleaner(SegmentManager manager, EntryTree tree, ThreadContext context) {
     this.manager = Assert.notNull(manager, "manager");
     this.tree = Assert.notNull(tree, "tree");
     this.context = Assert.notNull(context, "context");

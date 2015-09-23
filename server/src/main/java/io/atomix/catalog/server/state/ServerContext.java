@@ -34,9 +34,9 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.Managed;
-import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +57,7 @@ public class ServerContext implements Managed<Void> {
   private final Listeners<RaftServer.State> listeners = new Listeners<>();
   private final Random random;
   private final Serializer serializer;
-  private Context context;
+  private ThreadContext context;
   private final StateMachine userStateMachine;
   private final Address address;
   private final Storage storage;
@@ -130,7 +130,7 @@ public class ServerContext implements Managed<Void> {
    *
    * @return The execution context.
    */
-  public Context getContext() {
+  public ThreadContext getContext() {
     return context;
   }
 
@@ -507,7 +507,7 @@ public class ServerContext implements Managed<Void> {
       cluster.configure(0, members.values(), Collections.EMPTY_LIST);
 
       // Create a state machine executor and configure the state machine.
-      Context stateContext = new SingleThreadContext("catalog-server-" + address + "-state-%d", serializer.clone());
+      ThreadContext stateContext = new SingleThreadContext("catalog-server-" + address + "-state-%d", serializer.clone());
       stateMachine = new ServerStateMachine(userStateMachine, log::clean, stateContext);
 
       // Setup the server and connection manager.

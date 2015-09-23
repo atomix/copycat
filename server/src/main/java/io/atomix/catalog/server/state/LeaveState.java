@@ -15,10 +15,10 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.client.response.Response;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.LeaveRequest;
 import io.atomix.catalog.server.response.LeaveResponse;
-import io.atomix.catalog.client.response.Response;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
@@ -51,12 +51,12 @@ final class LeaveState extends InactiveState {
    * Sets a leave timeout.
    */
   private void startLeaveTimeout() {
-    leaveFuture = context.getContext().schedule(() -> {
+    leaveFuture = context.getContext().schedule(context.getElectionTimeout(), () -> {
       if (isOpen()) {
         LOGGER.warn("{} - Failed to leave the cluster in {} milliseconds", context.getAddress(), context.getElectionTimeout());
         transition(RaftServer.State.INACTIVE);
       }
-    }, context.getElectionTimeout());
+    });
   }
 
   /**

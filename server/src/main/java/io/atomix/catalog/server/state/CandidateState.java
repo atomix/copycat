@@ -84,7 +84,7 @@ final class CandidateState extends ActiveState {
     context.setTerm(context.getTerm() + 1);
 
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
-    currentTimer = context.getContext().schedule(() -> {
+    currentTimer = context.getContext().schedule(delay, () -> {
       // When the election times out, clear the previous majority vote
       // check and restart the election.
       LOGGER.debug("{} - Election timed out", context.getAddress());
@@ -94,7 +94,7 @@ final class CandidateState extends ActiveState {
       }
       sendVoteRequests();
       LOGGER.debug("{} - Restarted election", context.getAddress());
-    }, delay);
+    });
 
     final AtomicBoolean complete = new AtomicBoolean();
     final Set<MemberState> votingMembers = new HashSet<>(context.getCluster().getActiveMembers());
