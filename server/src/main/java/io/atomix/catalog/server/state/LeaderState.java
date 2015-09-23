@@ -15,13 +15,7 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.client.response.*;
-import io.atomix.catalog.server.request.*;
-import io.atomix.catalog.server.response.*;
-import io.atomix.catalog.server.storage.*;
-import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.client.Command;
-import io.atomix.catalog.client.ConsistencyLevel;
 import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.error.RaftException;
@@ -29,7 +23,13 @@ import io.atomix.catalog.client.request.CommandRequest;
 import io.atomix.catalog.client.request.KeepAliveRequest;
 import io.atomix.catalog.client.request.QueryRequest;
 import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.client.response.*;
+import io.atomix.catalog.server.RaftServer;
+import io.atomix.catalog.server.request.*;
+import io.atomix.catalog.server.response.*;
+import io.atomix.catalog.server.storage.*;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
 import java.time.Duration;
@@ -325,23 +325,43 @@ final class LeaderState extends ActiveState {
 
   @Override
   protected CompletableFuture<CommandResponse> command(final CommandRequest request) {
-    CompletableFuture<CommandResponse> future = new CompletableFuture<>();
+    context.checkThread();
+    logRequest(request);
+
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    if (session == null) {
+      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    }
+
+    ComposableFuture<CommandResponse> future = new ComposableFuture<>();
 
     Command command = request.command();
+
+    // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
+    // sequence number, queue this request for handling later. We want to handle command requests in the order in which
+    // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
+    // sequence number. In that case, it's likely that the command was submitted more than once to the
+    // cluster, and the command will be deduplicated once applied to the state machine.
+    if (request.sequence() > session.nextRequest()) {
+      session.registerRequest(request.sequence(), () -> command(request).whenComplete(future));
+      return future;
+    }
 
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final long index;
 
     try {
-      context.checkThread();
-      logRequest(request);
 
       // Create a CommandEntry and append it to the log.
       try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
         entry.setTerm(term)
-          .setTimestamp(timestamp)
           .setSession(request.session())
+          .setTimestamp(timestamp)
           .setSequence(request.sequence())
           .setCommand(command);
         index = context.getLog().append(entry);
@@ -361,18 +381,19 @@ final class LeaderState extends ActiveState {
               if (error == null) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.OK)
-                  .withVersion(index)
+                  .withVersion(entry.getIndex())
                   .withResult(result)
                   .build()));
               } else if (error instanceof RaftException) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withVersion(index)
+                  .withVersion(entry.getIndex())
                   .withError(((RaftException) error).getType())
                   .build()));
               } else {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
+                  .withVersion(entry.getIndex())
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -387,6 +408,9 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+
+    // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
+    session.setRequest(request.sequence());
 
     return future;
   }
@@ -408,20 +432,22 @@ final class LeaderState extends ActiveState {
         .setTerm(context.getTerm())
         .setTimestamp(timestamp)
         .setSession(request.session())
+        .setSequence(request.sequence())
         .setVersion(request.version())
         .setQuery(query);
 
-      ConsistencyLevel consistency = query.consistency();
+      Query.ConsistencyLevel consistency = query.consistency();
       if (consistency == null)
-        return submitQueryLinearizableStrict(entry);
+        return submitQueryLinearizable(entry);
 
       switch (consistency) {
-        case SERIALIZABLE:
-          return submitQuerySerializable(entry);
-        case LINEARIZABLE_LEASE:
-          return submitQueryLinearizableLease(entry);
+        case CAUSAL:
+        case SEQUENTIAL:
+          return submitQueryLocal(entry);
+        case BOUNDED_LINEARIZABLE:
+          return submitQueryBoundedLinearizable(entry);
         case LINEARIZABLE:
-          return submitQueryLinearizableStrict(entry);
+          return submitQueryLinearizable(entry);
         default:
           throw new IllegalStateException("unknown consistency level");
       }
@@ -433,26 +459,26 @@ final class LeaderState extends ActiveState {
   /**
    * Submits a query with serializable consistency.
    */
-  private CompletableFuture<QueryResponse> submitQuerySerializable(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> submitQueryLocal(QueryEntry entry) {
     return applyQuery(entry, new CompletableFuture<>());
   }
 
   /**
-   * Submits a query with lease based linearizable consistency.
+   * Submits a query with lease bounded linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> submitQueryLinearizableLease(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> submitQueryBoundedLinearizable(QueryEntry entry) {
     long commitTime = replicator.commitTime();
     if (System.currentTimeMillis() - commitTime < context.getElectionTimeout().toMillis()) {
-      return submitQuerySerializable(entry);
+      return submitQueryLocal(entry);
     } else {
-      return submitQueryLinearizableStrict(entry);
+      return submitQueryLinearizable(entry);
     }
   }
 
   /**
    * Submits a query with strict linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> submitQueryLinearizableStrict(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> submitQueryLinearizable(QueryEntry entry) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
     replicator.commit().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
@@ -476,7 +502,9 @@ final class LeaderState extends ActiveState {
    * Applies a query to the state machine.
    */
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
-    long version = context.getLastApplied();
+    // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
+    // versions will be the last applied index.
+    final long version = context.getStateMachine().getLastApplied();
     applyEntry(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
@@ -488,7 +516,6 @@ final class LeaderState extends ActiveState {
         } else if (error instanceof RaftException) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withVersion(version)
             .withError(((RaftException) error).getType())
             .build()));
         } else {
@@ -807,7 +834,6 @@ final class LeaderState extends ActiveState {
     /**
      * Performs an empty commit.
      */
-    @SuppressWarnings("unchecked")
     private void emptyCommit(MemberState member) {
       long prevIndex = getPrevIndex(member);
       RaftEntry prevEntry = getPrevEntry(member, prevIndex);

@@ -41,29 +41,29 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
     super(referenceManager);
   }
 
+  @Override
+  public Operation getOperation() {
+    return query;
+  }
+
   /**
-   * Returns the query version number.
+   * Returns the query version.
    *
-   * @return The query version number.
+   * @return The query version.
    */
   public long getVersion() {
     return version;
   }
 
   /**
-   * Sets the query version number.
+   * Sets the query version.
    *
-   * @param version The query version number.
+   * @param version The query version.
    * @return The query entry.
    */
   public QueryEntry setVersion(long version) {
     this.version = version;
     return this;
-  }
-
-  @Override
-  public Operation getOperation() {
-    return query;
   }
 
   /**
@@ -103,7 +103,7 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, version=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getVersion(), getTimestamp(), query);
+    return String.format("%s[index=%d, term=%d, session=%d, version=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), query);
   }
 
 }

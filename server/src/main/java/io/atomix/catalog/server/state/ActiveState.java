@@ -15,11 +15,7 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.request.VoteRequest;
-import io.atomix.catalog.server.response.AppendResponse;
-import io.atomix.catalog.server.storage.QueryEntry;
-import io.atomix.catalog.server.RaftServer;
-import io.atomix.catalog.client.ConsistencyLevel;
+import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.error.RaftException;
 import io.atomix.catalog.client.request.CommandRequest;
@@ -28,10 +24,14 @@ import io.atomix.catalog.client.request.Request;
 import io.atomix.catalog.client.response.CommandResponse;
 import io.atomix.catalog.client.response.QueryResponse;
 import io.atomix.catalog.client.response.Response;
+import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.AppendRequest;
 import io.atomix.catalog.server.request.PollRequest;
+import io.atomix.catalog.server.request.VoteRequest;
+import io.atomix.catalog.server.response.AppendResponse;
 import io.atomix.catalog.server.response.PollResponse;
 import io.atomix.catalog.server.response.VoteResponse;
+import io.atomix.catalog.server.storage.QueryEntry;
 import io.atomix.catalog.server.storage.RaftEntry;
 
 import java.util.concurrent.CompletableFuture;
@@ -235,8 +235,18 @@ abstract class ActiveState extends PassiveState {
       context.checkThread();
       logRequest(request);
 
-      if (request.query().consistency() == ConsistencyLevel.SERIALIZABLE) {
-        return querySerializable(request);
+      // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
+      if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL
+        || request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
+
+        // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
+        // Forward the request to the leader.
+        if (context.getLog().lastIndex() < context.getCommitIndex()) {
+          LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
+          return queryForward(request);
+        }
+
+        return queryLocal(request);
       } else {
         return queryForward(request);
       }
@@ -261,26 +271,30 @@ abstract class ActiveState extends PassiveState {
   }
 
   /**
-   * Performs a serializable query.
+   * Performs a local query.
    */
-  private CompletableFuture<QueryResponse> querySerializable(QueryRequest request) {
-    // If the commit index is not in the log then we've fallen too far behind the leader to perform a query.
-    // Forward the request to the leader.
-    if (context.getLog().lastIndex() < context.getCommitIndex()) {
-      LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
-      return queryForward(request);
-    }
-
+  private CompletableFuture<QueryResponse> queryLocal(QueryRequest request) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+
     QueryEntry entry = context.getLog().create(QueryEntry.class)
       .setIndex(context.getCommitIndex())
       .setTerm(context.getTerm())
       .setTimestamp(System.currentTimeMillis())
       .setSession(request.session())
+      .setSequence(request.sequence())
       .setVersion(request.version())
       .setQuery(request.query());
 
-    long version = context.getLastApplied();
+    // For CAUSAL queries, the state machine version is the last index applied to the state machine. For other consistency
+    // levels, the state machine may actually wait until those queries are applied to the state machine, so the last applied
+    // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
+    final long version;
+    if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
+      version = context.getStateMachine().getLastApplied();
+    } else {
+      version = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+    }
+
     context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {
       if (isOpen()) {
         if (error == null) {
@@ -298,6 +312,7 @@ abstract class ActiveState extends PassiveState {
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
+            .withVersion(version)
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }

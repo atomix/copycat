@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.client.request;
 
+import io.atomix.catalog.client.Operation;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
@@ -24,43 +25,49 @@ import io.atomix.catalyst.util.ReferenceFactory;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
- * Session request.
+ * Operation request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public abstract class SessionRequest<T extends SessionRequest<T>> extends AbstractRequest<T> {
-  protected long session;
+public abstract class OperationRequest<T extends OperationRequest<T>> extends SessionRequest<T> {
+  protected long sequence;
 
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public SessionRequest(ReferenceManager<T> referenceManager) {
+  public OperationRequest(ReferenceManager<T> referenceManager) {
     super(referenceManager);
   }
 
   /**
-   * Returns the session ID.
+   * Returns the request sequence number.
    *
-   * @return The session ID.
+   * @return The request sequence number.
    */
-  public long session() {
-    return session;
+  public long sequence() {
+    return sequence;
   }
+
+  /**
+   * Returns the request operation.
+   *
+   * @return The request operation.
+   */
+  public abstract Operation operation();
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
-    session = buffer.readLong();
+    super.readObject(buffer, serializer);
+    sequence = buffer.readLong();
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
-    buffer.writeLong(session);
+    super.writeObject(buffer, serializer);
+    buffer.writeLong(sequence);
   }
 
   /**
-   * Session request builder.
+   * Operation request builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends SessionRequest<U>> extends AbstractRequest.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends OperationRequest<U>> extends SessionRequest.Builder<T, U> {
 
     /**
      * @throws NullPointerException if {@code pool} or {@code factory} are null
@@ -72,26 +79,26 @@ public abstract class SessionRequest<T extends SessionRequest<T>> extends Abstra
     @Override
     protected void reset() {
       super.reset();
-      request.session = 0;
+      request.sequence = 0;
     }
 
     /**
-     * Sets the session ID.
+     * Sets the request sequence number.
      *
-     * @param session The session ID.
+     * @param sequence The request sequence number.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code session} is less than 0
+     * @throws IllegalArgumentException If the request sequence number is not positive.
      */
     @SuppressWarnings("unchecked")
-    public T withSession(long session) {
-      request.session = Assert.argNot(session, session < 0, "session must not be negative");
+    public T withSequence(long sequence) {
+      request.sequence = Assert.argNot(sequence, sequence <= 0, "sequence must be positive");
       return (T) this;
     }
 
     @Override
     public U build() {
       super.build();
-      Assert.stateNot(request.session < 1, "session cannot be less than 1");
+      Assert.stateNot(request.sequence < 1, "sequence cannot be less than 1");
       return request;
     }
   }

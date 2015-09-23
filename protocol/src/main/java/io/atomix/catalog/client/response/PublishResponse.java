@@ -188,22 +188,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
       Assert.stateNot(response.sequence < 1, "sequence cannot be less than 1");
       return response;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }
