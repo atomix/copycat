@@ -27,7 +27,7 @@ import io.atomix.catalog.client.response.*;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.*;
 import io.atomix.catalog.server.response.*;
-import io.atomix.catalog.server.storage.*;
+import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
@@ -85,7 +85,7 @@ final class LeaderState extends ActiveState {
     final long term = context.getTerm();
     final long index;
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
-      entry.setTerm(term).setTimestamp(System.currentTimeMillis());
+      entry.setId(context.nextEntryId()).setTerm(term).setTimestamp(System.currentTimeMillis());
       index = context.getLog().append(entry);
     }
 
@@ -171,7 +171,8 @@ final class LeaderState extends ActiveState {
       passiveMembers.add(request.member());
 
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(term)
+        entry.setId(context.nextEntryId())
+          .setTerm(term)
           .setActive(activeMembers)
           .setPassive(passiveMembers);
         index = context.getLog().append(entry);
@@ -230,7 +231,8 @@ final class LeaderState extends ActiveState {
       passiveMembers.remove(request.member());
 
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(term)
+        entry.setId(context.nextEntryId())
+          .setTerm(term)
           .setActive(activeMembers)
           .setPassive(passiveMembers);
         index = context.getLog().append(entry);
@@ -362,6 +364,7 @@ final class LeaderState extends ActiveState {
         entry.setTerm(term)
           .setSession(request.session())
           .setTimestamp(timestamp)
+          .setId(context.nextEntryId())
           .setSequence(request.sequence())
           .setCommand(command);
         index = context.getLog().append(entry);
@@ -429,6 +432,7 @@ final class LeaderState extends ActiveState {
 
       QueryEntry entry = context.getLog().create(QueryEntry.class)
         .setIndex(index)
+        .setId(0)
         .setTerm(context.getTerm())
         .setTimestamp(timestamp)
         .setSession(request.session())
@@ -541,10 +545,11 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-        entry.setTerm(context.getTerm());
-        entry.setTimestamp(timestamp);
-        entry.setConnection(request.connection());
-        entry.setTimeout(timeout);
+        entry.setId(context.nextEntryId())
+          .setTerm(context.getTerm())
+          .setTimestamp(timestamp)
+          .setConnection(request.connection())
+          .setTimeout(timeout);
         index = context.getLog().append(entry);
         LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
       }
@@ -602,7 +607,8 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-        entry.setTerm(context.getTerm())
+        entry.setId(context.nextEntryId())
+          .setTerm(context.getTerm())
           .setSession(request.session())
           .setCommandSequence(request.commandSequence())
           .setEventVersion(request.eventVersion())
@@ -790,6 +796,7 @@ final class LeaderState extends ActiveState {
       if (commitIndex > 0) {
         context.setCommitIndex(commitIndex);
         context.setGlobalIndex(globalIndex);
+        context.getLog().commit(globalIndex).compact(globalIndex);
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());
@@ -824,7 +831,7 @@ final class LeaderState extends ActiveState {
     /**
      * Gets the previous entry.
      */
-    private RaftEntry getPrevEntry(MemberState member, long prevIndex) {
+    private Entry getPrevEntry(MemberState member, long prevIndex) {
       if (prevIndex > 0) {
         return context.getLog().get(prevIndex);
       }
@@ -836,7 +843,7 @@ final class LeaderState extends ActiveState {
      */
     private void emptyCommit(MemberState member) {
       long prevIndex = getPrevIndex(member);
-      RaftEntry prevEntry = getPrevEntry(member, prevIndex);
+      Entry prevEntry = getPrevEntry(member, prevIndex);
 
       AppendRequest.Builder builder = AppendRequest.builder()
         .withTerm(context.getTerm())
@@ -854,7 +861,7 @@ final class LeaderState extends ActiveState {
      */
     private void entriesCommit(MemberState member) {
       long prevIndex = getPrevIndex(member);
-      RaftEntry prevEntry = getPrevEntry(member, prevIndex);
+      Entry prevEntry = getPrevEntry(member, prevIndex);
 
       AppendRequest.Builder builder = AppendRequest.builder()
         .withTerm(context.getTerm())
@@ -869,7 +876,7 @@ final class LeaderState extends ActiveState {
 
         int size = 0;
         while (size < MAX_BATCH_SIZE && index <= context.getLog().lastIndex()) {
-          RaftEntry entry = context.getLog().get(index);
+          Entry entry = context.getLog().get(index);
           if (entry != null && size + entry.size() <= MAX_BATCH_SIZE) {
             size += entry.size();
             builder.addEntry(entry);
@@ -996,7 +1003,8 @@ final class LeaderState extends ActiveState {
         passiveMembers.remove(member.getAddress());
 
         try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-          entry.setTerm(context.getTerm())
+          entry.setId(context.nextEntryId())
+            .setTerm(context.getTerm())
             .setActive(activeMembers)
             .setPassive(passiveMembers);
           long index = context.getLog().append(entry);

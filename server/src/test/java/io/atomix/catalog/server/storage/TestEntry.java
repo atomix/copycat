@@ -1,0 +1,137 @@
+/*
+ * Copyright 2015 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.atomix.catalog.server.storage;
+
+import io.atomix.catalog.server.storage.entry.Entry;
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.util.ReferenceManager;
+
+/**
+ * Command entry.
+ *
+ * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ */
+@SerializeWith(id=1000)
+public class TestEntry extends Entry<TestEntry> {
+  private long id;
+  private long address;
+  private long term;
+  private boolean remove;
+
+  public TestEntry(ReferenceManager<Entry<?>> referenceManager) {
+    super(referenceManager);
+  }
+
+  @Override
+  public long getId() {
+    return 1;
+  }
+
+  @Override
+  public boolean isTombstone() {
+    return true;
+  }
+
+  /**
+   * Sets the entry ID.
+   *
+   * @param id The entry ID.
+   * @return The entry.
+   */
+  public TestEntry setId(long id) {
+    this.id = id;
+    return this;
+  }
+
+  @Override
+  public long getAddress() {
+    return 1;
+  }
+
+  /**
+   * Sets the entry address.
+   *
+   * @param address The entry address.
+   * @return The entry.
+   */
+  public TestEntry setAddress(long address) {
+    this.address = address;
+    return this;
+  }
+
+  /**
+   * Returns the entry term.
+   *
+   * @return The entry term.
+   */
+  public long getTerm() {
+    return term;
+  }
+
+  /**
+   * Sets the entry term.
+   *
+   * @param term The entry term.
+   * @return The entry.
+   */
+  @SuppressWarnings("unchecked")
+  public TestEntry setTerm(long term) {
+    this.term = term;
+    return this;
+  }
+
+  /**
+   * Returns whether to remove the entry.
+   *
+   * @return Whether to remove the entry.
+   */
+  public boolean isRemove() {
+    return remove;
+  }
+
+  /**
+   * Sets whether to remove the entry.
+   *
+   * @param remove Whether to remove the entry.
+   * @return The entry.
+   */
+  public TestEntry setRemove(boolean remove) {
+    this.remove = remove;
+    return this;
+  }
+
+  @Override
+  public void writeObject(BufferOutput buffer, Serializer serializer) {
+    buffer.writeLong(address).writeLong(id).writeLong(term).writeBoolean(remove);
+  }
+
+  @Override
+  public void readObject(BufferInput buffer, Serializer serializer) {
+    address = buffer.readLong();
+    id = buffer.readLong();
+    term = buffer.readLong();
+    remove = buffer.readBoolean();
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[index=%d, term=%d, remove=%b]", getClass().getSimpleName(), getIndex(), term, remove);
+  }
+
+}

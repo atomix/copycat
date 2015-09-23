@@ -66,6 +66,15 @@ public interface Command<T> extends Operation<T> {
   }
 
   /**
+   * Returns the memory address of the command.
+   *
+   * @return The memory address of the command.
+   */
+  default long address() {
+    return 0;
+  }
+
+  /**
    * Returns the command consistency level.
    * <p>
    * The consistency will dictate the order with which commands are submitted to the Raft cluster. Ultimately, all commands

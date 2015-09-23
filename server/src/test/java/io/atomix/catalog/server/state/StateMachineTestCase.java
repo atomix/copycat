@@ -19,7 +19,7 @@ import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.session.Session;
 import io.atomix.catalog.server.StateMachine;
-import io.atomix.catalog.server.storage.*;
+import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;

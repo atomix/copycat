@@ -70,9 +70,8 @@
 
   <modules>
     <module>protocol</module>
-    <module>client</module>
     <module>server</module>
-    <module>storage</module>
+    <module>client</module>
   </modules>
 
   <dependencies>

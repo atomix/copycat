@@ -15,9 +15,8 @@
  */
 package io.atomix.catalog.client;
 
-import io.atomix.catalog.client.session.Session;
 import io.atomix.catalog.client.session.ClientSession;
-import io.atomix.catalog.server.storage.Log;
+import io.atomix.catalog.client.session.Session;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -138,7 +137,7 @@ public class RaftClient implements Managed<RaftClient> {
    * Submits a command to the Raft cluster.
    * <p>
    * Commands are used to alter state machine state. All commands will be forwarded to the current Raft leader.
-   * Once a leader receives the command, it will write the command to its internal {@link Log} and
+   * Once a leader receives the command, it will write the command to its internal {@code Log} and
    * replicate it to a majority of the cluster. Once the command has been replicated to a majority of the cluster, it
    * will apply the command to its state machine and respond with the result.
    * <p>

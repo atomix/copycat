@@ -15,14 +15,14 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.StateMachine;
-import io.atomix.catalog.server.request.*;
-import io.atomix.catalog.server.storage.Log;
-import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.client.request.CommandRequest;
 import io.atomix.catalog.client.request.KeepAliveRequest;
 import io.atomix.catalog.client.request.QueryRequest;
 import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.server.RaftServer;
+import io.atomix.catalog.server.StateMachine;
+import io.atomix.catalog.server.request.*;
+import io.atomix.catalog.server.storage.Log;
 import io.atomix.catalog.server.storage.Storage;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
@@ -55,6 +55,7 @@ import java.util.function.Consumer;
 public class ServerContext implements Managed<Void> {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
   private final Listeners<RaftServer.State> listeners = new Listeners<>();
+  private final Random random;
   private final Serializer serializer;
   private Context context;
   private final StateMachine userStateMachine;
@@ -81,6 +82,7 @@ public class ServerContext implements Managed<Void> {
 
   public ServerContext(Address address, Collection<Address> members, Transport transport, Storage storage, StateMachine stateMachine, Serializer serializer) {
     this.address = Assert.notNull(address, "address");
+    this.random = new Random(address.hashCode());
     this.members = new HashMap<>();
     members.forEach(m -> this.members.put(m.hashCode(), m));
     this.members.put(address.hashCode(), address);
@@ -358,7 +360,6 @@ public class ServerContext implements Managed<Void> {
     if (globalIndex < 0)
       throw new IllegalArgumentException("global index must be positive");
     this.globalIndex = Math.max(this.globalIndex, globalIndex);
-    log.commit(this.globalIndex);
     return this;
   }
 
@@ -405,6 +406,15 @@ public class ServerContext implements Managed<Void> {
    */
   public Log getLog() {
     return log;
+  }
+
+  /**
+   * Returns a random entry ID.
+   *
+   * @return A random entry ID.
+   */
+  long nextEntryId() {
+    return random.nextLong();
   }
 
   /**

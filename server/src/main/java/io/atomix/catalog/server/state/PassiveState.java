@@ -15,15 +15,14 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.request.*;
 import io.atomix.catalog.client.response.*;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.*;
 import io.atomix.catalog.server.response.*;
-import io.atomix.catalog.server.storage.ConfigurationEntry;
-import io.atomix.catalog.server.storage.Entry;
-import io.atomix.catalog.server.storage.RaftEntry;
-import io.atomix.catalog.client.error.RaftError;
+import io.atomix.catalog.server.storage.entry.ConfigurationEntry;
+import io.atomix.catalog.server.storage.entry.Entry;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -110,7 +109,7 @@ class PassiveState extends AbstractState {
     }
 
     // If the previous entry term doesn't match the local previous term then reject the request.
-    try (RaftEntry entry = context.getLog().get(request.logIndex())) {
+    try (Entry entry = context.getLog().get(request.logIndex())) {
       if (entry == null || entry.getTerm() != request.logTerm()) {
         LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getAddress(), request, entry != null ? entry.getTerm() : "unknown");
         return AppendResponse.builder()
@@ -130,19 +129,22 @@ class PassiveState extends AbstractState {
    */
   @SuppressWarnings("unchecked")
   protected AppendResponse doAppendEntries(AppendRequest request) {
+    // Mark entries up to the request global index as committed to the log.
+    context.getLog().commit(request.globalIndex());
+
     // If the log contains entries after the request's previous log index
     // then remove those entries to be replaced by the request entries.
     if (!request.entries().isEmpty()) {
 
       // Iterate through request entries and append them to the log.
-      for (RaftEntry entry : (Iterable<RaftEntry>) request.entries()) {
+      for (Entry entry : request.entries()) {
         // If the entry index is greater than the last log index, skip missing entries.
         if (context.getLog().lastIndex() < entry.getIndex()) {
           context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
           LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
         } else {
           // Compare the term of the received entry with the matching entry in the log.
-          try (RaftEntry match = context.getLog().get(entry.getIndex())) {
+          try (Entry match = context.getLog().get(entry.getIndex())) {
             if (match != null) {
               if (entry.getTerm() != match.getTerm()) {
                 // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
@@ -178,7 +180,10 @@ class PassiveState extends AbstractState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.getContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> applyIndex(request.globalIndex()));
+    context.getContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
+      context.setGlobalIndex(request.globalIndex());
+      context.getLog().compact(request.globalIndex());
+    });
 
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
@@ -257,15 +262,6 @@ class PassiveState extends AbstractState {
   protected CompletableFuture<?> applyEntry(Entry entry) {
     LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
     return context.getStateMachine().apply(entry);
-  }
-
-  /**
-   * Recycles the log up to the given index.
-   */
-  protected void applyIndex(long globalIndex) {
-    if (globalIndex > 0) {
-      context.setGlobalIndex(globalIndex);
-    }
   }
 
   @Override

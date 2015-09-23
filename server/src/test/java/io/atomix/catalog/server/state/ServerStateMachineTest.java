@@ -20,7 +20,7 @@ import io.atomix.catalog.client.Query;
 import io.atomix.catalog.server.Commit;
 import io.atomix.catalog.server.StateMachine;
 import io.atomix.catalog.server.StateMachineExecutor;
-import io.atomix.catalog.server.storage.*;
+import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
@@ -384,6 +384,10 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Test command.
    */
   private static class TestCommand implements Command<Long> {
+    @Override
+    public long address() {
+      return 0;
+    }
   }
 
   /**

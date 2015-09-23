@@ -19,7 +19,7 @@ import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.error.InternalException;
 import io.atomix.catalog.client.error.UnknownSessionException;
 import io.atomix.catalog.server.StateMachine;
-import io.atomix.catalog.server.storage.*;
+import io.atomix.catalog.server.storage.entry.*;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Context;
 import io.atomix.catalyst.util.concurrent.Futures;
