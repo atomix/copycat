@@ -15,9 +15,7 @@
  */
 package io.atomix.catalog.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
+import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import org.slf4j.Logger;
@@ -284,11 +282,50 @@ public class SegmentManager implements AutoCloseable {
   }
 
   /**
-   * Create a new segment.
+   * Creates a new segment.
    */
   public Segment createSegment(SegmentDescriptor descriptor) {
+    switch (storage.level()) {
+      case MEMORY:
+        return createMemorySegment(descriptor);
+      case MAPPED:
+        return createMappedSegment(descriptor);
+      case DISK:
+        return createDiskSegment(descriptor);
+      default:
+        throw new AssertionError();
+    }
+  }
+
+  /**
+   * Creates a new segment.
+   */
+  private Segment createDiskSegment(SegmentDescriptor descriptor) {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
     Buffer buffer = FileBuffer.allocate(segmentFile, 1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
+    descriptor.copyTo(buffer);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
+    LOGGER.debug("Created segment: {}", segment);
+    return segment;
+  }
+
+  /**
+   * Creates a new segment.
+   */
+  private Segment createMappedSegment(SegmentDescriptor descriptor) {
+    File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
+    Buffer buffer = MappedBuffer.allocate(segmentFile, 1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
+    descriptor.copyTo(buffer);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
+    LOGGER.debug("Created segment: {}", segment);
+    return segment;
+  }
+
+  /**
+   * Creates a new segment.
+   */
+  private Segment createMemorySegment(SegmentDescriptor descriptor) {
+    Buffer buffer = DirectBuffer.allocate(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
     Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
@@ -299,11 +336,50 @@ public class SegmentManager implements AutoCloseable {
    * Loads a segment.
    */
   public Segment loadSegment(long segmentId, long segmentVersion) {
+    switch (storage.level()) {
+      case MEMORY:
+        return loadMemorySegment(segmentId, segmentVersion);
+      case MAPPED:
+        return loadMappedSegment(segmentId, segmentVersion);
+      case DISK:
+        return loadDiskSegment(segmentId, segmentVersion);
+      default:
+        throw new AssertionError();
+    }
+  }
+
+  /**
+   * Loads a segment.
+   */
+  private Segment loadDiskSegment(long segmentId, long segmentVersion) {
     File file = SegmentFile.createSegmentFile(name, storage.directory(), segmentId, segmentVersion);
     Buffer buffer = FileBuffer.allocate(file, Math.min(1024 * 1024, storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES), storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES);
     SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
     Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
-    LOGGER.debug("Loaded segment: {} ({})", descriptor.id(), file.getName());
+    LOGGER.debug("Loaded file segment: {} ({})", descriptor.id(), file.getName());
+    return segment;
+  }
+
+  /**
+   * Loads a segment.
+   */
+  private Segment loadMappedSegment(long segmentId, long segmentVersion) {
+    File file = SegmentFile.createSegmentFile(name, storage.directory(), segmentId, segmentVersion);
+    Buffer buffer = MappedBuffer.allocate(file, Math.min(1024 * 1024, storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES), storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES);
+    SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
+    LOGGER.debug("Loaded mapped segment: {} ({})", descriptor.id(), file.getName());
+    return segment;
+  }
+
+  /**
+   * Loads a segment.
+   */
+  private Segment loadMemorySegment(long segmentId, long segmentVersion) {
+    Buffer buffer = DirectBuffer.allocate(Math.min(1024 * 1024, storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES), storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES);
+    SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
+    LOGGER.debug("Loaded memory segment: {}", descriptor.id());
     return segment;
   }
 

@@ -51,6 +51,7 @@ public class Storage {
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = (int) (Math.pow(2, 31) - 1) / 8 - 16;
   private static final int DEFAULT_CLEANER_THREADS = Runtime.getRuntime().availableProcessors() / 2;
 
+  private StorageLevel storageLevel = StorageLevel.DISK;
   private Serializer serializer = new Serializer(new PooledDirectAllocator());
   private File directory = new File(DEFAULT_DIRECTORY);
   private int maxEntrySize = DEFAULT_MAX_ENTRY_SIZE;
@@ -72,16 +73,16 @@ public class Storage {
    * @throws NullPointerException if {@code directory} is null
    */
   public Storage(File directory) {
-    this.directory = Assert.notNull(directory, "directory");
+    this(directory, StorageLevel.DISK);
   }
 
   /**
    * @throws NullPointerException if {@code directory} is null
    */
   public Storage(Serializer serializer) {
-    this.serializer = Assert.notNull(serializer, "serializer");
+    this(StorageLevel.DISK, serializer);
   }
-  
+
   /**
    * @throws NullPointerException if {@code directory} or {@code serializer} are null
    */
@@ -93,7 +94,45 @@ public class Storage {
    * @throws NullPointerException if {@code directory} or {@code serializer} are null
    */
   public Storage(File directory, Serializer serializer) {
+    this(directory, StorageLevel.DISK, serializer);
+  }
+
+  /**
+   * @throws NullPointerException if {@code directory} is null
+   */
+  public Storage(String directory, StorageLevel storageLevel) {
+    this(new File(Assert.notNull(directory, "directory")), storageLevel);
+  }
+
+  /**
+   * @throws NullPointerException if {@code directory} is null
+   */
+  public Storage(File directory, StorageLevel storageLevel) {
     this.directory = Assert.notNull(directory, "directory");
+    this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
+  }
+
+  /**
+   * @throws NullPointerException if {@code directory} is null
+   */
+  public Storage(StorageLevel storageLevel, Serializer serializer) {
+    this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
+    this.serializer = Assert.notNull(serializer, "serializer");
+  }
+
+  /**
+   * @throws NullPointerException if {@code directory} or {@code serializer} are null
+   */
+  public Storage(String directory, StorageLevel storageLevel, Serializer serializer) {
+    this(new File(Assert.notNull(directory, "directory")), storageLevel, serializer);
+  }
+
+  /**
+   * @throws NullPointerException if {@code directory} or {@code serializer} are null
+   */
+  public Storage(File directory, StorageLevel storageLevel, Serializer serializer) {
+    this.directory = Assert.notNull(directory, "directory");
+    this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
     this.serializer = Assert.notNull(serializer, "serializer");
   }
 
@@ -122,6 +161,15 @@ public class Storage {
    */
   public File directory() {
     return directory;
+  }
+
+  /**
+   * Returns the storage level.
+   *
+   * @return The storage level.
+   */
+  public StorageLevel level() {
+    return storageLevel;
   }
 
   /**
@@ -181,6 +229,17 @@ public class Storage {
     private final Storage storage = new Storage();
 
     private Builder() {
+    }
+
+    /**
+     * Sets the log storage level.
+     *
+     * @param storageLevel The log storage level.
+     * @return The storage builder.
+     */
+    public Builder withStorageLevel(StorageLevel storageLevel) {
+      storage.storageLevel = Assert.notNull(storageLevel, "storageLevel");
+      return this;
     }
 
     /**
