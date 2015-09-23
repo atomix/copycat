@@ -45,7 +45,7 @@ import java.time.Instant;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class StateMachine implements AutoCloseable {
-  private StateMachineContext context;
+  private StateMachineExecutor executor;
 
   protected StateMachine() {
   }
@@ -53,11 +53,12 @@ public abstract class StateMachine implements AutoCloseable {
   /**
    * Initializes the state machine.
    *
-   * @param context The state machine context.
+   * @param executor The state machine executor.
    * @throws NullPointerException if {@code context} is null
    */
-  public void init(StateMachineContext context) {
-    this.context = Assert.notNull(context, "context");
+  public void init(StateMachineExecutor executor) {
+    this.executor = Assert.notNull(executor, "executor");
+    configure(executor);
   }
 
   /**
@@ -65,7 +66,16 @@ public abstract class StateMachine implements AutoCloseable {
    *
    * @param executor The state machine executor.
    */
-  public abstract void configure(StateMachineExecutor executor);
+  protected abstract void configure(StateMachineExecutor executor);
+
+  /**
+   * Returns the state machine executor.
+   *
+   * @return The state machine executor.
+   */
+  protected StateMachineExecutor executor() {
+    return executor;
+  }
 
   /**
    * Returns the state machine sessions.
@@ -73,7 +83,7 @@ public abstract class StateMachine implements AutoCloseable {
    * @return The state machine sessions.
    */
   protected Sessions sessions() {
-    return context.sessions();
+    return executor.context().sessions();
   }
 
   /**
@@ -82,7 +92,7 @@ public abstract class StateMachine implements AutoCloseable {
    * @return The state machine's deterministic clock.
    */
   protected Clock clock() {
-    return context.clock();
+    return executor.context().clock();
   }
 
   /**
@@ -91,7 +101,7 @@ public abstract class StateMachine implements AutoCloseable {
    * @return The current state machine time.
    */
   protected Instant now() {
-    return context.now();
+    return executor.context().now();
   }
 
   /**

@@ -53,8 +53,7 @@ class ServerStateMachine implements AutoCloseable {
    * Initializes the state machine.
    */
   private void init() {
-    stateMachine.init(executor.context());
-    stateMachine.configure(executor);
+    stateMachine.init(executor);
   }
 
   /**
