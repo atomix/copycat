@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class EntryTree {
   private final Map<Long, Entry> tombstones = new ConcurrentHashMap<>();
-  private final Map<Long, Entry> entries = new ConcurrentHashMap<>();
   private final Map<Long, Long> trees = new ConcurrentHashMap<>();
 
   /**
@@ -39,8 +38,8 @@ public final class EntryTree {
    * @param entry The entry to add.
    * @return The entry tree.
    */
-  public EntryTree add(Entry entry) {
-    if (entry.isTombstone()) {
+  public EntryTree add(Entry entry, boolean isTombstone) {
+    if (isTombstone) {
       Entry tombstone = tombstones.get(entry.getAddress());
       if (tombstone != null) {
         if (entry.getIndex() > tombstone.getIndex()) {

@@ -15,10 +15,11 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.Commit;
-import io.atomix.catalog.server.storage.entry.OperationEntry;
 import io.atomix.catalog.client.Operation;
 import io.atomix.catalog.client.session.Session;
+import io.atomix.catalog.server.Commit;
+import io.atomix.catalog.server.storage.entry.OperationEntry;
+import io.atomix.catalyst.util.Assert;
 
 import java.time.Instant;
 
@@ -31,10 +32,9 @@ class ServerCommit implements Commit<Operation> {
   private final ServerCommitPool pool;
   private final ServerCommitCleaner cleaner;
   private final ServerSessionManager sessions;
-  private long index;
+  private OperationEntry entry;
   private Session session;
   private Instant instant;
-  private Operation operation;
   private volatile boolean open;
 
   public ServerCommit(ServerCommitPool pool, ServerCommitCleaner cleaner, ServerSessionManager sessions) {
@@ -49,16 +49,16 @@ class ServerCommit implements Commit<Operation> {
    * @param entry The entry.
    */
   void reset(OperationEntry entry) {
-    this.index = entry.getIndex();
+    entry.acquire();
+    this.entry = entry;
     this.session = sessions.getSession(entry.getSession());
     this.instant = Instant.ofEpochMilli(entry.getTimestamp());
-    this.operation = entry.getOperation();
     open = true;
   }
 
   @Override
   public long index() {
-    return index;
+    return entry.getIndex();
   }
 
   @Override
@@ -74,25 +74,33 @@ class ServerCommit implements Commit<Operation> {
   @Override
   @SuppressWarnings("unchecked")
   public Class type() {
-    return operation.getClass();
+    return entry.getOperation().getClass();
   }
 
   @Override
   public Operation operation() {
-    return operation;
+    return entry.getOperation();
   }
 
   @Override
   public void clean() {
-    if (!open)
-      throw new IllegalStateException("commit closed");
-    cleaner.clean(index);
+    Assert.state(open, "commit closed");
+    cleaner.clean(entry);
+    close();
+  }
+
+  @Override
+  public void clean(boolean tombstone) {
+    Assert.state(open, "commit closed");
+    cleaner.clean(entry, tombstone);
     close();
   }
 
   @Override
   public void close() {
     if (open) {
+      entry.release();
+      entry = null;
       pool.release(this);
       open = false;
     }

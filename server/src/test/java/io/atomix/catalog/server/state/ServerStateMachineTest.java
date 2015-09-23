@@ -51,7 +51,15 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void createStateMachine() {
     callerContext = new SingleThreadContext("caller", new Serializer());
     stateContext = new SingleThreadContext("state", new Serializer());
-    stateMachine = new ServerStateMachine(new TestStateMachine(), i -> {}, stateContext);
+    ServerCommitCleaner cleaner = new ServerCommitCleaner() {
+      @Override
+      public void clean(Entry entry) {
+      }
+      @Override
+      public void clean(Entry entry, boolean tombstone) {
+      }
+    };
+    stateMachine = new ServerStateMachine(new TestStateMachine(), cleaner, stateContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

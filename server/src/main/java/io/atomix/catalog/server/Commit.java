@@ -57,7 +57,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * <p>
    * The returned {@link Session} is representative of the session that submitted the operation
    * that resulted in this {@link Commit}. Note that the session will be provided regardless
-   * of whether the session is currently active in the cluster. However, attempts to {@link Session#publish(Object)} to
+   * of whether the session is currently active in the cluster. However, attempts to {@link Session#publish(String, Object)} to
    * inactive sessions will fail silently.
    * <p>
    * Additionally, because clients only connect to one server at any given time, the {@link Session}
@@ -105,6 +105,15 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * arbitrary point in the future.
    */
   void clean();
+
+  /**
+   * Cleans the commit.
+   * <p>
+   * Optionally overrides the tombstone configuration for the command.
+   *
+   * @param tombstone Whether to clean the commit as a tombstone.
+   */
+  void clean(boolean tombstone);
 
   /**
    * Closes the commit.

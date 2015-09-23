@@ -50,7 +50,18 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
     cleaned = new HashSet<>();
     callerContext = new SingleThreadContext("caller", new Serializer());
     stateContext = new SingleThreadContext("state", new Serializer());
-    stateMachine = new ServerStateMachine(createStateMachine(), cleaned::add, stateContext);
+    ServerCommitCleaner cleaner = new ServerCommitCleaner() {
+      @Override
+      public void clean(Entry entry) {
+        cleaned.add(entry.getIndex());
+      }
+
+      @Override
+      public void clean(Entry entry, boolean tombstone) {
+        cleaned.add(entry.getIndex());
+      }
+    };
+    stateMachine = new ServerStateMachine(createStateMachine(), cleaner, stateContext);
   }
 
   /**

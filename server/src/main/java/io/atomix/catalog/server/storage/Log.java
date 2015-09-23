@@ -189,13 +189,7 @@ public class Log implements AutoCloseable {
     checkRoll();
 
     // Append the entry to the appropriate segment.
-    long index = segments.currentSegment().append(entry);
-
-    // It's possible that the entry could have already been marked as committed.
-    if (index <= segments.compactIndex()) {
-      cleaner.tree().add(entry);
-    }
-    return index;
+    return segments.currentSegment().append(entry);
   }
 
   /**
@@ -286,8 +280,39 @@ public class Log implements AutoCloseable {
     assertValidIndex(index);
 
     Segment segment = segments.segment(index);
-    if (segment != null)
+    if (segment == null)
+      throw new IndexOutOfBoundsException("invalid index: " + index);
+
+    Entry entry = segment.get(index);
+    if (entry != null) {
+      cleaner.tree().add(entry, entry.isTombstone());
       segment.clean(index);
+    }
+    return this;
+  }
+
+  /**
+   * Cleans the entry at the given index.
+   *
+   * @param index The index of the entry to clean.
+   * @param tombstone Whether to clean the entry as a tombstone.
+   * @return The log.
+   * @throws IllegalStateException If the log is not open.
+   * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
+   */
+  public Log clean(long index, boolean tombstone) {
+    assertIsOpen();
+    assertValidIndex(index);
+
+    Segment segment = segments.segment(index);
+    if (segment == null)
+      throw new IndexOutOfBoundsException("invalid index: " + index);
+
+    Entry entry = segment.get(index);
+    if (entry != null) {
+      cleaner.tree().add(entry, tombstone);
+      segment.clean(index);
+    }
     return this;
   }
 
@@ -301,8 +326,28 @@ public class Log implements AutoCloseable {
    * @throws IndexOutOfBoundsException If the {@code entry} index is not within the bounds of the log.
    */
   public Log clean(Entry entry) {
+    return clean(entry, entry.isTombstone());
+  }
+
+  /**
+   * Cleans the given entry from the log.
+   *
+   * @param entry The entry to clean.
+   * @return The log.
+   * @throws IllegalStateException If the log is not open.
+   * @throws NullPointerException if {@code entry} is null
+   * @throws IndexOutOfBoundsException If the {@code entry} index is not within the bounds of the log.
+   */
+  public Log clean(Entry entry, boolean tombstone) {
+    assertIsOpen();
     Assert.notNull(entry, "entry");
-    return clean(entry.getIndex());
+
+    Segment segment = segments.segment(entry.getIndex());
+    if (segment == null)
+      throw new IndexOutOfBoundsException("invalid index: " + entry.getIndex());
+
+    cleaner.tree().add(entry, tombstone);
+    return this;
   }
 
   /**
@@ -325,16 +370,7 @@ public class Log implements AutoCloseable {
    */
   public Log compact(long index) {
     assertIsOpen();
-    for (long i = segments.compactIndex() + 1; i <= index; i++) {
-      if (validIndex(i)) {
-        try (Entry entry = get(i, true)) {
-          if (entry != null) {
-            cleaner.tree().add(entry);
-          }
-        }
-      }
-      segments.compactIndex(i);
-    }
+    segments.compactIndex(index);
     return this;
   }
 

@@ -24,6 +24,7 @@ import io.atomix.catalog.server.StateMachine;
 import io.atomix.catalog.server.request.*;
 import io.atomix.catalog.server.storage.Log;
 import io.atomix.catalog.server.storage.Storage;
+import io.atomix.catalog.server.storage.entry.Entry;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -506,9 +507,20 @@ public class ServerContext implements Managed<Void> {
       // Configure the cluster.
       cluster.configure(0, members.values(), Collections.EMPTY_LIST);
 
+      ServerCommitCleaner cleaner = new ServerCommitCleaner() {
+        @Override
+        public void clean(Entry entry) {
+          log.clean(entry);
+        }
+        @Override
+        public void clean(Entry entry, boolean tombstone) {
+          log.clean(entry, tombstone);
+        }
+      };
+
       // Create a state machine executor and configure the state machine.
       ThreadContext stateContext = new SingleThreadContext("catalog-server-" + address + "-state-%d", serializer.clone());
-      stateMachine = new ServerStateMachine(userStateMachine, log::clean, stateContext);
+      stateMachine = new ServerStateMachine(userStateMachine, cleaner, stateContext);
 
       // Setup the server and connection manager.
       UUID id = UUID.randomUUID();

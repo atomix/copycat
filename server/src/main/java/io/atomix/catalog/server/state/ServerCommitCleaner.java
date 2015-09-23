@@ -15,6 +15,8 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.server.storage.entry.Entry;
+
 /**
  * Server commit cleaner.
  *
@@ -23,8 +25,13 @@ package io.atomix.catalog.server.state;
 interface ServerCommitCleaner {
 
   /**
-   * Cleans the given index from the log.
+   * Cleans the given entry from the log.
    */
-  void clean(long index);
+  void clean(Entry entry);
+
+  /**
+   * Cleans the given entry from the log.
+   */
+  void clean(Entry entry, boolean tombstone);
 
 }
