@@ -15,6 +15,7 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Operation;
 import io.atomix.catalog.client.session.Session;
 import io.atomix.catalog.server.Commit;
@@ -85,14 +86,16 @@ class ServerCommit implements Commit<Operation> {
   @Override
   public void clean() {
     Assert.state(open, "commit closed");
-    cleaner.clean(entry);
+    if (entry.getOperation() instanceof Command)
+      cleaner.clean(entry);
     close();
   }
 
   @Override
   public void clean(boolean tombstone) {
     Assert.state(open, "commit closed");
-    cleaner.clean(entry, tombstone);
+    if (entry.getOperation() instanceof Command)
+      cleaner.clean(entry, tombstone);
     close();
   }
 
