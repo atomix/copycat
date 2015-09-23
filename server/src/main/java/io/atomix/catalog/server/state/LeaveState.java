@@ -51,7 +51,7 @@ final class LeaveState extends InactiveState {
    * Sets a leave timeout.
    */
   private void startLeaveTimeout() {
-    leaveFuture = context.getContext().schedule(context.getElectionTimeout(), () -> {
+    leaveFuture = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
       if (isOpen()) {
         LOGGER.warn("{} - Failed to leave the cluster in {} milliseconds", context.getAddress(), context.getElectionTimeout());
         transition(RaftServer.State.INACTIVE);

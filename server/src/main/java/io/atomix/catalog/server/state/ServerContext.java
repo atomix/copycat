@@ -131,7 +131,7 @@ public class ServerContext implements Managed<Void> {
    *
    * @return The execution context.
    */
-  public ThreadContext getContext() {
+  public ThreadContext getThreadContext() {
     return context;
   }
 

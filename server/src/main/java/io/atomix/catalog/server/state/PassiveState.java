@@ -180,7 +180,7 @@ class PassiveState extends AbstractState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.getContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
+    context.getThreadContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
       context.setGlobalIndex(request.globalIndex());
       context.getLog().compact(request.globalIndex());
     });
