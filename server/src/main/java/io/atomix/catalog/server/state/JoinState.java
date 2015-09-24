@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 final class JoinState extends InactiveState {
   private Scheduled joinFuture;
 
-  public JoinState(ServerContext context) {
+  public JoinState(ServerState context) {
     super(context);
   }
 

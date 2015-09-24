@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 final class LeaveState extends InactiveState {
   private Scheduled leaveFuture;
 
-  public LeaveState(ServerContext context) {
+  public LeaveState(ServerState context) {
     super(context);
   }
 

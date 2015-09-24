@@ -42,7 +42,7 @@ final class CandidateState extends ActiveState {
   private Quorum quorum;
   private Scheduled currentTimer;
 
-  public CandidateState(ServerContext context) {
+  public CandidateState(ServerState context) {
     super(context);
   }
 

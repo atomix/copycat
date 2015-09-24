@@ -62,6 +62,10 @@ public class Storage {
   public Storage() {
   }
 
+  public Storage(StorageLevel storageLevel) {
+    this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
+  }
+
   /**
    * @throws NullPointerException if {@code directory} is null
    */

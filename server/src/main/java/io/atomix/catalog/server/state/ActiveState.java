@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  */
 abstract class ActiveState extends PassiveState {
 
-  protected ActiveState(ServerContext context) {
+  protected ActiveState(ServerState context) {
     super(context);
   }
 

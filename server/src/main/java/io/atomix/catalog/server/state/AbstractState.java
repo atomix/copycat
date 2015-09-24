@@ -33,10 +33,10 @@ import java.util.concurrent.CompletableFuture;
  */
 abstract class AbstractState implements Managed<AbstractState> {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
-  protected final ServerContext context;
+  protected final ServerState context;
   private volatile boolean open;
 
-  protected AbstractState(ServerContext context) {
+  protected AbstractState(ServerState context) {
     this.context = context;
   }
 
@@ -79,28 +79,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Transitions to a new state.
    */
   protected void transition(RaftServer.State state) {
-    if (state == type())
-      return;
-
-    switch (state) {
-      case INACTIVE:
-        context.transition(InactiveState.class);
-        break;
-      case PASSIVE:
-        context.transition(PassiveState.class);
-        break;
-      case FOLLOWER:
-        context.transition(FollowerState.class);
-        break;
-      case CANDIDATE:
-        context.transition(CandidateState.class);
-        break;
-      case LEADER:
-        context.transition(LeaderState.class);
-        break;
-      default:
-        throw new IllegalStateException();
-    }
+    context.transition(state);
   }
 
   /**

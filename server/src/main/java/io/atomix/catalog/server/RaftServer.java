@@ -16,6 +16,7 @@
 package io.atomix.catalog.server;
 
 import io.atomix.catalog.server.state.ServerContext;
+import io.atomix.catalog.server.state.ServerState;
 import io.atomix.catalog.server.storage.Storage;
 import io.atomix.catalyst.buffer.PooledDirectAllocator;
 import io.atomix.catalyst.serializer.Serializer;
@@ -114,10 +115,17 @@ public class RaftServer implements Managed<RaftServer> {
   private final ServerContext context;
   private CompletableFuture<RaftServer> openFuture;
   private CompletableFuture<Void> closeFuture;
+  private ServerState state;
+  private final Duration electionTimeout;
+  private final Duration heartbeatInterval;
+  private final Duration sessionTimeout;
   private boolean open;
 
-  private RaftServer(ServerContext context) {
+  private RaftServer(ServerContext context, Duration electionTimeout, Duration heartbeatInterval, Duration sessionTimeout) {
     this.context = context;
+    this.electionTimeout = electionTimeout;
+    this.heartbeatInterval = heartbeatInterval;
+    this.sessionTimeout = sessionTimeout;
   }
 
   /**
@@ -126,7 +134,7 @@ public class RaftServer implements Managed<RaftServer> {
    * @return The current Raft term.
    */
   public long term() {
-    return context.getTerm();
+    return state.getTerm();
   }
 
   /**
@@ -135,7 +143,7 @@ public class RaftServer implements Managed<RaftServer> {
    * @return The current Raft leader.
    */
   public Address leader() {
-    return context.getLeader();
+    return state.getLeader();
   }
 
   /**
@@ -151,7 +159,7 @@ public class RaftServer implements Managed<RaftServer> {
    * @return The Raft context.
    */
   public ThreadContext context() {
-    return context.getContext();
+    return state.getContext();
   }
 
   /**
@@ -160,7 +168,7 @@ public class RaftServer implements Managed<RaftServer> {
    * @return The Raft server state.
    */
   public State state() {
-    return context.getState();
+    return state.getState();
   }
 
   @Override
@@ -172,14 +180,24 @@ public class RaftServer implements Managed<RaftServer> {
       synchronized (this) {
         if (openFuture == null) {
           if (closeFuture == null) {
-            openFuture = context.open().thenApply(c -> {
+            openFuture = context.open().thenApply(state -> {
               openFuture = null;
+              this.state = state;
+              state.setElectionTimeout(electionTimeout)
+                .setHeartbeatInterval(heartbeatInterval)
+                .setSessionTimeout(sessionTimeout)
+                .transition(State.JOIN).join();
               open = true;
               return this;
             });
           } else {
-            openFuture = closeFuture.thenCompose(v -> context.open().thenApply(c -> {
+            openFuture = closeFuture.thenCompose(c -> context.open().thenApply(state -> {
               openFuture = null;
+              this.state = state;
+              state.setElectionTimeout(electionTimeout)
+                .setHeartbeatInterval(heartbeatInterval)
+                .setSessionTimeout(sessionTimeout)
+                .transition(State.JOIN).join();
               open = true;
               return this;
             }));
@@ -383,11 +401,8 @@ public class RaftServer implements Managed<RaftServer> {
           .build();
       }
 
-      ServerContext context = new ServerContext(address, cluster, transport, storage, stateMachine, serializer)
-        .setHeartbeatInterval(heartbeatInterval)
-        .setElectionTimeout(electionTimeout)
-        .setSessionTimeout(sessionTimeout);
-      return new RaftServer(context);
+      ServerContext context = new ServerContext(address, cluster, stateMachine, transport, storage, serializer);
+      return new RaftServer(context, heartbeatInterval, electionTimeout, sessionTimeout);
     }
   }
 

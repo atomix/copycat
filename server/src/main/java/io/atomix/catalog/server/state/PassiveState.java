@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 class PassiveState extends AbstractState {
   private final Queue<AtomicInteger> counterPool = new ArrayDeque<>();
 
-  public PassiveState(ServerContext context) {
+  public PassiveState(ServerState context) {
     super(context);
   }
 

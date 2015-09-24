@@ -48,7 +48,7 @@ final class FollowerState extends ActiveState {
   private final Random random = new Random();
   private Scheduled heartbeatTimer;
 
-  public FollowerState(ServerContext context) {
+  public FollowerState(ServerState context) {
     super(context);
   }
 

@@ -26,7 +26,7 @@ import java.util.*;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ClusterState {
-  private final ServerContext context;
+  private final ServerState context;
   private final Address address;
   private Type type = Type.PASSIVE;
   private long version = -1;
@@ -44,7 +44,7 @@ class ClusterState {
     PASSIVE
   }
 
-  ClusterState(ServerContext context, Address address) {
+  ClusterState(ServerState context, Address address) {
     this.context = Assert.notNull(context, "context");
     this.address = Assert.notNull(address, "address");
   }

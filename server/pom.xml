@@ -31,6 +31,12 @@
       <artifactId>catalog-protocol</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.atomix.catalyst</groupId>
+      <artifactId>catalyst-local</artifactId>
+      <version>${catalyst.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

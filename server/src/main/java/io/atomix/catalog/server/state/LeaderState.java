@@ -46,7 +46,7 @@ final class LeaderState extends ActiveState {
   private Scheduled currentTimer;
   private final Replicator replicator = new Replicator();
 
-  public LeaderState(ServerContext context) {
+  public LeaderState(ServerState context) {
     super(context);
   }
 
