@@ -57,7 +57,7 @@ final class LeaderState extends ActiveState {
     // Schedule the initial entries commit to occur after the state is opened. Attempting any communication
     // within the open() method will result in a deadlock since RaftProtocol calls this method synchronously.
     // What is critical about this logic is that the heartbeat timer not be started until a no-op entry has been committed.
-    context.getContext().execute(this::commitEntries).whenComplete((result, error) -> {
+    context.getThreadContext().execute(this::commitEntries).whenComplete((result, error) -> {
       if (isOpen() && error == null) {
         startHeartbeatTimer();
       }
@@ -134,7 +134,7 @@ final class LeaderState extends ActiveState {
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
     LOGGER.debug("{} - Starting heartbeat timer", context.getAddress());
-    currentTimer = context.getContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::heartbeatMembers);
+    currentTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::heartbeatMembers);
   }
 
   /**
@@ -674,7 +674,7 @@ final class LeaderState extends ActiveState {
               checkSessions();
             }
             entry.release();
-          }, context.getContext().executor());
+          }, context.getThreadContext().executor());
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
