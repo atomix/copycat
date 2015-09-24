@@ -402,7 +402,7 @@ public class RaftServer implements Managed<RaftServer> {
       }
 
       ServerContext context = new ServerContext(address, cluster, stateMachine, transport, storage, serializer);
-      return new RaftServer(context, heartbeatInterval, electionTimeout, sessionTimeout);
+      return new RaftServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
     }
   }
 
