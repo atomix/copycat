@@ -40,20 +40,18 @@ import java.util.function.Consumer;
  * expire} while switching between servers.
  * <p>
  * Messages are sent to the other side of the session using the {@link #publish(String, Object)} method:
- * <p>
  * <pre>
  *   {@code
- *     session.publish("Hello world!");
+ *     session.publish("myEvent", "Hello world!");
  *   }
  * </pre>
- * <p>
  * When the message is published, it will be queued to be sent to the other side of the connection. Catalog guarantees
  * that the message will arrive within the session timeout unless the session itself times out.
  * <p>
  * To listen for events on a session register a {@link Consumer} via {@link #onEvent(String, Consumer)}:
  * <pre>
  *   {@code
- *     session.onEvent(message -> System.out.println("Received: " + message));
+ *     session.onEvent("myEvent", message -> System.out.println("Received: " + message));
  *   }
  * </pre>
  * Messages will always be received in the same thread and in the order in which they were sent by the other side of
