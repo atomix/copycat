@@ -25,6 +25,7 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
+import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 
@@ -119,6 +120,7 @@ public class RaftServer implements Managed<RaftServer> {
   private final Duration electionTimeout;
   private final Duration heartbeatInterval;
   private final Duration sessionTimeout;
+  private Listener<Address> electionListener;
   private boolean open;
 
   private RaftServer(ServerContext context, Duration electionTimeout, Duration heartbeatInterval, Duration sessionTimeout) {
@@ -180,26 +182,42 @@ public class RaftServer implements Managed<RaftServer> {
       synchronized (this) {
         if (openFuture == null) {
           if (closeFuture == null) {
-            openFuture = context.open().thenApply(state -> {
+            openFuture = context.open().thenCompose(state -> {
               openFuture = null;
               this.state = state;
               state.setElectionTimeout(electionTimeout)
                 .setHeartbeatInterval(heartbeatInterval)
                 .setSessionTimeout(sessionTimeout)
                 .transition(State.JOIN).join();
-              open = true;
-              return this;
+
+              CompletableFuture<RaftServer> future = new CompletableFuture<>();
+              electionListener = state.onLeaderElection(leader -> {
+                if (electionListener != null) {
+                  open = true;
+                  future.complete(null);
+                  electionListener.close();
+                }
+              });
+              return future;
             });
           } else {
-            openFuture = closeFuture.thenCompose(c -> context.open().thenApply(state -> {
+            openFuture = closeFuture.thenCompose(c -> context.open().thenCompose(state -> {
               openFuture = null;
               this.state = state;
               state.setElectionTimeout(electionTimeout)
                 .setHeartbeatInterval(heartbeatInterval)
                 .setSessionTimeout(sessionTimeout)
                 .transition(State.JOIN).join();
-              open = true;
-              return this;
+
+              CompletableFuture<RaftServer> future = new CompletableFuture<>();
+              electionListener = state.onLeaderElection(leader -> {
+                if (electionListener != null) {
+                  open = true;
+                  future.complete(null);
+                  electionListener.close();
+                }
+              });
+              return future;
             }));
           }
         }

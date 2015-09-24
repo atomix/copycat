@@ -47,7 +47,8 @@ import java.util.function.Consumer;
  */
 public class ServerState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerState.class);
-  private final Listeners<RaftServer.State> listeners = new Listeners<>();
+  private final Listeners<RaftServer.State> stateChangeListeners = new Listeners<>();
+  private final Listeners<Address> electionListeners = new Listeners<>();
   private final Random random;
   private ThreadContext context;
   private final StateMachine userStateMachine;
@@ -66,7 +67,6 @@ public class ServerState {
   private int lastVotedFor;
   private long commitIndex;
   private long globalIndex;
-  private volatile CompletableFuture<Void> openFuture;
 
   @SuppressWarnings("unchecked")
   ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext context) {
@@ -106,7 +106,17 @@ public class ServerState {
    * @return The listener context.
    */
   public Listener<RaftServer.State> onStateChange(Consumer<RaftServer.State> listener) {
-    return listeners.add(listener);
+    return stateChangeListeners.add(listener);
+  }
+
+  /**
+   * Registers a leader election listener.
+   *
+   * @param listener The leader election listener.
+   * @return The listener context.
+   */
+  public Listener<Address> onLeaderElection(Consumer<Address> listener) {
+    return electionListeners.add(listener);
   }
 
   /**
@@ -211,10 +221,7 @@ public class ServerState {
         this.leader = leader;
         this.lastVotedFor = 0;
         LOGGER.debug("{} - Found leader {}", this.address, address);
-        if (openFuture != null) {
-          openFuture.complete(null);
-          openFuture = null;
-        }
+        electionListeners.forEach(l -> l.accept(address));
       }
     } else if (leader != 0) {
       if (this.leader != leader) {
@@ -224,6 +231,7 @@ public class ServerState {
         this.leader = leader;
         this.lastVotedFor = 0;
         LOGGER.debug("{} - Found leader {}", this.address, address);
+        electionListeners.forEach(l -> l.accept(address));
       }
     } else {
       this.leader = 0;
@@ -476,7 +484,7 @@ public class ServerState {
       }
     }
 
-    listeners.forEach(l -> l.accept(this.state.type()));
+    stateChangeListeners.forEach(l -> l.accept(this.state.type()));
     return CompletableFuture.completedFuture(null);
   }
 
