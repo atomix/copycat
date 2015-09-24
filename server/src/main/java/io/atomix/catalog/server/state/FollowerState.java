@@ -18,9 +18,11 @@ package io.atomix.catalog.server.state;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.request.KeepAliveRequest;
 import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.client.request.UnregisterRequest;
 import io.atomix.catalog.client.response.KeepAliveResponse;
 import io.atomix.catalog.client.response.RegisterResponse;
 import io.atomix.catalog.client.response.Response;
+import io.atomix.catalog.client.response.UnregisterResponse;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.AppendRequest;
 import io.atomix.catalog.server.request.PollRequest;
@@ -100,6 +102,25 @@ final class FollowerState extends ActiveState {
     }
   }
 
+  @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      if (context.getLeader() == null) {
+        return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER_ERROR)
+          .build()));
+      } else {
+        return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
+      }
+    } finally {
+      request.release();
+    }
+  }
+
   /**
    * Starts the heartbeat timer.
    */
@@ -125,7 +146,7 @@ final class FollowerState extends ActiveState {
     // Set the election timeout in a semi-random fashion with the random range
     // being election timeout and 2 * election timeout.
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
-    heartbeatTimer = context.getContext().schedule(delay, () -> {
+    heartbeatTimer = context.getThreadContext().schedule(delay, () -> {
       heartbeatTimer = null;
       if (isOpen()) {
         context.setLeader(0);
@@ -145,7 +166,7 @@ final class FollowerState extends ActiveState {
    */
   private void sendPollRequests() {
     // Set a new timer within which other nodes must respond in order for this node to transition to candidate.
-    heartbeatTimer = context.getContext().schedule(context.getElectionTimeout(), () -> {
+    heartbeatTimer = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
       LOGGER.debug("{} - Failed to poll a majority of the cluster in {} milliseconds", context.getAddress(), context.getElectionTimeout());
       resetHeartbeatTimeout();
     });
@@ -223,7 +244,7 @@ final class FollowerState extends ActiveState {
           } else if (response != null) {
             response.release();
           }
-        }, context.getContext().executor());
+        }, context.getThreadContext().executor());
       });
     }
   }

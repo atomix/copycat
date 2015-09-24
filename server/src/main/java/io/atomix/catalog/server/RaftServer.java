@@ -160,8 +160,8 @@ public class RaftServer implements Managed<RaftServer> {
    *
    * @return The Raft context.
    */
-  public ThreadContext context() {
-    return state.getContext();
+  public ThreadContext threadContext() {
+    return state.getThreadContext();
   }
 
   /**

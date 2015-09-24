@@ -31,13 +31,8 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=266)
+@SerializeWith(id=272)
 public class PollRequest extends AbstractRequest<PollRequest> {
-
-  /**
-   * The unique identifier for the poll request type.
-   */
-  public static final byte TYPE = 0x0F;
 
   private static final BuilderPool<Builder, PollRequest> POOL = new BuilderPool<>(Builder::new);
 
@@ -70,11 +65,6 @@ public class PollRequest extends AbstractRequest<PollRequest> {
    */
   public PollRequest(ReferenceManager<PollRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

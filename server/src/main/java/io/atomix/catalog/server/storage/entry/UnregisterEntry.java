@@ -13,31 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.client.request;
+package io.atomix.catalog.server.storage.entry;
 
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceCounted;
+import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.catalyst.util.ReferenceManager;
 
 /**
- * Protocol request.
+ * Unregister entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Request<T extends Request<T>> extends ReferenceCounted<T>, CatalystSerializable {
+@SerializeWith(id=309)
+public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
 
-  /**
-   * Request builder.
-   *
-   * @param <T> The builder type.
-   */
-  abstract class Builder<T extends Builder<T, U>, U extends Request> extends io.atomix.catalyst.util.Builder<U> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool pool) {
-      super(pool);
-    }
+  public UnregisterEntry() {
+  }
+
+  public UnregisterEntry(ReferenceManager<Entry<?>> referenceManager) {
+    super(referenceManager);
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[index=%d, term=%d, session=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getTimestamp());
   }
 
 }

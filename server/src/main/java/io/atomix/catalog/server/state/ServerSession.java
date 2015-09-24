@@ -55,6 +55,7 @@ class ServerSession implements Session {
   private final Map<Long, Object> responses = new HashMap<>();
   private final Queue<EventHolder> events = new ArrayDeque<>();
   private final Queue<EventHolder> eventsPool = new ArrayDeque<>();
+  private boolean suspect;
   private boolean expired;
   private boolean closed;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
@@ -484,6 +485,27 @@ class ServerSession implements Session {
   @Override
   public boolean isClosed() {
     return closed;
+  }
+
+  /**
+   * Sets the session as suspect.
+   */
+  void suspect() {
+    suspect = true;
+  }
+
+  /**
+   * Sets the session as trusted.
+   */
+  void trust() {
+    suspect = false;
+  }
+
+  /**
+   * Indicates whether the session is suspect.
+   */
+  boolean isSuspect() {
+    return suspect;
   }
 
   /**

@@ -33,13 +33,8 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=273)
+@SerializeWith(id=261)
 public class RegisterResponse extends AbstractResponse<RegisterResponse> {
-
-  /**
-   * The unique identifier for the register response type.
-   */
-  public static final byte TYPE = 0x08;
 
   private static final BuilderPool<Builder, RegisterResponse> POOL = new BuilderPool<>(Builder::new);
 
@@ -72,11 +67,6 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
    */
   public RegisterResponse(ReferenceManager<RegisterResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**
@@ -161,6 +151,9 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
    */
   public static class Builder extends AbstractResponse.Builder<Builder, RegisterResponse> {
 
+    /**
+     * @throws NullPointerException if {@code pool} is null
+     */
     protected Builder(BuilderPool<Builder, RegisterResponse> pool) {
       super(pool, RegisterResponse::new);
     }

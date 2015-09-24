@@ -30,3 +30,4 @@ io.atomix.catalog.server.storage.entry.KeepAliveEntry
 io.atomix.catalog.server.storage.entry.NoOpEntry
 io.atomix.catalog.server.storage.entry.QueryEntry
 io.atomix.catalog.server.storage.entry.RegisterEntry
+io.atomix.catalog.server.storage.entry.UnregisterEntry

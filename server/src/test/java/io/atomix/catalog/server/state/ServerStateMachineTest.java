@@ -158,7 +158,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   /**
    * Tests expiring a session.
    */
-  public void testSessionExpire() throws Throwable {
+  public void testSessionSuspect() throws Throwable {
     callerContext.execute(() -> {
 
       RegisterEntry entry = new RegisterEntry()
@@ -199,7 +199,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    assertTrue(session.isExpired());
+    assertTrue(session.isSuspect());
   }
 
   /**

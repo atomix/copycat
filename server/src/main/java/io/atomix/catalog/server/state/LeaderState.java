@@ -19,10 +19,7 @@ import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.Query;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.error.RaftException;
-import io.atomix.catalog.client.request.CommandRequest;
-import io.atomix.catalog.client.request.KeepAliveRequest;
-import io.atomix.catalog.client.request.QueryRequest;
-import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.client.request.*;
 import io.atomix.catalog.client.response.*;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.*;
@@ -60,7 +57,7 @@ final class LeaderState extends ActiveState {
     // Schedule the initial entries commit to occur after the state is opened. Attempting any communication
     // within the open() method will result in a deadlock since RaftProtocol calls this method synchronously.
     // What is critical about this logic is that the heartbeat timer not be started until a no-op entry has been committed.
-    context.getContext().execute(this::commitEntries).whenComplete((result, error) -> {
+    context.getThreadContext().execute(this::commitEntries).whenComplete((result, error) -> {
       if (isOpen() && error == null) {
         startHeartbeatTimer();
       }
@@ -85,7 +82,9 @@ final class LeaderState extends ActiveState {
     final long term = context.getTerm();
     final long index;
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
-      entry.setId(context.nextEntryId()).setTerm(term).setTimestamp(System.currentTimeMillis());
+      entry.setId(context.nextEntryId())
+        .setTerm(term)
+        .setTimestamp(System.currentTimeMillis());
       index = context.getLog().append(entry);
     }
 
@@ -135,7 +134,7 @@ final class LeaderState extends ActiveState {
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
     LOGGER.debug("{} - Starting heartbeat timer", context.getAddress());
-    currentTimer = context.getContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::heartbeatMembers);
+    currentTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::heartbeatMembers);
   }
 
   /**
@@ -145,6 +144,30 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     if (isOpen()) {
       replicator.commit();
+    }
+  }
+
+  /**
+   * Checks for expired sessions.
+   */
+  private void checkSessions() {
+    long term = context.getTerm();
+    for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
+      if (session.isSuspect()) {
+        LOGGER.debug("{} - Detected expired session: {}", context.getAddress(), session.id());
+
+        final long index;
+        try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
+          entry.setId(context.nextEntryId())
+            .setTerm(term)
+            .setSession(session.id())
+            .setTimestamp(System.currentTimeMillis());
+          index = context.getLog().append(entry);
+          LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+        }
+
+        replicator.commit(index);
+      }
     }
   }
 
@@ -400,6 +423,7 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+              checkSessions();
             }
             entry.release();
           });
@@ -528,6 +552,7 @@ final class LeaderState extends ActiveState {
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
+        checkSessions();
       }
       entry.release();
     });
@@ -583,6 +608,7 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+              checkSessions();
             }
             entry.release();
           });
@@ -645,11 +671,71 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+              checkSessions();
             }
             entry.release();
-          }, context.getContext().executor());
+          }, context.getThreadContext().executor());
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(RaftError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+    return future;
+  }
+
+  @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    final long timestamp = System.currentTimeMillis();
+    final long index;
+
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
+        entry.setId(context.nextEntryId())
+          .setTerm(context.getTerm())
+          .setSession(request.session())
+          .setTimestamp(timestamp);
+        index = context.getLog().append(entry);
+        LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
+      }
+    } finally {
+      request.release();
+    }
+
+    CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
+    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (commitError == null) {
+          KeepAliveEntry entry = context.getLog().get(index);
+          applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
+            if (isOpen()) {
+              if (sessionError == null) {
+                future.complete(logResponse(UnregisterResponse.builder()
+                  .withStatus(Response.Status.OK)
+                  .build()));
+              } else if (sessionError instanceof RaftException) {
+                future.complete(logResponse(UnregisterResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((RaftException) sessionError).getType())
+                  .build()));
+              } else {
+                future.complete(logResponse(UnregisterResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .build()));
+              }
+              checkSessions();
+            }
+            entry.release();
+          }, context.getThreadContext().executor());
+        } else {
+          future.complete(logResponse(UnregisterResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));

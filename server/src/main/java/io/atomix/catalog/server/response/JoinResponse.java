@@ -34,13 +34,8 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=261)
+@SerializeWith(id=269)
 public class JoinResponse extends AbstractResponse<JoinResponse> {
-
-  /**
-   * The unique identifier for the join response type.
-   */
-  public static final byte TYPE = 0x0C;
 
   private static final BuilderPool<Builder, JoinResponse> POOL = new BuilderPool<>(Builder::new);
 
@@ -72,11 +67,6 @@ public class JoinResponse extends AbstractResponse<JoinResponse> {
    */
   public JoinResponse(ReferenceManager<JoinResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

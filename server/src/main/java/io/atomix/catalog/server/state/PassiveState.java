@@ -180,7 +180,7 @@ class PassiveState extends AbstractState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.getContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
+    context.getThreadContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
       context.setGlobalIndex(request.globalIndex());
       context.getLog().compact(request.globalIndex());
     });
@@ -373,6 +373,21 @@ class PassiveState extends AbstractState {
       logRequest(request);
 
       return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } finally {
+      request.release();
+    }
+  }
+
+  @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));

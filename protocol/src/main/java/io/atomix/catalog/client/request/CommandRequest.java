@@ -32,13 +32,8 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=258)
+@SerializeWith(id=256)
 public class CommandRequest extends OperationRequest<CommandRequest> {
-
-  /**
-   * The unique identifier for the command request type.
-   */
-  public static final byte TYPE = 0x01;
 
   private static final BuilderPool<Builder, CommandRequest> POOL = new BuilderPool<>(Builder::new);
 
@@ -69,11 +64,6 @@ public class CommandRequest extends OperationRequest<CommandRequest> {
    */
   public CommandRequest(ReferenceManager<CommandRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

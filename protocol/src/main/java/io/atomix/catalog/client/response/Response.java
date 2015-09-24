@@ -77,13 +77,6 @@ public interface Response<T extends Response<T>> extends ReferenceCounted<T>, Ca
   }
 
   /**
-   * Returns the response type.
-   *
-   * @return The response type.
-   */
-  byte type();
-
-  /**
    * Returns the response status.
    *
    * @return The response status.

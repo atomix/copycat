@@ -34,11 +34,6 @@ import java.util.Objects;
 @SerializeWith(id=274)
 public class VoteRequest extends AbstractRequest<VoteRequest> {
 
-  /**
-   * The unique identifier for the vote request type.
-   */
-  public static final byte TYPE = 0x11;
-
   private static final BuilderPool<Builder, VoteRequest> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -70,11 +65,6 @@ public class VoteRequest extends AbstractRequest<VoteRequest> {
    */
   public VoteRequest(ReferenceManager<VoteRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**
