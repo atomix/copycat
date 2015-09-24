@@ -39,7 +39,9 @@ final class LeaveState extends InactiveState {
 
   @Override
   public CompletableFuture<AbstractState> open() {
-    return super.open().thenRun(this::startLeaveTimeout).thenRun(this::leave).thenApply(v -> this);
+    startLeaveTimeout();
+    leave();
+    return CompletableFuture.completedFuture(this);
   }
 
   @Override

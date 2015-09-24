@@ -15,10 +15,10 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.server.RaftServer;
-import io.atomix.catalog.server.response.JoinResponse;
-import io.atomix.catalog.server.request.JoinRequest;
 import io.atomix.catalog.client.response.Response;
+import io.atomix.catalog.server.RaftServer;
+import io.atomix.catalog.server.request.JoinRequest;
+import io.atomix.catalog.server.response.JoinResponse;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 
 import java.util.Iterator;
@@ -39,7 +39,9 @@ final class JoinState extends InactiveState {
 
   @Override
   public CompletableFuture<AbstractState> open() {
-    return super.open().thenRun(this::startJoinTimeout).thenRun(this::join).thenApply(v -> this);
+    startJoinTimeout();
+    join();
+    return CompletableFuture.completedFuture(this);
   }
 
   @Override
