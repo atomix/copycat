@@ -27,7 +27,7 @@ import java.util.function.Consumer;
  * Sessions can be used by both clients and servers to monitor the connection status of another client or server. When
  * a client first connects to a server, it must register a new session. Once the session has been registered, listeners
  * registered via {@link #onOpen(Consumer)} will be called on <em>both the client and server side</em>. Thereafter, the
- * session can be used to {@link #publish(Object)} and {@link #onEvent(Consumer) receive} events between client and
+ * session can be used to {@link #publish(String, Object)} and {@link #onEvent(String, Consumer) receive} events between client and
  * server.
  * <p>
  * Sessions represent a connection between a single client and all servers in a Raft cluster. Session information
@@ -40,11 +40,13 @@ import java.util.function.Consumer;
  * expire} while switching between servers.
  * <p>
  * Messages are sent to the other side of the session using the {@link #publish(String, Object)} method:
+ * <p>
  * <pre>
  *   {@code
  *     session.publish("Hello world!");
  *   }
  * </pre>
+ * <p>
  * When the message is published, it will be queued to be sent to the other side of the connection. Catalog guarantees
  * that the message will arrive within the session timeout unless the session itself times out.
  * <p>
