@@ -33,11 +33,6 @@ import java.util.Objects;
 @SerializeWith(id=268)
 public class PublishRequest extends SessionRequest<PublishRequest> {
 
-  /**
-   * The unique identifier for the publish request type.
-   */
-  public static final byte TYPE = 0x05;
-
   private static final BuilderPool<Builder, PublishRequest> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -72,11 +67,6 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
    */
   public PublishRequest(ReferenceManager<PublishRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

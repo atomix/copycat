@@ -13,52 +13,53 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.catalog.server.response;
+package io.atomix.catalog.client.response;
 
 import io.atomix.catalog.client.error.RaftError;
-import io.atomix.catalog.client.response.AbstractResponse;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.catalyst.util.ReferenceManager;
 
 import java.util.Objects;
 
 /**
- * Protocol leave response.
+ * Protocol unregister response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=265)
-public class LeaveResponse extends AbstractResponse<LeaveResponse> {
+@SerializeWith(id=275)
+public class UnregisterResponse extends SessionResponse<UnregisterResponse> {
 
-  private static final BuilderPool<Builder, LeaveResponse> POOL = new BuilderPool<>(Builder::new);
+  private static final BuilderPool<Builder, UnregisterResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
-   * Returns a new leave response builder.
+   * Returns a new keep alive response builder.
    *
-   * @return A new leave response builder.
+   * @return A new keep alive response builder.
    */
   public static Builder builder() {
     return POOL.acquire();
   }
 
   /**
-   * Returns an leave response builder for an existing response.
+   * Returns a keep alive response builder for an existing response.
    *
    * @param response The response to build.
-   * @return The leave response builder.
+   * @return The keep alive response builder.
+   * @throws NullPointerException if {@code response} is null
    */
-  public static Builder builder(LeaveResponse response) {
-    return POOL.acquire(response);
+  public static Builder builder(UnregisterResponse response) {
+    return POOL.acquire(Assert.notNull(response, "response"));
   }
 
   /**
    * @throws NullPointerException if {@code referenceManager} is null
    */
-  public LeaveResponse(ReferenceManager<LeaveResponse> referenceManager) {
+  public UnregisterResponse(ReferenceManager<UnregisterResponse> referenceManager) {
     super(referenceManager);
   }
 
@@ -87,8 +88,8 @@ public class LeaveResponse extends AbstractResponse<LeaveResponse> {
 
   @Override
   public boolean equals(Object object) {
-    if (object instanceof LeaveResponse) {
-      LeaveResponse response = (LeaveResponse) object;
+    if (object instanceof UnregisterResponse) {
+      UnregisterResponse response = (UnregisterResponse) object;
       return response.status == status;
     }
     return false;
@@ -100,29 +101,15 @@ public class LeaveResponse extends AbstractResponse<LeaveResponse> {
   }
 
   /**
-   * Leave response builder.
+   * Status response builder.
    */
-  public static class Builder extends AbstractResponse.Builder<Builder, LeaveResponse> {
-
-    protected Builder(BuilderPool<Builder, LeaveResponse> pool) {
-      super(pool, LeaveResponse::new);
+  public static class Builder extends SessionResponse.Builder<Builder, UnregisterResponse> {
+    /**
+     * @throws NullPointerException if {@code pool} is null
+     */
+    protected Builder(BuilderPool<Builder, UnregisterResponse> pool) {
+      super(pool, UnregisterResponse::new);
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

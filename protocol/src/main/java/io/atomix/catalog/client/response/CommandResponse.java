@@ -28,11 +28,6 @@ import io.atomix.catalyst.util.ReferenceManager;
 @SerializeWith(id=259)
 public class CommandResponse extends OperationResponse<CommandResponse> {
 
-  /**
-   * The unique identifier for the command response type.
-   */
-  public static final byte TYPE = 0x02;
-
   private static final BuilderPool<Builder, CommandResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -62,15 +57,13 @@ public class CommandResponse extends OperationResponse<CommandResponse> {
     super(referenceManager);
   }
 
-  @Override
-  public byte type() {
-    return TYPE;
-  }
-
   /**
    * Command response builder.
    */
   public static class Builder extends OperationResponse.Builder<Builder, CommandResponse> {
+    /**
+     * @throws NullPointerException if {@code pool} is null
+     */
     protected Builder(BuilderPool<Builder, CommandResponse> pool) {
       super(pool, CommandResponse::new);
     }

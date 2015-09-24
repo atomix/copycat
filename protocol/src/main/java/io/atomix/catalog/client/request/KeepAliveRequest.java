@@ -33,11 +33,6 @@ import java.util.Objects;
 @SerializeWith(id=262)
 public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
 
-  /**
-   * The unique identifier for the keep alive request type.
-   */
-  public static final byte TYPE = 0x09;
-
   private static final BuilderPool<Builder, KeepAliveRequest> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -69,11 +64,6 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
    */
   public KeepAliveRequest(ReferenceManager<KeepAliveRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

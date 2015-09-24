@@ -35,11 +35,6 @@ import java.util.Objects;
 @SerializeWith(id=270)
 public class QueryRequest extends OperationRequest<QueryRequest> {
 
-  /**
-   * The unique identifier for the query request type.
-   */
-  public static final byte TYPE = 0x03;
-
   private static final BuilderPool<Builder, QueryRequest> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -70,11 +65,6 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
    */
   public QueryRequest(ReferenceManager<QueryRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

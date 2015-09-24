@@ -15,17 +15,11 @@
  */
 package io.atomix.catalog.server.state;
 
+import io.atomix.catalog.client.request.*;
+import io.atomix.catalog.client.response.*;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.*;
 import io.atomix.catalog.server.response.*;
-import io.atomix.catalog.client.request.CommandRequest;
-import io.atomix.catalog.client.request.KeepAliveRequest;
-import io.atomix.catalog.client.request.QueryRequest;
-import io.atomix.catalog.client.request.RegisterRequest;
-import io.atomix.catalog.client.response.CommandResponse;
-import io.atomix.catalog.client.response.KeepAliveResponse;
-import io.atomix.catalog.client.response.QueryResponse;
-import io.atomix.catalog.client.response.RegisterResponse;
 import io.atomix.catalyst.util.concurrent.Futures;
 
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +47,11 @@ class InactiveState extends AbstractState {
 
   @Override
   protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

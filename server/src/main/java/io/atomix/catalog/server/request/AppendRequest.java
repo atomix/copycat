@@ -38,11 +38,6 @@ import java.util.Objects;
 @SerializeWith(id=256)
 public class AppendRequest extends AbstractRequest<AppendRequest> {
 
-  /**
-   * The unique identifier for the append request type.
-   */
-  public static final byte TYPE = 0x13;
-
   private static final BuilderPool<Builder, AppendRequest> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -77,11 +72,6 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
    */
   private AppendRequest(ReferenceManager<AppendRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

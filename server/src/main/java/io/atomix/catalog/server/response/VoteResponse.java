@@ -36,11 +36,6 @@ import java.util.Objects;
 @SerializeWith(id=275)
 public class VoteResponse extends AbstractResponse<VoteResponse> {
 
-  /**
-   * The unique identifier for the vote response type.
-   */
-  public static final byte TYPE = 0x12;
-
   private static final BuilderPool<Builder, VoteResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -70,11 +65,6 @@ public class VoteResponse extends AbstractResponse<VoteResponse> {
    */
   public VoteResponse(ReferenceManager<VoteResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

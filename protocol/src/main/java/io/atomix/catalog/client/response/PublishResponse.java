@@ -34,11 +34,6 @@ import java.util.Objects;
 @SerializeWith(id=269)
 public class PublishResponse extends SessionResponse<PublishResponse> {
 
-  /**
-   * The unique identifier for the publish response type.
-   */
-  public static final byte TYPE = 0x06;
-
   private static final BuilderPool<Builder, PublishResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -69,11 +64,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
    */
   public PublishResponse(ReferenceManager<PublishResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**
@@ -143,6 +133,9 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
    */
   public static class Builder extends SessionResponse.Builder<Builder, PublishResponse> {
 
+    /**
+     * @throws NullPointerException if {@code pool} is null
+     */
     protected Builder(BuilderPool<Builder, PublishResponse> pool) {
       super(pool, PublishResponse::new);
     }

@@ -36,11 +36,6 @@ import java.util.Objects;
 @SerializeWith(id=263)
 public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
 
-  /**
-   * The unique identifier for the keep alive response type.
-   */
-  public static final byte TYPE = 0x0A;
-
   private static final BuilderPool<Builder, KeepAliveResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -70,11 +65,6 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
    */
   public KeepAliveResponse(ReferenceManager<KeepAliveResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**
@@ -133,6 +123,9 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
    */
   public static class Builder extends SessionResponse.Builder<Builder, KeepAliveResponse> {
 
+    /**
+     * @throws NullPointerException if {@code pool} is null
+     */
     protected Builder(BuilderPool<Builder, KeepAliveResponse> pool) {
       super(pool, KeepAliveResponse::new);
     }

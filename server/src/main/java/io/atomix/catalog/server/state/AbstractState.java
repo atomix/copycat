@@ -114,6 +114,11 @@ abstract class AbstractState implements Managed<AbstractState> {
   protected abstract CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
 
   /**
+   * Handles an unregister request.
+   */
+  protected abstract CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
+
+  /**
    * Handles a join request.
    */
   protected abstract CompletableFuture<JoinResponse> join(JoinRequest request);

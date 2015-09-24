@@ -36,11 +36,6 @@ import java.util.Objects;
 @SerializeWith(id=257)
 public class AppendResponse extends AbstractResponse<AppendResponse> {
 
-  /**
-   * The unique identifier for the append response type.
-   */
-  public static final byte TYPE = 0x14;
-
   private static final BuilderPool<Builder, AppendResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -71,11 +66,6 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
    */
   public AppendResponse(ReferenceManager<AppendResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

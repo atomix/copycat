@@ -35,11 +35,6 @@ import java.util.Objects;
 @SerializeWith(id=264)
 public class LeaveRequest extends AbstractRequest<LeaveRequest> {
 
-  /**
-   * The unique identifier for the leave request type.
-   */
-  public static final byte TYPE = 0x0D;
-
   private static final BuilderPool<Builder, LeaveRequest> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -68,11 +63,6 @@ public class LeaveRequest extends AbstractRequest<LeaveRequest> {
    */
   private LeaveRequest(ReferenceManager<LeaveRequest> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

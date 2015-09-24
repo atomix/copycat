@@ -26,8 +26,6 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -119,6 +117,8 @@ class ServerStateMachine implements AutoCloseable {
         return apply((RegisterEntry) entry);
       } else if (entry instanceof KeepAliveEntry) {
         return apply((KeepAliveEntry) entry);
+      } else if (entry instanceof UnregisterEntry) {
+        return apply((UnregisterEntry) entry);
       } else if (entry instanceof NoOpEntry) {
         return apply((NoOpEntry) entry);
       }
@@ -141,7 +141,7 @@ class ServerStateMachine implements AutoCloseable {
     executor.tick(entry.getTimestamp());
 
     // Expire any remaining expired sessions.
-    expireSessions(entry.getTimestamp());
+    suspectSessions(entry.getTimestamp());
 
     ThreadContext context = getContext();
     long index = entry.getIndex();
@@ -168,7 +168,7 @@ class ServerStateMachine implements AutoCloseable {
     executor.tick(entry.getTimestamp());
 
     // Expire any remaining expired sessions.
-    expireSessions(entry.getTimestamp());
+    suspectSessions(entry.getTimestamp());
 
     CompletableFuture<Void> future;
 
@@ -182,10 +182,50 @@ class ServerStateMachine implements AutoCloseable {
     else {
       ThreadContext context = getContext();
 
+      // Set the session as trusted. Sessions only timeout via RegisterEntry.
+      session.trust();
+
       // The keep alive request contains the
       session.setTimestamp(entry.getTimestamp())
         .clearResponses(entry.getCommandSequence())
         .clearEvents(entry.getEventVersion(), entry.getEventSequence());
+
+      future = new CompletableFuture<>();
+      context.execute(() -> future.complete(null));
+    }
+
+    return future;
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   *
+   * @param entry The entry to apply.
+   * @return The result.
+   */
+  private CompletableFuture<Void> apply(UnregisterEntry entry) {
+    ServerSession session = executor.context().sessions().unregisterSession(entry.getSession());
+
+    // Allow the executor to execute any scheduled events.
+    executor.tick(entry.getTimestamp());
+
+    // Expire any remaining expired sessions.
+    suspectSessions(entry.getTimestamp());
+
+    CompletableFuture<Void> future;
+
+    // If the server session is null, the session either never existed or already expired.
+    if (session == null) {
+      LOGGER.warn("Unknown session: " + entry.getSession());
+      future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
+    }
+    // If the session exists, don't allow it to expire even if its expiration has passed since we still
+    // managed to receive a keep alive request from the client before it was removed.
+    else {
+      ThreadContext context = getContext();
+
+      session.expire();
+      stateMachine.expire(session);
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
@@ -363,16 +403,12 @@ class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Expires any sessions that have timed out.
+   * Suspects any sessions that have timed out.
    */
-  private void expireSessions(long timestamp) {
-    Set<Long> sessions = new HashSet<>(executor.context().sessions().sessions.keySet());
-    for (long sessionId : sessions) {
-      ServerSession session = executor.context().sessions().getSession(sessionId);
+  private void suspectSessions(long timestamp) {
+    for (ServerSession session : executor.context().sessions().sessions.values()) {
       if (timestamp - session.timeout() > session.getTimestamp()) {
-        executor.context().sessions().unregisterSession(sessionId);
-        session.expire();
-        stateMachine.expire(session);
+        session.suspect();
       }
     }
   }

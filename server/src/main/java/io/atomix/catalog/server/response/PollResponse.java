@@ -36,11 +36,6 @@ import java.util.Objects;
 @SerializeWith(id=267)
 public class PollResponse extends AbstractResponse<PollResponse> {
 
-  /**
-   * The unique identifier for the poll response type.
-   */
-  public static final byte TYPE = 0x10;
-
   private static final BuilderPool<Builder, PollResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -70,11 +65,6 @@ public class PollResponse extends AbstractResponse<PollResponse> {
    */
   public PollResponse(ReferenceManager<PollResponse> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public byte type() {
-    return TYPE;
   }
 
   /**

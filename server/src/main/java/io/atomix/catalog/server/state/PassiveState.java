@@ -382,6 +382,21 @@ class PassiveState extends AbstractState {
   }
 
   @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } finally {
+      request.release();
+    }
+  }
+
+  @Override
   protected CompletableFuture<JoinResponse> join(JoinRequest request) {
     try {
       context.checkThread();

@@ -28,11 +28,6 @@ import io.atomix.catalyst.util.ReferenceManager;
 @SerializeWith(id=271)
 public class QueryResponse extends OperationResponse<QueryResponse> {
 
-  /**
-   * The unique identifier for the query response type.
-   */
-  public static final byte TYPE = 0x04;
-
   private static final BuilderPool<Builder, QueryResponse> POOL = new BuilderPool<>(Builder::new);
 
   /**
@@ -62,15 +57,13 @@ public class QueryResponse extends OperationResponse<QueryResponse> {
     super(referenceManager);
   }
 
-  @Override
-  public byte type() {
-    return TYPE;
-  }
-
   /**
    * Query response builder.
    */
   public static class Builder extends OperationResponse.Builder<Builder, QueryResponse> {
+    /**
+     * @throws NullPointerException if {@code pool} is null
+     */
     protected Builder(BuilderPool<Builder, QueryResponse> pool) {
       super(pool, QueryResponse::new);
     }

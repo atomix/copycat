@@ -18,9 +18,11 @@ package io.atomix.catalog.server.state;
 import io.atomix.catalog.client.error.RaftError;
 import io.atomix.catalog.client.request.KeepAliveRequest;
 import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.client.request.UnregisterRequest;
 import io.atomix.catalog.client.response.KeepAliveResponse;
 import io.atomix.catalog.client.response.RegisterResponse;
 import io.atomix.catalog.client.response.Response;
+import io.atomix.catalog.client.response.UnregisterResponse;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.request.AppendRequest;
 import io.atomix.catalog.server.request.PollRequest;
@@ -94,6 +96,25 @@ final class FollowerState extends ActiveState {
           .build()));
       } else {
         return this.<KeepAliveRequest, KeepAliveResponse>forward(request).thenApply(this::logResponse);
+      }
+    } finally {
+      request.release();
+    }
+  }
+
+  @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      if (context.getLeader() == null) {
+        return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER_ERROR)
+          .build()));
+      } else {
+        return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
       }
     } finally {
       request.release();

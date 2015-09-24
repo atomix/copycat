@@ -15,10 +15,7 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.client.request.CommandRequest;
-import io.atomix.catalog.client.request.KeepAliveRequest;
-import io.atomix.catalog.client.request.QueryRequest;
-import io.atomix.catalog.client.request.RegisterRequest;
+import io.atomix.catalog.client.request.*;
 import io.atomix.catalog.server.RaftServer;
 import io.atomix.catalog.server.StateMachine;
 import io.atomix.catalog.server.request.*;
@@ -481,6 +478,7 @@ public class ServerContext implements Managed<Void> {
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
     connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
+    connection.handler(UnregisterRequest.class, requset -> state.unregister(requset));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
     connection.handler(AppendRequest.class, request -> state.append(request));

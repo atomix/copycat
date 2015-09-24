@@ -23,3 +23,5 @@ io.atomix.catalog.client.request.QueryRequest
 io.atomix.catalog.client.response.QueryResponse
 io.atomix.catalog.client.request.RegisterRequest
 io.atomix.catalog.client.response.RegisterResponse
+io.atomix.catalog.client.request.UnregisterRequest
+io.atomix.catalog.client.response.UnregisterResponse
