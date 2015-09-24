@@ -220,7 +220,7 @@
 
                 -group "Raft client" io.atomix.catalog.client*
                 -group "Raft server" io.atomix.catalog.server:io.atomix.catalog.server.request:io.atomix.catalog.server.response:io.atomix.catalog.server.session
-                -group "Raft log" io.atomix.catalog.server.storage
+                -group "Raft log" io.atomix.catalog.server.storage*
               </additionalparam>
             </configuration>
           </plugin>
