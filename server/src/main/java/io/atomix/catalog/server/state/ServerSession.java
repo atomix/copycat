@@ -348,6 +348,7 @@ class ServerSession implements Session {
       holder = new EventHolder();
 
     // Populate the event holder and add it to the events queue.
+    holder.future = new CompletableFuture<>();
     holder.eventVersion = eventVersion;
     holder.eventSequence = eventSequence;
     holder.previousVersion = previousVersion;
@@ -360,7 +361,7 @@ class ServerSession implements Session {
     // Send the event.
     sendEvent(holder);
 
-    return CompletableFuture.completedFuture(null);
+    return holder.future;
   }
 
   @Override
@@ -384,6 +385,7 @@ class ServerSession implements Session {
       EventHolder holder = events.peek();
       while (holder != null && (holder.eventVersion < version || (holder.eventVersion == version && holder.eventSequence <= sequence))){
         events.remove();
+        holder.future.complete(null);
         eventsPool.add(holder);
       }
     }
@@ -533,6 +535,7 @@ class ServerSession implements Session {
    * Event holder.
    */
   private static class EventHolder {
+    private CompletableFuture<Void> future;
     private long eventVersion;
     private long eventSequence;
     private long previousVersion;
