@@ -117,6 +117,13 @@ public class ServerContext implements Managed<ServerState> {
               future.complete(null);
             }
           }, context.executor());
+
+          try {
+            this.state.getLog().close();
+          } catch (Exception e) {
+          }
+          this.state.getStateMachine().close();
+          this.state = null;
         }
       });
 

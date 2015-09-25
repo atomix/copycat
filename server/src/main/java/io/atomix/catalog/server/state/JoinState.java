@@ -39,9 +39,10 @@ final class JoinState extends InactiveState {
 
   @Override
   public CompletableFuture<AbstractState> open() {
-    startJoinTimeout();
-    join();
-    return CompletableFuture.completedFuture(this);
+    return super.open()
+      .thenRun(this::startJoinTimeout)
+      .thenRun(this::join)
+      .thenApply(v -> this);
   }
 
   @Override

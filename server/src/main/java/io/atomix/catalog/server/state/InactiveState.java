@@ -36,16 +36,6 @@ class InactiveState extends AbstractState {
   }
 
   @Override
-  public CompletableFuture<AbstractState> open() {
-    try {
-      context.getLog().close();
-    } catch (Exception e) {
-    }
-    context.getStateMachine().close();
-    return CompletableFuture.completedFuture(this);
-  }
-
-  @Override
   public RaftServer.State type() {
     return RaftServer.State.INACTIVE;
   }
