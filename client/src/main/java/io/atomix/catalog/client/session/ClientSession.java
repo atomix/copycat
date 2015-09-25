@@ -138,11 +138,20 @@ public class ClientSession implements Session, Managed<Session> {
     CompletableFuture<T> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
-      CommandRequest request = CommandRequest.builder()
-        .withSession(id)
-        .withSequence(++commandRequest)
-        .withCommand(command)
-        .build();
+      CommandRequest request;
+      if (command.consistency() == Command.ConsistencyLevel.NONE) {
+        request = CommandRequest.builder()
+          .withSequence(id)
+          .withSequence(0)
+          .withCommand(command)
+          .build();
+      } else {
+        request = CommandRequest.builder()
+          .withSession(id)
+          .withSequence(++commandRequest)
+          .withCommand(command)
+          .build();
+      }
 
       submit(request, future);
     });

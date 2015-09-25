@@ -43,6 +43,11 @@ public interface Command<T> extends Operation<T> {
   enum ConsistencyLevel {
 
     /**
+     * Enforces no command consistency.
+     */
+    NONE,
+
+    /**
      * Enforces linearizable command consistency.
      * <p>
      * Linearizable consistency enforces sequential consistency for concurrent writes from a single client by sequencing
