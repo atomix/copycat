@@ -27,4 +27,4 @@ to verify it maintains linearizability in a number of different failure scenario
 [servers]: http://atomix.io/user-manual/raft-internals/#servers
 [Website]: http://atomix.io/user-manual/raft-framework/
 [Google group]: https://groups.google.com/forum/#!forum/copycat
-[Javadoc]: http://atomix.github.io/catalogue/api/1.0.0-SNAPSHOT/
+[Javadoc]: http://atomix.io/catalogue/api/latest/
