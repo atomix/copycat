@@ -43,18 +43,7 @@ public interface Command<T> extends Operation<T> {
   enum ConsistencyLevel {
 
     /**
-     * Enforces causal (writes follow reads) command consistency.
-     * <p>
-     * Causal consistency guarantees consistency between non-overlapping commands from a single client. Commands that are submitted
-     * concurrently by a single client are not guaranteed to be either applied to the Raft state machine in program order or
-     * completed in program order. Note that if the client does not submit concurrent writes and instead blocks every command
-     * {@link java.util.concurrent.CompletableFuture future}, {@code CAUSAL} consistency may be more performant since there is
-     * no additional coordination involved.
-     */
-    CAUSAL,
-
-    /**
-     * Enforces linearizable (monotonic write) command consistency.
+     * Enforces linearizable command consistency.
      * <p>
      * Linearizable consistency enforces sequential consistency for concurrent writes from a single client by sequencing
      * commands as they're applied to the Raft state machine. If a client submits writes <em>a</em>, <em>b</em>, and <em>c</em>
