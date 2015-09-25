@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-io.atomix.catalog.client.request.CommandRequest
-io.atomix.catalog.client.response.CommandResponse
-io.atomix.catalog.client.request.KeepAliveRequest
-io.atomix.catalog.client.response.KeepAliveResponse
-io.atomix.catalog.client.request.PublishRequest
-io.atomix.catalog.client.response.PublishResponse
-io.atomix.catalog.client.request.QueryRequest
-io.atomix.catalog.client.response.QueryResponse
-io.atomix.catalog.client.request.RegisterRequest
-io.atomix.catalog.client.response.RegisterResponse
-io.atomix.catalog.client.request.UnregisterRequest
-io.atomix.catalog.client.response.UnregisterResponse
+io.atomix.catalogue.client.request.CommandRequest
+io.atomix.catalogue.client.response.CommandResponse
+io.atomix.catalogue.client.request.KeepAliveRequest
+io.atomix.catalogue.client.response.KeepAliveResponse
+io.atomix.catalogue.client.request.PublishRequest
+io.atomix.catalogue.client.response.PublishResponse
+io.atomix.catalogue.client.request.QueryRequest
+io.atomix.catalogue.client.response.QueryResponse
+io.atomix.catalogue.client.request.RegisterRequest
+io.atomix.catalogue.client.response.RegisterResponse
+io.atomix.catalogue.client.request.UnregisterRequest
+io.atomix.catalogue.client.response.UnregisterResponse
