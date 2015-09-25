@@ -15,7 +15,6 @@
  */
 package io.atomix.catalog.server.state;
 
-import io.atomix.catalog.client.Command;
 import io.atomix.catalog.client.error.InternalException;
 import io.atomix.catalog.client.error.UnknownSessionException;
 import io.atomix.catalog.server.StateMachine;
@@ -307,12 +306,7 @@ class ServerStateMachine implements AutoCloseable {
 
     // Update the session timestamp and command sequence number. This is done in the caller's thread since all
     // timestamp/version/sequence checks are done in this thread prior to executing operations on the state machine thread.
-    session.setTimestamp(entry.getTimestamp());
-
-    // If the command's consistency is LINEARIZABLE, update the session command sequence number.
-    if (entry.getCommand().consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
-      session.setSequence(entry.getSequence());
-    }
+    session.setTimestamp(entry.getTimestamp()).setSequence(entry.getSequence());
 
     return future;
   }
