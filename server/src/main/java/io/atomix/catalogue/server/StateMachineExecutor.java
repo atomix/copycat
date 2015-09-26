@@ -33,14 +33,14 @@ import java.util.function.Function;
  * <pre>
  * {@code
  * public class MapStateMachine extends StateMachine {
- *   private final Map<Object, Commit<Put>> map = new HashMap<>();
+ *   private final Map&lt;Object, Commit&lt;Put&gt;&gt; map = new HashMap<>();
  *
  *   @Override
  *   protected void configure(StateMachineExecutor executor) {
  *     executor.register(PutCommand.class, this::put);
  *   }
  *
- *   private Object put(Commit<Put> commit) {
+ *   private Object put(Commit&lt;Put&gt; commit) {
  *     return map.put(commit.operation().key(), commit);
  *   }
  * }
@@ -55,7 +55,7 @@ import java.util.function.Function;
  * State machines can use the executor to provide deterministic scheduling during command operations.
  * <pre>
  *   {@code
- *   private Object putWithTtl(Commit<PutWithTtl> commit) {
+ *   private Object putWithTtl(Commit&lt;PutWithTtl&gt; commit) {
  *     map.put(commit.operation().key(), commit);
  *     executor().schedule(Duration.ofMillis(commit.operation().ttl()), () -> {
  *       map.remove(commit.operation().key());

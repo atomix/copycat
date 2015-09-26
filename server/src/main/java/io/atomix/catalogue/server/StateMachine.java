@@ -44,14 +44,14 @@ import java.time.Instant;
  * <pre>
  * {@code
  * public class MapStateMachine extends StateMachine {
- *   private final Map<Object, Commit<Put>> map = new HashMap<>();
+ *   private final Map&lt;Object, Commit&lt;Put&gt;&gt; map = new HashMap<>();
  *
  *   @Override
  *   protected void configure(StateMachineExecutor executor) {
  *     executor.register(PutCommand.class, this::put);
  *   }
  *
- *   private Object put(Commit<Put> commit) {
+ *   private Object put(Commit&lt;Put&gt; commit) {
  *     return map.put(commit.operation().key(), commit);
  *   }
  * }
@@ -67,9 +67,9 @@ import java.time.Instant;
  * For instance, a lock state machine might use a client's {@link Session} to send a lock event to the client.
  * <pre>
  * {@code
- * public void unlock(Commit<Unlock> commit) {
+ * public void unlock(Commit&lt;Unlock&gt; commit) {
  *   try {
- *     Commit<Lock> next = queue.poll();
+ *     Commit&lt;Lock&gt; next = queue.poll();
  *     if (next != null) {
  *       next.session().publish("lock");
  *     }
