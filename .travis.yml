@@ -11,10 +11,13 @@ branches:
   only:
     - master
 
+install:
+  # Force update dependencies
+  - mvn -U clean test --quiet -DskipTests=true
+
 after_success:
   - bin/ci-push-javadoc.sh
 
 env:
   global:
     secure: T/GXhXGzVtPwrR+V0VXudWU5v1hTEcNKPvIzHv8Rg9A9UoCQ+kdbmQnt+AIpoqx9x/cxexIkTjcCf0vPM2i2Dq7PZdGrUMKDoMnzNlNQX533pbSoxzKGvoY8ugGBZsgTtIl/dYLTvYRzRTvPFqkmvt7viEGhL/M4UISMiCLtIZ7mZg0kV7WGY786jL5kf6UHa+YuDaCWJqN90jtwxc4kjIiMT32lzPw9+DsJaYN94qeQiv1mSrap85pVK/UJgut8eMg5ri8EywmBeldeTkwUGWVHcxzpacSAeHMVHTt09s58cqbfsKHvh+E80z57+HIbQ6kojekSd9oClMlf2zJOE8cUoVHBlEKroIhaswVYoQg8LuXvaH1kx+BbZF228j39zcazMQkhaQGOvicpINPJnERHmoNibGzQfMJdiSWJDV/ck3MPxAQFGbPrj0zRA6ZJgoxc1a+iG/nDcjJARiKNWHPWkfi3YAvizMcPC3H4I04ZfBQr2R1ZetbXfdJlDDUtOVjt58V6ZbICsyWH7jeepsegAQtwo7nsN+jJmoIuxlJoHl7H7vn2JdFvbVmQuUJreaYeHTkeSltWVbLchi7pfuDrpQdVFC2cwyAL+UmVFKr2XSha2c+irRuclz+cH7QliB9S3pLWlnJXPwLHriyjJYp66FB+Ywq5yWmCpXrH4w8=
-    
