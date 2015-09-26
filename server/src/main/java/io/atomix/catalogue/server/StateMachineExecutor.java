@@ -31,12 +31,18 @@ import java.util.function.Function;
  * must register {@link io.atomix.catalogue.client.Command} and {@link io.atomix.catalogue.client.Query}
  * (operations) callbacks via the executor.
  * <pre>
- *   {@code
- *   @Override
+ * {@code
+ * public class MapStateMachine extends StateMachine {
+ *   private final Map<Object, Commit<Put>> map = new HashMap<>();
+ *
  *   protected void configure(StateMachineExecutor executor) {
  *     executor.register(PutCommand.class, this::put);
  *   }
+ *
+ *   private Object put(Commit<Put> commit) {
+ *     return map.put(commit.operation().key(), commit);
  *   }
+ * }
  * }
  * </pre>
  * As operations are committed to the Raft log, the executor is responsible for applying them to the state machine.
@@ -48,7 +54,7 @@ import java.util.function.Function;
  * State machines can use the executor to provide deterministic scheduling during command operations.
  * <pre>
  *   {@code
- *   private Object putWithTtl(Commit&lt;PutWithTtl&gt; commit) {
+ *   private Object putWithTtl(Commit<PutWithTtl> commit) {
  *     map.put(commit.operation().key(), commit);
  *     executor().schedule(Duration.ofMillis(commit.operation().ttl()), () -> {
  *       map.remove(commit.operation().key());

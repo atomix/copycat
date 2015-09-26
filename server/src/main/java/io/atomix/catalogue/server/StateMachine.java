@@ -43,9 +43,16 @@ import java.time.Instant;
  * Override the {@link #configure(StateMachineExecutor)} method to register state machine operations.
  * <pre>
  *   {@code
- *   @Override
- *   protected void configure(StateMachineExecutor executor) {
- *     executor.register(PutCommand.class, this::put);
+ *   public class MapStateMachine extends StateMachine {
+ *     private final Map<Object, Commit<Put>> map = new HashMap<>();
+ *
+ *     protected void configure(StateMachineExecutor executor) {
+ *       executor.register(PutCommand.class, this::put);
+ *     }
+ *
+ *     private Object put(Commit<Put> commit) {
+ *       return map.put(commit.operation().key(), commit);
+ *     }
  *   }
  *   }
  * </pre>
@@ -58,18 +65,18 @@ import java.time.Instant;
  * During command or scheduled callbacks, {@link Sessions} can be used to send state machine events back to the client.
  * For instance, a lock state machine might use a client's {@link Session} to send a lock event to the client.
  * <pre>
- * {@code
- * public void unlock(Commit<Unlock> commit) {
- *   try {
- *     Commit<Lock> next = queue.poll();
- *     if (next != null) {
- *       next.session().publish("lock");
+ *   {@code
+ *   public void unlock(Commit<Unlock> commit) {
+ *     try {
+ *       Commit<Lock> next = queue.poll();
+ *       if (next != null) {
+ *         next.session().publish("lock");
+ *       }
+ *     } finally {
+ *       commit.clean();
  *     }
- *   } finally {
- *     commit.clean();
  *   }
- * }
- * }
+ *   }
  * </pre>
  * State machine operations are guaranteed to be executed in the order in which they were submitted by the client,
  * always in the same thread, and thus always sequentially. State machines do not need to be thread safe, but they must
@@ -102,8 +109,6 @@ import java.time.Instant;
  *
  * @see Commit
  * @see Command
- * @see Query
- * @see Session
  * @see StateMachineContext
  * @see StateMachineExecutor
  *
