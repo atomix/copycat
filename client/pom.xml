@@ -17,18 +17,18 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.atomix.catalog</groupId>
-    <artifactId>catalog-parent</artifactId>
+    <groupId>io.atomix.catalogue</groupId>
+    <artifactId>catalogue-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>catalog-client</artifactId>
-  <name>Catalog Raft Client</name>
+  <artifactId>catalogue-client</artifactId>
+  <name>Catalogue Raft Client</name>
 
   <dependencies>
     <dependency>
-      <groupId>io.atomix.catalog</groupId>
-      <artifactId>catalog-protocol</artifactId>
+      <groupId>io.atomix.catalogue</groupId>
+      <artifactId>catalogue-protocol</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

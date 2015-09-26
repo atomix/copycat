@@ -1,6 +1,6 @@
-# Catalog
+# Catalogue
 
-[![Build Status](https://travis-ci.org/atomix/catalog.png)](https://travis-ci.org/atomix/catalog)
+[![Build Status](https://travis-ci.org/atomix/catalogue.png)](https://travis-ci.org/atomix/catalogue)
 
 ### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc]
 
@@ -27,4 +27,4 @@ to verify it maintains linearizability in a number of different failure scenario
 [servers]: http://atomix.io/user-manual/raft-internals/#servers
 [Website]: http://atomix.io/user-manual/raft-framework/
 [Google group]: https://groups.google.com/forum/#!forum/copycat
-[Javadoc]: http://atomix.github.io/catalog/api/1.0.0-SNAPSHOT/
+[Javadoc]: http://atomix.io/catalogue/api/latest/
