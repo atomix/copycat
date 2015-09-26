@@ -44,7 +44,7 @@ import java.time.Instant;
  * <pre>
  * {@code
  * public class MapStateMachine extends StateMachine {
- *   private final Map&lt;Object, Commit&lt;Put&gt;&gt; map = new HashMap<>();
+ *   private final Map&lt;Object, Commit&lt;Put&gt;&gt; map = new HashMap&gt;&lt;();
  *
  *   @Override
  *   protected void configure(StateMachineExecutor executor) {
