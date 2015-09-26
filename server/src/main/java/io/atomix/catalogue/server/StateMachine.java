@@ -42,20 +42,20 @@ import java.time.Instant;
  * <p>
  * Override the {@link #configure(StateMachineExecutor)} method to register state machine operations.
  * <pre>
- *   {@code
- *   public class MapStateMachine extends StateMachine {
- *     private final Map<Object, Commit<Put>> map = new HashMap<>();
+ * {@code
+ * public class MapStateMachine extends StateMachine {
+ *   private final Map<Object, Commit<Put>> map = new HashMap<>();
  *
- *     @Override
- *     protected void configure(StateMachineExecutor executor) {
- *       executor.register(PutCommand.class, this::put);
- *     }
+ *   @Override
+ *   protected void configure(StateMachineExecutor executor) {
+ *     executor.register(PutCommand.class, this::put);
+ *   }
  *
- *     private Object put(Commit<Put> commit) {
- *       return map.put(commit.operation().key(), commit);
- *     }
+ *   private Object put(Commit<Put> commit) {
+ *     return map.put(commit.operation().key(), commit);
  *   }
- *   }
+ * }
+ * }
  * </pre>
  * When operations are applied to the state machine they're wrapped in a {@link Commit} object. The commit provides the
  * context of how the command or query was committed to the cluster, including the log {@link Commit#index()}, the
@@ -66,18 +66,18 @@ import java.time.Instant;
  * During command or scheduled callbacks, {@link Sessions} can be used to send state machine events back to the client.
  * For instance, a lock state machine might use a client's {@link Session} to send a lock event to the client.
  * <pre>
- *   {@code
- *   public void unlock(Commit<Unlock> commit) {
- *     try {
- *       Commit<Lock> next = queue.poll();
- *       if (next != null) {
- *         next.session().publish("lock");
- *       }
- *     } finally {
- *       commit.clean();
+ * {@code
+ * public void unlock(Commit<Unlock> commit) {
+ *   try {
+ *     Commit<Lock> next = queue.poll();
+ *     if (next != null) {
+ *       next.session().publish("lock");
  *     }
+ *   } finally {
+ *     commit.clean();
  *   }
- *   }
+ * }
+ * }
  * </pre>
  * State machine operations are guaranteed to be executed in the order in which they were submitted by the client,
  * always in the same thread, and thus always sequentially. State machines do not need to be thread safe, but they must
