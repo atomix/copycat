@@ -224,8 +224,14 @@ class ServerStateMachine implements AutoCloseable {
     else {
       ThreadContext context = getContext();
 
-      session.expire();
-      stateMachine.expire(session);
+      if (session.isSuspect()) {
+        session.expire();
+        stateMachine.expire(session);
+      } else {
+        session.close();
+      }
+
+      stateMachine.close(session);
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
