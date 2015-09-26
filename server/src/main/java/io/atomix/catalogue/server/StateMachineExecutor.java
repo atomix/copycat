@@ -65,7 +65,7 @@ public interface StateMachineExecutor extends ThreadContext {
    * @return The state machine executor.
    * @throws NullPointerException if {@code type} or {@code callback} are null
    */
-  <T extends Operation<?>> StateMachineExecutor register(Class<T> type, Function<Commit<T>, ?> callback);
+  <T extends Operation<U>, U> StateMachineExecutor register(Class<T> type, Function<Commit<T>, U> callback);
 
   @Override
   default void close() {

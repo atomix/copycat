@@ -227,7 +227,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   @Override
-  public <T extends Operation<?>> StateMachineExecutor register(Class<T> type, Function<Commit<T>, ?> callback) {
+  public <T extends Operation<U>, U> StateMachineExecutor register(Class<T> type, Function<Commit<T>, U> callback) {
     Assert.notNull(type, "type");
     Assert.notNull(callback, "callback");
     operations.put(type, callback);
