@@ -25,13 +25,18 @@ import io.atomix.catalogue.client.session.Session;
 /**
  * Represents the committed state and metadata of a Raft state machine operation.
  * <p>
- * This class is used by the {@link RaftServer} internally to expose committed
- * {@link Command commands} and {@link Query queries} to the user provided
- * {@link StateMachine}. Operations that are wrapped in a {@link Commit}
- * object are guaranteed to be persisted in the Raft log on a majority of the cluster. The commit object provides metadata
- * about the committed operation such as the {@link #index()} at which the operation was written in the log, the
- * {@link #time()} at which it was written, and the {@link Session} that submitted the
- * operation.
+ * When {@link Command commands} and {@link Query queries} are applied to the Raft {@link StateMachine}, they're
+ * wrapped in a commit object. The commit object provides useful metadata regarding the location of the commit
+ * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link Session} that
+ * submitted the operation to the cluster.
+ * <p>
+ * When state machines are done using a commit object, users should always call either {@link #clean()} or {@link #close()}.
+ * Failing to call either method is a bug, and Catalogue will log a warning message in such cases.
+ *
+ * @see Command
+ * @see Query
+ * @see Session
+ * @see Instant
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -56,13 +61,8 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * Returns the session that submitted the operation.
    * <p>
    * The returned {@link Session} is representative of the session that submitted the operation
-   * that resulted in this {@link Commit}. Note that the session will be provided regardless
-   * of whether the session is currently active in the cluster. However, attempts to {@link Session#publish(String, Object)} to
-   * inactive sessions will fail silently.
-   * <p>
-   * Additionally, because clients only connect to one server at any given time, the {@link Session}
-   * provided in any given commit to any {@link StateMachine} may or may not be capable of
-   * communicating with the client.
+   * that resulted in this {@link Commit}. The session can be used to {@link Session#publish(String, Object)}
+   * event messages to the client.
    *
    * @return The session that created the commit.
    */
@@ -99,7 +99,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
   T operation();
 
   /**
-   * Cleans the commit.
+   * Cleans the commit from the underlying log.
    * <p>
    * When the commit is cleaned, it will be removed from the log and may be removed permanently from disk at some
    * arbitrary point in the future.
@@ -107,9 +107,11 @@ public interface Commit<T extends Operation> extends AutoCloseable {
   void clean();
 
   /**
-   * Cleans the commit.
+   * Cleans the commit from the underlying log.
    * <p>
-   * Optionally overrides the tombstone configuration for the command.
+   * Optionally overrides the tombstone configuration for the command. For commits cleaned as tombstones, the
+   * log cleaner will guarantee that previous related commits will be removed from the log prior to cleaning
+   * the tombstone. This ensures consistency when replaying commit logs.
    *
    * @param tombstone Whether to clean the commit as a tombstone.
    */

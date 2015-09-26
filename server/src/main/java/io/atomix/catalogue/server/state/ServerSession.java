@@ -327,6 +327,11 @@ class ServerSession implements Session {
   }
 
   @Override
+  public Session publish(String event) {
+    return publish(event, null);
+  }
+
+  @Override
   public Session publish(String event, Object message) {
     if (context.type() == ServerStateMachineContext.Type.QUERY)
       throw new IllegalStateException("cannot publish session events during query execution");

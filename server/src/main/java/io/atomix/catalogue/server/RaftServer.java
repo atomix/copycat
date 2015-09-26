@@ -38,7 +38,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Raft server.
+ * Provides a standalone implementation of the <a href="http://raft.github.io/">Raft consensus algorithm</a>.
  * <p>
  * To create a new server, use the server {@link io.atomix.catalogue.server.RaftServer.Builder}. Servers require
  * cluster membership information in order to perform communication. Each server must be provided a local {@link Address}

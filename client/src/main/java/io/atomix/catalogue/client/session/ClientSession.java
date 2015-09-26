@@ -21,7 +21,6 @@ import io.atomix.catalogue.client.error.RaftError;
 import io.atomix.catalogue.client.error.UnknownSessionException;
 import io.atomix.catalogue.client.request.*;
 import io.atomix.catalogue.client.response.*;
-import io.atomix.catalogue.client.session.Session;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Client;
@@ -648,6 +647,11 @@ public class ClientSession implements Session, Managed<Session> {
   @Override
   public Listener<Session> onOpen(Consumer<Session> listener) {
     return openListeners.add(Assert.notNull(listener, "listener"));
+  }
+
+  @Override
+  public Session publish(String event) {
+    return publish(event, null);
   }
 
   @Override
