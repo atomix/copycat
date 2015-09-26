@@ -7,20 +7,20 @@
 Catalogue is a feature complete, fully asynchronous implementation of the [Raft consensus algorithm][Raft] in Java 8
 designed for use in [Copycat][Copycat]. The implementation provides a fully featured [client][clients] and [server][servers]
 and includes:
-* Pre-vote election protocol ([4.2.3][dissertation])
-* Session-based linearizable writes ([6.3][dissertation])
-* Lease-based reads from leaders ([6.4.1][dissertation])
-* Serializable reads from followers ([6.4.1][dissertation])
-* Session-based state machine events ([6.3][dissertation])
-* Membership changes ([4.3][dissertation])
-* Log compaction via cleaning ([5.3][dissertation])
+* Pre-vote election protocol (§[4.2.3][dissertation])
+* Session-based linearizable writes (§[6.3][dissertation])
+* Lease-based reads from leaders (§[6.4.1][dissertation])
+* Serializable reads from followers (§[6.4.1][dissertation])
+* Session-based state machine events (§[6.3][dissertation])
+* Membership changes (§[4.3][dissertation])
+* Log compaction via cleaning (§[5.3][dissertation])
 
 Additionally, this implementation has undergone [Jepsen testing](http://github.com/jhalterman/copycat-jepsen)
 to verify it maintains linearizability in a number of different failure scenarios.
 
 *For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/raft-internals/)*
 
-### Usage
+## Usage
 
 Catalogue consists of two separate projects: the Catalogue client and server. The server is a standalone Raft server
 implementation through which users can define and manage arbitrary replicated state machines, and the client is a
