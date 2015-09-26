@@ -62,6 +62,18 @@ import java.time.Instant;
  * the commit was written to the Raft log. Note that the commit time is guaranteed to progress monotonically, but it may
  * not be representative of the progress of actual time. See the {@link Commit} documentation for more information.
  * <p>
+ * State machine operations are guaranteed to be executed in the order in which they were submitted by the client,
+ * always in the same thread, and thus always sequentially. State machines do not need to be thread safe, but they must
+ * be deterministic. That is, state machines are guaranteed to see {@link Command}s in the same order on all servers,
+ * and given the same commands in the same order, all servers' state machines should arrive at the same state with the
+ * same output (return value). The return value of each operation callback is the response value that will be sent back
+ * to the client.
+ * <p>
+ * The {@link StateMachineExecutor} is responsible for executing state machine operations sequentially and provides an
+ * interface similar to that of {@link java.util.concurrent.ScheduledExecutorService} to allow state machines to schedule
+ * time-based callbacks. Because of the determinism requirement, scheduled callbacks are guaranteed to be executed
+ * deterministically as well. See the {@link StateMachineExecutor} documentation for more information.
+ * <p>
  * During command or scheduled callbacks, {@link Sessions} can be used to send state machine events back to the client.
  * For instance, a lock state machine might use a client's {@link Session} to send a lock event to the client.
  * <pre>
@@ -78,16 +90,6 @@ import java.time.Instant;
  *   }
  *   }
  * </pre>
- * State machine operations are guaranteed to be executed in the order in which they were submitted by the client,
- * always in the same thread, and thus always sequentially. State machines do not need to be thread safe, but they must
- * be deterministic. That is, state machines are guaranteed to see {@link Command}s in the same order on all servers,
- * and given the same commands in the same order, all servers' state machines should arrive at the same state.
- * <p>
- * The {@link StateMachineExecutor} is responsible for executing state machine operations sequentially and provides an
- * interface similar to that of {@link java.util.concurrent.ScheduledExecutorService} to allow state machines to schedule
- * time-based callbacks. Because of the determinism requirement, scheduled callbacks are guaranteed to be executed
- * deterministically as well. See the {@link StateMachineExecutor} documentation for more information.
- * <p>
  * As with other operations, state machines should ensure that the publishing of session events is deterministic.
  * Messages published via a {@link Session} will be managed according to the {@link io.atomix.catalogue.client.Command.ConsistencyLevel}
  * of the command being executed at the time the event was {@link Session#publish(String, Object) published}. Each command may
