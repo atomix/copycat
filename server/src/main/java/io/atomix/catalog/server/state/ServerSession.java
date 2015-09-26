@@ -326,15 +326,20 @@ class ServerSession implements Session {
   }
 
   @Override
-  public CompletableFuture<Void> publish(String event, Object message) {
+  public Session publish(String event, Object message) {
+    if (context.type() == ServerStateMachineContext.Type.QUERY)
+      throw new IllegalStateException("cannot publish session events during query execution");
+
     // If the client acked a version greater than the current state machine version then immediately return.
     if (eventAckVersion > context.version())
-      return CompletableFuture.completedFuture(null);
+      return this;
 
     // The previous event version and sequence are the current event version and sequence.
     long previousVersion = eventVersion;
     long previousSequence = eventSequence;
 
+    // if the event version is not the current context version, reset the event version and sequence. Otherwise,
+    // this must not be the first event, so increment the event sequence number.
     if (eventVersion != context.version()) {
       eventVersion = context.version();
       eventSequence = 1;
@@ -348,7 +353,6 @@ class ServerSession implements Session {
       holder = new EventHolder();
 
     // Populate the event holder and add it to the events queue.
-    holder.future = new CompletableFuture<>();
     holder.eventVersion = eventVersion;
     holder.eventSequence = eventSequence;
     holder.previousVersion = previousVersion;
@@ -356,12 +360,21 @@ class ServerSession implements Session {
     holder.event = event;
     holder.message = message;
 
+    // If this event was published by a command execution, create and register an event future.
+    if (context.type() == ServerStateMachineContext.Type.COMMAND) {
+      holder.future = new CompletableFuture<>();
+      context.register(holder.future);
+    } else {
+      holder.future = null;
+    }
+
+    // Add the event holder to the events list. This will be used to ack events once completed.
     events.add(holder);
 
     // Send the event.
     sendEvent(holder);
 
-    return holder.future;
+    return this;
   }
 
   @Override
@@ -385,7 +398,8 @@ class ServerSession implements Session {
       EventHolder holder = events.peek();
       while (holder != null && (holder.eventVersion < version || (holder.eventVersion == version && holder.eventSequence <= sequence))){
         events.remove();
-        holder.future.complete(null);
+        if (holder.future != null)
+          holder.future.complete(null);
         eventsPool.add(holder);
       }
     }

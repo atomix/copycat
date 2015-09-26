@@ -108,7 +108,7 @@ public interface Session {
    * @param message The event message.
    * @return A completable future to be called once the event has been published.
    */
-  CompletableFuture<Void> publish(String event, Object message);
+  Session publish(String event, Object message);
 
   /**
    * Registers an event listener.

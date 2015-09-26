@@ -22,7 +22,6 @@ import io.atomix.catalog.server.Commit;
 import io.atomix.catalog.server.StateMachineExecutor;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
@@ -32,7 +31,6 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -84,62 +82,73 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   /**
-   * Executes the given commit on the state machine.
+   * Executes the given command commit on the state machine.
    */
-  @SuppressWarnings("unchecked")
-  <T extends Operation<U>, U> CompletableFuture<U> execute(Commit<T> commit) {
-    ComposableFuture<U> future = new ComposableFuture<>();
+  <T extends Operation<U>, U> CompletableFuture<U> executeCommand(Commit<T> commit) {
+    CompletableFuture<U> future = new CompletableFuture<>();
     executor.executor().execute(() -> {
-      context.update(commit.index(), commit.time());
-
-      // Get the function registered for the operation. If no function is registered, attempt to
-      // use a global function if available.
-      Function function = operations.get(commit.type());
-
-      if (function == null) {
-        // If no operation function was found for the class, try to find an operation function
-        // registered with a parent class.
-        for (Map.Entry<Class, Function> entry : operations.entrySet()) {
-          if (entry.getKey().isAssignableFrom(commit.type())) {
-            function = entry.getValue();
-            break;
-          }
-        }
-
-        // If a parent operation function was found, store the function for future reference.
-        if (function != null) {
-          operations.put(commit.type(), function);
-        }
-      }
-
-      // If no operation function was found, use the all operation and store it as the permanent operation.
-      if (function == null) {
-        function = allOperation;
-        if (function != null) {
-          operations.put(commit.type(), function);
-        }
-      }
-
-      if (function == null) {
-        future.completeExceptionally(new IllegalStateException("unknown state machine operation: " + commit.type()));
-      } else {
-        // Execute the operation. If the operation return value is a Future, await the result,
-        // otherwise immediately complete the execution future.
-        try {
-          Object result = function.apply(commit);
-          if (result instanceof CompletableFuture) {
-            ((CompletableFuture<U>) result).whenCompleteAsync(future, executor.executor());
-          } else if (result instanceof Future) {
-            future.complete(((Future<U>) result).get());
-          } else {
-            future.complete((U) result);
-          }
-        } catch (Exception e) {
-          future.completeExceptionally(new ApplicationException("An application error occurred", e));
-        }
-      }
+      context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.COMMAND);
+      executeOperation(commit, future);
     });
     return future;
+  }
+
+  /**
+   * Executes the given query commit on the state machine.
+   */
+  <T extends Operation<U>, U> CompletableFuture<U> executeQuery(Commit<T> commit) {
+    CompletableFuture<U> future = new CompletableFuture<>();
+    executor.executor().execute(() -> {
+      context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.QUERY);
+      executeOperation(commit, future);
+    });
+    return future;
+  }
+
+  /**
+   * Executes an operation.
+   */
+  @SuppressWarnings("unchecked")
+  private <T extends Operation<U>, U> void executeOperation(Commit commit, CompletableFuture<U> future) {
+    // Get the function registered for the operation. If no function is registered, attempt to
+    // use a global function if available.
+    Function function = operations.get(commit.type());
+
+    if (function == null) {
+      // If no operation function was found for the class, try to find an operation function
+      // registered with a parent class.
+      for (Map.Entry<Class, Function> entry : operations.entrySet()) {
+        if (entry.getKey().isAssignableFrom(commit.type())) {
+          function = entry.getValue();
+          break;
+        }
+      }
+
+      // If a parent operation function was found, store the function for future reference.
+      if (function != null) {
+        operations.put(commit.type(), function);
+      }
+    }
+
+    // If no operation function was found, use the all operation and store it as the permanent operation.
+    if (function == null) {
+      function = allOperation;
+      if (function != null) {
+        operations.put(commit.type(), function);
+      }
+    }
+
+    if (function == null) {
+      future.completeExceptionally(new IllegalStateException("unknown state machine operation: " + commit.type()));
+    } else {
+      // Execute the operation. If the operation return value is a Future, await the result,
+      // otherwise immediately complete the execution future.
+      try {
+        future.complete((U) function.apply(commit));
+      } catch (Exception e) {
+        future.completeExceptionally(new ApplicationException("An application error occurred", e));
+      }
+    }
   }
 
   /**
@@ -158,7 +167,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
         ServerScheduledTask task = iterator.next();
         if (task.complete(this.timestamp)) {
           executor.executor().execute(() -> {
-            context.update(context.version(), Instant.ofEpochMilli(task.time));
+            context.update(context.version(), Instant.ofEpochMilli(task.time), ServerStateMachineContext.Type.NONE);
             task.execute();
           });
           complete.add(task);
@@ -188,11 +197,15 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   @Override
   public Scheduled schedule(Duration delay, Runnable callback) {
+    if (context.type() == ServerStateMachineContext.Type.QUERY)
+      throw new IllegalStateException("cannot schedule callbacks during query execution");
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
+    if (context.type() == ServerStateMachineContext.Type.QUERY)
+      throw new IllegalStateException("cannot schedule callbacks during query execution");
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }
 

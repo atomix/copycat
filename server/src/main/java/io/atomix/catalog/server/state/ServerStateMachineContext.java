@@ -20,6 +20,9 @@ import io.atomix.catalog.server.StateMachineContext;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Server state machine context.
@@ -28,15 +31,51 @@ import java.time.Instant;
  */
 class ServerStateMachineContext implements StateMachineContext {
   private long version;
+  private Type type = Type.NONE;
   private final ServerClock clock = new ServerClock();
   private final ServerSessionManager sessions = new ServerSessionManager(this);
+  private final List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+  /**
+   * State machine context type.
+   */
+  enum Type {
+    COMMAND,
+    QUERY,
+    NONE
+  }
 
   /**
    * Updates the state machine context.
    */
-  void update(long index, Instant instant) {
+  void update(long index, Instant instant, Type type) {
     version = index;
     clock.set(instant);
+    this.type = type;
+    futures.clear();
+  }
+
+  /**
+   * Registers a session event future in the context.
+   */
+  void register(CompletableFuture<Void> future) {
+    futures.add(future);
+  }
+
+  /**
+   * Returns futures registered for the context.
+   */
+  CompletableFuture<Void> futures() {
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
+  }
+
+  /**
+   * Returns the current context type.
+   *
+   * @return The current context type.
+   */
+  Type type() {
+    return type;
   }
 
   @Override

@@ -650,16 +650,17 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   @Override
-  public CompletableFuture<Void> publish(String event, Object message) {
+  public Session publish(String event, Object message) {
     Assert.notNull(event, "event");
-    return CompletableFuture.runAsync(() -> {
+    context.executor().execute(() -> {
       Listeners<Object> listeners = eventListeners.get(event);
       if (listeners != null) {
         for (Consumer<Object> listener : listeners) {
           listener.accept(message);
         }
       }
-    }, context.executor());
+    });
+    return this;
   }
 
   /**
