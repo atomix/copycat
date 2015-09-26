@@ -56,6 +56,7 @@ class ServerSession implements Session {
   private final Queue<EventHolder> events = new ArrayDeque<>();
   private final Queue<EventHolder> eventsPool = new ArrayDeque<>();
   private boolean suspect;
+  private boolean unregistering;
   private boolean expired;
   private boolean closed;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
@@ -522,6 +523,20 @@ class ServerSession implements Session {
    */
   boolean isSuspect() {
     return suspect;
+  }
+
+  /**
+   * Sets the session as being unregistered.
+   */
+  void unregister() {
+    unregistering = true;
+  }
+
+  /**
+   * Indicates whether the session is being unregistered.
+   */
+  boolean isUnregistering() {
+    return unregistering;
   }
 
   /**

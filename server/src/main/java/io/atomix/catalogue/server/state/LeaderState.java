@@ -153,7 +153,7 @@ final class LeaderState extends ActiveState {
   private void checkSessions() {
     long term = context.getTerm();
     for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
-      if (session.isSuspect()) {
+      if (!session.isUnregistering() && session.isSuspect()) {
         LOGGER.debug("{} - Detected expired session: {}", context.getAddress(), session.id());
 
         final long index;
@@ -167,6 +167,7 @@ final class LeaderState extends ActiveState {
         }
 
         replicator.commit(index);
+        session.unregister();
       }
     }
   }
