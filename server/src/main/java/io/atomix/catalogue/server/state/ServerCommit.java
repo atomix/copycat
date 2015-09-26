@@ -110,6 +110,11 @@ class ServerCommit implements Commit<Operation> {
   }
 
   @Override
+  protected void finalize() throws Throwable {
+    pool.warn(this);
+  }
+
+  @Override
   public String toString() {
     return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
   }

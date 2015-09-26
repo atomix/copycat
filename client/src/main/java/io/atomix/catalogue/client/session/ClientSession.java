@@ -21,7 +21,6 @@ import io.atomix.catalogue.client.error.RaftError;
 import io.atomix.catalogue.client.error.UnknownSessionException;
 import io.atomix.catalogue.client.request.*;
 import io.atomix.catalogue.client.response.*;
-import io.atomix.catalogue.client.session.Session;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Client;
@@ -92,7 +91,7 @@ public class ClientSession implements Session, Managed<Session> {
     UUID id = UUID.randomUUID();
     this.client = Assert.notNull(transport, "transport").client(id);
     this.members = new HashSet<>(Assert.notNull(members, "members"));
-    this.context = new SingleThreadContext("catalog-client-" + id.toString(), Assert.notNull(serializer, "serializer").clone());
+    this.context = new SingleThreadContext("catalogue-client-" + id.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectMembers = new ArrayList<>(members);
   }
 
@@ -651,16 +650,22 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   @Override
-  public CompletableFuture<Void> publish(String event, Object message) {
+  public Session publish(String event) {
+    return publish(event, null);
+  }
+
+  @Override
+  public Session publish(String event, Object message) {
     Assert.notNull(event, "event");
-    return CompletableFuture.runAsync(() -> {
+    context.executor().execute(() -> {
       Listeners<Object> listeners = eventListeners.get(event);
       if (listeners != null) {
         for (Consumer<Object> listener : listeners) {
           listener.accept(message);
         }
       }
-    }, context.executor());
+    });
+    return this;
   }
 
   /**

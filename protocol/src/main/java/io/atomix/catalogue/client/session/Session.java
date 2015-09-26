@@ -92,6 +92,31 @@ public interface Session {
   Listener<Session> onOpen(Consumer<Session> listener);
 
   /**
+   * Publishes an empty event to the session.
+   * <p>
+   * When an event is published via the {@link Session}, it is sent to the other side of the session's
+   * connection. If the event is sent from the client-side of the session, the event will be handled on
+   * the client side as well. Sessions guarantee serializable consistency. If an event is sent from a Raft
+   * server to a client that is disconnected or otherwise can't receive the event, the event will be resent
+   * once the client connects to another server as long as its session has not {@link #isExpired() expired}.
+   * <p>
+   * Event messages must be serializable. For fast serialization, message types should implement
+   * {@link io.atomix.catalyst.serializer.CatalystSerializable} or register a custom
+   * {@link io.atomix.catalyst.serializer.TypeSerializer}. Normal Java {@link java.io.Serializable} and
+   * {@link java.io.Externalizable} are supported but not recommended.
+   * <p>
+   * The returned {@link CompletableFuture} will be completed once the {@code event} has been sent
+   * but not necessarily received by the other side of the connection. In the event of a network or other
+   * failure, the message may be resent.
+   *
+   * @param event The event to publish.
+   * @return A completable future to be called once the event has been published.
+   * @throws NullPointerException If {@code event} is {@code null}
+   * @throws io.atomix.catalyst.serializer.SerializationException If {@code message} cannot be serialized
+   */
+  Session publish(String event);
+
+  /**
    * Publishes an event to the session.
    * <p>
    * When an event is published via the {@link Session}, it is sent to the other side of the session's
@@ -100,15 +125,24 @@ public interface Session {
    * server to a client that is disconnected or otherwise can't receive the event, the event will be resent
    * once the client connects to another server as long as its session has not {@link #isExpired() expired}.
    * <p>
+   * Event messages must be serializable. For fast serialization, message types should implement
+   * {@link io.atomix.catalyst.serializer.CatalystSerializable} or register a custom
+   * {@link io.atomix.catalyst.serializer.TypeSerializer}. Normal Java {@link java.io.Serializable} and
+   * {@link java.io.Externalizable} are supported but not recommended.
+   * <p>
    * The returned {@link CompletableFuture} will be completed once the {@code event} has been sent
    * but not necessarily received by the other side of the connection. In the event of a network or other
    * failure, the message may be resent.
    *
    * @param event The event to publish.
-   * @param message The event message.
+   * @param message The event message. The message must be serializable either by implementing
+   *               {@link io.atomix.catalyst.serializer.CatalystSerializable}, providing a
+   *               {@link io.atomix.catalyst.serializer.TypeSerializer}, or implementing {@link java.io.Serializable}.
    * @return A completable future to be called once the event has been published.
+   * @throws NullPointerException If {@code event} is {@code null}
+   * @throws io.atomix.catalyst.serializer.SerializationException If {@code message} cannot be serialized
    */
-  CompletableFuture<Void> publish(String event, Object message);
+  Session publish(String event, Object message);
 
   /**
    * Registers an event listener.

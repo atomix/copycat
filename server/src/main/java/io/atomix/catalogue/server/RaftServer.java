@@ -38,7 +38,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Raft server.
+ * Provides a standalone implementation of the <a href="http://raft.github.io/">Raft consensus algorithm</a>.
  * <p>
  * To create a new server, use the server {@link io.atomix.catalogue.server.RaftServer.Builder}. Servers require
  * cluster membership information in order to perform communication. Each server must be provided a local {@link Address}
@@ -71,12 +71,12 @@ import java.util.function.Consumer;
  * to configure the storage module to store entries in memory instead of disk, configure the
  * {@link io.atomix.catalogue.server.storage.StorageLevel}.
  * <pre>
- *   {@code
- *   RaftServer server = RaftServer.builder(address, members)
- *     .withStateMachine(new MyStateMachine())
- *     .withStorage(new Storage(StorageLevel.MEMORY))
- *     .build();
- *   }
+ * {@code
+ * RaftServer server = RaftServer.builder(address, members)
+ *   .withStateMachine(new MyStateMachine())
+ *   .withStorage(new Storage(StorageLevel.MEMORY))
+ *   .build();
+ * }
  * </pre>
  * All serialization is performed with a Catalyst {@link Serializer}. By default, the serializer loads registered
  * {@link io.atomix.catalyst.serializer.CatalystSerializable} types with {@link ServiceLoaderTypeResolver}, but users
@@ -86,11 +86,11 @@ import java.util.function.Consumer;
  * Once the server has been created, to connect to a cluster simply {@link #open()} the server. The server API is
  * fully asynchronous and relies on {@link CompletableFuture} to provide promises:
  * <pre>
- *   {@code
- *   server.open().thenRun(() -> {
- *     System.out.println("Server started successfully!");
- *   });
- *   }
+ * {@code
+ * server.open().thenRun(() -> {
+ *   System.out.println("Server started successfully!");
+ * });
+ * }
  * </pre>
  * When the server is started, it will attempt to connect to an existing cluster. If the server cannot find any
  * existing members, it will attempt to form its own cluster.
@@ -98,13 +98,13 @@ import java.util.function.Consumer;
  * Once the server is started, it will communicate with the rest of the nodes in the cluster, periodically
  * transitioning between states. Users can listen for state transitions via {@link #onStateChange(Consumer)}:
  * <pre>
- *   {@code
- *   server.onStateChange(state -> {
- *     if (state == RaftServer.State.LEADER) {
- *       System.out.println("Server elected leader!");
- *     }
- *   });
+ * {@code
+ * server.onStateChange(state -> {
+ *   if (state == RaftServer.State.LEADER) {
+ *     System.out.println("Server elected leader!");
  *   }
+ * });
+ * }
  * </pre>
  *
  * @see StateMachine

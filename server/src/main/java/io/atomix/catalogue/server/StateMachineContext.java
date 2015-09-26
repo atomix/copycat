@@ -16,13 +16,17 @@
 
 package io.atomix.catalogue.server;
 
+import io.atomix.catalogue.server.session.Sessions;
+
 import java.time.Clock;
 import java.time.Instant;
 
-import io.atomix.catalogue.server.session.Sessions;
-
 /**
  * State machine context.
+ * <p>
+ * The context is reflective of the current position and state of the Raft state machine. In particular,
+ * it exposes the current approximate {@link StateMachineContext#now() time} and all open
+ * {@link io.atomix.catalogue.server.session.Sessions}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -30,22 +34,26 @@ public interface StateMachineContext {
 
   /**
    * Returns the current state machine version.
+   * <p>
+   * The state version is indicative of the index of the current {@link io.atomix.catalogue.client.Command}
+   * being applied to the server state machine. If a {@link io.atomix.catalogue.client.Query} is being applied,
+   * the index of the last command applied will be used.
    *
    * @return The current state machine version.
    */
   long version();
 
   /**
-   * Returns the state machine executor clock.
+   * Returns the state machine clock.
    *
-   * @return The state machine executor clock.
+   * @return The state machine clock.
    */
   Clock clock();
 
   /**
-   * Returns the current state machine executor time.
+   * Returns the current state machine time.
    *
-   * @return The current state machine executor time.
+   * @return The current state machine time.
    */
   Instant now();
 

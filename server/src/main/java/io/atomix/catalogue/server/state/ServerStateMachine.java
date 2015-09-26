@@ -15,6 +15,7 @@
  */
 package io.atomix.catalogue.server.state;
 
+import io.atomix.catalogue.client.Command;
 import io.atomix.catalogue.client.error.InternalException;
 import io.atomix.catalogue.client.error.UnknownSessionException;
 import io.atomix.catalogue.server.StateMachine;
@@ -223,8 +224,14 @@ class ServerStateMachine implements AutoCloseable {
     else {
       ThreadContext context = getContext();
 
-      session.expire();
-      stateMachine.expire(session);
+      if (session.isSuspect()) {
+        session.expire();
+        stateMachine.expire(session);
+      } else {
+        session.close();
+      }
+
+      stateMachine.close(session);
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
@@ -291,13 +298,26 @@ class ServerStateMachine implements AutoCloseable {
     executor.tick(entry.getTimestamp());
 
     long sequence = entry.getSequence();
+    Command.ConsistencyLevel consistency = entry.getCommand().consistency();
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-    executor.execute(commits.acquire(entry)).whenComplete((result, error) -> {
+    executor.executeCommand(commits.acquire(entry)).whenComplete((result, error) -> {
       if (error == null) {
-        session.registerResponse(sequence, result);
-        context.execute(() -> future.complete(result));
+        if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
+          context.execute(() -> future.complete(result));
+        } else {
+          CompletableFuture<Void> sessionFuture = executor.context().futures();
+          if (sessionFuture != null) {
+            sessionFuture.whenComplete((sessionResult, sessionError) -> {
+              session.registerResponse(sequence, result);
+              context.execute(() -> future.complete(result));
+            });
+          } else {
+            session.registerResponse(sequence, result);
+            context.execute(() -> future.complete(result));
+          }
+        }
       } else {
         session.registerResponse(sequence, error);
         context.execute(() -> future.completeExceptionally((Throwable) error));
@@ -371,7 +391,7 @@ class ServerStateMachine implements AutoCloseable {
    * Executes a state machine query.
    */
   private CompletableFuture<Object> executeQuery(QueryEntry entry, CompletableFuture<Object> future, ThreadContext context) {
-    executor.execute(commits.acquire(entry.setTimestamp(executor.timestamp()))).whenComplete((result, error) -> {
+    executor.executeQuery(commits.acquire(entry.setTimestamp(executor.timestamp()))).whenComplete((result, error) -> {
       if (error == null) {
         context.execute(() -> future.complete(result));
       } else {

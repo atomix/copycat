@@ -11,6 +11,7 @@ rm -rf target/docs
 git clone git@github.com:$REPO.git target/docs -b gh-pages > /dev/null
 mvn javadoc:javadoc -Djv=$apiVersion
 git rm -rf target/docs/api/$apiVersion
+rm -rf target/docs/api/$apiVersion
 mv target/site/apidocs/api/$apiVersion target/docs/api
 cd target/docs
 git add -A -f api/$apiVersion

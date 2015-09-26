@@ -121,8 +121,7 @@
             -Xdoclint:none
             -link http://docs.oracle.com/javase/8/docs/api/
             -group "Raft client" io.atomix.catalogue.client*
-            -group "Raft server" io.atomix.catalogue.server:io.atomix.catalogue.server.request:io.atomix.catalogue.server.response:io.atomix.catalogue.server.session
-            -group "Raft log" io.atomix.catalogue.server.storage*
+            -group "Raft server" io.atomix.catalogue.server:io.atomix.catalogue.server.request:io.atomix.catalogue.server.response:io.atomix.catalogue.server.session:io.atomix.catalogue.server.storage*
           </additionalparam>
         </configuration>
       </plugin>

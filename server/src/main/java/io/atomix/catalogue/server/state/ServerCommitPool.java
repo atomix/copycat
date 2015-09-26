@@ -15,10 +15,12 @@
  */
 package io.atomix.catalogue.server.state;
 
+import io.atomix.catalogue.server.storage.entry.OperationEntry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import io.atomix.catalogue.server.storage.entry.OperationEntry;
 
 /**
  * Server commit pool.
@@ -26,6 +28,7 @@ import io.atomix.catalogue.server.storage.entry.OperationEntry;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerCommitPool implements AutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerCommitPool.class);
   private final ServerCommitCleaner cleaner;
   private final ServerSessionManager sessions;
   private final Queue<ServerCommit> pool = new ConcurrentLinkedQueue<>();
@@ -57,6 +60,15 @@ class ServerCommitPool implements AutoCloseable {
    */
   public void release(ServerCommit commit) {
     pool.add(commit);
+  }
+
+  /**
+   * Issues a warning that the given commit was garbage collected.
+   *
+   * @param commit The commit that was garbage collected.
+   */
+  public void warn(ServerCommit commit) {
+    LOGGER.warn("Server commit " + commit + " was garbage collected!\nCommit log is dirty!");
   }
 
   @Override

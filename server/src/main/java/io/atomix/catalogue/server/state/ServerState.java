@@ -90,7 +90,7 @@ public class ServerState {
     };
 
     // Create a state machine executor and configure the state machine.
-    ThreadContext stateContext = new SingleThreadContext("catalog-server-" + address + "-state-%d", context.serializer().clone());
+    ThreadContext stateContext = new SingleThreadContext("catalogue-server-" + address + "-state-%d", context.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, cleaner, stateContext);
 
     cluster.configure(0, this.members.values(), Collections.EMPTY_LIST);

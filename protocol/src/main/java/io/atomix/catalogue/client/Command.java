@@ -44,8 +44,22 @@ public interface Command<T> extends Operation<T> {
 
     /**
      * Enforces no command consistency.
+     * <p>
+     * Lack of consistency means that no guarantees are made with respect to when, how often, or in what order a command will
+     * be applied to server state machines. Inconsistent commands require no coordination, but they may be applied more than
+     * once or out of order.
      */
     NONE,
+
+    /**
+     * Enforces sequential command consistency.
+     * <p>
+     * All commands are applied to the server state machine in program order and at some point between their invocation and
+     * response (linearization point). But session events related to commands can be controlled by this consistency level.
+     * The sequential consistency level guarantees that all session events related to a command will be received by the client
+     * in sequential order. However, it does not guarantee that the events will be received during the invocation of the command.
+     */
+    SEQUENTIAL,
 
     /**
      * Enforces linearizable command consistency.
@@ -53,7 +67,9 @@ public interface Command<T> extends Operation<T> {
      * Linearizable consistency enforces sequential consistency for concurrent writes from a single client by sequencing
      * commands as they're applied to the Raft state machine. If a client submits writes <em>a</em>, <em>b</em>, and <em>c</em>
      * in that order, they're guaranteed to be applied to the Raft state machine and client {@link java.util.concurrent.CompletableFuture futures}
-     * are guaranteed to be completed in that order.
+     * are guaranteed to be completed in that order. Additionally, linearizable commands are guaranteed to be applied to the
+     * server state machine some time between invocation and response, and command-related session events are guaranteed to be
+     * received by clients prior to completion of the command.
      */
     LINEARIZABLE
 
