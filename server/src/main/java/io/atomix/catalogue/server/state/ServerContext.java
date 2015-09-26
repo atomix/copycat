@@ -58,7 +58,7 @@ public class ServerContext implements Managed<ServerState> {
     this.userStateMachine = stateMachine;
     this.transport = transport;
     this.storage = storage;
-    this.context = new SingleThreadContext("catalog-server-" + address, serializer);
+    this.context = new SingleThreadContext("catalogue-server-" + address, serializer);
 
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
     serializer.resolve(new ServiceLoaderTypeResolver());

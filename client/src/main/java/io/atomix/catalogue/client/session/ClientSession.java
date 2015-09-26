@@ -91,7 +91,7 @@ public class ClientSession implements Session, Managed<Session> {
     UUID id = UUID.randomUUID();
     this.client = Assert.notNull(transport, "transport").client(id);
     this.members = new HashSet<>(Assert.notNull(members, "members"));
-    this.context = new SingleThreadContext("catalog-client-" + id.toString(), Assert.notNull(serializer, "serializer").clone());
+    this.context = new SingleThreadContext("catalogue-client-" + id.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectMembers = new ArrayList<>(members);
   }
 

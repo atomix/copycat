@@ -40,7 +40,7 @@ public class Log implements AutoCloseable {
    */
   protected Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.cleaner = new Cleaner(segments, Executors.newScheduledThreadPool(storage.cleanerThreads(), new CatalystThreadFactory("catalog-log-cleaner-%d")));
+    this.cleaner = new Cleaner(segments, Executors.newScheduledThreadPool(storage.cleanerThreads(), new CatalystThreadFactory("catalogue-cleaner-%d")));
   }
 
   /**
