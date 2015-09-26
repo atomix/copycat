@@ -42,18 +42,12 @@ import java.time.Instant;
  * <p>
  * Override the {@link #configure(StateMachineExecutor)} method to register state machine operations.
  * <pre>
- * {@code
- * public class MapStateMachine extends StateMachine {
- *   private final Map<Object, Commit<Put>> map = new HashMap<>();
+ *   {@code
  *   @Override
  *   protected void configure(StateMachineExecutor executor) {
  *     executor.register(PutCommand.class, this::put);
  *   }
- *   private Object put(Commit<Put> commit) {
- *     return map.put(commit.operation().key(), commit);
  *   }
- * }
- * }
  * </pre>
  * When operations are applied to the state machine they're wrapped in a {@link Commit} object. The commit provides the
  * context of how the command or query was committed to the cluster, including the log {@link Commit#index()}, the
