@@ -786,7 +786,7 @@ final class LeaderState extends ActiveState {
      * @return A completable future to be completed the next time entries are committed to a majority of the cluster.
      */
     private CompletableFuture<Long> commit() {
-      if (context.getCluster().getMembers().size() == 1)
+      if (context.getCluster().getMembers().size() == 0)
         return CompletableFuture.completedFuture(null);
 
       if (commitFuture == null) {
