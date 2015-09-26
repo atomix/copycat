@@ -20,7 +20,7 @@ to verify it maintains linearizability in a number of different failure scenario
 
 *For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/raft-internals/)*
 
-#### Usage
+### Usage
 
 Catalogue consists of two separate projects: the Catalogue client and server. The server is a standalone Raft server
 implementation through which users can define and manage arbitrary replicated state machines, and the client is a
