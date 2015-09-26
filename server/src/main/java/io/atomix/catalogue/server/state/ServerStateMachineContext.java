@@ -66,7 +66,7 @@ class ServerStateMachineContext implements StateMachineContext {
    * Returns futures registered for the context.
    */
   CompletableFuture<Void> futures() {
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
+    return !futures.isEmpty() ? CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])) : null;
   }
 
   /**
