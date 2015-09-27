@@ -145,20 +145,37 @@ public interface Session {
   Session publish(String event, Object message);
 
   /**
+   * Registers a void event listener.
+   * <p>
+   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
+   * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
+   * always called in the same thread for the session. Therefore, no two events will be received concurrently
+   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
+   * the state machine.
+   *
+   * @param event The event to which to listen.
+   * @param callback The session receive callback.
+   * @return The listener context.
+   * @throws NullPointerException if {@code event} or {@code callback} is null
+   */
+  Listener<Void> onEvent(String event, Runnable callback);
+
+  /**
    * Registers an event listener.
    * <p>
    * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
    * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
    * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session.
+   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
+   * the state machine.
    *
    * @param event The event to which to listen.
-   * @param listener The session receive listener.
+   * @param callback The session receive callback.
    * @param <T> The session event type.
    * @return The listener context.
-   * @throws NullPointerException if {@code listener} is null
+   * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  <T> Listener<T> onEvent(String event, Consumer<T> listener);
+  <T> Listener<T> onEvent(String event, Consumer<T> callback);
 
   /**
    * Sets a session close listener.
