@@ -127,7 +127,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command group code.
    */
   default int groupCode() {
-    return hashCode();
+    return 0;
   }
 
   /**
@@ -137,7 +137,7 @@ public interface Command<T> extends Operation<T> {
    * @return Indicates whether the given command is part of the same group as this command.
    */
   default boolean groupEquals(Command command) {
-    return equals(command);
+    return true;
   }
 
   /**
