@@ -166,7 +166,12 @@ final class LeaderState extends ActiveState {
           LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
         }
 
-        replicator.commit(index);
+        replicator.commit(index).whenComplete((result, error) -> {
+          if (isOpen()) {
+            UnregisterEntry entry = context.getLog().get(index);
+            applyEntry(entry);
+          }
+        });
         session.unregister();
       }
     }
