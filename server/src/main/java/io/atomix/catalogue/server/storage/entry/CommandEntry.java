@@ -41,13 +41,8 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   }
 
   @Override
-  public long getAddress() {
-    return command.address();
-  }
-
-  @Override
   public boolean isTombstone() {
-    return command.persistence() == Command.PersistenceLevel.PERSISTENT;
+    return command.persistence() == Command.PersistenceLevel.EPHEMERAL;
   }
 
   @Override
@@ -86,6 +81,16 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     command = serializer.readObject(buffer);
+  }
+
+  @Override
+  public int hashCode() {
+    return command.groupCode();
+  }
+
+  @Override
+  public boolean equals(Object entry) {
+    return entry instanceof CommandEntry && command.groupEquals(((CommandEntry) entry).command);
   }
 
   @Override

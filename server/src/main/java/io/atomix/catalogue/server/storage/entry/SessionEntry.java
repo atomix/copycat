@@ -35,11 +35,6 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
     super(referenceManager);
   }
 
-  @Override
-  public long getAddress() {
-    return session;
-  }
-
   /**
    * Sets the session ID.
    *
@@ -71,6 +66,16 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     session = buffer.readLong();
+  }
+
+  @Override
+  public int hashCode() {
+    return (int) (session ^ (session >>> 32));
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof SessionEntry && ((SessionEntry) object).session == session;
   }
 
 }

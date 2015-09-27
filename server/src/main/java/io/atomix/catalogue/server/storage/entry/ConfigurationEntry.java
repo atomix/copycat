@@ -32,7 +32,6 @@ import java.util.Collection;
  */
 @SerializeWith(id=308)
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
-  private static final long ADDRESS = 1;
   private Collection<Address> active;
   private Collection<Address> passive;
 
@@ -41,11 +40,6 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
 
   public ConfigurationEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
-  }
-
-  @Override
-  public long getAddress() {
-    return ADDRESS;
   }
 
   /**
@@ -102,6 +96,16 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
     super.readObject(buffer, serializer);
     active = serializer.readObject(buffer);
     passive = serializer.readObject(buffer);
+  }
+
+  @Override
+  public int hashCode() {
+    return 1;
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof ConfigurationEntry;
   }
 
   @Override

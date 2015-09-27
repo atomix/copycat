@@ -385,6 +385,12 @@ class ServerSession implements Session {
 
   @Override
   @SuppressWarnings("unchecked")
+  public Listener<Void> onEvent(String event, Runnable callback) {
+    return onEvent(event, v -> callback.run());
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
   public Listener onEvent(String event, Consumer listener) {
     return eventListeners.computeIfAbsent(Assert.notNull(event, "event"), e -> new Listeners<>())
       .add(Assert.notNull(listener, "listener"));

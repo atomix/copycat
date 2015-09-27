@@ -59,11 +59,6 @@ public class TestEntry extends Entry<TestEntry> {
     return this;
   }
 
-  @Override
-  public long getAddress() {
-    return 1;
-  }
-
   /**
    * Sets the entry address.
    *
@@ -127,6 +122,16 @@ public class TestEntry extends Entry<TestEntry> {
     id = buffer.readLong();
     term = buffer.readLong();
     remove = buffer.readBoolean();
+  }
+
+  @Override
+  public int hashCode() {
+    return 1;
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof TestEntry;
   }
 
   @Override
