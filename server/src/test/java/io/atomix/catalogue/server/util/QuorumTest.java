@@ -18,8 +18,6 @@ package io.atomix.catalogue.server.util;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import io.atomix.catalogue.server.util.Quorum;
-
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.testng.Assert.assertEquals;

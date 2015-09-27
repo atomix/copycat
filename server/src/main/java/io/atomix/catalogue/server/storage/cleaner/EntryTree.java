@@ -43,6 +43,7 @@ public final class EntryTree {
       Entry tombstone = tombstones.get(entry);
       if (tombstone != null) {
         if (entry.getIndex() > tombstone.getIndex()) {
+          tombstones.remove(tombstone);
           entry.acquire();
           tombstones.put(entry, entry);
           update(tombstone);
