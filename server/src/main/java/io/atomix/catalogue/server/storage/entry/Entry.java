@@ -108,15 +108,6 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   }
 
   /**
-   * Returns the entry address.
-   *
-   * @return The entry address.
-   */
-  public long getAddress() {
-    return 0;
-  }
-
-  /**
    * Returns a boolean value indicating whether the command is a tombstone.
    *
    * @return Indicates whether the command is a tombstone.
@@ -210,5 +201,11 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   public void close() {
     release();
   }
+
+  @Override
+  public abstract int hashCode();
+
+  @Override
+  public abstract boolean equals(Object object);
 
 }

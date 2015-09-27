@@ -15,10 +15,10 @@
  */
 package io.atomix.catalogue.server.storage.cleaner;
 
+import io.atomix.catalogue.server.storage.entry.Entry;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import io.atomix.catalogue.server.storage.entry.Entry;
 
 /**
  * Entry tree.
@@ -26,8 +26,8 @@ import io.atomix.catalogue.server.storage.entry.Entry;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class EntryTree {
-  private final Map<Long, Entry> tombstones = new ConcurrentHashMap<>();
-  private final Map<Long, Long> trees = new ConcurrentHashMap<>();
+  private final Map<Entry, Entry> tombstones = new ConcurrentHashMap<>();
+  private final Map<Entry, Long> trees = new ConcurrentHashMap<>();
 
   /**
    * Adds an entry to the tree.
@@ -40,25 +40,25 @@ public final class EntryTree {
    */
   public EntryTree add(Entry entry, boolean isTombstone) {
     if (isTombstone) {
-      Entry tombstone = tombstones.get(entry.getAddress());
+      Entry tombstone = tombstones.get(entry);
       if (tombstone != null) {
         if (entry.getIndex() > tombstone.getIndex()) {
           entry.acquire();
-          tombstones.put(entry.getAddress(), entry);
-          update(tombstone.getAddress(), tombstone.getId());
+          tombstones.put(entry, entry);
+          update(tombstone);
           tombstone.release();
         } else {
-          update(entry.getAddress(), entry.getId());
+          update(entry);
         }
       } else {
         entry.acquire();
-        tombstones.put(entry.getAddress(), entry);
+        tombstones.put(entry, entry);
       }
     } else {
-      Entry tombstone = tombstones.remove(entry.getAddress());
+      Entry tombstone = tombstones.remove(entry);
       if (tombstone != null)
         tombstone.release();
-      update(entry.getAddress(), entry.getId());
+      update(entry);
     }
     return this;
   }
@@ -70,11 +70,11 @@ public final class EntryTree {
    * @return Indicates whether the given entry can be deleted.
    */
   boolean canDelete(Entry entry) {
-    Entry tombstone = tombstones.get(entry.getAddress());
+    Entry tombstone = tombstones.get(entry);
     if (tombstone == null) {
       return true;
     } else if (tombstone.getIndex() == entry.getIndex()) {
-      Long tree = trees.get(entry.getAddress());
+      Long tree = trees.get(entry);
       return tree == null || tree == 0;
     }
     return true;
@@ -87,17 +87,17 @@ public final class EntryTree {
    * @return The entry tree.
    */
   EntryTree delete(Entry entry) {
-    Entry tombstone = tombstones.get(entry.getAddress());
+    Entry tombstone = tombstones.get(entry);
     if (tombstone != null) {
       if (tombstone.getIndex() == entry.getIndex()) {
-        tombstones.remove(entry.getAddress());
-        trees.remove(entry.getAddress());
+        tombstones.remove(entry);
+        trees.remove(entry);
         tombstone.release();
       } else {
-        update(entry.getAddress(), entry.getId());
+        update(entry);
       }
     } else {
-      update(entry.getAddress(), entry.getId());
+      update(entry);
     }
     return this;
   }
@@ -105,16 +105,15 @@ public final class EntryTree {
   /**
    * Updates the tree for the given address and entry.
    *
-   * @param address The address to update.
-   * @param entry   The entry to update.
+   * @param entry The entry to update.
    */
-  private boolean update(long address, long entry) {
-    Long tree = trees.get(address);
+  private boolean update(Entry entry) {
+    Long tree = trees.get(entry);
     if (tree == null) {
       tree = 0L;
     }
-    tree ^= entry;
-    trees.put(address, tree);
+    tree ^= entry.getId();
+    trees.put(entry, tree);
     return tree == 0;
   }
 

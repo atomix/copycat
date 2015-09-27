@@ -34,6 +34,11 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   }
 
   @Override
+  public boolean isTombstone() {
+    return true;
+  }
+
+  @Override
   public String toString() {
     return String.format("%s[index=%d, term=%d, session=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getTimestamp());
   }

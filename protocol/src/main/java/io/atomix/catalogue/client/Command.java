@@ -98,15 +98,6 @@ public interface Command<T> extends Operation<T> {
   }
 
   /**
-   * Returns the memory address of the command.
-   *
-   * @return The memory address of the command.
-   */
-  default long address() {
-    return 0;
-  }
-
-  /**
    * Returns the command consistency level.
    * <p>
    * The consistency will dictate the order with which commands are submitted to the Raft cluster. Ultimately, all commands
@@ -131,6 +122,25 @@ public interface Command<T> extends Operation<T> {
    */
   default PersistenceLevel persistence() {
     return PersistenceLevel.EPHEMERAL;
+  }
+
+  /**
+   * Returns the command group code.
+   *
+   * @return The command group code.
+   */
+  default int groupCode() {
+    return hashCode();
+  }
+
+  /**
+   * Returns a boolean value indicating whether the given command is part of the same group as this command.
+   *
+   * @param command The command to check.
+   * @return Indicates whether the given command is part of the same group as this command.
+   */
+  default boolean groupEquals(Command command) {
+    return equals(command);
   }
 
   /**

@@ -97,6 +97,16 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   }
 
   @Override
+  public int hashCode() {
+    return connection.hashCode();
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof RegisterEntry && ((RegisterEntry) object).connection.equals(connection);
+  }
+
+  @Override
   public String toString() {
     return String.format("%s[index=%d, term=%d, connection=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getConnection(), getTimestamp());
   }
