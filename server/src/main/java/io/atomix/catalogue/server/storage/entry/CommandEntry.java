@@ -42,7 +42,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   @Override
   public boolean isTombstone() {
-    return command.persistence() == Command.PersistenceLevel.PERSISTENT;
+    return command.persistence() == Command.PersistenceLevel.EPHEMERAL;
   }
 
   @Override

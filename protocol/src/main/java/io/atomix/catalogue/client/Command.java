@@ -81,17 +81,14 @@ public interface Command<T> extends Operation<T> {
   enum PersistenceLevel {
 
     /**
-     * Enforces ephemeral persistence.
+     * Indicates the command should be persisted in the Raft log until all prior related commands have been cleaned.
      * <p>
-     * Ephemeral persistence means that once the command is marked for cleaning from the Raft log, it is safe to be removed.
+     * The {@code EPHEMERAL} persistence level is useful for things like tombstones.
      */
     EPHEMERAL,
 
     /**
-     * Enforces strong persistence.
-     * <p>
-     * Once a persistent command is marked for cleaning from the Raft log, the command will persist until all prior related
-     * entries have been cleaned.
+     * Indicates that the command should be persisted in the Raft log until overwritten by another related command.
      */
     PERSISTENT
 
@@ -121,7 +118,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command persistence level.
    */
   default PersistenceLevel persistence() {
-    return PersistenceLevel.EPHEMERAL;
+    return PersistenceLevel.PERSISTENT;
   }
 
   /**
