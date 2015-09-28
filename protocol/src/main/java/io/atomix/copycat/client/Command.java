@@ -107,7 +107,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command consistency level.
    */
   default ConsistencyLevel consistency() {
-    return ConsistencyLevel.LINEARIZABLE;
+    return null;
   }
 
   /**
