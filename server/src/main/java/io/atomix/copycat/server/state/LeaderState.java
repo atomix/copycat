@@ -21,6 +21,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.request.*;
@@ -967,12 +968,14 @@ final class LeaderState extends ActiveState {
         long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
 
         int size = 0;
-        while (size < MAX_BATCH_SIZE && index <= context.getLog().lastIndex()) {
+        while (index <= context.getLog().lastIndex()) {
           Entry entry = context.getLog().get(index);
-          if (entry != null && size + entry.size() <= MAX_BATCH_SIZE) {
-            size += entry.size();
-            builder.addEntry(entry);
+          Assert.notNull(entry, "entry");
+          if (size + entry.size() > MAX_BATCH_SIZE) {
+            break;
           }
+          size += entry.size();
+          builder.addEntry(entry);
           index++;
         }
       }
