@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-io.atomix.catalogue.server.storage.TestEntry
+io.atomix.copycat.server.storage.TestEntry

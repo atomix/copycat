@@ -17,12 +17,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.atomix.catalogue</groupId>
-    <artifactId>catalogue-parent</artifactId>
+    <groupId>io.atomix.copycat</groupId>
+    <artifactId>copycat-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>catalogue-protocol</artifactId>
+  <artifactId>copycat-protocol</artifactId>
   <name>Catalogue Raft Protocol</name>
 
   <dependencies>

@@ -1,6 +1,6 @@
 # Catalogue
 
-[![Build Status](https://travis-ci.org/atomix/catalogue.png)](https://travis-ci.org/atomix/catalogue)
+[![Build Status](https://travis-ci.org/atomix/copycat.png)](https://travis-ci.org/atomix/copycat)
 
 ### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc]
 
@@ -29,22 +29,22 @@ Raft client designed specifically to interact with the Catalogue server to maint
 A snapshot of Catalogue is deployed on every push to the `master` branch. There is no official release of Catalogue in
 Maven Central yet, but there will in the coming weeks. In the meantime:
 
-To add the Catalogue server to your project, add a dependency on the `catalogue-server` project:
+To add the Catalogue server to your project, add a dependency on the `copycat-server` project:
 
 ```
 <dependency>
-  <groupId>io.atomix.catalogue</groupId>
-  <artifactId>catalogue-server</artifactId>
+  <groupId>io.atomix.copycat</groupId>
+  <artifactId>copycat-server</artifactId>
   <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
 
-Similarly, to add the Catalogue client to your project, add a dependency on the `catalogue-client` project:
+Similarly, to add the Catalogue client to your project, add a dependency on the `copycat-client` project:
 
 ```
 <dependency>
-  <groupId>io.atomix.catalogue</groupId>
-  <artifactId>catalogue-client</artifactId>
+  <groupId>io.atomix.copycat</groupId>
+  <artifactId>copycat-client</artifactId>
   <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -52,8 +52,8 @@ Similarly, to add the Catalogue client to your project, add a dependency on the 
 Alternatively, you can build the Jars using Maven:
 
 ```
-git clone --branch master git@github.com:atomix/catalogue.git
-cd catalogue
+git clone --branch master git@github.com:atomix/copycat.git
+cd copycat
 mvn install
 ```
 
@@ -66,4 +66,4 @@ For documentation on how to use the Raft client and server, please visit the [we
 [servers]: http://atomix.io/user-manual/raft-internals/#servers
 [Website]: http://atomix.io/user-manual/raft-framework/
 [Google group]: https://groups.google.com/forum/#!forum/copycat
-[Javadoc]: http://atomix.io/catalogue/api/latest/
+[Javadoc]: http://atomix.io/copycat/api/latest/

@@ -13,21 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-io.atomix.catalogue.server.request.AppendRequest
-io.atomix.catalogue.server.response.AppendResponse
-io.atomix.catalogue.server.request.JoinRequest
-io.atomix.catalogue.server.response.JoinResponse
-io.atomix.catalogue.server.request.LeaveRequest
-io.atomix.catalogue.server.response.LeaveResponse
-io.atomix.catalogue.server.request.PollRequest
-io.atomix.catalogue.server.response.PollResponse
-io.atomix.catalogue.server.request.VoteRequest
-io.atomix.catalogue.server.response.VoteResponse
+io.atomix.copycat.server.request.AppendRequest
+io.atomix.copycat.server.response.AppendResponse
+io.atomix.copycat.server.request.JoinRequest
+io.atomix.copycat.server.response.JoinResponse
+io.atomix.copycat.server.request.LeaveRequest
+io.atomix.copycat.server.response.LeaveResponse
+io.atomix.copycat.server.request.PollRequest
+io.atomix.copycat.server.response.PollResponse
+io.atomix.copycat.server.request.VoteRequest
+io.atomix.copycat.server.response.VoteResponse
 
-io.atomix.catalogue.server.storage.entry.CommandEntry
-io.atomix.catalogue.server.storage.entry.ConfigurationEntry
-io.atomix.catalogue.server.storage.entry.KeepAliveEntry
-io.atomix.catalogue.server.storage.entry.NoOpEntry
-io.atomix.catalogue.server.storage.entry.QueryEntry
-io.atomix.catalogue.server.storage.entry.RegisterEntry
-io.atomix.catalogue.server.storage.entry.UnregisterEntry
+io.atomix.copycat.server.storage.entry.CommandEntry
+io.atomix.copycat.server.storage.entry.ConfigurationEntry
+io.atomix.copycat.server.storage.entry.KeepAliveEntry
+io.atomix.copycat.server.storage.entry.NoOpEntry
+io.atomix.copycat.server.storage.entry.QueryEntry
+io.atomix.copycat.server.storage.entry.RegisterEntry
+io.atomix.copycat.server.storage.entry.UnregisterEntry

@@ -1,6 +1,6 @@
 # From https://coderwall.com/p/9b_lfq
 
-REPO="atomix/catalogue"
+REPO="atomix/copycat"
 
 if [ "$TRAVIS_REPO_SLUG" == "$REPO" ] && \
    [ "$TRAVIS_JDK_VERSION" == "oraclejdk8" ] && \

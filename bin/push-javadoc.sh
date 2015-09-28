@@ -2,7 +2,7 @@
 # Pushes javadocs for an given release version
 # Run from top level dir
 
-REPO="atomix/catalogue"
+REPO="atomix/copycat"
 
 echo "Enter the API version to generate docs for: "
 read apiVersion
