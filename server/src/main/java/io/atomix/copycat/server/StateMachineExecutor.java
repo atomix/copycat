@@ -130,7 +130,6 @@ public interface StateMachineExecutor extends ThreadContext {
 
   @Override
   default void close() {
-
   }
 
 }

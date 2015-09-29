@@ -15,14 +15,16 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.request.PublishRequest;
-import io.atomix.copycat.client.response.PublishResponse;
-import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.client.session.Session;
+import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.request.PublishRequest;
+import io.atomix.copycat.client.response.PublishResponse;
+import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.client.session.Session;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -36,10 +38,10 @@ import java.util.function.Consumer;
  */
 class ServerSession implements Session {
   private final long id;
-  private final UUID connectionId;
   private final ServerStateMachineContext context;
   private final long timeout;
   private Connection connection;
+  private Address address;
   private long request;
   private long sequence;
   private long version;
@@ -63,12 +65,9 @@ class ServerSession implements Session {
   private final Listeners<Session> openListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
 
-  ServerSession(long id, UUID connectionId, ServerStateMachineContext context, long timeout) {
-    Assert.notNull(connectionId, "connectionId");
-
+  ServerSession(long id, ServerStateMachineContext context, long timeout) {
     this.id = id;
     this.version = id - 1;
-    this.connectionId = connectionId;
     this.context = context;
     this.timeout = timeout;
   }
@@ -76,15 +75,6 @@ class ServerSession implements Session {
   @Override
   public long id() {
     return id;
-  }
-
-  /**
-   * Returns the server connection ID.
-   *
-   * @return The server connection ID.
-   */
-  UUID connection() {
-    return connectionId;
   }
 
   /**
@@ -317,10 +307,33 @@ class ServerSession implements Session {
   ServerSession setConnection(Connection connection) {
     this.connection = connection;
     if (connection != null) {
-      Assert.arg(connection.id().equals(connectionId), "connection must match session connection ID");
       connection.handler(PublishRequest.class, this::handlePublish);
     }
     return this;
+  }
+
+  /**
+   * Returns the session connection.
+   *
+   * @return The session connection.
+   */
+  Connection getConnection() {
+    return connection;
+  }
+
+  /**
+   * Sets the session address.
+   */
+  ServerSession setAddress(Address address) {
+    this.address = address;
+    return this;
+  }
+
+  /**
+   * Returns the session address.
+   */
+  Address getAddress() {
+    return address;
   }
 
   @Override
@@ -330,7 +343,7 @@ class ServerSession implements Session {
 
   @Override
   public Session publish(String event, Object message) {
-    Assert.state(context.type() != ServerStateMachineContext.Type.QUERY, "cannot publish session events during query execution");
+    Assert.state(context.consistency() != null, "session events can only be published during command execution");
 
     // If the client acked a version greater than the current state machine version then immediately return.
     if (eventAckVersion > context.version())
@@ -362,8 +375,8 @@ class ServerSession implements Session {
     holder.event = event;
     holder.message = message;
 
-    // If this event was published by a command execution, create and register an event future.
-    if (context.type() == ServerStateMachineContext.Type.COMMAND) {
+    // If this event is linearizable, store an event future. Sequential events do not need to be tracked externally.
+    if (context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
       holder.future = new CompletableFuture<>();
       context.register(holder.future);
     } else {
@@ -435,26 +448,58 @@ class ServerSession implements Session {
    * Sends an event to the session.
    */
   private void sendEvent(EventHolder event) {
-    if (connection != null) {
-      connection.<PublishRequest, PublishResponse>send(PublishRequest.builder()
-        .withSession(id())
-        .withEventVersion(event.eventVersion)
-        .withEventSequence(event.eventSequence)
-        .withPreviousVersion(event.previousVersion)
-        .withPreviousSequence(event.previousSequence)
-        .withEvent(event.event)
-        .withMessage(event.message)
-        .build()).whenComplete((response, error) -> {
-        if (isOpen() && error == null) {
-          if (response.status() == Response.Status.OK) {
-            clearEvents(response.version(), response.sequence());
-          } else {
-            clearEvents(response.version(), response.sequence());
-            resendEvents(response.version(), response.sequence());
-          }
-        }
-      });
+    if (context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
+      sendLinearizableEvent(event);
+    } else {
+      sendSequentialEvent(event);
     }
+  }
+
+  /**
+   * Sends a linearizable event.
+   */
+  private void sendLinearizableEvent(EventHolder event) {
+    if (connection != null) {
+      sendEvent(event, connection);
+    } else if (address != null) {
+      context.connections().getConnection(address).thenAccept(connection -> sendEvent(event, connection));
+    }
+  }
+
+  /**
+   * Sends a sequential event.
+   */
+  private void sendSequentialEvent(EventHolder event) {
+    if (connection != null) {
+      sendEvent(event, connection);
+    }
+  }
+
+  /**
+   * Sends an event.
+   */
+  private void sendEvent(EventHolder event, Connection connection) {
+    PublishRequest request = PublishRequest.builder()
+      .withSession(id())
+      .withEventVersion(event.eventVersion)
+      .withEventSequence(event.eventSequence)
+      .withPreviousVersion(event.previousVersion)
+      .withPreviousSequence(event.previousSequence)
+      .withEvent(event.event)
+      .withMessage(event.message)
+      .build();
+
+    connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
+      if (isOpen() && error == null) {
+        if (response.status() == Response.Status.OK) {
+          clearEvents(response.version(), response.sequence());
+        } else {
+          clearEvents(response.version(), response.sequence());
+          resendEvents(response.version(), response.sequence());
+        }
+      }
+      request.release();
+    });
   }
 
   /**

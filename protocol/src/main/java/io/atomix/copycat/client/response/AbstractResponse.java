@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.client.response;
 
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.util.*;
 
@@ -37,6 +40,14 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
    */
   protected AbstractResponse(ReferenceManager<T> referenceManager) {
     this.referenceManager = Assert.notNull(referenceManager, "referenceManager");
+  }
+
+  @Override
+  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  }
+
+  @Override
+  public void readObject(BufferInput buffer, Serializer serializer) {
   }
 
   @Override

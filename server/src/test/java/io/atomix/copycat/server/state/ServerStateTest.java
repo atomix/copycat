@@ -15,6 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import io.atomix.catalyst.transport.*;
+import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
@@ -25,11 +30,6 @@ import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
-import io.atomix.catalyst.transport.*;
-import io.atomix.catalyst.util.concurrent.SingleThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -84,10 +84,8 @@ public class ServerStateTest extends ConcurrentTestCase {
 
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
 
-    id = UUID.randomUUID();
-
-    server = transport.server(id);
-    client = transport.client(id);
+    server = transport.server();
+    client = transport.client();
 
     state = new ServerState(members.get(0), members, log, stateMachine, new ConnectionManager(client), context);
 

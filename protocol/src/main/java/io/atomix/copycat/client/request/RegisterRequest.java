@@ -56,7 +56,7 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
     return POOL.acquire(Assert.notNull(request, "request"));
   }
 
-  private UUID connection;
+  private UUID client;
 
   /**
    * @throws NullPointerException if {@code referenceManager} is null
@@ -66,34 +66,34 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
   }
 
   /**
-   * Returns the connection ID.
+   * Returns the client ID.
    *
-   * @return The connection ID.
+   * @return The client ID.
    */
-  public UUID connection() {
-    return connection;
+  public UUID client() {
+    return client;
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
-    serializer.writeObject(connection, buffer);
+    serializer.writeObject(client, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
-    connection = serializer.readObject(buffer);
+    client = serializer.readObject(buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), connection);
+    return Objects.hash(getClass(), client);
   }
 
   @Override
   public boolean equals(Object object) {
     if (object instanceof RegisterRequest) {
       RegisterRequest request = (RegisterRequest) object;
-      return request.connection.equals(connection);
+      return request.client.equals(client);
     }
     return false;
   }
@@ -118,28 +118,28 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
     @Override
     protected void reset() {
       super.reset();
-      request.connection = null;
+      request.client = null;
     }
 
     /**
-     * Sets the connection ID.
+     * Sets the client ID.
      *
-     * @param connection The connection ID.
+     * @param client The client ID.
      * @return The request builder.
-     * @throws NullPointerException if {@code connection} is null
+     * @throws NullPointerException if {@code client} is null
      */
-    public Builder withConnection(UUID connection) {
-      request.connection = Assert.notNull(connection, "connection");
+    public Builder withClient(UUID client) {
+      request.client = Assert.notNull(client, "client");
       return this;
     }
 
     /**
-     * @throws IllegalStateException if connection is null
+     * @throws IllegalStateException if client is null
      */
     @Override
     public RegisterRequest build() {
       super.build();
-      Assert.stateNot(request.connection == null, "connection");
+      Assert.stateNot(request.client == null, "client");
       return request;
     }
   }

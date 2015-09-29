@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.copycat.client.session.ClientSession;
-import io.atomix.copycat.client.session.Session;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -26,11 +24,10 @@ import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.client.session.ClientSession;
+import io.atomix.copycat.client.session.Session;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -116,6 +113,7 @@ public class CopycatClient implements Managed<CopycatClient> {
     return new Builder(members);
   }
 
+  private final UUID id = UUID.randomUUID();
   private final Transport transport;
   private final Collection<Address> members;
   private final Serializer serializer;
@@ -291,7 +289,7 @@ public class CopycatClient implements Managed<CopycatClient> {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          ClientSession session = new ClientSession(transport, members, serializer);
+          ClientSession session = new ClientSession(id, transport, members, serializer);
           if (closeFuture == null) {
             openFuture = session.open().thenApply(s -> {
               synchronized (this) {

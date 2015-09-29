@@ -16,13 +16,15 @@
 
 package io.atomix.copycat.server.state;
 
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.StateMachineContext;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-
-import io.atomix.copycat.server.StateMachineContext;
 
 /**
  * Server state machine context.
@@ -30,29 +32,43 @@ import io.atomix.copycat.server.StateMachineContext;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 class ServerStateMachineContext implements StateMachineContext {
-  private long version;
-  private Type type = Type.NONE;
+  private CopycatServer.State state = CopycatServer.State.INACTIVE;
   private final ServerClock clock = new ServerClock();
-  private final ServerSessionManager sessions = new ServerSessionManager(this);
+  private final ConnectionManager connections;
+  private final ServerSessionManager sessions;
+  private long version;
+  private Command.ConsistencyLevel consistency;
   private final List<CompletableFuture<Void>> futures = new ArrayList<>();
 
+  public ServerStateMachineContext(ConnectionManager connections, ServerSessionManager sessions) {
+    this.connections = connections;
+    this.sessions = sessions;
+  }
+
   /**
-   * State machine context type.
+   * Returns the server state.
+   *
+   * @return The server state.
    */
-  enum Type {
-    COMMAND,
-    QUERY,
-    NONE
+  CopycatServer.State state() {
+    return state;
   }
 
   /**
    * Updates the state machine context.
    */
-  void update(long index, Instant instant, Type type) {
+  void update(long index, Instant instant, Command.ConsistencyLevel consistency) {
     version = index;
     clock.set(instant);
-    this.type = type;
+    this.consistency = consistency;
     futures.clear();
+  }
+
+  /**
+   * Returns the context consistency level.
+   */
+  Command.ConsistencyLevel consistency() {
+    return consistency;
   }
 
   /**
@@ -69,14 +85,6 @@ class ServerStateMachineContext implements StateMachineContext {
     return !futures.isEmpty() ? CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])) : null;
   }
 
-  /**
-   * Returns the current context type.
-   *
-   * @return The current context type.
-   */
-  Type type() {
-    return type;
-  }
 
   @Override
   public long version() {
@@ -89,13 +97,15 @@ class ServerStateMachineContext implements StateMachineContext {
   }
 
   @Override
-  public Instant now() {
-    return clock.instant();
-  }
-
-  @Override
   public ServerSessionManager sessions() {
     return sessions;
+  }
+
+  /**
+   * Returns the server connections.
+   */
+  ConnectionManager connections() {
+    return connections;
   }
 
   @Override

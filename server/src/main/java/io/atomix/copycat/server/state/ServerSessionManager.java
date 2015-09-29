@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.session.Sessions;
-import io.atomix.catalyst.transport.Connection;
 
 import java.util.Iterator;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,13 +30,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSessionManager implements Sessions {
-  private final ServerStateMachineContext context;
-  private final Map<UUID, Connection> connections = new ConcurrentHashMap<>();
+  private final Map<Long, Address> addresses = new ConcurrentHashMap<>();
+  private final Map<Long, Connection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
-
-  ServerSessionManager(ServerStateMachineContext context) {
-    this.context = context;
-  }
 
   @Override
   public Session session(long sessionId) {
@@ -44,15 +40,26 @@ class ServerSessionManager implements Sessions {
   }
 
   /**
+   * Registers an address.
+   */
+  ServerSessionManager registerAddress(long sessionId, Address address) {
+    ServerSession session = sessions.get(sessionId);
+    if (session != null) {
+      session.setAddress(address);
+    }
+    addresses.put(sessionId, address);
+    return this;
+  }
+
+  /**
    * Registers a connection.
    */
-  ServerSessionManager registerConnection(Connection connection) {
-    for (ServerSession session : sessions.values()) {
-      if (session.connection().equals(connection.id())) {
-        session.setConnection(connection);
-      }
+  ServerSessionManager registerConnection(long sessionId, Connection connection) {
+    ServerSession session = sessions.get(sessionId);
+    if (session != null) {
+      session.setConnection(connection);
     }
-    connections.put(connection.id(), connection);
+    connections.put(sessionId, connection);
     return this;
   }
 
@@ -60,21 +67,27 @@ class ServerSessionManager implements Sessions {
    * Unregisters a connection.
    */
   ServerSessionManager unregisterConnection(Connection connection) {
-    for (ServerSession session : sessions.values()) {
-      if (session.connection().equals(connection.id())) {
-        session.setConnection(null);
+    Iterator<Map.Entry<Long, Connection>> iterator = connections.entrySet().iterator();
+    while (iterator.hasNext()) {
+      Map.Entry<Long, Connection> entry = iterator.next();
+      if (entry.getValue().equals(connection)) {
+        ServerSession session = sessions.get(entry.getKey());
+        if (session != null) {
+          session.setConnection(null);
+        }
+        iterator.remove();
       }
     }
-    connections.remove(connection.id());
     return this;
   }
 
   /**
    * Registers a session.
    */
-  ServerSession registerSession(long sessionId, UUID connectionId, long timeout) {
-    ServerSession session = new ServerSession(sessionId, connectionId, context, timeout).setConnection(connections.get(connectionId));
-    sessions.put(sessionId, session);
+  ServerSession registerSession(ServerSession session) {
+    session.setAddress(addresses.get(session.id()));
+    session.setConnection(connections.get(session.id()));
+    sessions.put(session.id(), session);
     return session;
   }
 
@@ -82,6 +95,8 @@ class ServerSessionManager implements Sessions {
    * Unregisters a session.
    */
   ServerSession unregisterSession(long sessionId) {
+    addresses.remove(sessionId);
+    connections.remove(sessionId);
     return sessions.remove(sessionId);
   }
 

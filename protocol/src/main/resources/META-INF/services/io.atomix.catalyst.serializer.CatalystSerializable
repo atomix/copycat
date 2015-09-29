@@ -23,5 +23,7 @@ io.atomix.copycat.client.request.QueryRequest
 io.atomix.copycat.client.response.QueryResponse
 io.atomix.copycat.client.request.RegisterRequest
 io.atomix.copycat.client.response.RegisterResponse
+io.atomix.copycat.client.request.ConnectRequest
+io.atomix.copycat.client.response.ConnectResponse
 io.atomix.copycat.client.request.UnregisterRequest
 io.atomix.copycat.client.response.UnregisterResponse

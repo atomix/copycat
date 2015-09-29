@@ -15,15 +15,14 @@
  */
 package io.atomix.copycat.server;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.session.Sessions;
-import io.atomix.catalyst.util.Assert;
 
 import java.time.Clock;
-import java.time.Instant;
 
 /**
  * Base class for user-provided Raft state machines.
@@ -165,15 +164,6 @@ public abstract class StateMachine implements AutoCloseable {
    */
   protected Clock clock() {
     return executor.context().clock();
-  }
-
-  /**
-   * Returns the current state machine time.
-   *
-   * @return The current state machine time.
-   */
-  protected Instant now() {
-    return executor.context().now();
   }
 
   /**

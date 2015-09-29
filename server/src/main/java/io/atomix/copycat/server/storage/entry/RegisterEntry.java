@@ -31,7 +31,7 @@ import java.util.UUID;
  */
 @SerializeWith(id=303)
 public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
-  private UUID connection;
+  private UUID client;
   private long timeout;
 
   public RegisterEntry() {
@@ -42,23 +42,23 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   }
 
   /**
-   * Returns the entry connection ID.
+   * Returns the entry client ID.
    *
-   * @return The entry connection ID.
+   * @return The entry client ID.
    */
-  public UUID getConnection() {
-    return connection;
+  public UUID getClient() {
+    return client;
   }
 
   /**
-   * Sets the entry connection ID.
+   * Sets the entry client ID.
    *
-   * @param connection The entry connection ID.
+   * @param client The entry client ID.
    * @return The register entry.
-   * @throws NullPointerException if {@code connection} is null
+   * @throws NullPointerException if {@code client} is null
    */
-  public RegisterEntry setConnection(UUID connection) {
-    this.connection = Assert.notNull(connection, "connection");
+  public RegisterEntry setClient(UUID client) {
+    this.client = Assert.notNull(client, "client");
     return this;
   }
 
@@ -86,29 +86,29 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(timeout);
-    serializer.writeObject(connection, buffer);
+    serializer.writeObject(client, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     timeout = buffer.readLong();
-    connection = serializer.readObject(buffer);
+    client = serializer.readObject(buffer);
   }
 
   @Override
   public int hashCode() {
-    return connection.hashCode();
+    return client.hashCode();
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof RegisterEntry && ((RegisterEntry) object).connection.equals(connection);
+    return object instanceof RegisterEntry && ((RegisterEntry) object).client.equals(client);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, connection=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getConnection(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, client=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getTimestamp());
   }
 
 }

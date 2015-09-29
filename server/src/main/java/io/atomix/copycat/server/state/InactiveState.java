@@ -15,10 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.CopycatServer;
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 
@@ -46,12 +47,27 @@ class InactiveState extends AbstractState {
   }
 
   @Override
+  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
+  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
   protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
   protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
+  protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

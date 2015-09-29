@@ -15,11 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
@@ -28,6 +23,11 @@ import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
+import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.request.*;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +91,7 @@ public class ServerState {
 
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, cleaner, stateContext);
+    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), cleaner, stateContext);
 
     cluster.configure(0, this.members.values(), Collections.EMPTY_LIST);
   }
@@ -414,7 +414,6 @@ public class ServerState {
    * Handles a connection.
    */
   void connect(Connection connection) {
-    stateMachine.executor().context().sessions().registerConnection(connection);
     registerHandlers(connection);
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }
@@ -428,8 +427,11 @@ public class ServerState {
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
+    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
+    connection.handler(AcceptRequest.class, request -> state.accept(request));
     connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
+    connection.handler(PublishRequest.class, request -> state.publish(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
     connection.handler(AppendRequest.class, request -> state.append(request));

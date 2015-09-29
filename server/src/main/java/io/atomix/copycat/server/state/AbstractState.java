@@ -15,10 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.CopycatServer;
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import org.slf4j.Logger;
@@ -88,6 +89,16 @@ abstract class AbstractState implements Managed<AbstractState> {
   protected abstract CompletableFuture<RegisterResponse> register(RegisterRequest request);
 
   /**
+   * Handles a connect request.
+   */
+  protected abstract CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection);
+
+  /**
+   * Handles an accept request.
+   */
+  protected abstract CompletableFuture<AcceptResponse> accept(AcceptRequest request);
+
+  /**
    * Handles a keep alive request.
    */
   protected abstract CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
@@ -96,6 +107,11 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Handles an unregister request.
    */
   protected abstract CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
+
+  /**
+   * Handles a publish request.
+   */
+  protected abstract CompletableFuture<PublishResponse> publish(PublishRequest request);
 
   /**
    * Handles a join request.

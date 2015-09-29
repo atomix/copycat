@@ -15,14 +15,17 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.LocalServerRegistry;
+import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.transport.Transport;
+import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.concurrent.SingleThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
@@ -43,6 +46,7 @@ import static org.testng.Assert.*;
 public class ServerStateMachineTest extends ConcurrentTestCase {
   private ThreadContext callerContext;
   private ThreadContext stateContext;
+  private Transport transport;
   private ServerStateMachine stateMachine;
   private long timestamp;
   private AtomicLong sequence;
@@ -51,6 +55,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void createStateMachine() {
     callerContext = new SingleThreadContext("caller", new Serializer());
     stateContext = new SingleThreadContext("state", new Serializer());
+    LocalServerRegistry registry = new LocalServerRegistry();
+    transport = new LocalTransport(registry);
     ServerCommitCleaner cleaner = new ServerCommitCleaner() {
       @Override
       public void clean(Entry entry) {
@@ -59,7 +65,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
       public void clean(Entry entry, boolean tombstone) {
       }
     };
-    stateMachine = new ServerStateMachine(new TestStateMachine(), cleaner, stateContext);
+    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaner, stateContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }
@@ -75,7 +81,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTerm(1)
         .setTimestamp(timestamp)
         .setTimeout(500)
-        .setConnection(UUID.randomUUID());
+        .setClient(UUID.randomUUID());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -122,7 +128,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTerm(1)
         .setTimestamp(timestamp)
         .setTimeout(500)
-        .setConnection(UUID.randomUUID());
+        .setClient(UUID.randomUUID());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -166,7 +172,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTerm(1)
         .setTimestamp(timestamp)
         .setTimeout(500)
-        .setConnection(UUID.randomUUID());
+        .setClient(UUID.randomUUID());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -213,7 +219,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTerm(1)
         .setTimestamp(timestamp)
         .setTimeout(500)
-        .setConnection(UUID.randomUUID());
+        .setClient(UUID.randomUUID());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -302,7 +308,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTerm(1)
         .setTimestamp(timestamp)
         .setTimeout(500)
-        .setConnection(UUID.randomUUID());
+        .setClient(UUID.randomUUID());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -377,10 +383,15 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     public void configure(StateMachineExecutor executor) {
       executor.register(TestCommand.class, this::testCommand);
       executor.register(TestQuery.class, this::testQuery);
+      executor.register(EventCommand.class, this::eventCommand);
     }
 
     private long testCommand(Commit<TestCommand> commit) {
       return sequence.incrementAndGet();
+    }
+
+    private void eventCommand(Commit<EventCommand> commit) {
+      commit.session().publish("hello", "world!");
     }
 
     private long testQuery(Commit<TestQuery> commit) {
@@ -392,6 +403,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Test command.
    */
   private static class TestCommand implements Command<Long> {
+  }
+
+  /**
+   * Event command.
+   */
+  private static class EventCommand implements Command<Void> {
   }
 
   /**

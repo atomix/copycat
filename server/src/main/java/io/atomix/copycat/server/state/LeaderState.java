@@ -15,16 +15,17 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.util.concurrent.ComposableFuture;
+import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.concurrent.ComposableFuture;
-import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.*;
@@ -408,7 +409,9 @@ final class LeaderState extends ActiveState {
       if (isOpen()) {
         if (commitError == null) {
           CommandEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenComplete((result, error) -> {
+
+          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          context.getStateMachine().apply(entry, true).whenComplete((result, error) -> {
             if (isOpen()) {
               if (error == null) {
                 future.complete(logResponse(CommandResponse.builder()
@@ -579,7 +582,7 @@ final class LeaderState extends ActiveState {
         entry.setId(context.nextEntryId())
           .setTerm(context.getTerm())
           .setTimestamp(timestamp)
-          .setConnection(request.connection())
+          .setClient(request.client())
           .setTimeout(timeout);
         index = context.getLog().append(entry);
         LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
@@ -620,6 +623,84 @@ final class LeaderState extends ActiveState {
           });
         } else {
           future.complete(logResponse(RegisterResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(RaftError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+    return future;
+  }
+
+  @Override
+  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+    context.checkThread();
+    logRequest(request);
+
+    context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+
+    AcceptRequest acceptRequest = AcceptRequest.builder()
+      .withSession(request.session())
+      .withAddress(context.getAddress())
+      .build();
+    return accept(acceptRequest)
+      .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
+      .thenApply(this::logResponse)
+      .whenComplete((result, error) -> request.release());
+  }
+
+  @Override
+  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+    final long timestamp = System.currentTimeMillis();
+    final long index;
+
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
+        entry.setId(context.nextEntryId())
+          .setTerm(context.getTerm())
+          .setTimestamp(timestamp)
+          .setAddress(request.address());
+        index = context.getLog().append(entry);
+        LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
+      }
+    } finally {
+      request.release();
+    }
+
+    context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
+
+    CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
+    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (commitError == null) {
+          ConnectEntry entry = context.getLog().get(index);
+          applyEntry(entry).whenComplete((connectResult, connectError) -> {
+            if (isOpen()) {
+              if (connectError == null) {
+                future.complete(logResponse(AcceptResponse.builder()
+                  .withStatus(Response.Status.OK)
+                  .build()));
+              } else if (connectError instanceof RaftException) {
+                future.complete(logResponse(AcceptResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((RaftException) connectError).getType())
+                  .build()));
+              } else {
+                future.complete(logResponse(AcceptResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .build()));
+              }
+              checkSessions();
+            }
+            entry.release();
+          });
+        } else {
+          future.complete(logResponse(AcceptResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));

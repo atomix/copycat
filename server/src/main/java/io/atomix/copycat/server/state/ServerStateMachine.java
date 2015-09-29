@@ -15,11 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import java.util.concurrent.CompletableFuture;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Futures;
@@ -28,13 +23,11 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.storage.entry.CommandEntry;
-import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.entry.KeepAliveEntry;
-import io.atomix.copycat.server.storage.entry.NoOpEntry;
-import io.atomix.copycat.server.storage.entry.QueryEntry;
-import io.atomix.copycat.server.storage.entry.RegisterEntry;
-import io.atomix.copycat.server.storage.entry.UnregisterEntry;
+import io.atomix.copycat.server.storage.entry.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Raft server state machine.
@@ -48,10 +41,10 @@ class ServerStateMachine implements AutoCloseable {
   private final ServerCommitPool commits;
   private long lastApplied;
 
-  ServerStateMachine(StateMachine stateMachine, ServerCommitCleaner cleaner, ThreadContext context) {
+  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
     this.stateMachine = stateMachine;
-    this.executor = new ServerStateMachineExecutor(context);
-    this.commits = new ServerCommitPool(cleaner, executor.context().sessions());
+    this.executor = new ServerStateMachineExecutor(context, executor);
+    this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
     init();
   }
 
@@ -112,9 +105,20 @@ class ServerStateMachine implements AutoCloseable {
    * @return The result.
    */
   CompletableFuture<?> apply(Entry entry) {
+    return apply(entry, false);
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   *
+   * @param entry The entry to apply.
+   * @param expectResult Indicates whether this call expects a result.
+   * @return The result.
+   */
+  CompletableFuture<?> apply(Entry entry, boolean expectResult) {
     try {
       if (entry instanceof CommandEntry) {
-        return apply((CommandEntry) entry);
+        return apply((CommandEntry) entry, expectResult);
       } else if (entry instanceof QueryEntry) {
         return apply((QueryEntry) entry);
       } else if (entry instanceof RegisterEntry) {
@@ -139,7 +143,8 @@ class ServerStateMachine implements AutoCloseable {
    * @return The result.
    */
   private CompletableFuture<Long> apply(RegisterEntry entry) {
-    ServerSession session = executor.context().sessions().registerSession(entry.getIndex(), entry.getConnection(), entry.getTimeout()).setTimestamp(entry.getTimestamp());
+    ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
+    executor.context().sessions().registerSession(session).setTimestamp(entry.getTimestamp());
 
     // Allow the executor to execute any scheduled events.
     executor.tick(entry.getTimestamp());
@@ -156,6 +161,42 @@ class ServerStateMachine implements AutoCloseable {
       stateMachine.register(session);
       context.execute(() -> future.complete(index));
     });
+
+    return future;
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   *
+   * @param entry The entry to apply.
+   */
+  private CompletableFuture<Void> apply(ConnectEntry entry) {
+    ServerSession session = executor.context().sessions().getSession(entry.getSession());
+
+    // Allow the executor to execute any scheduled events.
+    executor().tick(entry.getTimestamp());
+
+    CompletableFuture<Void> future;
+
+    // If the server session is null, the session either never existed or already expired.
+    if (session == null) {
+      LOGGER.warn("Unknown session: " + entry.getSession());
+      future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
+    }
+    // If the session exists, don't allow it to expire even if its expiration has passed since we still
+    // managed to receive a keep alive request from the client before it was removed.
+    else {
+      ThreadContext context = getContext();
+
+      // Set the session as trusted. Sessions only timeout via RegisterEntry.
+      session.trust();
+
+      // Configure the session's server.
+      session.setAddress(entry.getAddress());
+
+      future = new CompletableFuture<>();
+      context.execute(() -> future.complete(null));
+    }
 
     return future;
   }
@@ -248,9 +289,10 @@ class ServerStateMachine implements AutoCloseable {
    * Applies an entry to the state machine.
    *
    * @param entry The entry to apply.
+   * @param expectResult Whether the call expects a result.
    * @return The result.
    */
-  private CompletableFuture<Object> apply(CommandEntry entry) {
+  private CompletableFuture<Object> apply(CommandEntry entry, boolean expectResult) {
     final CompletableFuture<Object> future = new CompletableFuture<>();
 
     // First check to ensure that the session exists.
@@ -285,7 +327,7 @@ class ServerStateMachine implements AutoCloseable {
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.
     else {
-      executeCommand(entry, session, future, getContext());
+      executeCommand(entry, session, expectResult, future, getContext());
     }
 
     return future;
@@ -294,7 +336,7 @@ class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine command.
    */
-  private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, CompletableFuture<Object> future, ThreadContext context) {
+  private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, boolean expectResult, CompletableFuture<Object> future, ThreadContext context) {
     context.checkThread();
 
     // Allow the executor to execute any scheduled events.
@@ -302,10 +344,12 @@ class ServerStateMachine implements AutoCloseable {
 
     long sequence = entry.getSequence();
     Command.ConsistencyLevel consistency = entry.getCommand().consistency();
+    Command.ConsistencyLevel sessionConsistency = expectResult && (consistency == null || consistency == Command.ConsistencyLevel.LINEARIZABLE)
+      ? Command.ConsistencyLevel.LINEARIZABLE : Command.ConsistencyLevel.SEQUENTIAL;
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-    executor.executeCommand(commits.acquire(entry)).whenComplete((result, error) -> {
+    executor.executeCommand(commits.acquire(entry), sessionConsistency).whenComplete((result, error) -> {
       if (error == null) {
         if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
           context.execute(() -> future.complete(result));

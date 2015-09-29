@@ -15,10 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.Storage;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -28,11 +24,14 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -73,9 +72,8 @@ public class ServerContext implements Managed<ServerState> {
       Log log = storage.open("copycat");
 
       // Setup the server and connection manager.
-      UUID id = UUID.randomUUID();
-      server = transport.server(id);
-      ConnectionManager connections = new ConnectionManager(transport.client(id));
+      server = transport.server();
+      ConnectionManager connections = new ConnectionManager(transport.client());
 
       server.listen(address, c -> state.connect(c)).thenRun(() -> {
         state = new ServerState(address, members, log, userStateMachine, connections, context);

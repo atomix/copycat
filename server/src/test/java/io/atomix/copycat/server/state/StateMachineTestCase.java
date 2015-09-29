@@ -15,13 +15,16 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.LocalServerRegistry;
+import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.transport.Transport;
+import io.atomix.catalyst.util.concurrent.SingleThreadContext;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.concurrent.SingleThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
@@ -50,6 +53,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
     cleaned = new HashSet<>();
     callerContext = new SingleThreadContext("caller", new Serializer());
     stateContext = new SingleThreadContext("state", new Serializer());
+    Transport transport = new LocalTransport(new LocalServerRegistry());
     ServerCommitCleaner cleaner = new ServerCommitCleaner() {
       @Override
       public void clean(Entry entry) {
@@ -61,7 +65,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
         cleaned.add(entry.getIndex());
       }
     };
-    stateMachine = new ServerStateMachine(createStateMachine(), cleaner, stateContext);
+    stateMachine = new ServerStateMachine(createStateMachine(), new ServerStateMachineContext(new ConnectionManager(transport.client()), new ServerSessionManager()), cleaner, stateContext);
   }
 
   /**
@@ -94,7 +98,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
         .setTerm(1)
         .setTimestamp(timestamp)
         .setTimeout(500)
-        .setConnection(UUID.randomUUID());
+        .setClient(UUID.randomUUID());
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);

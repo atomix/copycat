@@ -15,14 +15,16 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.client.request.*;
+import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
+import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.*;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -174,6 +176,9 @@ class PassiveState extends AbstractState {
               transition(CopycatServer.State.PASSIVE);
             }
           }
+        } else if (entry instanceof ConnectEntry) {
+          ConnectEntry connectEntry = (ConnectEntry) entry;
+          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getSession(), connectEntry.getAddress());
         }
       }
     }
@@ -365,6 +370,36 @@ class PassiveState extends AbstractState {
   }
 
   @Override
+  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } finally {
+      request.release();
+    }
+  }
+
+  @Override
+  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } finally {
+      request.release();
+    }
+  }
+
+  @Override
   protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     try {
       context.checkThread();
@@ -386,6 +421,21 @@ class PassiveState extends AbstractState {
       logRequest(request);
 
       return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } finally {
+      request.release();
+    }
+  }
+
+  @Override
+  protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
+    try {
+      context.checkThread();
+      logRequest(request);
+
+      return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));

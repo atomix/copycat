@@ -16,18 +16,17 @@
 
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.server.session.Sessions;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.server.session.Sessions;
 
 import java.time.Clock;
-import java.time.Instant;
 
 /**
  * State machine context.
  * <p>
  * The context is reflective of the current position and state of the Raft state machine. In particular,
- * it exposes the current approximate {@link StateMachineContext#now() time} and all open
+ * it exposes the current approximate {@link StateMachineContext#clock() time} and all open
  * {@link Sessions}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
@@ -51,13 +50,6 @@ public interface StateMachineContext {
    * @return The state machine clock.
    */
   Clock clock();
-
-  /**
-   * Returns the current state machine time.
-   *
-   * @return The current state machine time.
-   */
-  Instant now();
 
   /**
    * Returns the state machine sessions.

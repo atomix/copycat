@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.client.request;
 
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.*;
 
 import java.util.Objects;
@@ -34,6 +37,14 @@ public abstract class AbstractRequest<T extends Request<T>> implements Request<T
    */
   protected AbstractRequest(ReferenceManager<T> referenceManager) {
     this.referenceManager = Assert.notNull(referenceManager, "referenceManager");
+  }
+
+  @Override
+  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  }
+
+  @Override
+  public void readObject(BufferInput buffer, Serializer serializer) {
   }
 
   @Override

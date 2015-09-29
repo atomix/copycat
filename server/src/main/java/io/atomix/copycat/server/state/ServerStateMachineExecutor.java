@@ -16,14 +16,15 @@
 
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.error.ApplicationException;
-import io.atomix.copycat.server.Commit;
-import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Operation;
+import io.atomix.copycat.client.error.ApplicationException;
+import io.atomix.copycat.server.Commit;
+import io.atomix.copycat.server.StateMachineExecutor;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -49,9 +50,9 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private Function allOperation;
   private long timestamp;
 
-  ServerStateMachineExecutor(ThreadContext context) {
-    this.executor = context;
-    this.context = new ServerStateMachineContext();
+  ServerStateMachineExecutor(ServerStateMachineContext context, ThreadContext executor) {
+    this.executor = executor;
+    this.context = context;
   }
 
   /**
@@ -84,10 +85,10 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   /**
    * Executes the given command commit on the state machine.
    */
-  <T extends Operation<U>, U> CompletableFuture<U> executeCommand(Commit<T> commit) {
+  <T extends Operation<U>, U> CompletableFuture<U> executeCommand(Commit<T> commit, Command.ConsistencyLevel consistency) {
     CompletableFuture<U> future = new CompletableFuture<>();
     executor.executor().execute(() -> {
-      context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.COMMAND);
+      context.update(commit.index(), commit.time(), consistency);
       executeOperation(commit, future);
     });
     return future;
@@ -99,7 +100,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   <T extends Operation<U>, U> CompletableFuture<U> executeQuery(Commit<T> commit) {
     CompletableFuture<U> future = new CompletableFuture<>();
     executor.executor().execute(() -> {
-      context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.QUERY);
+      context.update(commit.index(), commit.time(), null);
       executeOperation(commit, future);
     });
     return future;
@@ -167,7 +168,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
         ServerScheduledTask task = iterator.next();
         if (task.complete(this.timestamp)) {
           executor.executor().execute(() -> {
-            context.update(context.version(), Instant.ofEpochMilli(task.time), ServerStateMachineContext.Type.NONE);
+            context.update(context.version(), Instant.ofEpochMilli(task.time), Command.ConsistencyLevel.SEQUENTIAL);
             task.execute();
           });
           complete.add(task);
@@ -197,13 +198,13 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   @Override
   public Scheduled schedule(Duration delay, Runnable callback) {
-    Assert.state(context.type() != ServerStateMachineContext.Type.QUERY, "cannot schedule callbacks during query execution");
+    Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
-    Assert.state(context.type() != ServerStateMachineContext.Type.QUERY, "cannot schedule callbacks during query execution");
+    Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }
 
@@ -254,7 +255,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       this.delay = delay;
       this.interval = interval;
       this.callback = callback;
-      this.time = context.now().toEpochMilli() + delay;
+      this.time = context.clock().instant().toEpochMilli() + delay;
     }
 
     /**

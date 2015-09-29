@@ -15,10 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Client;
@@ -32,6 +28,10 @@ import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import org.slf4j.Logger;
@@ -62,6 +62,7 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   private final Random random = new Random();
+  private final UUID clientId;
   private final Client client;
   private Set<Address> members;
   private final ThreadContext context;
@@ -87,11 +88,11 @@ public class ClientSession implements Session, Managed<Session> {
   private long eventVersion;
   private long eventSequence;
 
-  public ClientSession(Transport transport, Collection<Address> members, Serializer serializer) {
-    UUID id = UUID.randomUUID();
-    this.client = Assert.notNull(transport, "transport").client(id);
+  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer) {
+    this.clientId = Assert.notNull(clientId, "clientId");
+    this.client = Assert.notNull(transport, "transport").client();
     this.members = new HashSet<>(Assert.notNull(members, "members"));
-    this.context = new SingleThreadContext("copycat-client-" + id.toString(), Assert.notNull(serializer, "serializer").clone());
+    this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectMembers = new ArrayList<>(members);
   }
 
@@ -381,11 +382,10 @@ public class ClientSession implements Session, Managed<Session> {
     if (connectFuture == null) {
       // If there's no existing connect future, create a new one.
       LOGGER.info("Connecting: {}", member.socketAddress());
-      connectFuture = client.connect(member).whenComplete((connection, error) -> {
+      connectFuture = client.connect(member).thenCompose(this::setupConnection).whenComplete((connection, error) -> {
         connectFuture = null;
         if (!checkOpen || isOpen()) {
           if (error == null) {
-            setupConnection(connection);
             request(request, connection, future, checkOpen, recordFailures);
           } else {
             LOGGER.info("Failed to connect: {}", member.socketAddress());
@@ -479,6 +479,43 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   /**
+   * Sets up the given connection.
+   */
+  private CompletableFuture<Connection> setupConnection(Connection connection) {
+    this.connection = connection;
+    connection.closeListener(c -> {
+      if (c.equals(this.connection)) {
+        this.connection = null;
+      }
+    });
+    connection.exceptionListener(c -> {
+      if (c.equals(this.connection)) {
+        this.connection = null;
+      }
+    });
+    connection.handler(PublishRequest.class, this::handlePublish);
+
+    if (id != 0) {
+      ConnectRequest request = ConnectRequest.builder()
+        .withSession(id)
+        .build();
+
+      CompletableFuture<Connection> future = new CompletableFuture<>();
+      connection.send(request).whenComplete((response, error) -> {
+        if (isOpen()) {
+          if (error == null) {
+            future.complete(connection);
+          } else {
+            future.completeExceptionally(error);
+          }
+        }
+      });
+      return future;
+    }
+    return CompletableFuture.completedFuture(connection);
+  }
+
+  /**
    * Retries sending requests.
    */
   private void retryRequests() {
@@ -528,25 +565,6 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   /**
-   * Sets up the given connection.
-   */
-  private ClientSession setupConnection(Connection connection) {
-    this.connection = connection;
-    connection.closeListener(c -> {
-      if (c.equals(this.connection)) {
-        this.connection = null;
-      }
-    });
-    connection.exceptionListener(c -> {
-      if (c.equals(this.connection)) {
-        this.connection = null;
-      }
-    });
-    connection.handler(PublishRequest.class, this::handlePublish);
-    return this;
-  }
-
-  /**
    * Registers the session.
    */
   private CompletableFuture<Void> register() {
@@ -555,7 +573,7 @@ public class ClientSession implements Session, Managed<Session> {
     CompletableFuture<Void> future = new CompletableFuture<>();
 
     RegisterRequest request = RegisterRequest.builder()
-      .withConnection(client.id())
+      .withClient(clientId)
       .build();
 
     request.acquire();
@@ -565,7 +583,7 @@ public class ClientSession implements Session, Managed<Session> {
           setMembers(response.members());
           setTimeout(response.timeout());
           onOpen(response.session());
-          future.complete(null);
+          setupConnection(connection).whenComplete((setupResult, setupError) -> future.complete(null));
           resetMembers().keepAlive(Duration.ofMillis(Math.round(response.timeout() * KEEP_ALIVE_RATIO)));
         } else {
           future.completeExceptionally(response.error().createException());
