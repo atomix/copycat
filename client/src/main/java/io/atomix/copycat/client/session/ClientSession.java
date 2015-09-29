@@ -142,7 +142,7 @@ public class ClientSession implements Session, Managed<Session> {
       CommandRequest request;
       if (command.consistency() == Command.ConsistencyLevel.NONE) {
         request = CommandRequest.builder()
-          .withSequence(id)
+          .withSession(id)
           .withSequence(0)
           .withCommand(command)
           .build();

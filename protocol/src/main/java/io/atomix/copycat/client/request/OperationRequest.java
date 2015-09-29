@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.request;
 
-import io.atomix.copycat.client.Operation;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
@@ -23,6 +22,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.catalyst.util.ReferenceFactory;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.Operation;
 
 /**
  * Operation request.
@@ -91,14 +91,14 @@ public abstract class OperationRequest<T extends OperationRequest<T>> extends Se
      */
     @SuppressWarnings("unchecked")
     public T withSequence(long sequence) {
-      request.sequence = Assert.argNot(sequence, sequence <= 0, "sequence must be positive");
+      request.sequence = Assert.argNot(sequence, sequence < 0, "sequence must be positive");
       return (T) this;
     }
 
     @Override
     public U build() {
       super.build();
-      Assert.stateNot(request.sequence < 1, "sequence cannot be less than 1");
+      Assert.stateNot(request.sequence < 0, "sequence cannot be less than 0");
       return request;
     }
   }

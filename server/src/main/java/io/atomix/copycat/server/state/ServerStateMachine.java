@@ -307,7 +307,7 @@ class ServerStateMachine implements AutoCloseable {
     // If the command's sequence number is less than the next session sequence number then that indicates that
     // we've received a command that was previously applied to the state machine. Ensure linearizability by
     // returning the cached response instead of applying it to the user defined state machine.
-    else if (entry.getSequence() < session.nextSequence()) {
+    else if (entry.getSequence() > 0 && entry.getSequence() < session.nextSequence()) {
       // Ensure the response check is executed in the state machine thread in order to ensure the
       // command was applied, otherwise there will be a race condition and concurrent modification issues.
       ThreadContext context = getContext();
