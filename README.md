@@ -1,4 +1,4 @@
-# Catalogue
+# Copycat
 
 [![Build Status](https://travis-ci.org/atomix/copycat.png)](https://travis-ci.org/atomix/copycat)
 
