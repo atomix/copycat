@@ -64,8 +64,7 @@ class ServerSession implements Session {
   private final Listeners<Session> closeListeners = new Listeners<>();
 
   ServerSession(long id, UUID connectionId, ServerStateMachineContext context, long timeout) {
-    if (connectionId == null)
-      throw new NullPointerException("connection cannot be null");
+    Assert.notNull(connectionId, "connectionId");
 
     this.id = id;
     this.version = id - 1;
@@ -318,9 +317,7 @@ class ServerSession implements Session {
   ServerSession setConnection(Connection connection) {
     this.connection = connection;
     if (connection != null) {
-      if (!connection.id().equals(connectionId)) {
-        throw new IllegalArgumentException("connection must match session connection ID");
-      }
+      Assert.arg(connection.id().equals(connectionId), "connection must match session connection ID");
       connection.handler(PublishRequest.class, this::handlePublish);
     }
     return this;
@@ -333,8 +330,7 @@ class ServerSession implements Session {
 
   @Override
   public Session publish(String event, Object message) {
-    if (context.type() == ServerStateMachineContext.Type.QUERY)
-      throw new IllegalStateException("cannot publish session events during query execution");
+    Assert.state(context.type() != ServerStateMachineContext.Type.QUERY, "cannot publish session events during query execution");
 
     // If the client acked a version greater than the current state machine version then immediately return.
     if (eventAckVersion > context.version())

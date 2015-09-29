@@ -47,7 +47,7 @@ public class ServerState {
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
   private final Random random;
-  private ThreadContext context;
+  private ThreadContext threadContext;
   private final StateMachine userStateMachine;
   private final Address address;
   private final ClusterState cluster;
@@ -66,7 +66,7 @@ public class ServerState {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext context) {
+  ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.address = Assert.notNull(address, "address");
     this.random = new Random(address.hashCode());
     this.members = new HashMap<>();
@@ -74,7 +74,7 @@ public class ServerState {
     this.members.put(address.hashCode(), address);
     this.cluster = new ClusterState(this, address);
     this.log = Assert.notNull(log, "log");
-    this.context = Assert.notNull(context, "context");
+    this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
 
@@ -90,7 +90,7 @@ public class ServerState {
     };
 
     // Create a state machine executor and configure the state machine.
-    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", context.serializer().clone());
+    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, cleaner, stateContext);
 
     cluster.configure(0, this.members.values(), Collections.EMPTY_LIST);
@@ -131,7 +131,7 @@ public class ServerState {
    * @return The execution context.
    */
   public ThreadContext getThreadContext() {
-    return context;
+    return threadContext;
   }
 
   /**
@@ -213,8 +213,7 @@ public class ServerState {
     if (this.leader == 0) {
       if (leader != 0) {
         Address address = members.get(leader);
-        if (address == null)
-          throw new IllegalStateException("unknown leader: " + leader);
+        Assert.state(address != null, "unknown leader: ", leader);
         this.leader = leader;
         this.lastVotedFor = 0;
         LOGGER.debug("{} - Found leader {}", this.address, address);
@@ -223,8 +222,7 @@ public class ServerState {
     } else if (leader != 0) {
       if (this.leader != leader) {
         Address address = members.get(leader);
-        if (address == null)
-          throw new IllegalStateException("unknown leader: " + leader);
+        Assert.state(address != null, "unknown leader: ", leader);
         this.leader = leader;
         this.lastVotedFor = 0;
         LOGGER.debug("{} - Found leader {}", this.address, address);
@@ -294,17 +292,10 @@ public class ServerState {
    */
   ServerState setLastVotedFor(int candidate) {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
-    if (lastVotedFor != 0 && candidate != 0) {
-      throw new IllegalStateException("Already voted for another candidate");
-    }
-    if (leader != 0 && candidate != 0) {
-      throw new IllegalStateException("Cannot cast vote - leader already exists");
-    }
+    Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
+    Assert.stateNot (leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
     Address address = members.get(candidate);
-    if (address == null) {
-      throw new IllegalStateException("unknown candidate: " + candidate);
-    }
-
+    Assert.state(address != null, "unknown candidate: ", candidate);
     this.lastVotedFor = candidate;
 
     if (candidate != 0) {
@@ -331,10 +322,8 @@ public class ServerState {
    * @return The Raft context.
    */
   ServerState setCommitIndex(long commitIndex) {
-    if (commitIndex < 0)
-      throw new IllegalArgumentException("commit index must be positive");
-    if (commitIndex < this.commitIndex)
-      throw new IllegalArgumentException("cannot decrease commit index");
+    Assert.argNot(commitIndex < 0, "commit index must be positive");
+    Assert.argNot(commitIndex < this.commitIndex, "cannot decrease commit index");
     this.commitIndex = commitIndex;
     return this;
   }
@@ -355,8 +344,7 @@ public class ServerState {
    * @return The Raft context.
    */
   ServerState setGlobalIndex(long globalIndex) {
-    if (globalIndex < 0)
-      throw new IllegalArgumentException("global index must be positive");
+    Assert.argNot(globalIndex < 0, "global index must be positive");
     this.globalIndex = Math.max(this.globalIndex, globalIndex);
     return this;
   }
@@ -419,7 +407,7 @@ public class ServerState {
    * Checks that the current thread is the state context thread.
    */
   void checkThread() {
-    context.checkThread();
+    threadContext.checkThread();
   }
 
   /**
@@ -435,7 +423,7 @@ public class ServerState {
    * Registers all message handlers.
    */
   private void registerHandlers(Connection connection) {
-    context.checkThread();
+    threadContext.checkThread();
 
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.

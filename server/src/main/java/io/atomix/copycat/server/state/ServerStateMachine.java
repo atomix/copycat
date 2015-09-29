@@ -15,18 +15,26 @@
  */
 package io.atomix.copycat.server.state;
 
+import java.util.concurrent.CompletableFuture;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.util.concurrent.ComposableFuture;
+import io.atomix.catalyst.util.concurrent.Futures;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.catalyst.util.concurrent.ComposableFuture;
-import io.atomix.catalyst.util.concurrent.Futures;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.server.storage.entry.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.CompletableFuture;
+import io.atomix.copycat.server.storage.entry.CommandEntry;
+import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.entry.KeepAliveEntry;
+import io.atomix.copycat.server.storage.entry.NoOpEntry;
+import io.atomix.copycat.server.storage.entry.QueryEntry;
+import io.atomix.copycat.server.storage.entry.RegisterEntry;
+import io.atomix.copycat.server.storage.entry.UnregisterEntry;
 
 /**
  * Raft server state machine.
@@ -78,9 +86,8 @@ class ServerStateMachine implements AutoCloseable {
    * @param lastApplied The last applied index.
    */
   private void setLastApplied(long lastApplied) {
-    if (lastApplied < this.lastApplied) {
-      throw new IllegalArgumentException("lastApplied index must be greater than previous lastApplied index");
-    } else if (lastApplied > this.lastApplied) {
+    Assert.argNot(lastApplied < this.lastApplied, "lastApplied index must be greater than previous lastApplied index");
+    if (lastApplied > this.lastApplied) {
       this.lastApplied = lastApplied;
 
       for (ServerSession session : executor.context().sessions().sessions.values()) {
@@ -95,10 +102,7 @@ class ServerStateMachine implements AutoCloseable {
    * @return The current thread context.
    */
   private ThreadContext getContext() {
-    ThreadContext context = ThreadContext.currentContext();
-    if (context == null)
-      throw new IllegalStateException("must be called from a Catalyst thread");
-    return context;
+    return ThreadContext.currentContextOrThrow();
   }
 
   /**
@@ -246,7 +250,6 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  @SuppressWarnings("unchecked")
   private CompletableFuture<Object> apply(CommandEntry entry) {
     final CompletableFuture<Object> future = new CompletableFuture<>();
 
@@ -337,7 +340,6 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  @SuppressWarnings("unchecked")
   private CompletableFuture<Object> apply(QueryEntry entry) {
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
 

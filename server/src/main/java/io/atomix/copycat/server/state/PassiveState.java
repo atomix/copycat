@@ -127,7 +127,6 @@ class PassiveState extends AbstractState {
   /**
    * Appends entries to the local log.
    */
-  @SuppressWarnings("unchecked")
   protected AppendResponse doAppendEntries(AppendRequest request) {
     // Mark entries up to the request global index as committed to the log.
     context.getLog().commit(request.globalIndex());
@@ -196,7 +195,6 @@ class PassiveState extends AbstractState {
   /**
    * Applies commits to the local state machine.
    */
-  @SuppressWarnings("unchecked")
   protected CompletableFuture<Void> applyCommits(long commitIndex) {
     // Set the commit index, ensuring that the index cannot be decreased.
     context.setCommitIndex(Math.max(context.getCommitIndex(), commitIndex));

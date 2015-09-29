@@ -31,8 +31,6 @@ class MemberState {
   private long time;
 
   public MemberState(Address address) {
-    if (address == null)
-      throw new NullPointerException("member cannot be null");
     this.address = Assert.notNull(address, "address");
   }
 

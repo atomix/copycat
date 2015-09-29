@@ -197,15 +197,13 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   @Override
   public Scheduled schedule(Duration delay, Runnable callback) {
-    if (context.type() == ServerStateMachineContext.Type.QUERY)
-      throw new IllegalStateException("cannot schedule callbacks during query execution");
+    Assert.state(context.type() != ServerStateMachineContext.Type.QUERY, "cannot schedule callbacks during query execution");
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
-    if (context.type() == ServerStateMachineContext.Type.QUERY)
-      throw new IllegalStateException("cannot schedule callbacks during query execution");
+    Assert.state(context.type() != ServerStateMachineContext.Type.QUERY, "cannot schedule callbacks during query execution");
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }
 
