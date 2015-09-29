@@ -50,7 +50,6 @@ import java.util.function.Consumer;
  */
 @Test
 public class ServerStateTest extends ConcurrentTestCase {
-  private static final File directory = new File("test-logs");
   private LocalServerRegistry registry;
   private Transport transport;
   private List<Address> members;
@@ -71,8 +70,6 @@ public class ServerStateTest extends ConcurrentTestCase {
    */
   @BeforeMethod
   public void createState() throws Throwable {
-    deleteDirectory(directory);
-
     serializer = new Serializer();
     serializer.resolve(new ServiceLoaderTypeResolver());
 
@@ -201,26 +198,6 @@ public class ServerStateTest extends ConcurrentTestCase {
     log.close();
     context.close();
     test.close();
-    deleteDirectory(directory);
-  }
-
-  /**
-   * Deletes a directory recursively.
-   */
-  private void deleteDirectory(File directory) throws IOException {
-    if (directory.exists()) {
-      File[] files = directory.listFiles();
-      if (files != null) {
-        for (File file : files) {
-          if (file.isDirectory()) {
-            deleteDirectory(file);
-          } else {
-            Files.delete(file.toPath());
-          }
-        }
-      }
-      Files.delete(directory.toPath());
-    }
   }
 
 }
