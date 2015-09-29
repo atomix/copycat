@@ -15,10 +15,10 @@
  */
 
 /**
- * Provides a standalone segmented log for Catalog's <a href="https://raftconsensus.github.io/">Raft</a> implementation.
+ * Provides a standalone segmented log for Copycat's <a href="https://raftconsensus.github.io/">Raft</a> implementation.
  * <p>
- * The log is designed as a standalone journal built on Catalog's {@link io.atomix.catalyst.buffer.Buffer} abstraction.
- * The buffer abstraction allows Catalog's {@link io.atomix.copycat.server.storage.Log} to write to memory or disk based on the
+ * The log is designed as a standalone journal built on Copycat's {@link io.atomix.catalyst.buffer.Buffer} abstraction.
+ * The buffer abstraction allows Copycat's {@link io.atomix.copycat.server.storage.Log} to write to memory or disk based on the
  * buffer type.
  * <p>
  * While the log is not dependent on the Raft algorithm, it does implement many features in support of the Raft implementation.

@@ -23,7 +23,7 @@
   </parent>
 
   <artifactId>copycat-server</artifactId>
-  <name>Catalogue Raft Server</name>
+  <name>Copycat Raft Server</name>
 
   <dependencies>
     <dependency>

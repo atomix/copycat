@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Log entry.
  * <p>
- * The {@code Entry} represents a single record in a Catalog {@link Log}. Each entry is stored at
+ * The {@code Entry} represents a single record in a Copycat {@link Log}. Each entry is stored at
  * a unique {@link #getIndex() index} in the log. Indexes are applied to entries once written to a log.
  * <p>
  * Custom entry implementations should implement serialization and deserialization logic via

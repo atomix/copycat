@@ -4,8 +4,8 @@
 
 ### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc]
 
-Catalogue is a feature complete, fully asynchronous implementation of the [Raft consensus algorithm][Raft] in Java 8
-designed for use in [Copycat][Copycat]. The implementation provides a fully featured [client][clients] and [server][servers]
+Copycat is a feature complete, fully asynchronous implementation of the [Raft consensus algorithm][Raft] in Java 8
+designed for use in [Atomix][Atomix]. The implementation provides a fully featured [client][clients] and [server][servers]
 and includes:
 * Pre-vote election protocol (§[4.2.3][dissertation])
 * Session-based linearizable writes (§[6.3][dissertation])
@@ -22,14 +22,14 @@ to verify it maintains linearizability in a number of different failure scenario
 
 ## Usage
 
-Catalogue consists of two separate projects: the Catalogue client and server. The server is a standalone Raft server
+Copycat consists of two separate projects: the Copycat client and server. The server is a standalone Raft server
 implementation through which users can define and manage arbitrary replicated state machines, and the client is a
-Raft client designed specifically to interact with the Catalogue server to maintain strong consistency constraints.
+Raft client designed specifically to interact with the Copycat server to maintain strong consistency constraints.
 
-A snapshot of Catalogue is deployed on every push to the `master` branch. There is no official release of Catalogue in
+A snapshot of Copycat is deployed on every push to the `master` branch. There is no official release of Copycat in
 Maven Central yet, but there will in the coming weeks. In the meantime:
 
-To add the Catalogue server to your project, add a dependency on the `copycat-server` project:
+To add the Copycat server to your project, add a dependency on the `copycat-server` project:
 
 ```
 <dependency>
@@ -39,7 +39,7 @@ To add the Catalogue server to your project, add a dependency on the `copycat-se
 </dependency>
 ```
 
-Similarly, to add the Catalogue client to your project, add a dependency on the `copycat-client` project:
+Similarly, to add the Copycat client to your project, add a dependency on the `copycat-client` project:
 
 ```
 <dependency>
@@ -61,7 +61,7 @@ For documentation on how to use the Raft client and server, please visit the [we
 
 [Raft]: https://raft.github.io/
 [dissertation]: https://ramcloud.stanford.edu/~ongaro/thesis.pdf
-[Copycat]: http://github.com/atomix/copycat
+[Atomix]: http://github.com/atomix/atomix
 [clients]: http://atomix.io/user-manual/copycat/raft-internals/#clients
 [servers]: http://atomix.io/user-manual/copycat/raft-internals/#servers
 [Website]: http://atomix.io/user-manual/copycat/raft-framework/

@@ -31,7 +31,7 @@ import java.time.Clock;
  * <p>
  * State machines are responsible for handling {@link Operation operations} submitted to the Raft
  * cluster and filtering {@link Commit committed} operations out of the Raft log. The most
- * important rule of state machines is that <em>state machines must be deterministic</em> in order to maintain Catalogue's
+ * important rule of state machines is that <em>state machines must be deterministic</em> in order to maintain Copycat's
  * consistency guarantees. That is, state machines must not change their behavior based on external influences and have
  * no side effects. Users should <em>never</em> use {@code System} time to control behavior within a state machine.
  * <p>
@@ -97,7 +97,7 @@ import java.time.Clock;
  * For commands with lower consistency levels, command responses will be immediately sent. Session events are always guaranteed
  * to be received by the client in the order in which they were published by the state machine.
  * <p>
- * Even though state machines on multiple servers may appear to publish the same event, Catalogue's protocol ensures that only
+ * Even though state machines on multiple servers may appear to publish the same event, Copycat's protocol ensures that only
  * one server ever actually sends the event. Still, it's critical that all state machines publish all events to ensure
  * consistency and fault tolerance. In the event that a server fails after publishing a session event, the client will transparently
  * reconnect to another server and retrieve lost event messages.

@@ -31,7 +31,7 @@ import io.atomix.copycat.client.session.Session;
  * submitted the operation to the cluster.
  * <p>
  * When state machines are done using a commit object, users should always call either {@link #clean()} or {@link #close()}.
- * Failing to call either method is a bug, and Catalogue will log a warning message in such cases.
+ * Failing to call either method is a bug, and Copycat will log a warning message in such cases.
  *
  * @see Command
  * @see Query
@@ -46,7 +46,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * Returns the commit index.
    * <p>
    * This is the index at which the committed {@link Operation} was written in the Raft log.
-   * Catalog guarantees that this index will be the same for all instances of the given operation on all nodes in the
+   * Copycat guarantees that this index will be the same for all instances of the given operation on all nodes in the
    * cluster.
    * <p>
    * Note that for {@link Query} operations, the returned {@code index} may actually represent

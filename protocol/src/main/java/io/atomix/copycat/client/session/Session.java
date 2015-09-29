@@ -45,7 +45,7 @@ import java.util.function.Consumer;
  *     session.publish("myEvent", "Hello world!");
  *   }
  * </pre>
- * When the message is published, it will be queued to be sent to the other side of the connection. Catalog guarantees
+ * When the message is published, it will be queued to be sent to the other side of the connection. Copycat guarantees
  * that the message will arrive within the session timeout unless the session itself times out.
  * <p>
  * To listen for events on a session register a {@link Consumer} via {@link #onEvent(String, Consumer)}:

@@ -42,9 +42,9 @@ abstract class AbstractState implements Managed<AbstractState> {
   }
 
   /**
-   * Returns the Catalog state represented by this state.
+   * Returns the Copycat state represented by this state.
    *
-   * @return The Catalog state represented by this state.
+   * @return The Copycat state represented by this state.
    */
   public abstract CopycatServer.State type();
 
