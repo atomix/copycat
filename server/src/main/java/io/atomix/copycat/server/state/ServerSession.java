@@ -46,6 +46,7 @@ class ServerSession implements Session {
   private long sequence;
   private long version;
   private long commandLowWaterMark;
+  private long currentEvent;
   private long eventVersion;
   private long eventSequence;
   private long eventAckVersion;
@@ -137,6 +138,26 @@ class ServerSession implements Session {
       command.run();
     }
     return this;
+  }
+
+  /**
+   * Sets the event sequence number.
+   *
+   * @param event The event sequence number.
+   * @return The server session.
+   */
+  ServerSession setCurrentEvent(long event) {
+    this.currentEvent = event;
+    return this;
+  }
+
+  /**
+   * Returns the event sequence number.
+   *
+   * @return The current event sequence number.
+   */
+  long getCurrentEvent() {
+    return currentEvent;
   }
 
   /**
@@ -345,18 +366,18 @@ class ServerSession implements Session {
   public Session publish(String event, Object message) {
     Assert.state(context.consistency() != null, "session events can only be published during command execution");
 
-    // If the client acked a version greater than the current state machine version then immediately return.
-    if (eventAckVersion > context.version())
+    // If the client acked a version greater than the current event sequence number since we know the client must have received it from another server.
+    if (eventAckVersion > currentEvent)
       return this;
 
     // The previous event version and sequence are the current event version and sequence.
     long previousVersion = eventVersion;
     long previousSequence = eventSequence;
 
-    // if the event version is not the current context version, reset the event version and sequence. Otherwise,
+    // If the event version is not the current context version, reset the event version and sequence. Otherwise,
     // this must not be the first event, so increment the event sequence number.
-    if (eventVersion != context.version()) {
-      eventVersion = context.version();
+    if (eventVersion != currentEvent) {
+      eventVersion = currentEvent;
       eventSequence = 1;
     } else {
       eventSequence++;

@@ -83,34 +83,10 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   /**
-   * Executes the given command commit on the state machine.
-   */
-  <T extends Operation<U>, U> CompletableFuture<U> executeCommand(Commit<T> commit, Command.ConsistencyLevel consistency) {
-    CompletableFuture<U> future = new CompletableFuture<>();
-    executor.executor().execute(() -> {
-      context.update(commit.index(), commit.time(), consistency);
-      executeOperation(commit, future);
-    });
-    return future;
-  }
-
-  /**
-   * Executes the given query commit on the state machine.
-   */
-  <T extends Operation<U>, U> CompletableFuture<U> executeQuery(Commit<T> commit) {
-    CompletableFuture<U> future = new CompletableFuture<>();
-    executor.executor().execute(() -> {
-      context.update(commit.index(), commit.time(), null);
-      executeOperation(commit, future);
-    });
-    return future;
-  }
-
-  /**
    * Executes an operation.
    */
   @SuppressWarnings("unchecked")
-  private <T extends Operation<U>, U> void executeOperation(Commit commit, CompletableFuture<U> future) {
+  <T extends Operation<U>, U> U executeOperation(Commit commit) {
     // Get the function registered for the operation. If no function is registered, attempt to
     // use a global function if available.
     Function function = operations.get(commit.type());
@@ -140,14 +116,14 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
     }
 
     if (function == null) {
-      future.completeExceptionally(new IllegalStateException("unknown state machine operation: " + commit.type()));
+      throw new IllegalStateException("unknown state machine operation: " + commit.type());
     } else {
       // Execute the operation. If the operation return value is a Future, await the result,
       // otherwise immediately complete the execution future.
       try {
-        future.complete((U) function.apply(commit));
+        return (U) function.apply(commit);
       } catch (Exception e) {
-        future.completeExceptionally(new ApplicationException("An application error occurred", e));
+        throw new ApplicationException("An application error occurred", e);
       }
     }
   }
