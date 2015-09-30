@@ -700,6 +700,7 @@ public class ClientSession implements Session, Managed<Session> {
     if (request.previousVersion() != eventVersion || request.previousSequence() != eventSequence) {
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.INTERNAL_ERROR)
         .withVersion(eventVersion)
         .withSequence(eventSequence)
         .build());
