@@ -74,29 +74,113 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(Command.ConsistencyLevel.NONE);
+  public void testOneNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(1, Command.ConsistencyLevel.NONE);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(Command.ConsistencyLevel.SEQUENTIAL);
+  public void testOneNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(1, Command.ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(Command.ConsistencyLevel.LINEARIZABLE);
+  public void testOneNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(1, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(2, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(2, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(2, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testThreeNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(3, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testThreeNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(3, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testThreeNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(3, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testFourNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(4, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(4, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(4, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testFiveNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(5, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testFiveNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(5, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testFiveNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(5, Command.ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a command with a configured consistency level.
    */
-  private void testSubmitCommand(Command.ConsistencyLevel consistency) throws Throwable {
-    createServers(5);
+  private void testSubmitCommand(int nodes, Command.ConsistencyLevel consistency) throws Throwable {
+    createServers(nodes);
 
     CopycatClient client = createClient();
     client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
@@ -110,36 +194,148 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a query.
    */
-  public void testSubmitQueryWithCausalConsistency() throws Throwable {
-    testSubmitQuery(Query.ConsistencyLevel.CAUSAL);
+  public void testOneNodeSubmitQueryWithCausalConsistency() throws Throwable {
+    testSubmitQuery(1, Query.ConsistencyLevel.CAUSAL);
   }
 
   /**
    * Tests submitting a query.
    */
-  public void testSubmitQueryWithSequentialConsistency() throws Throwable {
-    testSubmitQuery(Query.ConsistencyLevel.SEQUENTIAL);
+  public void testOneNodeSubmitQueryWithSequentialConsistency() throws Throwable {
+    testSubmitQuery(1, Query.ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a query.
    */
-  public void testSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+  public void testOneNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
+    testSubmitQuery(1, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query.
    */
-  public void testSubmitQueryWithLinearizableConsistency() throws Throwable {
-    testSubmitQuery(Query.ConsistencyLevel.LINEARIZABLE);
+  public void testOneNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
+    testSubmitQuery(1, Query.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testTwoNodeSubmitQueryWithCausalConsistency() throws Throwable {
+    testSubmitQuery(2, Query.ConsistencyLevel.CAUSAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testTwoNodeSubmitQueryWithSequentialConsistency() throws Throwable {
+    testSubmitQuery(2, Query.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testTwoNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
+    testSubmitQuery(2, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testTwoNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
+    testSubmitQuery(2, Query.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testThreeNodeSubmitQueryWithCausalConsistency() throws Throwable {
+    testSubmitQuery(3, Query.ConsistencyLevel.CAUSAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testThreeNodeSubmitQueryWithSequentialConsistency() throws Throwable {
+    testSubmitQuery(3, Query.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testThreeNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
+    testSubmitQuery(3, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testThreeNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
+    testSubmitQuery(3, Query.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFourNodeSubmitQueryWithCausalConsistency() throws Throwable {
+    testSubmitQuery(4, Query.ConsistencyLevel.CAUSAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFourNodeSubmitQueryWithSequentialConsistency() throws Throwable {
+    testSubmitQuery(4, Query.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFourNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
+    testSubmitQuery(4, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFourNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
+    testSubmitQuery(4, Query.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFiveNodeSubmitQueryWithCausalConsistency() throws Throwable {
+    testSubmitQuery(5, Query.ConsistencyLevel.CAUSAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFiveNodeSubmitQueryWithSequentialConsistency() throws Throwable {
+    testSubmitQuery(5, Query.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFiveNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
+    testSubmitQuery(5, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a query.
+   */
+  public void testFiveNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
+    testSubmitQuery(5, Query.ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query with a configured consistency level.
    */
-  private void testSubmitQuery(Query.ConsistencyLevel consistency) throws Throwable {
-    createServers(5);
+  private void testSubmitQuery(int nodes, Query.ConsistencyLevel consistency) throws Throwable {
+    createServers(nodes);
 
     CopycatClient client = createClient();
     client.submit(new TestQuery("Hello world!", consistency)).thenAccept(result -> {
@@ -153,8 +349,43 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a sequential event.
    */
-  public void testSequentialEvent() throws Throwable {
-    createServers(5);
+  public void testOneNodeSequentialEvent() throws Throwable {
+    testSequentialEvent(1);
+  }
+
+  /**
+   * Tests submitting a sequential event.
+   */
+  public void testTwoNodeSequentialEvent() throws Throwable {
+    testSequentialEvent(2);
+  }
+
+  /**
+   * Tests submitting a sequential event.
+   */
+  public void testThreeNodeSequentialEvent() throws Throwable {
+    testSequentialEvent(3);
+  }
+
+  /**
+   * Tests submitting a sequential event.
+   */
+  public void testFourNodeSequentialEvent() throws Throwable {
+    testSequentialEvent(4);
+  }
+
+  /**
+   * Tests submitting a sequential event.
+   */
+  public void testFiveNodeSequentialEvent() throws Throwable {
+    testSequentialEvent(5);
+  }
+
+  /**
+   * Tests submitting a sequential event.
+   */
+  private void testSequentialEvent(int nodes) throws Throwable {
+    createServers(nodes);
 
     CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
@@ -171,10 +402,45 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests submitting Linearizablesequential events.
+   */
+  public void testOneNodeSequentialEvents() throws Throwable {
+    testSequentialEvents(1);
+  }
+
+  /**
+   * Tests submitting Linearizablesequential events.
+   */
+  public void testTwoNodeSequentialEvents() throws Throwable {
+    testSequentialEvents(2);
+  }
+
+  /**
+   * Tests submitting Linearizablesequential events.
+   */
+  public void testThreeNodeSequentialEvents() throws Throwable {
+    testSequentialEvents(3);
+  }
+
+  /**
+   * Tests submitting Linearizablesequential events.
+   */
+  public void testFourNodeSequentialEvents() throws Throwable {
+    testSequentialEvents(4);
+  }
+
+  /**
+   * Tests submitting Linearizablesequential events.
+   */
+  public void testFiveNodeSequentialEvents() throws Throwable {
+    testSequentialEvents(5);
+  }
+
+  /**
    * Tests submitting sequential events to all sessions.
    */
-  public void testSequentialEvents() throws Throwable {
-    createServers(5);
+  private void testSequentialEvents(int nodes) throws Throwable {
+    createServers(nodes);
 
     CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
@@ -199,10 +465,45 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests submitting a linearizable event.
+   */
+  public void testOneNodeLinearizableEvent() throws Throwable {
+    testLinearizableEvent(1);
+  }
+
+  /**
+   * Tests submitting a linearizable event.
+   */
+  public void testTwoNodeLinearizableEvent() throws Throwable {
+    testLinearizableEvent(2);
+  }
+
+  /**
+   * Tests submitting a linearizable event.
+   */
+  public void testThreeNodeLinearizableEvent() throws Throwable {
+    testLinearizableEvent(3);
+  }
+
+  /**
+   * Tests submitting a linearizable event.
+   */
+  public void testFourNodeLinearizableEvent() throws Throwable {
+    testLinearizableEvent(4);
+  }
+
+  /**
+   * Tests submitting a linearizable event.
+   */
+  public void testFiveNodeLinearizableEvent() throws Throwable {
+    testLinearizableEvent(5);
+  }
+
+  /**
    * Tests submitting an event command.
    */
-  public void testLinearizableEvent() throws Throwable {
-    createServers(5);
+  private void testLinearizableEvent(int nodes) throws Throwable {
+    createServers(nodes);
 
     AtomicInteger counter = new AtomicInteger();
 
@@ -223,10 +524,45 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests submitting linearizable events.
+   */
+  public void testOneNodeLinearizableEvents() throws Throwable {
+    testLinearizableEvents(1);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testTwoNodeLinearizableEvents() throws Throwable {
+    testLinearizableEvents(2);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testThreeNodeLinearizableEvents() throws Throwable {
+    testLinearizableEvents(3);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFourNodeLinearizableEvents() throws Throwable {
+    testLinearizableEvents(4);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFiveNodeLinearizableEvents() throws Throwable {
+    testLinearizableEvents(5);
+  }
+
+  /**
    * Tests submitting a linearizable event that publishes to all sessions.
    */
-  public void testLinearizableEvents() throws Throwable {
-    createServers(5);
+  private void testLinearizableEvents(int nodes) throws Throwable {
+    createServers(nodes);
 
     AtomicInteger counter = new AtomicInteger();
 
@@ -274,7 +610,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = new ArrayList<>();
 
     List<Address> members = new ArrayList<>();
-    for (int i = 1; i <= nodes; i++) {
+    for (int i = 0; i < nodes; i++) {
       members.add(nextAddress());
     }
 

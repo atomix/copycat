@@ -15,10 +15,6 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.server.state.ServerContext;
-import io.atomix.copycat.server.state.ServerState;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.Storage;
 import io.atomix.catalyst.buffer.PooledDirectAllocator;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
@@ -31,6 +27,10 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.server.state.ServerContext;
+import io.atomix.copycat.server.state.ServerState;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 
 import java.time.Duration;
@@ -39,7 +39,9 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Provides a standalone implementation of the <a href="http://raft.github.io/">Raft consensus algorithm</a>.
@@ -360,44 +362,34 @@ public class CopycatServer implements Managed<CopycatServer> {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
+          Function<ServerState, CompletionStage<CopycatServer>> completionFunction = state -> {
+            openFuture = null;
+            this.state = state;
+            state.setElectionTimeout(electionTimeout)
+              .setHeartbeatInterval(heartbeatInterval)
+              .setSessionTimeout(sessionTimeout)
+              .transition(State.JOIN).join();
+
+            if (state.getLeader() != null) {
+              return CompletableFuture.completedFuture(this);
+            } else {
+              CompletableFuture<CopycatServer> future = new CompletableFuture<>();
+              electionListener = state.onLeaderElection(leader -> {
+                if (electionListener != null) {
+                  open = true;
+                  future.complete(null);
+                  electionListener.close();
+                  electionListener = null;
+                }
+              });
+              return future;
+            }
+          };
+
           if (closeFuture == null) {
-            openFuture = context.open().thenCompose(state -> {
-              openFuture = null;
-              this.state = state;
-              state.setElectionTimeout(electionTimeout)
-                .setHeartbeatInterval(heartbeatInterval)
-                .setSessionTimeout(sessionTimeout)
-                .transition(State.JOIN).join();
-
-              CompletableFuture<CopycatServer> future = new CompletableFuture<>();
-              electionListener = state.onLeaderElection(leader -> {
-                if (electionListener != null) {
-                  open = true;
-                  future.complete(null);
-                  electionListener.close();
-                }
-              });
-              return future;
-            });
+            openFuture = context.open().thenCompose(completionFunction);
           } else {
-            openFuture = closeFuture.thenCompose(c -> context.open().thenCompose(state -> {
-              openFuture = null;
-              this.state = state;
-              state.setElectionTimeout(electionTimeout)
-                .setHeartbeatInterval(heartbeatInterval)
-                .setSessionTimeout(sessionTimeout)
-                .transition(State.JOIN).join();
-
-              CompletableFuture<CopycatServer> future = new CompletableFuture<>();
-              electionListener = state.onLeaderElection(leader -> {
-                if (electionListener != null) {
-                  open = true;
-                  future.complete(null);
-                  electionListener.close();
-                }
-              });
-              return future;
-            }));
+            openFuture = closeFuture.thenCompose(c -> context.open().thenCompose(completionFunction));
           }
         }
       }

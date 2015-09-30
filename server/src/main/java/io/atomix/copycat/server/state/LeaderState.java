@@ -917,10 +917,11 @@ final class LeaderState extends ActiveState {
      * Returns the last time a majority of the cluster was contacted.
      */
     private long commitTime() {
-      return context.getCluster()
+      int quorumIndex = quorumIndex();
+      return quorumIndex >= 0 ? context.getCluster()
         .getActiveMembers((m1, m2) -> (int) (m2.getTime() - m1.getTime()))
         .get(quorumIndex())
-        .getTime();
+        .getTime() : System.currentTimeMillis();
     }
 
     /**
