@@ -59,7 +59,7 @@ class ServerCommit implements Commit<Operation> {
 
   @Override
   public long index() {
-    return entry.getIndex();
+    return entry != null ? entry.getIndex() : 0;
   }
 
   @Override
@@ -75,12 +75,12 @@ class ServerCommit implements Commit<Operation> {
   @Override
   @SuppressWarnings("unchecked")
   public Class type() {
-    return entry.getOperation().getClass();
+    return entry != null ? entry.getOperation().getClass() : null;
   }
 
   @Override
   public Operation operation() {
-    return entry.getOperation();
+    return entry != null ? entry.getOperation() : null;
   }
 
   @Override
