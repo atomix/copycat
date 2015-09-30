@@ -20,8 +20,12 @@ import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.request.CommandRequest;
 import io.atomix.copycat.client.request.Request;
+import io.atomix.copycat.client.response.CommandResponse;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
@@ -35,6 +39,7 @@ import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
+import io.atomix.copycat.server.storage.entry.CommandEntry;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -42,6 +47,7 @@ import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -549,12 +555,77 @@ public class ServerStateTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests that the leader sequences commands to the log.
+   */
+  public void testLeaderSequencesCommands() throws Throwable {
+    configure(state -> {
+      state.setTerm(1).setLeader(members.get(0).hashCode()).getStateMachine().executor().context().sessions().registerSession(new ServerSession(1, state.getStateMachine().executor().context(), 1000));
+    });
+
+    transition(CopycatServer.State.LEADER);
+
+    CommandRequest request1 = CommandRequest.builder()
+      .withSession(1)
+      .withSequence(2)
+      .withCommand(new TestCommand("bar"))
+      .build();
+
+    CommandRequest request2 = CommandRequest.builder()
+      .withSession(1)
+      .withSequence(3)
+      .withCommand(new TestCommand("baz"))
+      .build();
+
+    CommandRequest request3 = CommandRequest.builder()
+      .withSession(1)
+      .withSequence(1)
+      .withCommand(new TestCommand("foo"))
+      .build();
+
+    AtomicInteger counter = new AtomicInteger();
+
+    test.execute(() -> {
+      connection.<CommandRequest, CommandResponse>send(request1);
+      connection.<CommandRequest, CommandResponse>send(request2);
+      connection.<CommandRequest, CommandResponse>send(request3);
+      resume();
+    });
+
+    await();
+
+    Thread.sleep(1000);
+
+    state.getThreadContext().execute(() -> {
+
+      try (CommandEntry entry = state.getLog().get(2)) {
+        threadAssertEquals(((TestCommand) entry.getOperation()).value, "foo");
+      }
+
+      try (CommandEntry entry = state.getLog().get(3)) {
+        threadAssertEquals(((TestCommand) entry.getOperation()).value, "bar");
+      }
+
+      try (CommandEntry entry = state.getLog().get(4)) {
+        threadAssertEquals(((TestCommand) entry.getOperation()).value, "baz");
+      }
+
+      resume();
+    });
+
+    await();
+  }
+
+  /**
    * Test state machine.
    */
   private static class TestStateMachine extends StateMachine {
     @Override
     protected void configure(StateMachineExecutor executor) {
+      executor.register(TestCommand.class, this::command);
+    }
 
+    private String command(Commit<TestCommand> commit) {
+      return commit.operation().value;
     }
   }
 
@@ -581,6 +652,17 @@ public class ServerStateTest extends ConcurrentTestCase {
     log.close();
     context.close();
     test.close();
+  }
+
+  /**
+   * Test command.
+   */
+  public static class TestCommand implements Command<String> {
+    private String value;
+
+    public TestCommand(String value) {
+      this.value = value;
+    }
   }
 
 }
