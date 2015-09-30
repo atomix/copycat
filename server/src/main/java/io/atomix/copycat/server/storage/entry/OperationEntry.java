@@ -41,7 +41,7 @@ public abstract class OperationEntry<T extends OperationEntry<T>> extends Sessio
    *
    * @return The entry operation.
    */
-  public abstract Operation getOperation();
+  public abstract Operation<T> getOperation();
 
   /**
    * Returns the operation sequence number.
@@ -65,13 +65,13 @@ public abstract class OperationEntry<T extends OperationEntry<T>> extends Sessio
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(sequence);
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     sequence = buffer.readLong();
   }

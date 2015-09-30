@@ -96,6 +96,7 @@ public class Cleaner implements AutoCloseable {
               cleanFuture.complete(null);
             }
           }
+          cleaner.close();
         }));
       }
     } else {

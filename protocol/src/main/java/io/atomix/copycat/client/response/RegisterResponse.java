@@ -97,7 +97,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
@@ -112,7 +112,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(session);

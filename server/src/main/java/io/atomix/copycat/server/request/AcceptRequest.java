@@ -76,13 +76,13 @@ public class AcceptRequest extends SessionRequest<AcceptRequest> {
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     address = serializer.readObject(buffer);
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     serializer.writeObject(address, buffer);
   }

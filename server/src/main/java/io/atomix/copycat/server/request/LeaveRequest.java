@@ -75,12 +75,12 @@ public class LeaveRequest extends AbstractRequest<LeaveRequest> {
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     serializer.writeObject(member, buffer);
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     member = serializer.readObject(buffer);
   }
 

@@ -75,12 +75,12 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     serializer.writeObject(client, buffer);
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     client = serializer.readObject(buffer);
   }
 

@@ -91,14 +91,14 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     version = buffer.readLong();
     query = serializer.readObject(buffer);
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(version);
     serializer.writeObject(query, buffer);

@@ -48,12 +48,12 @@ public abstract class SessionRequest<T extends SessionRequest<T>> extends Abstra
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     session = buffer.readLong();
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeLong(session);
   }
 

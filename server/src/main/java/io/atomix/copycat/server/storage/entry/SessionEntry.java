@@ -57,13 +57,13 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(session);
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     session = buffer.readLong();
   }
@@ -75,7 +75,7 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof SessionEntry && ((SessionEntry) object).session == session;
+    return object instanceof SessionEntry && ((SessionEntry<?>) object).session == session;
   }
 
 }

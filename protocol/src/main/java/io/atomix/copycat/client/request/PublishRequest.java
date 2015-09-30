@@ -124,7 +124,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     eventVersion = buffer.readLong();
     eventSequence = buffer.readLong();
@@ -135,7 +135,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(eventVersion);
     buffer.writeLong(eventSequence);

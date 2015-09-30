@@ -104,7 +104,7 @@ public class VoteRequest extends AbstractRequest<VoteRequest> {
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     term = buffer.readLong();
     candidate = buffer.readInt();
     logIndex = buffer.readLong();
@@ -112,7 +112,7 @@ public class VoteRequest extends AbstractRequest<VoteRequest> {
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeLong(term)
       .writeInt(candidate)
       .writeLong(logIndex)

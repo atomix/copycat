@@ -29,11 +29,11 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ServerCommit implements Commit<Operation> {
+class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
   private final ServerCommitCleaner cleaner;
   private final ServerSessionManager sessions;
-  private OperationEntry entry;
+  private OperationEntry<?> entry;
   private Session session;
   private Instant instant;
   private volatile boolean open;
@@ -49,7 +49,7 @@ class ServerCommit implements Commit<Operation> {
    *
    * @param entry The entry.
    */
-  void reset(OperationEntry entry) {
+  void reset(OperationEntry<?> entry) {
     entry.acquire();
     this.entry = entry;
     this.session = sessions.getSession(entry.getSession());
@@ -73,13 +73,12 @@ class ServerCommit implements Commit<Operation> {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public Class type() {
     return entry != null ? entry.getOperation().getClass() : null;
   }
 
   @Override
-  public Operation operation() {
+  public Operation<?> operation() {
     return entry != null ? entry.getOperation() : null;
   }
 

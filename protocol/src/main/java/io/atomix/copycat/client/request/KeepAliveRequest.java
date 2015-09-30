@@ -94,7 +94,7 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
     eventVersion = buffer.readLong();
@@ -102,7 +102,7 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
     buffer.writeLong(eventVersion);

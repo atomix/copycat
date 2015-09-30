@@ -61,7 +61,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
     version = buffer.readLong();
     if (status == Status.OK) {
@@ -73,7 +73,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(status.id()).writeLong(version);
     if (status == Status.OK) {
       serializer.writeObject(result, buffer);

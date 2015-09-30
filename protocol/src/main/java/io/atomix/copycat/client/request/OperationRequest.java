@@ -53,13 +53,13 @@ public abstract class OperationRequest<T extends OperationRequest<T>> extends Se
   public abstract Operation operation();
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     sequence = buffer.readLong();
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(sequence);
   }
