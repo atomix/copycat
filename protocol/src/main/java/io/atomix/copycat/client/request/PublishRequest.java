@@ -184,7 +184,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     @Override
     protected void reset() {
       super.reset();
-      request.eventVersion = 0;
+      request.eventVersion = -1;
       request.eventSequence = 0;
       request.previousVersion = -1;
       request.previousSequence = -1;
@@ -200,7 +200,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
      * @throws IllegalArgumentException if {@code version} is less than 1
      */
     public Builder withEventVersion(long version) {
-      request.eventVersion = Assert.argNot(version, version < 1, "version cannot be less than 1");
+      request.eventVersion = Assert.argNot(version, version < 0, "version cannot be less than 0");
       return this;
     }
 
@@ -224,7 +224,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
      * @throws IllegalArgumentException if {@code version} is less than 1
      */
     public Builder withPreviousVersion(long version) {
-      request.previousVersion = Assert.argNot(version, version < 0, "version cannot be less than 0");
+      request.previousVersion = Assert.argNot(version, version < -1, "version cannot be less than -1");
       return this;
     }
 
@@ -269,9 +269,9 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     @Override
     public PublishRequest build() {
       super.build();
-      Assert.stateNot(request.eventVersion < 1, "eventVersion cannot be less than 1");
+      Assert.stateNot(request.eventVersion < 0, "eventVersion cannot be less than 0");
       Assert.stateNot(request.eventSequence < 1, "eventSequence cannot be less than 1");
-      Assert.stateNot(request.previousVersion < 0, "previousVersion cannot be less than 0");
+      Assert.stateNot(request.previousVersion < -1, "previousVersion cannot be less than -1");
       Assert.stateNot(request.previousSequence < 0, "previousSequence cannot be less than 0");
       Assert.stateNot(request.event == null, "event cannot be null");
       Assert.stateNot(request.message == null, "message cannot be null");

@@ -143,8 +143,8 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     @Override
     protected void reset() {
       super.reset();
-      response.version = 0;
-      response.sequence = 0;
+      response.version = -1;
+      response.sequence = -1;
     }
 
     /**
@@ -155,7 +155,7 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
      * @throws IllegalArgumentException if {@code version} is less than {@code 1}
      */
     public Builder withVersion(long version) {
-      response.version = Assert.argNot(version, version < 1, "version cannot be less than 1");
+      response.version = Assert.argNot(version, version < 0, "version cannot be less than 0");
       return this;
     }
 
@@ -167,7 +167,7 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
      * @throws IllegalArgumentException if {@code sequence} is less than {@code 1}
      */
     public Builder withSequence(long sequence) {
-      response.sequence = Assert.argNot(sequence, sequence < 1, "sequence cannot be less than 1");
+      response.sequence = Assert.argNot(sequence, sequence < 0, "sequence cannot be less than 0");
       return this;
     }
 
@@ -177,8 +177,8 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     @Override
     public PublishResponse build() {
       super.build();
-      Assert.stateNot(response.version < 1, "version cannot be less than 1");
-      Assert.stateNot(response.sequence < 1, "sequence cannot be less than 1");
+      Assert.stateNot(response.version < 0, "version cannot be less than 0");
+      Assert.stateNot(response.sequence < 0, "sequence cannot be less than 0");
       return response;
     }
   }

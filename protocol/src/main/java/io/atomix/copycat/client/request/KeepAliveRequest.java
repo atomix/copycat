@@ -171,7 +171,7 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
      * @throws IllegalArgumentException if {@code eventVersion} is less than 0
      */
     public Builder withEventVersion(long eventVersion) {
-      request.eventVersion = Assert.argNot(eventVersion, eventVersion < 0, "eventSequence cannot be negative");
+      request.eventVersion = Assert.argNot(eventVersion, eventVersion < -1, "eventVersion cannot be negative");
       return this;
     }
 

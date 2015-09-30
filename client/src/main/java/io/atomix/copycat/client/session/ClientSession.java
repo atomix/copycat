@@ -85,7 +85,7 @@ public class ClientSession implements Session, Managed<Session> {
   private long requestSequence;
   private long responseSequence;
   private long responseVersion;
-  private long eventVersion;
+  private long eventVersion = -1;
   private long eventSequence;
 
   public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer) {

@@ -47,9 +47,9 @@ class ServerSession implements Session {
   private long version;
   private long commandLowWaterMark;
   private long currentEvent;
-  private long eventVersion;
-  private long eventSequence;
-  private long eventAckVersion;
+  private long eventVersion = -1;
+  private long eventSequence = 0;
+  private long eventAckVersion = -1;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();

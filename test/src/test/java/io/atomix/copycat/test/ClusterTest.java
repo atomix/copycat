@@ -21,6 +21,7 @@ import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
@@ -36,6 +37,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Copycat cluster test.
@@ -48,6 +50,26 @@ public class ClusterTest extends ConcurrentTestCase {
   protected LocalServerRegistry registry;
   protected int port;
   protected List<Address> members;
+
+  /**
+   * Tests joining a server to an existing cluster.
+   */
+  public void testServerJoin() throws Throwable {
+    createServers(3);
+    CopycatServer joiner = createServer(nextAddress());
+    joiner.open().thenRun(this::resume);
+    await();
+  }
+
+  /**
+   * Tests leaving a sever from a cluster.
+   */
+  public void testServerLeave() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+    CopycatServer server = servers.get(0);
+    server.close().thenRun(this::resume);
+    await();
+  }
 
   /**
    * Tests submitting a command.
@@ -126,6 +148,112 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     await();
+  }
+
+  /**
+   * Tests submitting a sequential event.
+   */
+  public void testSequentialEvent() throws Throwable {
+    createServers(5);
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      resume();
+    });
+
+    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      resume();
+    });
+
+    await(0, 2);
+  }
+
+  /**
+   * Tests submitting sequential events to all sessions.
+   */
+  public void testSequentialEvents() throws Throwable {
+    createServers(5);
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      resume();
+    });
+    createClient().session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      resume();
+    });
+    createClient().session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      resume();
+    });
+
+    client.submit(new TestEvent("Hello world!", false, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      resume();
+    });
+
+    await(0, 4);
+  }
+
+  /**
+   * Tests submitting an event command.
+   */
+  public void testLinearizableEvent() throws Throwable {
+    createServers(5);
+
+    AtomicInteger counter = new AtomicInteger();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      counter.incrementAndGet();
+      resume();
+    });
+
+    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      threadAssertEquals(counter.get(), 1);
+      resume();
+    });
+
+    await(0, 2);
+  }
+
+  /**
+   * Tests submitting a linearizable event that publishes to all sessions.
+   */
+  public void testLinearizableEvents() throws Throwable {
+    createServers(5);
+
+    AtomicInteger counter = new AtomicInteger();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      counter.incrementAndGet();
+      resume();
+    });
+    createClient().session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      counter.incrementAndGet();
+      resume();
+    });
+    createClient().session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      counter.incrementAndGet();
+      resume();
+    });
+
+    client.submit(new TestEvent("Hello world!", false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      threadAssertEquals(counter.get(), 3);
+      resume();
+    });
+
+    await(0, 4);
   }
 
   /**
@@ -220,6 +348,7 @@ public class ClusterTest extends ConcurrentTestCase {
     protected void configure(StateMachineExecutor executor) {
       executor.register(TestCommand.class, this::command);
       executor.register(TestQuery.class, this::query);
+      executor.register(TestEvent.class, this::event);
     }
 
     private String command(Commit<TestCommand> commit) {
@@ -227,6 +356,17 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     private String query(Commit<TestQuery> commit) {
+      return commit.operation().value();
+    }
+
+    private String event(Commit<TestEvent> commit) {
+      if (commit.operation().own()) {
+        commit.session().publish("test", commit.operation().value());
+      } else {
+        for (Session session : sessions()) {
+          session.publish("test", commit.operation().value());
+        }
+      }
       return commit.operation().value();
     }
   }
@@ -282,6 +422,44 @@ public class ClusterTest extends ConcurrentTestCase {
 
     public String value() {
       return value;
+    }
+  }
+
+  /**
+   * Test event.
+   */
+  public static class TestEvent implements Command<String> {
+    private String value;
+    private boolean own;
+    private ConsistencyLevel consistency;
+
+    public TestEvent(String value, boolean own, ConsistencyLevel consistency) {
+      this.value = value;
+      this.own = own;
+      this.consistency = consistency;
+    }
+
+    @Override
+    public Command.ConsistencyLevel consistency() {
+      return consistency;
+    }
+
+    public String value() {
+      return value;
+    }
+
+    public boolean own() {
+      return own;
+    }
+
+    @Override
+    public int groupCode() {
+      return value.hashCode();
+    }
+
+    @Override
+    public boolean groupEquals(Command command) {
+      return command instanceof TestCommand && ((TestCommand) command).value.equals(value);
     }
   }
 
