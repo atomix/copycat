@@ -89,7 +89,24 @@ abstract class ActiveState extends PassiveState {
    * Handles a poll request.
    */
   protected PollResponse handlePoll(PollRequest request) {
-    if (logUpToDate(request.logIndex(), request.logTerm(), request)) {
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context.
+    if (request.term() > context.getTerm()) {
+      context.setTerm(request.term());
+    }
+
+
+    // If the request term is not as great as the current context term then don't
+    // vote for the candidate. We want to vote for candidates that are at least
+    // as up to date as us.
+    if (request.term() < context.getTerm()) {
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
+      return PollResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withAccepted(false)
+        .build();
+    } else if (logUpToDate(request.logIndex(), request.logTerm(), request)) {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -119,7 +136,7 @@ abstract class ActiveState extends PassiveState {
    */
   protected VoteResponse handleVote(VoteRequest request) {
     // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
+    // assign that term and leader to the current context.
     if (request.term() > context.getTerm()) {
       context.setTerm(request.term());
     }

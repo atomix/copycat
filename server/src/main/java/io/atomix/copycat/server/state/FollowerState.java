@@ -102,8 +102,7 @@ final class FollowerState extends ActiveState {
           .build();
         return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
           .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
-          .thenApply(this::logResponse)
-          .whenComplete((result, error) -> request.release());
+          .thenApply(this::logResponse);
       }
     } finally {
       request.release();
