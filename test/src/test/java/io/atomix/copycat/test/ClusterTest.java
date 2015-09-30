@@ -37,7 +37,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Copycat cluster test.
@@ -591,6 +593,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     await(0, 4);
   }
+
   /**
    * Tests submitting linearizable events.
    */
@@ -625,6 +628,82 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     await(0, 3);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFiveNodeManyEvents() throws Throwable {
+    testManyEvents(5);
+  }
+
+  /**
+   * Tests submitting a linearizable event that publishes to all sessions.
+   */
+  private void testManyEvents(int nodes) throws Throwable {
+    createServers(nodes);
+
+    AtomicReference<String> value = new AtomicReference<>();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    for (int i = 0 ; i < 1000; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(0, 2);
+    }
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFiveNodeManySessionsManyEvents() throws Throwable {
+    testManySessionsManyEvents(5);
+  }
+
+  /**
+   * Tests submitting a linearizable event that publishes to all sessions.
+   */
+  private void testManySessionsManyEvents(int nodes) throws Throwable {
+    createServers(nodes);
+
+    AtomicReference<String> value = new AtomicReference<>();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    createClient().session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    createClient().session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    for (int i = 0 ; i < 1000; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(0, 4);
+    }
   }
 
   /**
