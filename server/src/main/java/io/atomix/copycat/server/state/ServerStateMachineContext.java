@@ -37,6 +37,7 @@ class ServerStateMachineContext implements StateMachineContext {
   private final ConnectionManager connections;
   private final ServerSessionManager sessions;
   private long version;
+  private boolean synchronous;
   private Command.ConsistencyLevel consistency;
   private final List<CompletableFuture<Void>> futures = new ArrayList<>();
 
@@ -57,11 +58,19 @@ class ServerStateMachineContext implements StateMachineContext {
   /**
    * Updates the state machine context.
    */
-  void update(long index, Instant instant, Command.ConsistencyLevel consistency) {
+  void update(long index, Instant instant, boolean synchronous, Command.ConsistencyLevel consistency) {
     version = index;
     clock.set(instant);
+    this.synchronous = synchronous;
     this.consistency = consistency;
     futures.clear();
+  }
+
+  /**
+   * Indicates whether the current context is synchronous.
+   */
+  boolean synchronous() {
+    return synchronous;
   }
 
   /**

@@ -591,6 +591,41 @@ public class ClusterTest extends ConcurrentTestCase {
 
     await(0, 4);
   }
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFiveNodeCommandBeforeEvent() throws Throwable {
+    testCommandBeforeEvent(5);
+  }
+
+  /**
+   * Tests submitting a linearizable event that publishes to all sessions.
+   */
+  private void testCommandBeforeEvent(int nodes) throws Throwable {
+    createServers(nodes);
+
+    AtomicInteger counter = new AtomicInteger();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, "Hello world!");
+      counter.incrementAndGet();
+      resume();
+    });
+
+    client.submit(new TestCommand("Hello world!", Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      resume();
+    });
+
+    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      threadAssertEquals(counter.get(), 1);
+      resume();
+    });
+
+    await(0, 3);
+  }
 
   /**
    * Returns the next server address.

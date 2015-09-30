@@ -396,16 +396,16 @@ class ServerSession implements Session {
     holder.event = event;
     holder.message = message;
 
+    // Add the event holder to the events list. This will be used to ack events once completed.
+    events.add(holder);
+
     // If this event is linearizable, store an event future. Sequential events do not need to be tracked externally.
-    if (context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
+    if (context.synchronous() && context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
       holder.future = new CompletableFuture<>();
       context.register(holder.future);
     } else {
       holder.future = null;
     }
-
-    // Add the event holder to the events list. This will be used to ack events once completed.
-    events.add(holder);
 
     // Send the event.
     sendEvent(holder);
@@ -469,9 +469,10 @@ class ServerSession implements Session {
    * Sends an event to the session.
    */
   private void sendEvent(EventHolder event) {
-    if (context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
+    // Linearizable events must be sent synchronously, so only send them within a synchronous context.
+    if (context.synchronous() && context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
       sendLinearizableEvent(event);
-    } else {
+    } else if (context.consistency() != Command.ConsistencyLevel.LINEARIZABLE) {
       sendSequentialEvent(event);
     }
   }

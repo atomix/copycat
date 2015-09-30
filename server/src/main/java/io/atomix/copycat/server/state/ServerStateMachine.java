@@ -289,10 +289,10 @@ class ServerStateMachine implements AutoCloseable {
    * Applies an entry to the state machine.
    *
    * @param entry The entry to apply.
-   * @param expectResult Whether the call expects a result.
+   * @param synchronous Whether the call expects a result.
    * @return The result.
    */
-  private CompletableFuture<Object> apply(CommandEntry entry, boolean expectResult) {
+  private CompletableFuture<Object> apply(CommandEntry entry, boolean synchronous) {
     final CompletableFuture<Object> future = new CompletableFuture<>();
 
     // First check to ensure that the session exists.
@@ -327,7 +327,7 @@ class ServerStateMachine implements AutoCloseable {
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.
     else {
-      executeCommand(entry, session, expectResult, future, getContext());
+      executeCommand(entry, session, synchronous, future, getContext());
     }
 
     return future;
@@ -336,7 +336,7 @@ class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine command.
    */
-  private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, boolean expectResult, CompletableFuture<Object> future, ThreadContext context) {
+  private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, boolean synchronous, CompletableFuture<Object> future, ThreadContext context) {
     context.checkThread();
 
     // Allow the executor to execute any scheduled events.
@@ -345,15 +345,13 @@ class ServerStateMachine implements AutoCloseable {
     long sequence = entry.getSequence();
 
     Command.ConsistencyLevel consistency = entry.getCommand().consistency();
-    Command.ConsistencyLevel sessionConsistency = expectResult && (consistency == null || consistency == Command.ConsistencyLevel.LINEARIZABLE)
-      ? Command.ConsistencyLevel.LINEARIZABLE : Command.ConsistencyLevel.SEQUENTIAL;
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
     ServerCommit commit = commits.acquire(entry);
     executor.executor().execute(() -> {
       session.setCurrentEvent(sequence);
-      executor.context().update(commit.index(), commit.time(), sessionConsistency);
+      executor.context().update(commit.index(), commit.time(), synchronous, consistency != null ? consistency : Command.ConsistencyLevel.LINEARIZABLE);
 
       try {
         Object result = executor.executeOperation(commit);
@@ -445,7 +443,7 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Object> executeQuery(QueryEntry entry, CompletableFuture<Object> future, ThreadContext context) {
     ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
     executor.executor().execute(() -> {
-      executor.context().update(commit.index(), commit.time(), null);
+      executor.context().update(commit.index(), commit.time(), true, null);
       try {
         Object result = executor.executeOperation(commit);
         context.executor().execute(() -> future.complete(result));
