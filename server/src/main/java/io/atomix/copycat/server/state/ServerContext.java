@@ -106,7 +106,7 @@ public class ServerContext implements Managed<ServerState> {
       open = false;
 
       state.onStateChange(state -> {
-        if (state == CopycatServer.State.INACTIVE) {
+        if (this.state != null && state == CopycatServer.State.INACTIVE) {
           server.close().whenCompleteAsync((r1, e1) -> {
             context.close();
             if (e1 != null) {
