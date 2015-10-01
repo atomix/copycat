@@ -62,8 +62,8 @@ For documentation on how to use the Raft client and server, please visit the [we
 [Raft]: https://raft.github.io/
 [dissertation]: https://ramcloud.stanford.edu/~ongaro/thesis.pdf
 [Atomix]: http://github.com/atomix/atomix
-[clients]: http://atomix.io/copycat/raft-internals/#clients
-[servers]: http://atomix.io/copycat/raft-internals/#servers
+[clients]: http://atomix.io/copycat/user-manual/client
+[servers]: http://atomix.io/copycat/user-manual/server
 [Website]: http://atomix.io/copycat/
 [Google group]: https://groups.google.com/forum/#!forum/copycat
 [Javadoc]: http://atomix.io/copycat/api/latest/
