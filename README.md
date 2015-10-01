@@ -18,7 +18,7 @@ and includes:
 Additionally, this implementation has undergone [Jepsen testing](http://github.com/jhalterman/copycat-jepsen)
 to verify it maintains linearizability in a number of different failure scenarios.
 
-*For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/raft-internals/)*
+*For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/internals/)*
 
 ## Usage
 
