@@ -35,6 +35,7 @@ import org.testng.annotations.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -707,6 +708,27 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests session expiring events.
+   */
+  public void testFiveNodeExpireEvent() throws Throwable {
+    testSessionExpire(5);
+  }
+
+  /**
+   * Tests a session expiring.
+   */
+  private void testSessionExpire(int nodes) throws Throwable {
+    createServers(nodes);
+
+    CopycatClient client1 = createClient();
+    CopycatClient client2 = createClient();
+    client1.session().onEvent("expire", this::resume);
+    client1.submit(new TestExpire()).thenRun(this::resume);
+    client2.close().thenRun(this::resume);
+    await(Duration.ofSeconds(10).toMillis(), 3);
+  }
+
+  /**
    * Returns the next server address.
    *
    * @return The next server address.
@@ -794,11 +816,20 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test state machine.
    */
   public static class TestStateMachine extends StateMachine {
+    private Commit<TestExpire> expire;
+
     @Override
     protected void configure(StateMachineExecutor executor) {
       executor.register(TestCommand.class, this::command);
       executor.register(TestQuery.class, this::query);
       executor.register(TestEvent.class, this::event);
+      executor.<TestExpire>register(TestExpire.class, this::expire);
+    }
+
+    @Override
+    public void expire(Session session) {
+      if (expire != null)
+        expire.session().publish("expired");
     }
 
     private String command(Commit<TestCommand> commit) {
@@ -818,6 +849,10 @@ public class ClusterTest extends ConcurrentTestCase {
         }
       }
       return commit.operation().value();
+    }
+
+    private void expire(Commit<TestExpire> commit) {
+      this.expire = commit;
     }
   }
 
@@ -910,6 +945,21 @@ public class ClusterTest extends ConcurrentTestCase {
     @Override
     public boolean groupEquals(Command command) {
       return command instanceof TestCommand && ((TestCommand) command).value.equals(value);
+    }
+  }
+
+  /**
+   * Test event.
+   */
+  public static class TestExpire implements Command<Void> {
+    @Override
+    public int groupCode() {
+      return 1;
+    }
+
+    @Override
+    public boolean groupEquals(Command command) {
+      return command instanceof TestExpire;
     }
   }
 

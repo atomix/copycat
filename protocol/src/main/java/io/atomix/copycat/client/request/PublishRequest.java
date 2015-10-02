@@ -259,7 +259,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
      * @throws NullPointerException if {@code message} is null
      */
     public Builder withMessage(Object message) {
-      request.message = Assert.notNull(message, "message");
+      request.message = message;
       return this;
     }
 
@@ -274,7 +274,6 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
       Assert.stateNot(request.previousVersion < -1, "previousVersion cannot be less than -1");
       Assert.stateNot(request.previousSequence < 0, "previousSequence cannot be less than 0");
       Assert.stateNot(request.event == null, "event cannot be null");
-      Assert.stateNot(request.message == null, "message cannot be null");
       return request;
     }
   }

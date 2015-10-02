@@ -231,9 +231,11 @@ class ServerStateMachine implements AutoCloseable {
       session.trust();
 
       // The keep alive request contains the
-      session.setTimestamp(entry.getTimestamp())
-        .clearResponses(entry.getCommandSequence())
-        .clearEvents(entry.getEventVersion(), entry.getEventSequence());
+      session.setTimestamp(entry.getTimestamp());
+
+      executor.executor().execute(() -> {
+        session.clearResponses(entry.getCommandSequence()).clearEvents(entry.getEventVersion(), entry.getEventSequence());
+      });
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));

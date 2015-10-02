@@ -438,11 +438,12 @@ class ServerSession implements Session {
       eventAckVersion = version;
 
       EventHolder holder = events.peek();
-      while (holder != null && (holder.eventVersion < version || (holder.eventVersion == version && holder.eventSequence <= sequence))){
+      while (holder != null && (holder.eventVersion < version || (holder.eventVersion == version && holder.eventSequence <= sequence))) {
         events.remove();
         if (holder.future != null)
           holder.future.complete(null);
         eventsPool.add(holder);
+        holder = events.peek();
       }
     }
     return this;
