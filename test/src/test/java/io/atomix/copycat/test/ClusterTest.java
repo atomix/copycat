@@ -722,7 +722,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
-    client1.session().onEvent("expire", this::resume);
+    client1.session().onEvent("expired", this::resume);
     client1.submit(new TestExpire()).thenRun(this::resume);
     client2.close().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
