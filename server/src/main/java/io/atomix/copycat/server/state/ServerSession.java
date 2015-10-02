@@ -521,7 +521,6 @@ class ServerSession implements Session {
           resendEvents(response.version(), response.sequence());
         }
       }
-      request.release();
     });
   }
 
