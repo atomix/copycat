@@ -710,6 +710,20 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests session expiring events.
    */
+  public void testOneNodeExpireEvent() throws Throwable {
+    testSessionExpire(1);
+  }
+
+  /**
+   * Tests session expiring events.
+   */
+  public void testThreeNodeExpireEvent() throws Throwable {
+    testSessionExpire(3);
+  }
+
+  /**
+   * Tests session expiring events.
+   */
   public void testFiveNodeExpireEvent() throws Throwable {
     testSessionExpire(5);
   }
