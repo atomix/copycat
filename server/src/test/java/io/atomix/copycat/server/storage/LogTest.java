@@ -17,7 +17,6 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
-import io.atomix.copycat.server.storage.entry.Entry;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -31,7 +30,7 @@ import static org.testng.Assert.*;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @Test
-public class LogTest extends AbstractLogTest {
+public abstract class LogTest extends AbstractLogTest {
   private final Random random = new Random();
 
   /**
@@ -51,10 +50,16 @@ public class LogTest extends AbstractLogTest {
         .withMaxEntrySize(1024)
         .withMaxSegmentSize(1024 * 1024)
         .withMaxEntriesPerSegment(1024)
+        .withStorageLevel(storageLevel())
         .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
         .build()
         .open("copycat");
   }
+
+  /**
+   * Returns the log storage level.
+   */
+  protected abstract StorageLevel storageLevel();
 
   /**
    * Tests writing and reading an entry.
@@ -243,62 +248,9 @@ public class LogTest extends AbstractLogTest {
   }
 
   /**
-   * Tests recovering the log.
-   */
-  public void testRecover() {
-    appendEntries(log, 1024);
-    assertEquals(log.length(), 1024);
-
-    try (Log log = createLog()) {
-      assertEquals(log.length(), 1024);
-
-      for (long i = log.firstIndex(); i <= log.lastIndex(); i++) {
-        try (Entry entry = log.get(i)) {
-          assertNotNull(entry);
-        }
-      }
-    }
-  }
-
-  /**
-   * Tests recovering the log after compaction.
-   */
-  public void testRecoverAfterCompact() {
-    appendEntries(log, 2048);
-    for (long i = 1; i <= 2048; i++) {
-      if (i % 3 == 0 || i % 3 == 1) {
-        log.clean(i);
-      }
-    }
-
-    for (long i = 1; i <= 2048; i++) {
-      if (i % 3 == 0 || i % 3 == 1) {
-        assertTrue(log.lastIndex() >= i);
-        assertFalse(log.contains(i));
-      }
-    }
-
-    log.commit(1024).compact(1024).cleaner().clean().join();
-    log.commit(2048).compact(2048).cleaner().clean().join();
-
-    try (Log log = createLog()) {
-      assertEquals(log.length(), 2048);
-      for (long i = 1; i <= 2048; i++) {
-        if (i % 3 == 0 || i % 3 == 1) {
-          assertTrue(log.lastIndex() >= i);
-          if (i != 1024) {
-            assertFalse(log.contains(i));
-            assertNull(log.get(i));
-          }
-        }
-      }
-    }
-  }
-
-  /**
    * Appends a set of entries to the log.
    */
-  private void appendEntries(Log log, int entries) {
+  protected void appendEntries(Log log, int entries) {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
         entry.setAddress(1);
