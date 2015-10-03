@@ -223,7 +223,7 @@ public class Segment implements AutoCloseable {
     long position = buffer.mark().position();
 
     // Serialize the object into the segment buffer.
-    serializer.writeObject(entry, buffer.skip(Short.BYTES + Integer.BYTES).limit(-1));
+    serializer.writeObject(entry, buffer.skip(Short.BYTES + Integer.BYTES).limit(buffer.position() + descriptor.maxEntrySize()));
 
     // Calculate the length of the serialized bytes based on the resulting buffer position and the starting position.
     int length = (int) (buffer.position() - (position + Short.BYTES + Integer.BYTES));
