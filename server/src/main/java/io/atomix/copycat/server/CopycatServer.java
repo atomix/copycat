@@ -59,7 +59,7 @@ import java.util.function.Function;
  *   Address address = new Address("123.456.789.0", 5000);
  *   Collection<Address> members = Arrays.asList(new Address("123.456.789.1", 5000), new Address("123.456.789.2", 5000));
  *
- *   RaftServer server = RaftServer.builder(address, members)
+ *   CopycatServer server = CopycatServer.builder(address, members)
  *     .withStateMachine(new MyStateMachine())
  *     .build();
  *   }
@@ -78,7 +78,7 @@ import java.util.function.Function;
  * {@link StorageLevel}.
  * <pre>
  * {@code
- * RaftServer server = RaftServer.builder(address, members)
+ * CopycatServer server = CopycatServer.builder(address, members)
  *   .withStateMachine(new MyStateMachine())
  *   .withStorage(new Storage(StorageLevel.MEMORY))
  *   .build();
@@ -106,7 +106,7 @@ import java.util.function.Function;
  * <pre>
  * {@code
  * server.onStateChange(state -> {
- *   if (state == RaftServer.State.LEADER) {
+ *   if (state == CopycatServer.State.LEADER) {
  *     System.out.println("Server elected leader!");
  *   }
  * });
@@ -304,7 +304,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * <pre>
    *   {@code
    *   server.onStateChange(state -> {
-   *     if (state == RaftServer.State.LEADER) {
+   *     if (state == CopycatServer.State.LEADER) {
    *       System.out.println("Server elected leader!");
    *     }
    *   });

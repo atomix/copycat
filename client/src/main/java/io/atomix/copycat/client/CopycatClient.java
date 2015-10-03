@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  * static {@link #builder(Address...)} method, passing one or more server {@link Address}:
  * <pre>
  *   {@code
- *     RaftClient client = RaftClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000).build();
+ *     CopycatClient client = CopycatClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000).build();
  *   }
  * </pre>
  * By default, the client will attempt to use the {@code NettyTransport} to communicate with the cluster. See the {@link CopycatClient.Builder}
@@ -377,7 +377,7 @@ public class CopycatClient implements Managed<CopycatClient> {
    * New client builders should be constructed using the static {@link #builder(Address...)} factory method.
    * <pre>
    *   {@code
-   *     RaftClient client = RaftClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000)
+   *     CopycatClient client = CopycatClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000)
    *       .withTransport(new NettyTransport())
    *       .build();
    *   }
