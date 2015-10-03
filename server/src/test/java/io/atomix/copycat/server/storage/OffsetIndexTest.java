@@ -74,11 +74,36 @@ public class OffsetIndexTest {
   /**
    * Tests truncating entries.
    */
-  public void testTruncate() {
+  public void testTruncateMiddle() {
     OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(0, 0);
     index.index(1, 10);
     index.index(2, 20);
+    index.index(3, 30);
+    index.index(4, 40);
+    assertEquals(index.truncate(2), 30);
+  }
+
+  /**
+   * Tests truncating entries.
+   */
+  public void testTruncateLast() {
+    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    index.index(0, 0);
+    index.index(1, 10);
+    index.index(2, 20);
+    index.index(3, 30);
+    index.index(4, 40);
+    assertEquals(index.truncate(3), 40);
+  }
+
+  /**
+   * Tests truncating missing entries.
+   */
+  public void testTruncateMissing() {
+    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    index.index(0, 0);
+    index.index(1, 10);
     index.index(3, 30);
     index.index(4, 40);
     assertEquals(index.truncate(2), 30);
@@ -93,7 +118,7 @@ public class OffsetIndexTest {
     index.index(1, 10);
     index.index(3, 30);
     index.index(4, 40);
-    assertEquals(index.truncate(2), 30);
+    assertEquals(index.truncate(1), 30);
   }
 
   /**
