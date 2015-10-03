@@ -335,7 +335,6 @@ final class LeaderState extends ActiveState {
     try {
       context.checkThread();
       if (request.term() > context.getTerm()) {
-        request.acquire();
         return super.append(request);
       } else if (request.term() < context.getTerm()) {
         return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
@@ -347,7 +346,6 @@ final class LeaderState extends ActiveState {
       } else {
         context.setLeader(request.leader());
         transition(CopycatServer.State.FOLLOWER);
-        request.acquire();
         return super.append(request);
       }
     } finally {
@@ -1054,6 +1052,8 @@ final class LeaderState extends ActiveState {
           if (entry != null && size + entry.size() <= MAX_BATCH_SIZE) {
             size += entry.size();
             builder.addEntry(entry);
+          } else {
+            break;
           }
           index++;
         }
