@@ -48,7 +48,7 @@ public class Storage {
   private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
   private static final int DEFAULT_MAX_ENTRY_SIZE = 1024 * 8;
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
-  private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = (int) (Math.pow(2, 31) - 1) / 8 - 16;
+  private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
   private static final int DEFAULT_CLEANER_THREADS = Runtime.getRuntime().availableProcessors() / 2;
 
   private StorageLevel storageLevel = StorageLevel.DISK;
@@ -294,7 +294,7 @@ public class Storage {
      *
      * @param maxEntrySize The maximum entry count.
      * @return The log builder.
-     * @throws IllegalArgumentException If the {@code maxEntrySize} is not positive or {@code maxEntrySize} is not 
+     * @throws IllegalArgumentException If the {@code maxEntrySize} is not positive or {@code maxEntrySize} is not
      * less than the max segment size.
      */
     public Builder withMaxEntrySize(int maxEntrySize) {
@@ -324,7 +324,7 @@ public class Storage {
      *
      * @param maxEntriesPerSegment The maximum number of entries allowed per segment.
      * @return The log builder.
-     * @throws IllegalArgumentException If the {@code maxEntriesPerSegment} not greater than the default max entries per 
+     * @throws IllegalArgumentException If the {@code maxEntriesPerSegment} not greater than the default max entries per
      * segment
      */
     public Builder withMaxEntriesPerSegment(int maxEntriesPerSegment) {

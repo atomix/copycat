@@ -221,7 +221,7 @@ class OffsetIndex implements AutoCloseable {
       int mid = lo + (hi - lo) / 2;
       int i = buffer.readInt(mid * ENTRY_SIZE);
       if (i == offset || lo == mid) {
-        return mid;
+        return hi;
       } else if (i < offset) {
         lo = mid;
       } else {

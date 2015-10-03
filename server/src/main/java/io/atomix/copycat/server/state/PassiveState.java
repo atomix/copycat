@@ -151,8 +151,7 @@ class PassiveState extends AbstractState {
                 // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
                 // If appending to the log fails, apply commits and reply false to the append request.
                 LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getAddress());
-                context.getLog().truncate(entry.getIndex() - 1);
-                context.getLog().append(entry);
+                context.getLog().truncate(entry.getIndex() - 1).append(entry);
                 LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
               }
             } else {
@@ -184,9 +183,11 @@ class PassiveState extends AbstractState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.getThreadContext().execute(() -> applyCommits(request.commitIndex())).thenRun(() -> {
-      context.setGlobalIndex(request.globalIndex());
-      context.getLog().compact(request.globalIndex());
+    long commitIndex = request.commitIndex();
+    long globalIndex = request.globalIndex();
+    context.getThreadContext().execute(() -> applyCommits(commitIndex)).thenRun(() -> {
+      context.setGlobalIndex(globalIndex);
+      context.getLog().compact(globalIndex);
     });
 
     return AppendResponse.builder()

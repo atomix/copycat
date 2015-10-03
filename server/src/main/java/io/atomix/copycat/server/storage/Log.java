@@ -15,12 +15,12 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.copycat.server.storage.cleaner.Cleaner;
-import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.entry.TypedEntryPool;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
+import io.atomix.copycat.server.storage.cleaner.Cleaner;
+import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.entry.TypedEntryPool;
 
 import java.util.concurrent.Executors;
 
@@ -412,7 +412,7 @@ public class Log implements AutoCloseable {
     assertIsOpen();
     if (index > 0)
       assertValidIndex(index);
-    Assert.index(index >= segments.commitIndex(), "cannot truncate committed entries");
+    Assert.index(index >= segments.compactIndex(), "cannot truncate committed entries");
 
     if (lastIndex() == index)
       return this;

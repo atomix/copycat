@@ -163,6 +163,43 @@ public abstract class LogTest extends AbstractLogTest {
   }
 
   /**
+   * Tests truncating and then appending entries in the log.
+   */
+  public void testTruncateAppend() throws Throwable {
+    appendEntries(log, 10);
+    assertEquals(log.lastIndex(), 10);
+    TestEntry entry = log.create(TestEntry.class)
+      .setIndex(10)
+      .setTerm(2)
+      .setId(1234)
+      .setAddress(1);
+    log.truncate(entry.getIndex() - 1).append(entry);
+    TestEntry result89 = log.get(9);
+    assertEquals(result89.getTerm(), 1);
+    TestEntry result90 = log.get(10);
+    assertEquals(result90.getTerm(), 2);
+  }
+
+  /**
+   * Tests truncating and then appending entries in the log.
+   */
+  public void testTruncateUncommitted() throws Throwable {
+    appendEntries(log, 10);
+    log.commit(1);
+    assertEquals(log.lastIndex(), 10);
+    TestEntry entry = log.create(TestEntry.class)
+      .setIndex(10)
+      .setTerm(2)
+      .setId(1234)
+      .setAddress(1);
+    log.truncate(entry.getIndex() - 1).append(entry);
+    TestEntry result89 = log.get(9);
+    assertEquals(result89.getTerm(), 1);
+    TestEntry result90 = log.get(10);
+    assertEquals(result90.getTerm(), 2);
+  }
+
+  /**
    * Tests truncating to a skipped index.
    */
   public void testTruncateSkipped() throws Throwable {
