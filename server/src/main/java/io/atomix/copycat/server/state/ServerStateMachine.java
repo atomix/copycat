@@ -129,6 +129,10 @@ class ServerStateMachine implements AutoCloseable {
         return apply((UnregisterEntry) entry);
       } else if (entry instanceof NoOpEntry) {
         return apply((NoOpEntry) entry);
+      } else if (entry instanceof ConnectEntry) {
+        return CompletableFuture.completedFuture(null);
+      } else if (entry instanceof ConfigurationEntry) {
+        return CompletableFuture.completedFuture(null);
       }
       return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
     } finally {
