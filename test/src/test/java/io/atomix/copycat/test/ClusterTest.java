@@ -31,6 +31,7 @@ import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
+import static org.testng.Assert.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -62,6 +63,38 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer joiner = createServer(nextAddress());
     joiner.open().thenRun(this::resume);
     await();
+  }
+
+  /**
+   * Tests joining a server after many entries have been committed.
+   */
+  public void testServerJoinLate() throws Throwable {
+    createServers(3);
+    CopycatClient client = createClient();
+    submit(client, 0, 10000);
+    await();
+    CopycatServer joiner = createServer(nextAddress());
+    joiner.open().thenRun(this::resume);
+    await();
+    joiner.onStateChange(state -> {
+      if (state == CopycatServer.State.FOLLOWER)
+        resume();
+    });
+    await();
+  }
+
+  /**
+   * Submits a bunch of commands recursively.
+   */
+  private void submit(CopycatClient client, int count, int total) {
+    if (count < total) {
+      client.submit(new TestCommand("Hello world!", Command.ConsistencyLevel.LINEARIZABLE)).whenComplete((result, error) -> {
+        threadAssertNull(error);
+        submit(client, count + 1, total);
+      });
+    } else {
+      resume();
+    }
   }
 
   /**
@@ -782,7 +815,7 @@ public class ClusterTest extends ConcurrentTestCase {
     return CopycatServer.builder(address, members)
       .withTransport(new LocalTransport(registry))
       .withStorage(Storage.builder()
-        .withDirectory(new File(directory, address.toString()))
+        .withDirectory(new File(directory, "" + address.hashCode()))
         .build())
       .withStateMachine(new TestStateMachine())
       .build();
