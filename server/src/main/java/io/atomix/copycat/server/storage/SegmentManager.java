@@ -15,10 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.buffer.MappedBuffer;
+import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import org.slf4j.Logger;
@@ -328,7 +325,7 @@ public class SegmentManager implements AutoCloseable {
    * Creates a new segment.
    */
   private Segment createMemorySegment(SegmentDescriptor descriptor) {
-    Buffer buffer = HeapBuffer.allocate(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
+    Buffer buffer = DirectBuffer.allocate(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
     Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
