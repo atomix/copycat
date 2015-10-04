@@ -376,7 +376,7 @@ public class SegmentManager implements AutoCloseable {
    * Loads a segment.
    */
   private Segment loadMemorySegment(long segmentId, long segmentVersion) {
-    Buffer buffer = HeapBuffer.allocate(Math.min(1024 * 1024, storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES), storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES);
+    Buffer buffer = DirectBuffer.allocate(Math.min(1024 * 1024, storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES), storage.maxSegmentSize() + storage.maxEntrySize() + SegmentDescriptor.BYTES);
     SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
     Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), storage.serializer().clone(), this);
     LOGGER.debug("Loaded memory segment: {}", descriptor.id());
