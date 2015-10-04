@@ -158,19 +158,18 @@ class OffsetIndex implements AutoCloseable {
    * @return The starting position of the given offset.
    */
   public long position(int offset) {
-    // Perform a binary search to get the index of the offset in the index buffer.
-    if (!skipped) {
-      return buffer.readUnsignedInt(offset * ENTRY_SIZE + OFFSET_SIZE);
-    } else {
-      int index = search(offset);
-      return index == -1 ? -1 : buffer.readUnsignedInt(index + OFFSET_SIZE);
-    }
+    int relativeOffset = relativeOffset(offset);
+    return relativeOffset != -1 ? buffer.readUnsignedInt(relativeOffset * ENTRY_SIZE + OFFSET_SIZE) : -1;
   }
 
   /**
    * Returns the relative offset for the given offset.
    */
   private int relativeOffset(int offset) {
+    if (!skipped) {
+      return offset;
+    }
+
     if (currentOffset != -1 && currentOffset > lastOffset && buffer.readInt((currentOffset + 1) * ENTRY_SIZE) == offset) {
       return ++currentOffset;
     }
@@ -216,6 +215,7 @@ class OffsetIndex implements AutoCloseable {
     if (size == 0) {
       return -1;
     }
+
     if (!skipped) {
       return offset;
     }
@@ -237,14 +237,6 @@ class OffsetIndex implements AutoCloseable {
     }
 
     return (low < high) ? low + 1 : high + 1;
-  }
-
-  /**
-   * Performs a binary search to find the given offset in the buffer.
-   */
-  private int search(int offset) {
-    int relativeOffset = relativeOffset(offset);
-    return relativeOffset != -1 ? relativeOffset * ENTRY_SIZE : -1;
   }
 
   /**
