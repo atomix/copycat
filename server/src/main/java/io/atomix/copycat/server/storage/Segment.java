@@ -276,7 +276,7 @@ public class Segment implements AutoCloseable {
     }
 
     // Get the start position of the entry from the memory index.
-    long position = offsetIndex.position(offset, manager.commitIndex() == 0 || manager.commitIndex() >= lastIndex());
+    long position = offsetIndex.position(offset);
 
     // If the index contained the entry, read the entry from the buffer.
     if (position != -1) {
@@ -325,7 +325,7 @@ public class Segment implements AutoCloseable {
 
     // Check the memory index first for performance reasons.
     int offset = offset(index);
-    return offsetIndex.contains(offset, manager.commitIndex() == 0 || manager.commitIndex() >= lastIndex()) && !offsetIndex.deleted(offset);
+    return offsetIndex.contains(offset) && !offsetIndex.deleted(offset);
   }
 
   /**
