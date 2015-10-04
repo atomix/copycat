@@ -91,7 +91,7 @@ public class Segment implements AutoCloseable {
    * @return Indicates whether the segment is full.
    */
   public boolean isFull() {
-    return size() >= descriptor.maxSegmentSize()
+    return size() + descriptor.maxEntrySize() >= descriptor.maxSegmentSize()
       || offsetIndex.size() >= descriptor.maxEntries()
       || offsetIndex.lastOffset() + skip + 1 == Integer.MAX_VALUE;
   }
