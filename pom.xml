@@ -141,6 +141,7 @@
           <aggregate>true</aggregate>
           <additionalparam>
             -Xdoclint:none
+            -notimestamp
             -link http://docs.oracle.com/javase/8/docs/api/
             -link http://atomix.io/catalyst/api/latest/
             -group "Raft client" io.atomix.copycat.client*
