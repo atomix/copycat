@@ -18,10 +18,7 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
-import io.atomix.catalyst.buffer.util.BitArray;
 import io.atomix.catalyst.util.Assert;
-
-import java.io.IOException;
 
 /**
  * Segment offset index.
@@ -62,7 +59,6 @@ class OffsetIndex implements AutoCloseable {
   private static final int OFFSET_SIZE = 4;
 
   private final Buffer buffer;
-  private final BitArray deletes;
   private boolean skipped;
   private int offset;
   private int size;
@@ -74,7 +70,6 @@ class OffsetIndex implements AutoCloseable {
    */
   public OffsetIndex(Buffer buffer) {
     this.buffer = Assert.notNull(buffer, "buffer");
-    this.deletes = BitArray.allocate(1024);
   }
 
   /**
@@ -158,14 +153,14 @@ class OffsetIndex implements AutoCloseable {
    * @return The starting position of the given offset.
    */
   public long position(int offset) {
-    int relativeOffset = relativeOffset(offset);
+    int relativeOffset = find(offset);
     return relativeOffset != -1 ? buffer.readUnsignedInt(relativeOffset * ENTRY_SIZE + OFFSET_SIZE) : -1;
   }
 
   /**
-   * Returns the relative offset for the given offset.
+   * Finds the relative offset for the given offset.
    */
-  private int relativeOffset(int offset) {
+  public int find(int offset) {
     if (!skipped) {
       return offset;
     }
@@ -211,7 +206,7 @@ class OffsetIndex implements AutoCloseable {
   /**
    * Returns the offset nearest the given offset.
    */
-  private int nearestOffset(int offset) {
+  private int findAfter(int offset) {
     if (size == 0) {
       return -1;
     }
@@ -257,7 +252,7 @@ class OffsetIndex implements AutoCloseable {
       return 0;
     }
 
-    int nearestOffset = nearestOffset(offset + 1);
+    int nearestOffset = findAfter(offset + 1);
 
     if (nearestOffset == -1)
       return -1;
@@ -282,45 +277,6 @@ class OffsetIndex implements AutoCloseable {
   }
 
   /**
-   * Deletes the given offset from the index.
-   *
-   * @param offset The offset to delete.
-   */
-  public boolean delete(int offset) {
-    int relativeOffset = relativeOffset(offset);
-    if (relativeOffset == -1) {
-      return false;
-    }
-
-    if (deletes.size() <= relativeOffset) {
-      while (deletes.size() <= relativeOffset) {
-        deletes.resize(deletes.size() * 2);
-      }
-    }
-    return deletes.set(relativeOffset);
-  }
-
-  /**
-   * Returns whether the given offset has been deleted from the index.
-   *
-   * @param offset The offset to check.
-   * @return Whether the offset has been marked for deletion.
-   */
-  public boolean deleted(int offset) {
-    int relativeOffset = relativeOffset(offset);
-    return relativeOffset == -1 || (deletes.size() > relativeOffset && deletes.get(relativeOffset));
-  }
-
-  /**
-   * Returns the number of deletes in the index.
-   *
-   * @return The number of deletes in the index.
-   */
-  public int deletes() {
-    return (int) deletes.count();
-  }
-
-  /**
    * Flushes the index to the underlying storage.
    */
   public void flush() {
@@ -329,12 +285,7 @@ class OffsetIndex implements AutoCloseable {
 
   @Override
   public void close() {
-    try {
-      buffer.close();
-      deletes.close();
-    } catch (IOException e) {
-      throw new StorageException(e);
-    }
+    buffer.close();
   }
 
   /**

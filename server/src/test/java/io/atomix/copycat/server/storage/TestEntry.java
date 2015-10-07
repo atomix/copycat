@@ -15,12 +15,12 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
  * Command entry.
@@ -29,44 +29,26 @@ import io.atomix.catalyst.util.ReferenceManager;
  */
 @SerializeWith(id=1000)
 public class TestEntry extends Entry<TestEntry> {
-  private long id;
-  private long address;
   private long term;
-  private boolean remove;
+  private boolean tombstone;
 
   public TestEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
   }
 
   @Override
-  public long getId() {
-    return 1;
-  }
-
-  @Override
   public boolean isTombstone() {
-    return true;
+    return tombstone;
   }
 
   /**
-   * Sets the entry ID.
+   * Sets whether the entry is a tombstone.
    *
-   * @param id The entry ID.
-   * @return The entry.
+   * @param tombstone Whether the entry is a tombstone.
+   * @return The test entry.
    */
-  public TestEntry setId(long id) {
-    this.id = id;
-    return this;
-  }
-
-  /**
-   * Sets the entry address.
-   *
-   * @param address The entry address.
-   * @return The entry.
-   */
-  public TestEntry setAddress(long address) {
-    this.address = address;
+  public TestEntry setTombstone(boolean tombstone) {
+    this.tombstone = tombstone;
     return this;
   }
 
@@ -91,52 +73,20 @@ public class TestEntry extends Entry<TestEntry> {
     return this;
   }
 
-  /**
-   * Returns whether to remove the entry.
-   *
-   * @return Whether to remove the entry.
-   */
-  public boolean isRemove() {
-    return remove;
-  }
-
-  /**
-   * Sets whether to remove the entry.
-   *
-   * @param remove Whether to remove the entry.
-   * @return The entry.
-   */
-  public TestEntry setRemove(boolean remove) {
-    this.remove = remove;
-    return this;
-  }
-
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
-    buffer.writeLong(address).writeLong(id).writeLong(term).writeBoolean(remove);
+    buffer.writeLong(term).writeBoolean(tombstone);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
-    address = buffer.readLong();
-    id = buffer.readLong();
     term = buffer.readLong();
-    remove = buffer.readBoolean();
-  }
-
-  @Override
-  public int hashCode() {
-    return 1;
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof TestEntry;
+    tombstone = buffer.readBoolean();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, remove=%b]", getClass().getSimpleName(), getIndex(), term, remove);
+    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), term, tombstone);
   }
 
 }

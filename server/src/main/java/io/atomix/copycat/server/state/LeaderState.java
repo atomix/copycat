@@ -83,8 +83,7 @@ final class LeaderState extends ActiveState {
     final long term = context.getTerm();
     final long index;
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
-      entry.setId(context.nextEntryId())
-        .setTerm(term)
+      entry.setTerm(term)
         .setTimestamp(System.currentTimeMillis());
       index = context.getLog().append(entry);
     }
@@ -159,8 +158,7 @@ final class LeaderState extends ActiveState {
 
         final long index;
         try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-          entry.setId(context.nextEntryId())
-            .setTerm(term)
+          entry.setTerm(term)
             .setSession(session.id())
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
@@ -201,8 +199,7 @@ final class LeaderState extends ActiveState {
       passiveMembers.add(request.member());
 
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setId(context.nextEntryId())
-          .setTerm(term)
+        entry.setTerm(term)
           .setActive(activeMembers)
           .setPassive(passiveMembers);
         index = context.getLog().append(entry);
@@ -261,8 +258,7 @@ final class LeaderState extends ActiveState {
       passiveMembers.remove(request.member());
 
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setId(context.nextEntryId())
-          .setTerm(term)
+        entry.setTerm(term)
           .setActive(activeMembers)
           .setPassive(passiveMembers);
         index = context.getLog().append(entry);
@@ -392,7 +388,6 @@ final class LeaderState extends ActiveState {
         entry.setTerm(term)
           .setSession(request.session())
           .setTimestamp(timestamp)
-          .setId(context.nextEntryId())
           .setSequence(request.sequence())
           .setCommand(command);
         index = context.getLog().append(entry);
@@ -463,7 +458,6 @@ final class LeaderState extends ActiveState {
 
       QueryEntry entry = context.getLog().create(QueryEntry.class)
         .setIndex(index)
-        .setId(0)
         .setTerm(context.getTerm())
         .setTimestamp(timestamp)
         .setSession(request.session())
@@ -577,8 +571,7 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-        entry.setId(context.nextEntryId())
-          .setTerm(context.getTerm())
+        entry.setTerm(context.getTerm())
           .setTimestamp(timestamp)
           .setClient(request.client())
           .setTimeout(timeout);
@@ -657,8 +650,7 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
-        entry.setId(context.nextEntryId())
-          .setTerm(context.getTerm())
+        entry.setTerm(context.getTerm())
           .setTimestamp(timestamp)
           .setAddress(request.address());
         index = context.getLog().append(entry);
@@ -718,8 +710,7 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-        entry.setId(context.nextEntryId())
-          .setTerm(context.getTerm())
+        entry.setTerm(context.getTerm())
           .setSession(request.session())
           .setCommandSequence(request.commandSequence())
           .setEventVersion(request.eventVersion())
@@ -781,8 +772,7 @@ final class LeaderState extends ActiveState {
       logRequest(request);
 
       try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-        entry.setId(context.nextEntryId())
-          .setTerm(context.getTerm())
+        entry.setTerm(context.getTerm())
           .setSession(request.session())
           .setTimestamp(timestamp);
         index = context.getLog().append(entry);
@@ -968,7 +958,7 @@ final class LeaderState extends ActiveState {
       if (commitIndex > 0) {
         context.setCommitIndex(commitIndex);
         context.setGlobalIndex(globalIndex);
-        context.getLog().commit(globalIndex).compact(globalIndex);
+        context.getLog().commit(globalIndex);
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());
@@ -1177,8 +1167,7 @@ final class LeaderState extends ActiveState {
         passiveMembers.remove(member.getAddress());
 
         try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-          entry.setId(context.nextEntryId())
-            .setTerm(context.getTerm())
+          entry.setTerm(context.getTerm())
             .setActive(activeMembers)
             .setPassive(passiveMembers);
           long index = context.getLog().append(entry);

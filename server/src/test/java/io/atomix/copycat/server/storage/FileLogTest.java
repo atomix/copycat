@@ -18,7 +18,6 @@ package io.atomix.copycat.server.storage;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import static org.testng.Assert.*;
-import static org.testng.Assert.assertNull;
 
 /**
  * File log test.
@@ -64,12 +63,11 @@ public class FileLogTest extends LogTest {
     for (long i = 1; i <= 2048; i++) {
       if (i % 3 == 0 || i % 3 == 1) {
         assertTrue(log.lastIndex() >= i);
-        assertFalse(log.contains(i));
+        assertTrue(log.contains(i));
       }
     }
 
-    log.commit(1024).compact(1024).cleaner().clean().join();
-    log.commit(2048).compact(2048).cleaner().clean().join();
+    log.commit(2048).compactor().compact().join();
 
     try (Log log = createLog()) {
       assertEquals(log.length(), 2048);

@@ -17,34 +17,33 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import org.testng.annotations.Test;
 
-import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 
 import static org.testng.Assert.*;
 
 /**
- * Minor compaction test.
+ * Major compaction test.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @Test
-public class CleanerTest extends AbstractLogTest {
-  private final Random random = new Random();
+public class MajorCompactionTest extends AbstractLogTest {
 
   protected Log createLog() {
     return tempStorageBuilder()
-        .withMaxEntriesPerSegment(10)
-        .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
-        .build()
-        .open("copycat");
+      .withMaxEntriesPerSegment(10)
+      .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
+      .build()
+      .open("copycat");
   }
-  
+
   /**
    * Tests compacting the log.
    */
-  public void testCompact() throws Throwable {
+  public void testMajorCompaction() throws Throwable {
     writeEntries(30);
 
     assertEquals(log.length(), 30L);
@@ -55,7 +54,7 @@ public class CleanerTest extends AbstractLogTest {
     log.commit(30);
 
     CountDownLatch latch = new CountDownLatch(1);
-    log.cleaner().clean().thenRun(latch::countDown);
+    log.compactor().compact(Compaction.MAJOR).thenRun(latch::countDown);
     latch.await();
 
     assertEquals(log.length(), 30L);
@@ -75,10 +74,12 @@ public class CleanerTest extends AbstractLogTest {
   private void writeEntries(int entries) {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
-        entry.setAddress(1);
-        entry.setId(random.nextLong());
         entry.setTerm(1);
-        entry.setRemove(false);
+        if (entry.getIndex() % 2 == 0) {
+          entry.setTombstone(true);
+        } else {
+          entry.setTombstone(false);
+        }
         log.append(entry);
       }
     }

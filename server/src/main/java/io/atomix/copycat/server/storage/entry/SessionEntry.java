@@ -68,14 +68,4 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
     session = buffer.readLong();
   }
 
-  @Override
-  public int hashCode() {
-    return (int) (session ^ (session >>> 32));
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof SessionEntry && ((SessionEntry<?>) object).session == session;
-  }
-
 }

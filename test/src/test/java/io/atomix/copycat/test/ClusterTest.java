@@ -31,7 +31,6 @@ import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import static org.testng.Assert.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -923,16 +922,6 @@ public class ClusterTest extends ConcurrentTestCase {
     public String value() {
       return value;
     }
-
-    @Override
-    public int groupCode() {
-      return value.hashCode();
-    }
-
-    @Override
-    public boolean groupEquals(Command command) {
-      return command instanceof TestCommand && ((TestCommand) command).value.equals(value);
-    }
   }
 
   /**
@@ -983,31 +972,12 @@ public class ClusterTest extends ConcurrentTestCase {
     public boolean own() {
       return own;
     }
-
-    @Override
-    public int groupCode() {
-      return value.hashCode();
-    }
-
-    @Override
-    public boolean groupEquals(Command command) {
-      return command instanceof TestCommand && ((TestCommand) command).value.equals(value);
-    }
   }
 
   /**
    * Test event.
    */
   public static class TestExpire implements Command<Void> {
-    @Override
-    public int groupCode() {
-      return 1;
-    }
-
-    @Override
-    public boolean groupEquals(Command command) {
-      return command instanceof TestExpire;
-    }
   }
 
 }

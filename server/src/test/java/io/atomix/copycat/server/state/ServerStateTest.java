@@ -140,7 +140,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       for (int i = 0; i < entries; i++) {
         try (TestEntry entry = state.getLog().create(TestEntry.class)) {
           entry.setTerm(term)
-            .setAddress(i);
+            .setTombstone(false);
           state.getLog().append(entry);
         }
       }

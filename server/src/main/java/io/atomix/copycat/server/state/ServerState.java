@@ -27,12 +27,14 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -46,7 +48,6 @@ public class ServerState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerState.class);
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
-  private final Random random;
   private ThreadContext threadContext;
   private final StateMachine userStateMachine;
   private final Address address;
@@ -68,7 +69,6 @@ public class ServerState {
   @SuppressWarnings("unchecked")
   ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.address = Assert.notNull(address, "address");
-    this.random = new Random(address.hashCode());
     this.members = new HashMap<>();
     members.forEach(m -> this.members.put(m.hashCode(), m));
     this.members.put(address.hashCode(), address);
@@ -78,20 +78,9 @@ public class ServerState {
     this.connections = Assert.notNull(connections, "connections");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
 
-    ServerCommitCleaner cleaner = new ServerCommitCleaner() {
-      @Override
-      public void clean(Entry entry) {
-        log.clean(entry);
-      }
-      @Override
-      public void clean(Entry entry, boolean tombstone) {
-        log.clean(entry, tombstone);
-      }
-    };
-
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), cleaner, stateContext);
+    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
 
     cluster.configure(0, this.members.values(), Collections.EMPTY_LIST);
   }
@@ -392,15 +381,6 @@ public class ServerState {
    */
   public Log getLog() {
     return log;
-  }
-
-  /**
-   * Returns a random entry ID.
-   *
-   * @return A random entry ID.
-   */
-  long nextEntryId() {
-    return random.nextLong();
   }
 
   /**

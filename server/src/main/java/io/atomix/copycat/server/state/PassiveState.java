@@ -130,9 +130,6 @@ class PassiveState extends AbstractState {
    * Appends entries to the local log.
    */
   protected AppendResponse doAppendEntries(AppendRequest request) {
-    // Mark entries up to the request global index as committed to the log.
-    context.getLog().commit(request.globalIndex());
-
     // If the log contains entries after the request's previous log index
     // then remove those entries to be replaced by the request entries.
     if (!request.entries().isEmpty()) {
@@ -187,7 +184,7 @@ class PassiveState extends AbstractState {
     long globalIndex = request.globalIndex();
     context.getThreadContext().execute(() -> applyCommits(commitIndex)).thenRun(() -> {
       context.setGlobalIndex(globalIndex);
-      context.getLog().compact(globalIndex);
+      context.getLog().commit(globalIndex);
     });
 
     return AppendResponse.builder()
@@ -223,7 +220,7 @@ class PassiveState extends AbstractState {
 
       for (long i = lastApplied + 1; i <= effectiveIndex; i++) {
         Entry entry = context.getLog().get(i);
-        if (entry != null && !(entry instanceof ConfigurationEntry)) {
+        if (entry != null) {
           applyEntry(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
               LOGGER.info("{} - An application error occurred: {}", context.getAddress(), error.getMessage());

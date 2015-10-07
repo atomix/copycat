@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.server.storage.Log;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
@@ -23,6 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceCounted;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.storage.Log;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -43,7 +43,6 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   private final ReferenceManager<Entry<?>> referenceManager;
   private final AtomicInteger references = new AtomicInteger();
   private long index;
-  private long id;
   private long term;
   private int size = -1;
 
@@ -83,27 +82,6 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   @SuppressWarnings("unchecked")
   public T setIndex(long index) {
     this.index = index;
-    return (T) this;
-  }
-
-  /**
-   * Returns the entry ID.
-   *
-   * @return The entry ID.
-   */
-  public long getId() {
-    return id;
-  }
-
-  /**
-   * Sets the entry ID.
-   *
-   * @param id The entry ID.
-   * @return The entry entry.
-   */
-  @SuppressWarnings("unchecked")
-  public T setId(long id) {
-    this.id = id;
     return (T) this;
   }
 
@@ -162,13 +140,11 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(id);
     buffer.writeLong(term);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    id = buffer.readLong();
     term = buffer.readLong();
   }
 
@@ -201,11 +177,5 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   public void close() {
     release();
   }
-
-  @Override
-  public abstract int hashCode();
-
-  @Override
-  public abstract boolean equals(Object object);
 
 }

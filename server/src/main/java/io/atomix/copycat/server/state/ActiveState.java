@@ -295,7 +295,6 @@ abstract class ActiveState extends PassiveState {
 
     QueryEntry entry = context.getLog().create(QueryEntry.class)
       .setIndex(context.getCommitIndex())
-      .setId(0)
       .setTerm(context.getTerm())
       .setTimestamp(System.currentTimeMillis())
       .setSession(request.session())

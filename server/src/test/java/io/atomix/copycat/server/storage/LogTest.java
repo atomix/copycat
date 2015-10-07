@@ -20,7 +20,6 @@ import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import org.testng.annotations.Test;
 
 import java.io.File;
-import java.util.Random;
 
 import static org.testng.Assert.*;
 
@@ -31,7 +30,6 @@ import static org.testng.Assert.*;
  */
 @Test
 public abstract class LogTest extends AbstractLogTest {
-  private final Random random = new Random();
 
   /**
    * Creates a new log.
@@ -71,7 +69,6 @@ public abstract class LogTest extends AbstractLogTest {
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
       entry.setTerm(1);
-      entry.setRemove(true);
       index = log.append(entry);
     }
 
@@ -80,7 +77,6 @@ public abstract class LogTest extends AbstractLogTest {
 
     try (TestEntry entry = log.get(index)) {
       assertEquals(entry.getTerm(), 1);
-      assertTrue(entry.isRemove());
     }
   }
 
@@ -94,7 +90,6 @@ public abstract class LogTest extends AbstractLogTest {
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
       entry.setTerm(1);
-      entry.setRemove(true);
       index = log.append(entry);
     }
 
@@ -102,7 +97,6 @@ public abstract class LogTest extends AbstractLogTest {
 
     try (TestEntry entry = log.get(index)) {
       assertEquals(entry.getTerm(), 1);
-      assertTrue(entry.isRemove());
     }
   }
 
@@ -116,7 +110,6 @@ public abstract class LogTest extends AbstractLogTest {
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
       entry.setTerm(1);
-      entry.setRemove(true);
       index = log.append(entry);
     }
 
@@ -125,7 +118,6 @@ public abstract class LogTest extends AbstractLogTest {
 
     try (TestEntry entry = log.get(index)) {
       assertEquals(entry.getTerm(), 1);
-      assertTrue(entry.isRemove());
     }
   }
 
@@ -138,7 +130,6 @@ public abstract class LogTest extends AbstractLogTest {
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
       entry.setTerm(1);
-      entry.setRemove(true);
       index = log.append(entry);
     }
 
@@ -146,7 +137,6 @@ public abstract class LogTest extends AbstractLogTest {
 
     try (TestEntry entry = log.get(index)) {
       assertEquals(entry.getTerm(), 1);
-      assertTrue(entry.isRemove());
     }
   }
 
@@ -170,9 +160,7 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.lastIndex(), 10);
     TestEntry entry = log.create(TestEntry.class)
       .setIndex(10)
-      .setTerm(2)
-      .setId(1234)
-      .setAddress(1);
+      .setTerm(2);
     log.truncate(entry.getIndex() - 1).append(entry);
     TestEntry result89 = log.get(9);
     assertEquals(result89.getTerm(), 1);
@@ -189,9 +177,7 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.lastIndex(), 10);
     TestEntry entry = log.create(TestEntry.class)
       .setIndex(10)
-      .setTerm(2)
-      .setId(1234)
-      .setAddress(1);
+      .setTerm(2);
     log.truncate(entry.getIndex() - 1).append(entry);
     TestEntry result89 = log.get(9);
     assertEquals(result89.getTerm(), 1);
@@ -235,10 +221,7 @@ public abstract class LogTest extends AbstractLogTest {
 
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
-      entry.setAddress(1);
-      entry.setId(random.nextLong());
       entry.setTerm(1);
-      entry.setRemove(true);
       index = log.append(entry);
     }
 
@@ -251,7 +234,6 @@ public abstract class LogTest extends AbstractLogTest {
 
     try (TestEntry entry = log.get(index)) {
       assertEquals(entry.getTerm(), 1);
-      assertTrue(entry.isRemove());
     }
   }
 
@@ -268,7 +250,6 @@ public abstract class LogTest extends AbstractLogTest {
     long index;
     try (TestEntry entry = log.create(TestEntry.class)) {
       entry.setTerm(1);
-      entry.setRemove(true);
       index = log.append(entry);
     }
 
@@ -280,7 +261,6 @@ public abstract class LogTest extends AbstractLogTest {
 
     try (TestEntry entry = log.get(index)) {
       assertEquals(entry.getTerm(), 1);
-      assertTrue(entry.isRemove());
     }
   }
 
@@ -290,10 +270,7 @@ public abstract class LogTest extends AbstractLogTest {
   protected void appendEntries(Log log, int entries) {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
-        entry.setAddress(1);
-        entry.setId(random.nextLong());
         entry.setTerm(1);
-        entry.setRemove(true);
         log.append(entry);
       }
     }

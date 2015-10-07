@@ -11,97 +11,32 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
-package io.atomix.copycat.server.storage.cleaner;
+package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
+import io.atomix.copycat.server.storage.Storage;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Log cleaner.
+ * Minor compaction manager.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class Cleaner implements AutoCloseable {
-  private static final double CLEAN_THRESHOLD = 0.5;
-  private final SegmentManager manager;
-  private final EntryTree tree = new EntryTree();
-  private final ScheduledExecutorService executor;
-  private CompletableFuture<Void> cleanFuture;
+public class MinorCompactionManager implements CompactionManager {
 
-  /**
-   * @throws NullPointerException if {@code manager} or {@code executor} are null
-   */
-  public Cleaner(SegmentManager manager, ScheduledExecutorService executor) {
-    this.manager = Assert.notNull(manager, "manager");
-    this.executor = Assert.notNull(executor, "executor");
-  }
-
-  /**
-   * Returns the cleaner index.
-   *
-   * @return The cleaner index.
-   */
-  public long index() {
-    return manager.compactIndex();
-  }
-
-  /**
-   * Returns the log cleaner entry tree.
-   *
-   * @return The log cleaner entry tree.
-   */
-  public EntryTree tree() {
-    return tree;
-  }
-
-  /**
-   * Cleans the log.
-   *
-   * @return A completable future to be completed once the log has been cleaned.
-   */
-  public CompletableFuture<Void> clean() {
-    if (cleanFuture != null)
-      return cleanFuture;
-
-    cleanFuture = new CompletableFuture<>();
-    cleanSegments(ThreadContext.currentContext());
-    return cleanFuture.whenComplete((result, error) -> cleanFuture = null);
-  }
-
-  /**
-   * Cleans all cleanable segments.
-   */
-  private void cleanSegments(ThreadContext context) {
-    AtomicInteger counter = new AtomicInteger();
-    List<List<Segment>> cleanSegments = getCleanSegments();
-    if (!cleanSegments.isEmpty()) {
-      for (List<Segment> segments : cleanSegments) {
-        EntryCleaner cleaner = new EntryCleaner(manager, tree, new ThreadPoolContext(executor, manager.serializer()));
-        executor.execute(() -> cleaner.clean(segments).whenComplete((result, error) -> {
-          if (counter.incrementAndGet() == cleanSegments.size()) {
-            if (context != null) {
-              context.execute(() -> cleanFuture.complete(null));
-            } else {
-              cleanFuture.complete(null);
-            }
-          }
-          cleaner.close();
-        }));
-      }
-    } else {
-      cleanFuture.complete(null);
+  @Override
+  public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
+    List<List<Segment>> groups = getCleanableGroups(storage, segments);
+    List<CompactionTask> tasks = new ArrayList<>(groups.size());
+    for (List<Segment> group : groups) {
+      tasks.add(new MinorCompactionTask(segments, group));
     }
+    return tasks;
   }
 
   /**
@@ -109,11 +44,11 @@ public class Cleaner implements AutoCloseable {
    *
    * @return A list of segment sets to clean in the order in which they should be cleaned.
    */
-  private List<List<Segment>> getCleanSegments() {
+  private List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
-    for (Segment segment : getCleanableSegments()) {
+    for (Segment segment : getCleanableSegments(storage, manager)) {
       if (segments == null) {
         segments = new ArrayList<>();
         segments.add(segment);
@@ -151,31 +86,23 @@ public class Cleaner implements AutoCloseable {
    *
    * @return A list of compactable segments.
    */
-  private Iterable<Segment> getCleanableSegments() {
+  private Iterable<Segment> getCleanableSegments(Storage storage, SegmentManager manager) {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.lastIndex() <= index() && segment.isFull()) {
+      if (segment.lastIndex() <= manager.commitIndex() && segment.isFull()) {
 
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
-        double cleanPercentage = (segment.length() - segment.deleteCount()) / (double) segment.length();
+        double cleanPercentage = segment.cleanCount() / (double) segment.length();
 
         // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
         // add the segment to the segments list for cleaning.
-        if (cleanPercentage * segment.descriptor().version() >= CLEAN_THRESHOLD) {
+        if (cleanPercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
           segments.add(segment);
         }
       }
     }
     return segments;
-  }
-
-  /**
-   * Closes the log cleaner.
-   */
-  @Override
-  public void close() {
-    executor.shutdown();
   }
 
 }

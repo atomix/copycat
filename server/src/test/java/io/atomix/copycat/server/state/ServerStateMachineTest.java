@@ -32,6 +32,8 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -50,6 +52,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private ServerStateMachine stateMachine;
   private long timestamp;
   private AtomicLong sequence;
+  private Set<Long> cleaned;
 
   @BeforeMethod
   public void createStateMachine() {
@@ -57,15 +60,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     stateContext = new SingleThreadContext("state", new Serializer());
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
-    ServerCommitCleaner cleaner = new ServerCommitCleaner() {
-      @Override
-      public void clean(Entry entry) {
-      }
-      @Override
-      public void clean(Entry entry, boolean tombstone) {
-      }
-    };
-    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaner, stateContext);
+    cleaned = new HashSet<>();
+    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaned::add, stateContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

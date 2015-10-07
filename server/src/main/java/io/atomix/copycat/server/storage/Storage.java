@@ -20,6 +20,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 import java.io.File;
+import java.time.Duration;
 
 /**
  * Immutable log configuration/factory.
@@ -36,9 +37,9 @@ import java.io.File;
  *   }
  * </pre>
  * Users can also configure a number of options related to how {@link Log logs} are constructed and managed.
- * Most notable of the configuration options is the number of {@link #cleanerThreads()}, which specifies the
+ * Most notable of the configuration options is the number of {@link #compactionThreads()}, which specifies the
  * number of background threads to use to clean log {@link Segment segments}. The parallelism of the log
- * compaction algorithm will be limited by the number of {@link #cleanerThreads()}.
+ * compaction algorithm will be limited by the number of {@link #compactionThreads()}.
  *
  * @see Log
  *
@@ -49,7 +50,10 @@ public class Storage {
   private static final int DEFAULT_MAX_ENTRY_SIZE = 1024 * 8;
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
-  private static final int DEFAULT_CLEANER_THREADS = Runtime.getRuntime().availableProcessors() / 2;
+  private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
+  private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
+  private static final Duration DEFAULT_MAJOR_COMPACTION_INTERVAL = Duration.ofMinutes(10);
+  private static final double DEFAULT_COMPACTION_THRESHOLD = 0.5;
 
   private StorageLevel storageLevel = StorageLevel.DISK;
   private Serializer serializer = new Serializer(new PooledDirectAllocator());
@@ -57,7 +61,10 @@ public class Storage {
   private int maxEntrySize = DEFAULT_MAX_ENTRY_SIZE;
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
-  private int cleanerThreads = DEFAULT_CLEANER_THREADS;
+  private int compactionThreads = DEFAULT_COMPACTION_THREADS;
+  private Duration minorCompactionInterval = DEFAULT_MINOR_COMPACTION_INTERVAL;
+  private Duration majorCompactionInterval = DEFAULT_MAJOR_COMPACTION_INTERVAL;
+  private double compactionThreshold = DEFAULT_COMPACTION_THRESHOLD;
 
   public Storage() {
   }
@@ -204,12 +211,39 @@ public class Storage {
   }
 
   /**
-   * Returns the number of log cleaner threads.
+   * Returns the number of log compaction threads.
    *
-   * @return The number of log cleaner threads.
+   * @return The number of log compaction threads.
    */
-  public int cleanerThreads() {
-    return cleanerThreads;
+  public int compactionThreads() {
+    return compactionThreads;
+  }
+
+  /**
+   * Returns the minor compaction interval.
+   *
+   * @return The minor compaction interval.
+   */
+  public Duration minorCompactionInterval() {
+    return minorCompactionInterval;
+  }
+
+  /**
+   * Returns the major compaction interval.
+   *
+   * @return The major compaction interval.
+   */
+  public Duration majorCompactionInterval() {
+    return majorCompactionInterval;
+  }
+
+  /**
+   * Returns the compaction threshold.
+   *
+   * @return The compaction threshold.
+   */
+  public double compactionThreshold() {
+    return compactionThreshold;
   }
 
   /**
@@ -250,7 +284,7 @@ public class Storage {
      * Sets the log entry serializer.
      *
      * @param serializer The log entry serializer.
-     * @return The log builder.
+     * @return The storage builder.
      * @throws NullPointerException If the serializer is {@code null}
      */
     public Builder withSerializer(Serializer serializer) {
@@ -265,7 +299,7 @@ public class Storage {
      * for each unique log instance.
      *
      * @param directory The log directory.
-     * @return The log builder.
+     * @return The storage builder.
      * @throws NullPointerException If the {@code directory} is {@code null}
      */
     public Builder withDirectory(String directory) {
@@ -279,7 +313,7 @@ public class Storage {
      * for each unique log instance.
      *
      * @param directory The log directory.
-     * @return The log builder.
+     * @return The storage builder.
      * @throws NullPointerException If the {@code directory} is {@code null}
      */
     public Builder withDirectory(File directory) {
@@ -293,7 +327,7 @@ public class Storage {
      * The maximum entry count will be used to place an upper limit on the count of log segments.
      *
      * @param maxEntrySize The maximum entry count.
-     * @return The log builder.
+     * @return The storage builder.
      * @throws IllegalArgumentException If the {@code maxEntrySize} is not positive or {@code maxEntrySize} is not
      * less than the max segment size.
      */
@@ -308,7 +342,7 @@ public class Storage {
      * Sets the maximum segment count, returning the builder for method chaining.
      *
      * @param maxSegmentSize The maximum segment count.
-     * @return The log builder.
+     * @return The storage builder.
      * @throws IllegalArgumentException If the {@code maxSegmentSize} is not positive or {@code maxSegmentSize} 
      * is not greater than the maxEntrySize
      */
@@ -323,7 +357,7 @@ public class Storage {
      * Sets the maximum number of allows entries per segment.
      *
      * @param maxEntriesPerSegment The maximum number of entries allowed per segment.
-     * @return The log builder.
+     * @return The storage builder.
      * @throws IllegalArgumentException If the {@code maxEntriesPerSegment} not greater than the default max entries per
      * segment
      */
@@ -335,14 +369,47 @@ public class Storage {
     }
 
     /**
-     * Sets the number of log cleaner threads.
+     * Sets the number of log compaction threads.
      *
-     * @param cleanerThreads The number of log cleaner threads.
-     * @return The log builder.
-     * @throws IllegalArgumentException if {@code cleanerThreads} is not positive
+     * @param compactionThreads The number of log compaction threads.
+     * @return The storage builder.
+     * @throws IllegalArgumentException if {@code compactionThreads} is not positive
      */
-    public Builder withCleanerThreads(int cleanerThreads) {
-      storage.cleanerThreads = Assert.arg(cleanerThreads, cleanerThreads > 0, "cleanerThreads must be positive");
+    public Builder withCompactionThreads(int compactionThreads) {
+      storage.compactionThreads = Assert.arg(compactionThreads, compactionThreads > 0, "compactionThreads must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the minor compaction interval.
+     *
+     * @param interval The minor compaction interval.
+     * @return The storage builder.
+     */
+    public Builder withMinorCompactionInterval(Duration interval) {
+      storage.minorCompactionInterval = Assert.notNull(interval, "interval");
+      return this;
+    }
+
+    /**
+     * Sets the major compaction interval.
+     *
+     * @param interval The major compaction interval.
+     * @return The storage builder.
+     */
+    public Builder withMajorCompactionInterval(Duration interval) {
+      storage.majorCompactionInterval = Assert.notNull(interval, "interval");
+      return this;
+    }
+
+    /**
+     * Sets the percentage of entries in the segment that must be cleaned before a segment can be compacted.
+     *
+     * @param threshold The segment compact threshold.
+     * @return The storage builder.
+     */
+    public Builder withCompactionThreshold(double threshold) {
+      storage.compactionThreshold = Assert.argNot(threshold, threshold <= 0, "threshold must be positive");
       return this;
     }
 

@@ -54,18 +54,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
     callerContext = new SingleThreadContext("caller", new Serializer());
     stateContext = new SingleThreadContext("state", new Serializer());
     Transport transport = new LocalTransport(new LocalServerRegistry());
-    ServerCommitCleaner cleaner = new ServerCommitCleaner() {
-      @Override
-      public void clean(Entry entry) {
-        cleaned.add(entry.getIndex());
-      }
-
-      @Override
-      public void clean(Entry entry, boolean tombstone) {
-        cleaned.add(entry.getIndex());
-      }
-    };
-    stateMachine = new ServerStateMachine(createStateMachine(), new ServerStateMachineContext(new ConnectionManager(transport.client()), new ServerSessionManager()), cleaner, stateContext);
+    stateMachine = new ServerStateMachine(createStateMachine(), new ServerStateMachineContext(new ConnectionManager(transport.client()), new ServerSessionManager()), cleaned::add, stateContext);
   }
 
   /**

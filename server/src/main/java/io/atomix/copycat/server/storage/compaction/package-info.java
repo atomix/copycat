@@ -11,12 +11,12 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
 
 /**
- * Classes that support efficient Raft log cleaning.
+ * Classes that support efficient Raft log compaction.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-package io.atomix.copycat.server.storage.cleaner;
+package io.atomix.copycat.server.storage.compaction;

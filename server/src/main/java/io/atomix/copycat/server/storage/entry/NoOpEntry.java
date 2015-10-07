@@ -34,16 +34,6 @@ public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
   }
 
   @Override
-  public int hashCode() {
-    return 0;
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof NoOpEntry;
-  }
-
-  @Override
   public String toString() {
     return String.format("%s[index=%d, term=%d, timestamp=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getTimestamp());
   }

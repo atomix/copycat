@@ -18,7 +18,7 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
-import io.atomix.copycat.server.storage.cleaner.Cleaner;
+import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.TypedEntryPool;
 
@@ -31,25 +31,25 @@ import java.util.concurrent.Executors;
  */
 public class Log implements AutoCloseable {
   private final SegmentManager segments;
+  private final Compactor compactor;
   private final TypedEntryPool entryPool = new TypedEntryPool();
-  private final Cleaner cleaner;
   private boolean open = true;
 
   /**
-   * @throws NullPointerException if {@code storage} is null
+   * @throws NullPointerException if {@code name} or {@code storage} is null
    */
   protected Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.cleaner = new Cleaner(segments, Executors.newScheduledThreadPool(storage.cleanerThreads(), new CatalystThreadFactory("copycat-cleaner-%d")));
+    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-cleaner-%d")));
   }
 
   /**
-   * Returns the log cleaner.
+   * Returns the log compactor.
    *
-   * @return The log cleaner.
+   * @return The log compactor.
    */
-  public Cleaner cleaner() {
-    return cleaner;
+  public Compactor compactor() {
+    return compactor;
   }
 
   /**
@@ -151,7 +151,6 @@ public class Log implements AutoCloseable {
   private void checkRoll() {
     if (segments.currentSegment().isFull()) {
       segments.nextSegment();
-      cleaner.clean();
     }
   }
 
@@ -215,24 +214,13 @@ public class Log implements AutoCloseable {
    * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
    */
   public <T extends Entry> T get(long index) {
-    return get(index, false);
-  }
-
-  /**
-   * Gets an entry from the log.
-   *
-   * @param index The entry index to read.
-   * @param includeDeleted Whether to include entries marked for deletion.
-   * @return The entry.
-   */
-  private <T extends Entry> T get(long index, boolean includeDeleted) {
     assertIsOpen();
     assertValidIndex(index);
 
     Segment segment = segments.segment(index);
     if (segment == null)
       throw new IndexOutOfBoundsException("invalid index: " + index);
-    T entry = segment.get(index, includeDeleted);
+    T entry = segment.get(index);
     return entry != null ? entry : null;
   }
 
@@ -282,95 +270,19 @@ public class Log implements AutoCloseable {
     Segment segment = segments.segment(index);
     if (segment == null)
       throw new IndexOutOfBoundsException("invalid index: " + index);
-
-    Entry entry = segment.get(index);
-    if (entry != null) {
-      cleaner.tree().add(entry, entry.isTombstone());
-      segment.clean(index);
-    }
+    segment.clean(index);
     return this;
   }
 
   /**
-   * Cleans the entry at the given index.
+   * Commits entries up to the given index to the log.
    *
-   * @param index The index of the entry to clean.
-   * @param tombstone Whether to clean the entry as a tombstone.
-   * @return The log.
-   * @throws IllegalStateException If the log is not open.
-   * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
-   */
-  public Log clean(long index, boolean tombstone) {
-    assertIsOpen();
-    assertValidIndex(index);
-
-    Segment segment = segments.segment(index);
-    if (segment == null)
-      throw new IndexOutOfBoundsException("invalid index: " + index);
-
-    Entry entry = segment.get(index);
-    if (entry != null) {
-      cleaner.tree().add(entry, tombstone);
-      segment.clean(index);
-    }
-    return this;
-  }
-
-  /**
-   * Cleans the given entry from the log.
-   *
-   * @param entry The entry to clean.
-   * @return The log.
-   * @throws IllegalStateException If the log is not open.
-   * @throws NullPointerException if {@code entry} is null
-   * @throws IndexOutOfBoundsException If the {@code entry} index is not within the bounds of the log.
-   */
-  public Log clean(Entry entry) {
-    return clean(entry, entry.isTombstone());
-  }
-
-  /**
-   * Cleans the given entry from the log.
-   *
-   * @param entry The entry to clean.
-   * @return The log.
-   * @throws IllegalStateException If the log is not open.
-   * @throws NullPointerException if {@code entry} is null
-   * @throws IndexOutOfBoundsException If the {@code entry} index is not within the bounds of the log.
-   */
-  public Log clean(Entry entry, boolean tombstone) {
-    assertIsOpen();
-    Assert.notNull(entry, "entry");
-
-    Segment segment = segments.segment(entry.getIndex());
-    if (segment == null)
-      throw new IndexOutOfBoundsException("invalid index: " + entry.getIndex());
-
-    cleaner.tree().add(entry, tombstone);
-    return this;
-  }
-
-  /**
-   * Sets the log commit index.
-   *
-   * @param index The log commit index.
+   * @param index The index up to which to commit entries.
    * @return The log.
    */
   public Log commit(long index) {
     assertIsOpen();
     segments.commitIndex(index);
-    return this;
-  }
-
-  /**
-   * Marks entries up to the given index for compaction.
-   *
-   * @param index The index up to which to compact entries.
-   * @return The log.
-   */
-  public Log compact(long index) {
-    assertIsOpen();
-    segments.compactIndex(index);
     return this;
   }
 
@@ -412,7 +324,7 @@ public class Log implements AutoCloseable {
     assertIsOpen();
     if (index > 0)
       assertValidIndex(index);
-    Assert.index(index >= segments.compactIndex(), "cannot truncate committed entries");
+    Assert.index(index >= segments.commitIndex(), "cannot truncate committed entries");
 
     if (lastIndex() == index)
       return this;
@@ -447,7 +359,7 @@ public class Log implements AutoCloseable {
     assertIsOpen();
     flush();
     segments.close();
-    cleaner.close();
+    compactor.close();
     open = false;
   }
 

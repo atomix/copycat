@@ -11,20 +11,14 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.storage.compaction;
 
 /**
- * Server commit cleaner.
+ * Log compaction task.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-interface ServerCommitCleaner {
-
-  /**
-   * Cleans the given index from the log.
-   */
-  void clean(long index);
-
+public interface CompactionTask extends Runnable {
 }

@@ -121,17 +121,4 @@ public class OffsetIndexTest {
     assertEquals(index.truncate(1), 30);
   }
 
-  /**
-   * Tests truncating a deleted item from the index.
-   */
-  public void testTruncateDeleted() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
-    index.index(0, 0);
-    index.index(1, 10);
-    index.index(3, 30);
-    index.index(4, 40);
-    index.delete(1);
-    assertEquals(index.truncate(1), 30);
-  }
-
 }

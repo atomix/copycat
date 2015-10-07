@@ -11,72 +11,49 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
-package io.atomix.copycat.server.storage.cleaner;
+package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentDescriptor;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Log entry cleaner.
+ * Minor compaction task.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class EntryCleaner implements AutoCloseable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(EntryCleaner.class);
+public class MinorCompactionTask implements CompactionTask {
+  private static final Logger LOGGER = LoggerFactory.getLogger(MinorCompactionTask.class);
   private final SegmentManager manager;
-  private final EntryTree tree;
-  private final ThreadContext context;
-  private CompletableFuture<Void> cleanFuture;
+  private final List<Segment> segments;
 
-  /**
-   * @throws NullPointerException if {@code manager} or {@code context} are null
-   */
-  public EntryCleaner(SegmentManager manager, EntryTree tree, ThreadContext context) {
+  public MinorCompactionTask(SegmentManager manager, List<Segment> segments) {
     this.manager = Assert.notNull(manager, "manager");
-    this.tree = Assert.notNull(tree, "tree");
-    this.context = Assert.notNull(context, "context");
+    this.segments = Assert.notNull(segments, "segments");
+  }
+
+  @Override
+  public void run() {
+    cleanSegments();
   }
 
   /**
-   * Cleans a list of segments.
-   *
-   * @param segments The segments to clean.
-   * @return A completable future to be completed once the segments have been cleaned.
-   * @throws NullPointerException if {@code segments} is null
+   * Cleans all cleanable segments.
    */
-  CompletableFuture<Void> clean(List<Segment> segments) {
-    Assert.notNull(segments, "segments");
-    if (cleanFuture != null)
-      return cleanFuture;
-
-    if (segments.isEmpty())
-      return CompletableFuture.completedFuture(null);
-
-    cleanFuture = context.execute(() -> {
-      cleanSegments(segments);
-    }).whenComplete((result, error) -> cleanFuture = null);
-    return cleanFuture;
-  }
-
-  /**
-   * Cleans the given segments.
-   *
-   * @param segments The segments to clean.
-   */
-  private void cleanSegments(List<Segment> segments) {
+  private void cleanSegments() {
+    // Get the first segment which contains the first index being cleaned. The clean segment will be written
+    // as a newer version of the earliest segment being rewritten.
     Segment firstSegment = segments.iterator().next();
 
+    // Create a clean segment with a newer version to which to rewrite the segment entries.
     Segment cleanSegment = manager.createSegment(SegmentDescriptor.builder()
       .withId(firstSegment.descriptor().id())
       .withVersion(firstSegment.descriptor().version() + 1)
@@ -86,17 +63,22 @@ class EntryCleaner implements AutoCloseable {
       .withMaxEntries(segments.stream().mapToInt(s -> s.descriptor().maxEntries()).max().getAsInt())
       .build());
 
+    // Clean the first entry from the segment to ensure the clean segment is not empty when inserted into the segment manager.
     cleanEntry(firstSegment.firstIndex(), firstSegment, cleanSegment);
 
+    // Insert the new clean segment into the segment manager.
     manager.insertSegment(cleanSegment);
 
+    // Iterate through all segments being compacted and write entries to a single clean segment.
     for (Segment segment : segments) {
       cleanSegment(segment, cleanSegment);
     }
 
+    // Update the clean segment descriptor and lock the segment.
     cleanSegment.descriptor().update(System.currentTimeMillis());
     cleanSegment.descriptor().lock();
 
+    // Delete the old segments.
     for (Segment segment : segments) {
       segment.delete();
     }
@@ -110,8 +92,14 @@ class EntryCleaner implements AutoCloseable {
    */
   private void cleanSegment(Segment segment, Segment cleanSegment) {
     while (!segment.isEmpty()) {
+      // Logic inside the Segment ensures that the firstIndex() is always reflective of the first index that
+      // has not been compact()ed from the segment.
       long index = segment.firstIndex();
+
+      // Clean the entry at the current index from the segment.
       cleanEntry(index, segment, cleanSegment);
+
+      // Once the entry has been cleaned, update the segment manager to point to the correct segment.
       manager.moveSegment(index, segment);
     }
   }
@@ -125,35 +113,38 @@ class EntryCleaner implements AutoCloseable {
    */
   private void cleanEntry(long index, Segment segment, Segment cleanSegment) {
     try (Entry entry = segment.get(index)) {
+      // If an entry was found, only remove the entry from the segment if it's not a tombstone that has been cleaned.
       if (entry != null) {
-        cleanSegment.append(entry);
-      } else {
-        try (Entry deleted = segment.get(index, true)) {
-          if (deleted != null) {
-            if (tree.canDelete(deleted)) {
-              tree.delete(deleted);
-              cleanSegment.skip(1);
-              LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
-            } else {
-              cleanSegment.append(deleted);
-              cleanSegment.clean(deleted.getIndex());
-            }
-          } else {
+        // If the entry has been cleaned, determine whether it's a tombstone.
+        if (segment.isClean(index)) {
+          // If the entry is a tombstone, append the entry to the segment and clean it.
+          // if the entry is not a tombstone, clean the entry.
+          if (!entry.isTombstone()) {
             cleanSegment.skip(1);
+            LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
+          } else {
+            cleanSegment.append(entry);
+            cleanSegment.clean(index);
           }
         }
+        // If the entry hasn't been cleaned, simply transfer it to the new segment.
+        else {
+          cleanSegment.append(entry);
+        }
+      }
+      // If the entry has already been compacted, skip the index in the segment.
+      else {
+        cleanSegment.skip(1);
       }
     }
 
+    // Compact the segment to move the segment's firstIndex() to index + 1.
     segment.compact(index + 1);
   }
 
-  /**
-   * Closes the entry cleaner.
-   */
   @Override
-  public void close() {
-
+  public String toString() {
+    return String.format("%s%s", getClass().getSimpleName(), segments);
   }
 
 }

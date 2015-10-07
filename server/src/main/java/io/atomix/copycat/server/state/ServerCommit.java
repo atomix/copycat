@@ -15,12 +15,12 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
-import io.atomix.catalyst.util.Assert;
 
 import java.time.Instant;
 
@@ -33,9 +33,10 @@ class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
   private final ServerCommitCleaner cleaner;
   private final ServerSessionManager sessions;
-  private OperationEntry<?> entry;
+  private long index;
   private Session session;
   private Instant instant;
+  private Operation operation;
   private volatile boolean open;
 
   public ServerCommit(ServerCommitPool pool, ServerCommitCleaner cleaner, ServerSessionManager sessions) {
@@ -50,16 +51,16 @@ class ServerCommit implements Commit<Operation<?>> {
    * @param entry The entry.
    */
   void reset(OperationEntry<?> entry) {
-    entry.acquire();
-    this.entry = entry;
+    this.index = entry.getIndex();
     this.session = sessions.getSession(entry.getSession());
     this.instant = Instant.ofEpochMilli(entry.getTimestamp());
+    this.operation = entry.getOperation();
     open = true;
   }
 
   @Override
   public long index() {
-    return entry != null ? entry.getIndex() : 0;
+    return index;
   }
 
   @Override
@@ -74,35 +75,29 @@ class ServerCommit implements Commit<Operation<?>> {
 
   @Override
   public Class type() {
-    return entry != null ? entry.getOperation().getClass() : null;
+    return operation != null ? operation.getClass() : null;
   }
 
   @Override
   public Operation<?> operation() {
-    return entry != null ? entry.getOperation() : null;
+    return operation;
   }
 
   @Override
   public void clean() {
     Assert.state(open, "commit closed");
-    if (entry.getOperation() instanceof Command)
-      cleaner.clean(entry);
-    close();
-  }
-
-  @Override
-  public void clean(boolean tombstone) {
-    Assert.state(open, "commit closed");
-    if (entry.getOperation() instanceof Command)
-      cleaner.clean(entry, tombstone);
+    if (operation instanceof Command)
+      cleaner.clean(index);
     close();
   }
 
   @Override
   public void close() {
     if (open) {
-      entry.release();
-      entry = null;
+      index = 0;
+      session = null;
+      instant = null;
+      operation = null;
       pool.release(this);
       open = false;
     }
@@ -111,6 +106,7 @@ class ServerCommit implements Commit<Operation<?>> {
   @Override
   protected void finalize() throws Throwable {
     pool.warn(this);
+    super.finalize();
   }
 
   @Override

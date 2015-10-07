@@ -38,12 +38,15 @@ class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
   private final ServerStateMachineExecutor executor;
+  private final ServerCommitCleaner cleaner;
   private final ServerCommitPool commits;
   private long lastApplied;
+  private long configuration;
 
   ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
     this.stateMachine = stateMachine;
     this.executor = new ServerStateMachineExecutor(context, executor);
+    this.cleaner = cleaner;
     this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
     init();
   }
@@ -130,14 +133,40 @@ class ServerStateMachine implements AutoCloseable {
       } else if (entry instanceof NoOpEntry) {
         return apply((NoOpEntry) entry);
       } else if (entry instanceof ConnectEntry) {
-        return CompletableFuture.completedFuture(null);
+        return apply((ConnectEntry) entry);
       } else if (entry instanceof ConfigurationEntry) {
-        return CompletableFuture.completedFuture(null);
+        return apply((ConfigurationEntry) entry);
       }
       return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
     } finally {
       setLastApplied(entry.getIndex());
     }
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   *
+   * @param entry The entry to apply.
+   * @return The result.
+   */
+  private CompletableFuture<Void> apply(ConfigurationEntry entry) {
+    long previousConfiguration = configuration;
+    configuration = entry.getIndex();
+    if (previousConfiguration > 0) {
+      cleaner.clean(previousConfiguration);
+    }
+    return CompletableFuture.completedFuture(null);
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   *
+   * @param entry The entry to apply.
+   * @return The result.
+   */
+  private CompletableFuture<Void> apply(ConnectEntry entry) {
+    cleaner.clean(entry.getIndex());
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -174,42 +203,6 @@ class ServerStateMachine implements AutoCloseable {
    *
    * @param entry The entry to apply.
    */
-  private CompletableFuture<Void> apply(ConnectEntry entry) {
-    ServerSession session = executor.context().sessions().getSession(entry.getSession());
-
-    // Allow the executor to execute any scheduled events.
-    executor().tick(entry.getTimestamp());
-
-    CompletableFuture<Void> future;
-
-    // If the server session is null, the session either never existed or already expired.
-    if (session == null) {
-      LOGGER.warn("Unknown session: " + entry.getSession());
-      future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
-    }
-    // If the session exists, don't allow it to expire even if its expiration has passed since we still
-    // managed to receive a keep alive request from the client before it was removed.
-    else {
-      ThreadContext context = getContext();
-
-      // Set the session as trusted. Sessions only timeout via RegisterEntry.
-      session.trust();
-
-      // Configure the session's server.
-      session.setAddress(entry.getAddress());
-
-      future = new CompletableFuture<>();
-      context.execute(() -> future.complete(null));
-    }
-
-    return future;
-  }
-
-  /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   */
   private CompletableFuture<Void> apply(KeepAliveEntry entry) {
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
 
@@ -237,13 +230,19 @@ class ServerStateMachine implements AutoCloseable {
       // The keep alive request contains the
       session.setTimestamp(entry.getTimestamp());
 
-      executor.executor().execute(() -> {
-        session.clearResponses(entry.getCommandSequence()).clearEvents(entry.getEventVersion(), entry.getEventSequence());
-      });
+      // Store the command/event sequence and event version instead of acquiring a reference to the entry.
+      long commandSequence = entry.getCommandSequence();
+      long eventVersion = entry.getEventVersion();
+      long eventSequence = entry.getEventSequence();
+
+      executor.executor().execute(() -> session.clearResponses(commandSequence).clearEvents(eventVersion, eventSequence));
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
     }
+
+    // Immediately clean the keep alive entry from the log.
+    cleaner.clean(entry.getIndex());
 
     return future;
   }
@@ -284,9 +283,15 @@ class ServerStateMachine implements AutoCloseable {
 
       stateMachine.close(session);
 
+      // Clean the session registration entry from the log.
+      cleaner.clean(session.id());
+
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
     }
+
+    // Immediately clean the unregister entry from the log.
+    cleaner.clean(entry.getIndex());
 
     return future;
   }
@@ -412,17 +417,22 @@ class ServerStateMachine implements AutoCloseable {
       // Get the caller's context.
       ThreadContext context = getContext();
 
+      // Store the entry version and sequence instead of acquiring a reference to the entry.
+      long version = entry.getVersion();
+      long sequence = entry.getSequence();
+
       // Once the query has met its sequence requirement, check whether it has also met its version requirement. If the version
       // requirement is not yet met, queue the query for the state machine to catch up to the required version.
-      session.registerSequenceQuery(entry.getSequence(), () -> {
+      ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
+      session.registerSequenceQuery(sequence, () -> {
         context.checkThread();
-        if (entry.getVersion() > session.getVersion()) {
-          session.registerVersionQuery(entry.getVersion(), () -> {
+        if (version > session.getVersion()) {
+          session.registerVersionQuery(version, () -> {
             context.checkThread();
-            executeQuery(entry, future, context);
+            executeQuery(commit, future, context);
           });
         } else {
-          executeQuery(entry, future, context);
+          executeQuery(commit, future, context);
         }
       });
       return future;
@@ -433,21 +443,21 @@ class ServerStateMachine implements AutoCloseable {
 
       ThreadContext context = getContext();
 
+      ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
       session.registerVersionQuery(entry.getVersion(), () -> {
         context.checkThread();
-        executeQuery(entry, future, context);
+        executeQuery(commit, future, context);
       });
       return future;
     } else {
-      return executeQuery(entry, new CompletableFuture<>(), getContext());
+      return executeQuery(commits.acquire(entry.setTimestamp(executor.timestamp())), new CompletableFuture<>(), getContext());
     }
   }
 
   /**
    * Executes a state machine query.
    */
-  private CompletableFuture<Object> executeQuery(QueryEntry entry, CompletableFuture<Object> future, ThreadContext context) {
-    ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
+  private CompletableFuture<Object> executeQuery(ServerCommit commit, CompletableFuture<Object> future, ThreadContext context) {
     executor.executor().execute(() -> {
       executor.context().update(commit.index(), commit.time(), true, null);
       try {
@@ -472,6 +482,7 @@ class ServerStateMachine implements AutoCloseable {
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(entry.getTimestamp());
     }
+    cleaner.clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), getContext().executor());
   }
 

@@ -97,16 +97,6 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   }
 
   @Override
-  public int hashCode() {
-    return client.hashCode();
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof RegisterEntry && ((RegisterEntry) object).client.equals(client);
-  }
-
-  @Override
   public String toString() {
     return String.format("%s[index=%d, term=%d, client=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getTimestamp());
   }

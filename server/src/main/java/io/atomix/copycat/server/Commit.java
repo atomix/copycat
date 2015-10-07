@@ -15,12 +15,12 @@
  */
 package io.atomix.copycat.server;
 
-import java.time.Instant;
-
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
+
+import java.time.Instant;
 
 /**
  * Represents the committed state and metadata of a Raft state machine operation.
@@ -105,17 +105,6 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * arbitrary point in the future.
    */
   void clean();
-
-  /**
-   * Cleans the commit from the underlying log.
-   * <p>
-   * Optionally overrides the tombstone configuration for the command. For commits cleaned as tombstones, the
-   * log cleaner will guarantee that previous related commits will be removed from the log prior to cleaning
-   * the tombstone. This ensures consistency when replaying commit logs.
-   *
-   * @param tombstone Whether to clean the commit as a tombstone.
-   */
-  void clean(boolean tombstone);
 
   /**
    * Closes the commit.

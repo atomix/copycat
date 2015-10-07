@@ -32,6 +32,7 @@ public class Segment implements AutoCloseable {
   private final Serializer serializer;
   private final Buffer buffer;
   private final OffsetIndex offsetIndex;
+  private final OffsetCleaner cleaner;
   private final SegmentManager manager;
   private int skip = 0;
   private boolean open = true;
@@ -39,11 +40,12 @@ public class Segment implements AutoCloseable {
   /**
    * @throws NullPointerException if any argument is null
    */
-  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, Serializer serializer, SegmentManager manager) {
+  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetCleaner cleaner, Serializer serializer, SegmentManager manager) {
     this.serializer = Assert.notNull(serializer, "serializer");
     this.buffer = Assert.notNull(buffer, "buffer");
     this.descriptor = Assert.notNull(descriptor, "descriptor");
     this.offsetIndex = Assert.notNull(offsetIndex, "offsetIndex");
+    this.cleaner = Assert.notNull(cleaner, "cleaner");
     this.manager = Assert.notNull(manager, "manager");
 
     // Rebuild the index from the segment data.
@@ -121,15 +123,6 @@ public class Segment implements AutoCloseable {
    */
   public int count() {
     return offsetIndex.lastOffset() + 1;
-  }
-
-  /**
-   * Returns the count of entries in the segment minus deletes.
-   *
-   * @return The count of entries in the segment minus deletes.
-   */
-  public int deleteCount() {
-    return offsetIndex.lastOffset() + 1 - offsetIndex.deletes();
   }
 
   /**
@@ -251,29 +244,11 @@ public class Segment implements AutoCloseable {
    * @throws IllegalStateException if the segment is not open or {@code index} is inconsistent with the entry
    */
   public synchronized <T extends Entry> T get(long index) {
-    return get(index, false);
-  }
-
-  /**
-   * Reads the entry at the given index.
-   *
-   * @param index The index from which to read the entry.
-   * @param includeDeleted Whether to include deleted entries.
-   * @return The entry at the given index.
-   * @throws IllegalStateException if the segment is not open or {@code index} is inconsistent with the entry
-   */
-  public synchronized <T extends Entry> T get(long index, boolean includeDeleted) {
     assertSegmentOpen();
     checkRange(index);
 
     // Get the offset of the index within this segment.
     int offset = offset(index);
-
-    // Return null if the offset has been committed and has been marked for deletion from the segment.
-    // Offsets that are not committed can still be read regardless of whether they've been marked for deletion.
-    if (!includeDeleted && index <= manager.commitIndex() && offsetIndex.deleted(offset)) {
-      return null;
-    }
 
     // Get the start position of the entry from the memory index.
     long position = offsetIndex.position(offset);
@@ -325,20 +300,42 @@ public class Segment implements AutoCloseable {
 
     // Check the memory index first for performance reasons.
     int offset = offset(index);
-    return offsetIndex.contains(offset) && !offsetIndex.deleted(offset);
+    return offsetIndex.contains(offset);
   }
 
   /**
    * Cleans an entry from the segment.
    *
    * @param index The index of the entry to clean.
-   * @return The segment.
+   * @return Indicates whether the entry was newly cleaned from the segment.
    * @throws IllegalStateException if the segment is not open
    */
-  public Segment clean(long index) {
+  public boolean clean(long index) {
     assertSegmentOpen();
-    offsetIndex.delete(offset(index));
-    return this;
+    return cleaner.clean(offsetIndex.find(offset(index)));
+  }
+
+  /**
+   * Returns a boolean value indicating whether the given index was cleaned from the segment.
+   *
+   * @param index The index of the entry to check.
+   * @return Indicates whether the given entry was cleaned from the segment.
+   * @throws IllegalStateException if the segment is not open
+   */
+  public boolean isClean(long index) {
+    assertSegmentOpen();
+    return cleaner.isClean(offsetIndex.find(offset(index)));
+  }
+
+  /**
+   * Returns the number of entries in the segment that have been cleaned.
+   *
+   * @return The number of entries in the segment that have been cleaned.
+   * @throws IllegalStateException if the segment is not open
+   */
+  public int cleanCount() {
+    assertSegmentOpen();
+    return cleaner.count();
   }
 
   /**

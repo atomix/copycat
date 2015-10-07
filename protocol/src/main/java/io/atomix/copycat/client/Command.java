@@ -81,14 +81,14 @@ public interface Command<T> extends Operation<T> {
   enum PersistenceLevel {
 
     /**
-     * Indicates the command should be persisted in the Raft log until all prior related commands have been cleaned.
-     * <p>
-     * The {@code EPHEMERAL} persistence level is useful for things like tombstones.
+     * Indicates that the command should be persisted in the Raft log until cleaned.
      */
     EPHEMERAL,
 
     /**
-     * Indicates that the command should be persisted in the Raft log until overwritten by another related command.
+     * Indicates the command should be persisted in the Raft log until all prior related commands have been cleaned.
+     * <p>
+     * The {@code PERSISTENT} persistence level is useful for things like tombstones.
      */
     PERSISTENT
 
@@ -118,26 +118,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command persistence level.
    */
   default PersistenceLevel persistence() {
-    return PersistenceLevel.PERSISTENT;
-  }
-
-  /**
-   * Returns the command group code.
-   *
-   * @return The command group code.
-   */
-  default int groupCode() {
-    return 0;
-  }
-
-  /**
-   * Returns a boolean value indicating whether the given command is part of the same group as this command.
-   *
-   * @param command The command to check.
-   * @return Indicates whether the given command is part of the same group as this command.
-   */
-  default boolean groupEquals(Command command) {
-    return true;
+    return PersistenceLevel.EPHEMERAL;
   }
 
   /**

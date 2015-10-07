@@ -99,16 +99,6 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   }
 
   @Override
-  public int hashCode() {
-    return 1;
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof ConfigurationEntry;
-  }
-
-  @Override
   public String toString() {
     return String.format("%s[index=%d, term=%d, active=%s, passive=%s]", getClass().getSimpleName(), getIndex(), getTerm(), active, passive);
   }

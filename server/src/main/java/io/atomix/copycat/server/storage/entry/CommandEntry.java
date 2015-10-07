@@ -15,14 +15,14 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Operation;
 
 /**
  * Command entry.
@@ -42,7 +42,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   @Override
   public boolean isTombstone() {
-    return command.persistence() == Command.PersistenceLevel.EPHEMERAL;
+    return command.persistence() == Command.PersistenceLevel.PERSISTENT;
   }
 
   @Override
@@ -84,18 +84,8 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   }
 
   @Override
-  public int hashCode() {
-    return command.groupCode();
-  }
-
-  @Override
-  public boolean equals(Object entry) {
-    return entry instanceof CommandEntry && command.groupEquals(((CommandEntry) entry).command);
-  }
-
-  @Override
   public String toString() {
-    return String.format("%s[index=%d, id=%d, term=%d, session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), getIndex(), getId(), getTerm(), getSession(), getSequence(), getTimestamp(), command);
+    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), command);
   }
 
 }
