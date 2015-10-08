@@ -123,4 +123,9 @@ class MemberState {
     return this;
   }
 
+  @Override
+  public String toString() {
+    return address.toString();
+  }
+
 }

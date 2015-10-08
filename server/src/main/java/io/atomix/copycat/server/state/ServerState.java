@@ -205,7 +205,7 @@ public class ServerState {
         Assert.state(address != null, "unknown leader: ", leader);
         this.leader = leader;
         this.lastVotedFor = 0;
-        LOGGER.debug("{} - Found leader {}", this.address, address);
+        LOGGER.info("{} - Found leader {}", this.address, address);
         electionListeners.forEach(l -> l.accept(address));
       }
     } else if (leader != 0) {
@@ -214,7 +214,7 @@ public class ServerState {
         Assert.state(address != null, "unknown leader: ", leader);
         this.leader = leader;
         this.lastVotedFor = 0;
-        LOGGER.debug("{} - Found leader {}", this.address, address);
+        LOGGER.info("{} - Found leader {}", this.address, address);
         electionListeners.forEach(l -> l.accept(address));
       }
     } else {
