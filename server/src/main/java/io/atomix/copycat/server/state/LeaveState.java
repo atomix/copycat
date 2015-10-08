@@ -66,7 +66,7 @@ final class LeaveState extends InactiveState {
    * Starts leaving the cluster.
    */
   private void leave() {
-    if (context.getLeader() == null) {
+    if (context.getLeader() != null) {
       leave(context.getLeader(), context.getCluster().getActiveMembers().iterator());
     } else {
       Iterator<MemberState> iterator = context.getCluster().getActiveMembers().iterator();
