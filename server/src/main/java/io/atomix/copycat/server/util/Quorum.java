@@ -25,7 +25,7 @@ import java.util.function.Consumer;
  */
 public class Quorum {
   private final int quorum;
-  private int succeeded;
+  private int succeeded = 1;
   private int failed;
   private Consumer<Boolean> callback;
   private boolean complete;

@@ -104,7 +104,7 @@ class ClusterState {
    * @return The remote quorum count.
    */
   int getQuorum() {
-    return (int) Math.ceil(activeMembers.size() / 2.0);
+    return (int) Math.floor((activeMembers.size() + (type == Type.ACTIVE ? 1 : 0)) / 2.0) + 1;
   }
 
   /**

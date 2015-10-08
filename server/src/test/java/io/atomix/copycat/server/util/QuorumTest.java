@@ -45,7 +45,6 @@ public class QuorumTest {
    */
   public void testQuorumSucceed() {
     quorum.succeed();
-    quorum.succeed();
     quorum.fail();
     assertEquals(callbackResult.get(), 0);
     quorum.fail();
@@ -61,7 +60,6 @@ public class QuorumTest {
     quorum.fail();
     quorum.succeed();
     assertEquals(callbackResult.get(), 0);
-    quorum.succeed();
     quorum.fail();
     assertEquals(callbackResult.get(), 2);
   }

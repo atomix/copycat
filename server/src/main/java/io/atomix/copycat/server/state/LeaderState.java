@@ -851,7 +851,7 @@ final class LeaderState extends ActiveState {
      * @return The current quorum index.
      */
     private int quorumIndex() {
-      return context.getCluster().getQuorum() - 1;
+      return context.getCluster().getQuorum() - 2;
     }
 
     /**
@@ -906,10 +906,12 @@ final class LeaderState extends ActiveState {
      */
     private long commitTime() {
       int quorumIndex = quorumIndex();
-      return quorumIndex >= 0 ? context.getCluster()
-        .getActiveMembers((m1, m2) -> (int) (m2.getTime() - m1.getTime()))
-        .get(quorumIndex())
-        .getTime() : System.currentTimeMillis();
+      if (quorumIndex >= 0) {
+        long commitTime = context.getCluster().getActiveMembers((m1, m2) -> (int) (m2.getTime() - m1.getTime())).get(quorumIndex).getTime();
+        if (commitTime > 0)
+          return commitTime;
+      }
+      return System.currentTimeMillis();
     }
 
     /**
