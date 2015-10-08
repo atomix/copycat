@@ -651,6 +651,7 @@ final class LeaderState extends ActiveState {
 
       try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
         entry.setTerm(context.getTerm())
+          .setSession(request.session())
           .setTimestamp(timestamp)
           .setAddress(request.address());
         index = context.getLog().append(entry);
