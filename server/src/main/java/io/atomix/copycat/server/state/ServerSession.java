@@ -132,10 +132,12 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setRequest(long request) {
-    this.request = request;
-    Runnable command = this.commands.remove(nextRequest());
-    if (command != null) {
-      command.run();
+    if (request > this.request) {
+      this.request = request;
+      Runnable command = this.commands.remove(nextRequest());
+      if (command != null) {
+        command.run();
+      }
     }
     return this;
   }
@@ -185,6 +187,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setSequence(long sequence) {
+    // For each increment of the sequence number, trigger query callbacks that are dependent on the specific sequence.
     for (long i = this.sequence + 1; i <= sequence; i++) {
       this.sequence = i;
       List<Runnable> queries = this.sequenceQueries.remove(this.sequence);
@@ -194,6 +197,24 @@ class ServerSession implements Session {
         }
         queries.clear();
         queriesPool.add(queries);
+      }
+    }
+
+    // If the request sequence number is less than the applied sequence number, update the request
+    // sequence number to ensure followers can correctly handle request sequencing if they become the leader.
+    if (sequence > request) {
+      // Only attempt to trigger command callbacks if any are registered.
+      if (!this.commands.isEmpty()) {
+        // For each request sequence number, a command callback completing the command submission may exist.
+        for (long i = this.request + 1; i <= request; i++) {
+          this.request = i;
+          Runnable command = this.commands.remove(i);
+          if (command != null) {
+            command.run();
+          }
+        }
+      } else {
+        this.request = sequence;
       }
     }
 
@@ -225,6 +246,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setVersion(long version) {
+    // For each increment of the version number, trigger query callbacks that are dependent on the specific version.
     for (long i = this.version + 1; i <= version; i++) {
       this.version = i;
       List<Runnable> queries = this.versionQueries.remove(this.version);
