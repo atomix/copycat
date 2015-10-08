@@ -17,7 +17,7 @@ package io.atomix.copycat.test;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
-import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.transport.NettyTransport;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
@@ -53,6 +53,8 @@ public class ClusterTest extends ConcurrentTestCase {
   protected LocalServerRegistry registry;
   protected int port;
   protected List<Address> members;
+  protected List<CopycatClient> clients = new ArrayList<>();
+  protected List<CopycatServer> servers = new ArrayList<>();
 
   /**
    * Tests joining a server to an existing cluster.
@@ -216,6 +218,84 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private void testSubmitCommand(int nodes, Command.ConsistencyLevel consistency) throws Throwable {
     createServers(nodes);
+
+    CopycatClient client = createClient();
+    client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      resume();
+    });
+
+    await();
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoOfThreeNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(2, 3, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoOfThreeNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(2, 3, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoOfThreeNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(2, 3, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoOfFourNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(3, 4, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoOfFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(3, 4, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testTwoOfFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(3, 4, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testThreeOfFiveNodeSubmitCommandWithNoneConsistency() throws Throwable {
+    testSubmitCommand(3, 5, Command.ConsistencyLevel.NONE);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testThreeOfFiveNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+    testSubmitCommand(3, 5, Command.ConsistencyLevel.SEQUENTIAL);
+  }
+
+  /**
+   * Tests submitting a command.
+   */
+  public void testThreeOfFiveNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+    testSubmitCommand(3, 5, Command.ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Tests submitting a command to a partial cluster.
+   */
+  private void testSubmitCommand(int live, int total, Command.ConsistencyLevel consistency) throws Throwable {
+    createServers(live, total);
 
     CopycatClient client = createClient();
     client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
@@ -437,35 +517,35 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests submitting Linearizablesequential events.
+   * Tests submitting sequential events.
    */
   public void testOneNodeSequentialEvents() throws Throwable {
     testSequentialEvents(1);
   }
 
   /**
-   * Tests submitting Linearizablesequential events.
+   * Tests submitting sequential events.
    */
   public void testTwoNodeSequentialEvents() throws Throwable {
     testSequentialEvents(2);
   }
 
   /**
-   * Tests submitting Linearizablesequential events.
+   * Tests submitting sequential events.
    */
   public void testThreeNodeSequentialEvents() throws Throwable {
     testSequentialEvents(3);
   }
 
   /**
-   * Tests submitting Linearizablesequential events.
+   * Tests submitting sequential events.
    */
   public void testFourNodeSequentialEvents() throws Throwable {
     testSequentialEvents(4);
   }
 
   /**
-   * Tests submitting Linearizablesequential events.
+   * Tests submitting sequential events.
    */
   public void testFiveNodeSequentialEvents() throws Throwable {
     testSequentialEvents(5);
@@ -699,6 +779,60 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting linearizable events.
    */
+  public void testThreeNodesManyEventsAfterLeaderShutdown() throws Throwable {
+    testManyEventsAfterLeaderShutdown(3);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFiveNodesManyEventsAfterLeaderShutdown() throws Throwable {
+    testManyEventsAfterLeaderShutdown(5);
+  }
+
+  /**
+   * Tests submitting a linearizable event that publishes to all sessions.
+   */
+  private void testManyEventsAfterLeaderShutdown(int nodes) throws Throwable {
+    List<CopycatServer> servers = createServers(nodes);
+
+    AtomicReference<String> value = new AtomicReference<>();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    for (int i = 0 ; i < 100; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(0, 2);
+    }
+
+    CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
+    leader.close().join();
+
+    for (int i = 0 ; i < 100; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(0, 2);
+    }
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
   public void testFiveNodeManySessionsManyEvents() throws Throwable {
     testManySessionsManyEvents(5);
   }
@@ -808,35 +942,72 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Creates a set of Copycat servers.
+   */
+  private List<CopycatServer> createServers(int live, int total) throws Throwable {
+    List<CopycatServer> servers = new ArrayList<>();
+
+    List<Address> members = new ArrayList<>();
+    for (int i = 0; i < total; i++) {
+      members.add(nextAddress());
+    }
+
+    for (int i = 0; i < live; i++) {
+      CopycatServer server = createServer(members.get(i));
+      server.open().thenRun(this::resume);
+      servers.add(server);
+    }
+
+    await(0, live);
+
+    return servers;
+  }
+
+  /**
    * Creates a Copycat server.
    */
   private CopycatServer createServer(Address address) {
-    return CopycatServer.builder(address, members)
-      .withTransport(new LocalTransport(registry))
+    CopycatServer server = CopycatServer.builder(address, members)
+      .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withDirectory(new File(directory, "" + address.hashCode()))
         .build())
       .withStateMachine(new TestStateMachine())
       .build();
+    servers.add(server);
+    return server;
   }
 
   /**
    * Creates a Copycat client.
    */
   private CopycatClient createClient() throws Throwable {
-    CopycatClient client = CopycatClient.builder(members).withTransport(new LocalTransport(registry)).build();
+    CopycatClient client = CopycatClient.builder(members).withTransport(new NettyTransport()).build();
     client.open().thenRun(this::resume);
     await();
+    clients.add(client);
     return client;
   }
 
   @BeforeMethod
   @AfterMethod
-  public void clearTests() throws IOException {
+  public void clearTests() throws Exception {
     deleteDirectory(directory);
     port = 5000;
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
+
+    if (!clients.isEmpty()) {
+      clients.forEach(c -> c.close().join());
+    }
+
+    if (!servers.isEmpty()) {
+      servers.forEach(s -> s.close().join());
+      Thread.sleep(2500);
+    }
+
+    clients = new ArrayList<>();
+    servers = new ArrayList<>();
   }
 
   /**
@@ -879,22 +1050,34 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     private String command(Commit<TestCommand> commit) {
-      return commit.operation().value();
+      try {
+        return commit.operation().value();
+      } finally {
+        commit.clean();
+      }
     }
 
     private String query(Commit<TestQuery> commit) {
-      return commit.operation().value();
+      try {
+        return commit.operation().value();
+      } finally {
+        commit.close();
+      }
     }
 
     private String event(Commit<TestEvent> commit) {
-      if (commit.operation().own()) {
-        commit.session().publish("test", commit.operation().value());
-      } else {
-        for (Session session : sessions()) {
-          session.publish("test", commit.operation().value());
+      try {
+        if (commit.operation().own()) {
+          commit.session().publish("test", commit.operation().value());
+        } else {
+          for (Session session : sessions()) {
+            session.publish("test", commit.operation().value());
+          }
         }
+        return commit.operation().value();
+      } finally {
+        commit.clean();
       }
-      return commit.operation().value();
     }
 
     private void expire(Commit<TestExpire> commit) {
