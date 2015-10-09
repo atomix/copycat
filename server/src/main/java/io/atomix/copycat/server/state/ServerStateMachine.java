@@ -235,7 +235,7 @@ class ServerStateMachine implements AutoCloseable {
       long eventVersion = entry.getEventVersion();
       long eventSequence = entry.getEventSequence();
 
-      executor.executor().execute(() -> session.clearResponses(commandSequence).clearEvents(eventVersion, eventSequence));
+      executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventVersion, eventSequence));
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));

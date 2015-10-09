@@ -455,7 +455,7 @@ class ServerSession implements Session {
    * @param sequence The sequence to clear.
    * @return The server session.
    */
-  ServerSession clearEvents(long version, long sequence) {
+  private ServerSession clearEvents(long version, long sequence) {
     if (version >= eventAckVersion) {
       eventAckVersion = version;
 
@@ -478,11 +478,11 @@ class ServerSession implements Session {
    * @param sequence The sequence from which to resend events.
    * @return The server session.
    */
-  private ServerSession resendEvents(long version, long sequence) {
-    if (version > eventAckVersion) {
+  ServerSession resendEvents(long version, long sequence) {
+    if (version >= eventAckVersion) {
       clearEvents(version, sequence);
       for (EventHolder holder : events) {
-        sendEvent(holder);
+        sendSequentialEvent(holder);
       }
     }
     return this;
@@ -539,7 +539,6 @@ class ServerSession implements Session {
         if (response.status() == Response.Status.OK) {
           clearEvents(response.version(), response.sequence());
         } else {
-          clearEvents(response.version(), response.sequence());
           resendEvents(response.version(), response.sequence());
         }
       }
