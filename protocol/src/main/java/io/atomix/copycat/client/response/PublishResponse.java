@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -23,6 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
 
@@ -57,7 +57,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
   }
 
   private long version;
-  private long sequence;
 
   /**
    * @throws NullPointerException if {@code referenceManager} is null
@@ -75,22 +74,12 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     return version;
   }
 
-  /**
-   * Returns the event sequence number.
-   *
-   * @return The event sequence number.
-   */
-  public long sequence() {
-    return sequence;
-  }
-
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
       version = buffer.readLong();
-      sequence = buffer.readLong();
     } else {
       error = RaftError.forId(buffer.readByte());
     }
@@ -101,7 +90,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(version);
-      buffer.writeLong(sequence);
     } else {
       buffer.writeByte(error.id());
     }
@@ -117,15 +105,14 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     if (object instanceof PublishResponse) {
       PublishResponse response = (PublishResponse) object;
       return response.status == status
-        && response.version == version
-        && response.sequence == sequence;
+        && response.version == version;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, sequence=%d]", getClass().getSimpleName(), status, version, sequence);
+    return String.format("%s[status=%s, version=%d]", getClass().getSimpleName(), status, version);
   }
 
   /**
@@ -144,7 +131,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     protected void reset() {
       super.reset();
       response.version = -1;
-      response.sequence = -1;
     }
 
     /**
@@ -160,25 +146,12 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     }
 
     /**
-     * Sets the event sequence number.
-     *
-     * @param sequence The event sequence number.
-     * @return The response builder.
-     * @throws IllegalArgumentException if {@code sequence} is less than {@code 1}
-     */
-    public Builder withSequence(long sequence) {
-      response.sequence = Assert.argNot(sequence, sequence < 0, "sequence cannot be less than 0");
-      return this;
-    }
-
-    /**
      * @throws IllegalStateException if sequence is less than 1
      */
     @Override
     public PublishResponse build() {
       super.build();
       Assert.stateNot(response.version < 0, "version cannot be less than 0");
-      Assert.stateNot(response.sequence < 0, "sequence cannot be less than 0");
       return response;
     }
   }

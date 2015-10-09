@@ -22,7 +22,11 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.Event;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -56,11 +60,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   }
 
   private long eventVersion;
-  private long eventSequence;
   private long previousVersion;
-  private long previousSequence;
-  private String event;
-  private Object message;
+  private List<Event<?>> events = new ArrayList<>(8);
 
   /**
    * @throws NullPointerException if {@code referenceManager} is null
@@ -79,15 +80,6 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   }
 
   /**
-   * Returns the event sequence number.
-   *
-   * @return The event sequence number.
-   */
-  public long eventSequence() {
-    return eventSequence;
-  }
-
-  /**
    * Returns the previous event version number.
    *
    * @return The previous event version number.
@@ -97,57 +89,42 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   }
 
   /**
-   * Returns the previous event sequence number.
+   * Returns the request events.
    *
-   * @return The previous event sequence number.
+   * @return The request events.
    */
-  public long previousSequence() {
-    return previousSequence;
-  }
-
-  /**
-   * Returns the request event.
-   *
-   * @return The request event.
-   */
-  public String event() {
-    return event;
-  }
-
-  /**
-   * Returns the request message.
-   *
-   * @return The request message.
-   */
-  public Object message() {
-    return message;
+  public List<Event<?>> events() {
+    return events;
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     eventVersion = buffer.readLong();
-    eventSequence = buffer.readLong();
     previousVersion = buffer.readLong();
-    previousSequence = buffer.readLong();
-    event = buffer.readString();
-    message = serializer.readObject(buffer);
+
+    events.clear();
+    int size = buffer.readUnsignedShort();
+    for (int i = 0; i < size; i++) {
+      events.add(serializer.readObject(buffer));
+    }
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(eventVersion);
-    buffer.writeLong(eventSequence);
     buffer.writeLong(previousVersion);
-    buffer.writeLong(previousSequence);
-    buffer.writeString(event);
-    serializer.writeObject(message, buffer);
+
+    buffer.writeUnsignedShort(events.size());
+    for (Event<?> event : events) {
+      serializer.writeObject(event, buffer);
+    }
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, eventVersion, eventSequence, previousVersion, previousSequence, event, message);
+    return Objects.hash(getClass(), session, eventVersion, previousVersion, events);
   }
 
   @Override
@@ -156,18 +133,15 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
       PublishRequest request = (PublishRequest) object;
       return request.session == session
         && request.eventVersion == eventVersion
-        && request.eventSequence == eventSequence
         && request.previousVersion == previousVersion
-        && request.previousSequence == previousSequence
-        && request.event.equals(event)
-        && request.message.equals(message);
+        && request.events.equals(events);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, eventVersion=%d, eventSequence=%d, previousVersion=%d, previousSequence=%d, event=%s, message=%s]", getClass().getSimpleName(), session, eventVersion, eventSequence, previousVersion, previousSequence, event, message);
+    return String.format("%s[session=%d, eventVersion=%d, previousVersion=%d, events=%s]", getClass().getSimpleName(), session, eventVersion, previousVersion, events);
   }
 
   /**
@@ -185,11 +159,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     protected void reset() {
       super.reset();
       request.eventVersion = -1;
-      request.eventSequence = 0;
       request.previousVersion = -1;
-      request.previousSequence = -1;
-      request.event = null;
-      request.message = null;
+      request.events.clear();
     }
 
     /**
@@ -200,19 +171,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
      * @throws IllegalArgumentException if {@code version} is less than 1
      */
     public Builder withEventVersion(long version) {
-      request.eventVersion = Assert.argNot(version, version < 0, "version cannot be less than 0");
-      return this;
-    }
-
-    /**
-     * Sets the event sequence number.
-     *
-     * @param sequence The event sequence number.
-     * @return The request builder.
-     * @throws IllegalArgumentException if {@code sequence} is less than 1
-     */
-    public Builder withEventSequence(long sequence) {
-      request.eventSequence = Assert.argNot(sequence, sequence < 1, "sequence cannot be less than 1");
+      request.eventVersion = Assert.argNot(version, version < 1, "version cannot be less than 1");
       return this;
     }
 
@@ -224,42 +183,28 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
      * @throws IllegalArgumentException if {@code version} is less than 1
      */
     public Builder withPreviousVersion(long version) {
-      request.previousVersion = Assert.argNot(version, version < -1, "version cannot be less than -1");
+      request.previousVersion = Assert.argNot(version, version < 0, "version cannot be less than 0");
       return this;
     }
 
     /**
-     * Sets the previous event sequence number.
+     * Sets the request events.
      *
-     * @param sequence The previous event sequence number.
-     * @return The request builder.
-     * @throws IllegalArgumentException if {@code sequence} is less than 1
-     */
-    public Builder withPreviousSequence(long sequence) {
-      request.previousSequence = Assert.argNot(sequence, sequence < 0, "sequence cannot be less than 0");
-      return this;
-    }
-
-    /**
-     * Sets the request event.
-     *
-     * @param event The request event.
+     * @param events The request events.
      * @return The publish request builder.
      */
-    public Builder withEvent(String event) {
-      request.event = Assert.notNull(event, "event");
-      return this;
+    public Builder withEvents(Event<?>... events) {
+      return withEvents(Arrays.asList(Assert.notNull(events, "events")));
     }
 
     /**
-     * Sets the request message.
+     * Sets the request events.
      *
-     * @param message The request message.
+     * @param events The request events.
      * @return The publish request builder.
-     * @throws NullPointerException if {@code message} is null
      */
-    public Builder withMessage(Object message) {
-      request.message = message;
+    public Builder withEvents(List<Event<?>> events) {
+      request.events = events;
       return this;
     }
 
@@ -270,10 +215,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     public PublishRequest build() {
       super.build();
       Assert.stateNot(request.eventVersion < 0, "eventVersion cannot be less than 0");
-      Assert.stateNot(request.eventSequence < 1, "eventSequence cannot be less than 1");
       Assert.stateNot(request.previousVersion < -1, "previousVersion cannot be less than -1");
-      Assert.stateNot(request.previousSequence < 0, "previousSequence cannot be less than 0");
-      Assert.stateNot(request.event == null, "event cannot be null");
+      Assert.stateNot(request.events == null, "events cannot be null");
       return request;
     }
   }

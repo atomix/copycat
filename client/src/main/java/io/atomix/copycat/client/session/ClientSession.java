@@ -29,6 +29,7 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Event;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
@@ -85,8 +86,7 @@ public class ClientSession implements Session, Managed<Session> {
   private long requestSequence;
   private long responseSequence;
   private long responseVersion;
-  private long eventVersion = -1;
-  private long eventSequence;
+  private long eventVersion;
 
   public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer) {
     this.clientId = Assert.notNull(clientId, "clientId");
@@ -609,7 +609,6 @@ public class ClientSession implements Session, Managed<Session> {
           .withSession(id)
           .withCommandSequence(commandResponse)
           .withEventVersion(eventVersion)
-          .withEventSequence(eventSequence)
           .build();
 
         request.acquire();
@@ -697,22 +696,22 @@ public class ClientSession implements Session, Managed<Session> {
     if (request.session() != id)
       return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
 
-    if (request.previousVersion() != eventVersion || request.previousSequence() != eventSequence) {
+    if (request.previousVersion() != eventVersion) {
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.INTERNAL_ERROR)
         .withVersion(eventVersion)
-        .withSequence(eventSequence)
         .build());
     }
 
     eventVersion = request.eventVersion();
-    eventSequence = request.eventSequence();
 
-    Listeners<Object> listeners = eventListeners.get(request.event());
-    if (listeners != null) {
-      for (Consumer listener : listeners) {
-        listener.accept(request.message());
+    for (Event<?> event : request.events()) {
+      Listeners<Object> listeners = eventListeners.get(event.name());
+      if (listeners != null) {
+        for (Consumer listener : listeners) {
+          listener.accept(event.message());
+        }
       }
     }
 
@@ -721,7 +720,6 @@ public class ClientSession implements Session, Managed<Session> {
     return CompletableFuture.completedFuture(PublishResponse.builder()
       .withStatus(Response.Status.OK)
       .withVersion(eventVersion)
-      .withSequence(eventSequence)
       .build());
   }
 

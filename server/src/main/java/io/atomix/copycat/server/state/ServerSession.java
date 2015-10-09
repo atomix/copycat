@@ -21,6 +21,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Event;
 import io.atomix.copycat.client.request.PublishRequest;
 import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;
@@ -46,18 +47,16 @@ class ServerSession implements Session {
   private long sequence;
   private long version;
   private long commandLowWaterMark;
-  private long currentEvent;
-  private long eventVersion = -1;
-  private long eventSequence = 0;
-  private long eventAckVersion = -1;
+  private long eventVersion;
+  private long eventAckVersion;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> versionQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, Object> responses = new HashMap<>();
-  private final Queue<EventHolder> events = new ArrayDeque<>();
-  private final Queue<EventHolder> eventsPool = new ArrayDeque<>();
+  private final Map<Long, EventHolder> events = new HashMap<>();
+  private final Map<Long, CompletableFuture<Void>> futures = new HashMap<>();
   private boolean suspect;
   private boolean unregistering;
   private boolean expired;
@@ -140,26 +139,6 @@ class ServerSession implements Session {
       }
     }
     return this;
-  }
-
-  /**
-   * Sets the event sequence number.
-   *
-   * @param event The event sequence number.
-   * @return The server session.
-   */
-  ServerSession setCurrentEvent(long event) {
-    this.currentEvent = event;
-    return this;
-  }
-
-  /**
-   * Returns the event sequence number.
-   *
-   * @return The current event sequence number.
-   */
-  long getCurrentEvent() {
-    return currentEvent;
   }
 
   /**
@@ -313,8 +292,10 @@ class ServerSession implements Session {
    * @param response The response.
    * @return The server session.
    */
-  ServerSession registerResponse(long sequence, Object response) {
+  ServerSession registerResponse(long sequence, Object response, CompletableFuture<Void> future) {
     responses.put(sequence, response);
+    if (future != null)
+      futures.put(sequence, future);
     return this;
   }
 
@@ -328,6 +309,7 @@ class ServerSession implements Session {
     if (sequence > commandLowWaterMark) {
       for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
         responses.remove(i);
+        futures.remove(i);
         commandLowWaterMark = i;
       }
     }
@@ -342,6 +324,16 @@ class ServerSession implements Session {
    */
   Object getResponse(long sequence) {
     return responses.get(sequence);
+  }
+
+  /**
+   * Returns the response future for the given sequence.
+   *
+   * @param sequence The response sequence.
+   * @return The response future.
+   */
+  CompletableFuture<Void> getResponseFuture(long sequence) {
+    return futures.get(sequence);
   }
 
   /**
@@ -389,50 +381,34 @@ class ServerSession implements Session {
     Assert.state(context.consistency() != null, "session events can only be published during command execution");
 
     // If the client acked a version greater than the current event sequence number since we know the client must have received it from another server.
-    if (eventAckVersion > currentEvent)
+    if (eventAckVersion > context.version())
       return this;
 
-    // The previous event version and sequence are the current event version and sequence.
-    long previousVersion = eventVersion;
-    long previousSequence = eventSequence;
-
-    // If the event version is not the current context version, reset the event version and sequence. Otherwise,
-    // this must not be the first event, so increment the event sequence number.
-    if (eventVersion != currentEvent) {
-      eventVersion = currentEvent;
-      eventSequence = 1;
-    } else {
-      eventSequence++;
+    // If no event has been published for this version yet, create a new event holder.
+    EventHolder holder = events.get(context.version());
+    if (holder == null) {
+      long previousVersion = eventVersion;
+      eventVersion = context.version();
+      holder = new EventHolder(eventVersion, previousVersion);
+      events.put(eventVersion, holder);
     }
 
-    // Get a holder from the event holder pool.
-    EventHolder holder = eventsPool.poll();
-    if (holder == null)
-      holder = new EventHolder();
-
-    // Populate the event holder and add it to the events queue.
-    holder.eventVersion = eventVersion;
-    holder.eventSequence = eventSequence;
-    holder.previousVersion = previousVersion;
-    holder.previousSequence = previousSequence;
-    holder.event = event;
-    holder.message = message;
-
-    // Add the event holder to the events list. This will be used to ack events once completed.
-    events.add(holder);
-
-    // If this event is linearizable, store an event future. Sequential events do not need to be tracked externally.
-    if (context.synchronous() && context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
-      holder.future = new CompletableFuture<>();
-      context.register(holder.future);
-    } else {
-      holder.future = null;
-    }
-
-    // Send the event.
-    sendEvent(holder);
+    // Add the event to the event holder.
+    holder.events.add(new Event<>(event, message));
 
     return this;
+  }
+
+  /**
+   * Commits events for the given version.
+   */
+  CompletableFuture<Void> commit(long version) {
+    EventHolder event = events.get(version);
+    if (event != null) {
+      sendEvent(event);
+      return event.future;
+    }
+    return null;
   }
 
   @Override
@@ -452,20 +428,16 @@ class ServerSession implements Session {
    * Clears events up to the given sequence.
    *
    * @param version The version to clear.
-   * @param sequence The sequence to clear.
    * @return The server session.
    */
-  private ServerSession clearEvents(long version, long sequence) {
+  private ServerSession clearEvents(long version) {
     if (version >= eventAckVersion) {
-      eventAckVersion = version;
-
-      EventHolder holder = events.peek();
-      while (holder != null && (holder.eventVersion < version || (holder.eventVersion == version && holder.eventSequence <= sequence))) {
-        events.remove();
-        if (holder.future != null)
-          holder.future.complete(null);
-        eventsPool.add(holder);
-        holder = events.peek();
+      for (long i = eventAckVersion + 1; i <= version; i++) {
+        eventAckVersion = i;
+        EventHolder event = events.remove(i);
+        if (event != null) {
+          event.future.complete(null);
+        }
       }
     }
     return this;
@@ -475,14 +447,16 @@ class ServerSession implements Session {
    * Resends events from the given sequence.
    *
    * @param version The version from which to resend events.
-   * @param sequence The sequence from which to resend events.
    * @return The server session.
    */
-  ServerSession resendEvents(long version, long sequence) {
+  ServerSession resendEvents(long version) {
     if (version >= eventAckVersion) {
-      clearEvents(version, sequence);
-      for (EventHolder holder : events) {
-        sendSequentialEvent(holder);
+      clearEvents(version);
+      for (long i = version + 1; i <= eventVersion; i++) {
+        EventHolder event = events.get(i);
+        if (event != null) {
+          sendSequentialEvent(event);
+        }
       }
     }
     return this;
@@ -527,19 +501,16 @@ class ServerSession implements Session {
     PublishRequest request = PublishRequest.builder()
       .withSession(id())
       .withEventVersion(event.eventVersion)
-      .withEventSequence(event.eventSequence)
       .withPreviousVersion(event.previousVersion)
-      .withPreviousSequence(event.previousSequence)
-      .withEvent(event.event)
-      .withMessage(event.message)
+      .withEvents(event.events)
       .build();
 
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (isOpen() && error == null) {
         if (response.status() == Response.Status.OK) {
-          clearEvents(response.version(), response.sequence());
+          clearEvents(response.version());
         } else {
-          resendEvents(response.version(), response.sequence());
+          resendEvents(response.version());
         }
       }
     });
@@ -553,10 +524,12 @@ class ServerSession implements Session {
    */
   @SuppressWarnings("unchecked")
   protected CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
-    Listeners<Object> listeners = eventListeners.get(request.event());
-    if (listeners != null) {
-      for (Listener listener : listeners) {
-        listener.accept(request.message());
+    for (Event<?> event : request.events()) {
+      Listeners<Object> listeners = eventListeners.get(event.name());
+      if (listeners != null) {
+        for (Listener listener : listeners) {
+          listener.accept(event.message());
+        }
       }
     }
 
@@ -640,6 +613,9 @@ class ServerSession implements Session {
   void expire() {
     closed = true;
     expired = true;
+    for (EventHolder event : events.values()) {
+      event.future.complete(null);
+    }
     for (Listener<Session> listener : closeListeners) {
       listener.accept(this);
     }
@@ -671,13 +647,15 @@ class ServerSession implements Session {
    * Event holder.
    */
   private static class EventHolder {
-    private CompletableFuture<Void> future;
-    private long eventVersion;
-    private long eventSequence;
-    private long previousVersion;
-    private long previousSequence;
-    private String event;
-    private Object message;
+    private final long eventVersion;
+    private final long previousVersion;
+    private final List<Event<?>> events = new ArrayList<>(8);
+    private final CompletableFuture<Void> future = new CompletableFuture<>();
+
+    private EventHolder(long eventVersion, long previousVersion) {
+      this.eventVersion = eventVersion;
+      this.previousVersion = previousVersion;
+    }
   }
 
 }

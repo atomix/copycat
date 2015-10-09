@@ -23,7 +23,9 @@ import io.atomix.copycat.server.StateMachineContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -36,10 +38,10 @@ class ServerStateMachineContext implements StateMachineContext {
   private final ServerClock clock = new ServerClock();
   private final ConnectionManager connections;
   private final ServerSessionManager sessions;
+  private final Map<Long, CompletableFuture<Void>> futures = new HashMap<>();
   private long version;
   private boolean synchronous;
   private Command.ConsistencyLevel consistency;
-  private final List<CompletableFuture<Void>> futures = new ArrayList<>();
 
   public ServerStateMachineContext(ConnectionManager connections, ServerSessionManager sessions) {
     this.connections = connections;
@@ -63,7 +65,25 @@ class ServerStateMachineContext implements StateMachineContext {
     clock.set(instant);
     this.synchronous = synchronous;
     this.consistency = consistency;
-    futures.clear();
+  }
+
+  /**
+   * Commits the state machine version.
+   */
+  CompletableFuture<Void> commit() {
+    long version = this.version;
+
+    List<CompletableFuture<Void>> futures = null;
+    for (ServerSession session : sessions.sessions.values()) {
+      CompletableFuture<Void> future = session.commit(version);
+      if (future != null) {
+        if (futures == null)
+          futures = new ArrayList<>(8);
+        futures.add(future);
+      }
+    }
+
+    return futures != null ? CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])) : null;
   }
 
   /**
@@ -79,21 +99,6 @@ class ServerStateMachineContext implements StateMachineContext {
   Command.ConsistencyLevel consistency() {
     return consistency;
   }
-
-  /**
-   * Registers a session event future in the context.
-   */
-  void register(CompletableFuture<Void> future) {
-    futures.add(future);
-  }
-
-  /**
-   * Returns futures registered for the context.
-   */
-  CompletableFuture<Void> futures() {
-    return !futures.isEmpty() ? CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])) : null;
-  }
-
 
   @Override
   public long version() {

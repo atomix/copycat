@@ -57,7 +57,6 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
 
   private long commandSequence;
   private long eventVersion;
-  private long eventSequence;
 
   /**
    * @throws NullPointerException if {@code referenceManager} is null
@@ -84,21 +83,11 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
     return eventVersion;
   }
 
-  /**
-   * Returns the event sequence number.
-   *
-   * @return The event sequence number.
-   */
-  public long eventSequence() {
-    return eventSequence;
-  }
-
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
     eventVersion = buffer.readLong();
-    eventSequence = buffer.readLong();
   }
 
   @Override
@@ -106,7 +95,6 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
     buffer.writeLong(eventVersion);
-    buffer.writeLong(eventSequence);
   }
 
   @Override
@@ -120,15 +108,14 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
       KeepAliveRequest request = (KeepAliveRequest) object;
       return request.session == session
         && request.commandSequence == commandSequence
-        && request.eventVersion == eventVersion
-        && request.eventSequence == eventSequence;
+        && request.eventVersion == eventVersion;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventVersion=%d, eventSequence=%d]", getClass().getSimpleName(), session, commandSequence, eventVersion, eventSequence);
+    return String.format("%s[session=%d, commandSequence=%d, eventVersion=%d]", getClass().getSimpleName(), session, commandSequence, eventVersion);
   }
 
   /**
@@ -148,7 +135,6 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
       super.reset();
       request.commandSequence = 0;
       request.eventVersion = 0;
-      request.eventSequence = 0;
     }
 
     /**
@@ -171,19 +157,7 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
      * @throws IllegalArgumentException if {@code eventVersion} is less than 0
      */
     public Builder withEventVersion(long eventVersion) {
-      request.eventVersion = Assert.argNot(eventVersion, eventVersion < -1, "eventVersion cannot be negative");
-      return this;
-    }
-
-    /**
-     * Sets the event sequence number.
-     *
-     * @param eventSequence The event sequence number.
-     * @return The request builder.
-     * @throws IllegalArgumentException if {@code eventSequence} is less than 0
-     */
-    public Builder withEventSequence(long eventSequence) {
-      request.eventSequence = Assert.argNot(eventSequence, eventSequence < 0, "eventSequence cannot be negative");
+      request.eventVersion = Assert.argNot(eventVersion, eventVersion < 0, "eventVersion cannot be negative");
       return this;
     }
 

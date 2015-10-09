@@ -30,7 +30,6 @@ import io.atomix.catalyst.util.ReferenceManager;
 public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   private long commandSequence;
   private long eventVersion;
-  private long eventSequence;
 
   public KeepAliveEntry() {
   }
@@ -79,32 +78,11 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
     return this;
   }
 
-  /**
-   * Returns the event sequence number.
-   *
-   * @return The event sequence number.
-   */
-  public long getEventSequence() {
-    return eventSequence;
-  }
-
-  /**
-   * Sets the event sequence number.
-   *
-   * @param eventSequence The event sequence number.
-   * @return The keep alive entry.
-   */
-  public KeepAliveEntry setEventSequence(long eventSequence) {
-    this.eventSequence = eventSequence;
-    return this;
-  }
-
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
     eventVersion = buffer.readLong();
-    eventSequence = buffer.readLong();
   }
 
   @Override
@@ -112,12 +90,11 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
     buffer.writeLong(eventVersion);
-    buffer.writeLong(eventSequence);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventVersion=%d, eventSequence=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventVersion(), getEventSequence(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventSequence=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventVersion(), getTimestamp());
   }
 
 }

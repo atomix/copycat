@@ -233,9 +233,8 @@ class ServerStateMachine implements AutoCloseable {
       // Store the command/event sequence and event version instead of acquiring a reference to the entry.
       long commandSequence = entry.getCommandSequence();
       long eventVersion = entry.getEventVersion();
-      long eventSequence = entry.getEventSequence();
 
-      executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventVersion, eventSequence));
+      executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventVersion));
 
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
@@ -325,13 +324,27 @@ class ServerStateMachine implements AutoCloseable {
       long sequence = entry.getSequence();
 
       executor.executor().execute(() -> {
-        Object response = session.getResponse(sequence);
-        if (response == null) {
-          context.executor().execute(() -> future.complete(null));
-        } else if (response instanceof Throwable) {
-          context.executor().execute(() -> future.completeExceptionally((Throwable) response));
+        CompletableFuture<Void> sessionFuture = session.getResponseFuture(sequence);
+        if (sessionFuture != null) {
+          sessionFuture.whenComplete((result, error) -> {
+            Object response = session.getResponse(sequence);
+            if (response == null) {
+              context.executor().execute(() -> future.complete(null));
+            } else if (response instanceof Throwable) {
+              context.executor().execute(() -> future.completeExceptionally((Throwable) response));
+            } else {
+              context.executor().execute(() -> future.complete(response));
+            }
+          });
         } else {
-          context.executor().execute(() -> future.complete(response));
+          Object response = session.getResponse(sequence);
+          if (response == null) {
+            context.executor().execute(() -> future.complete(null));
+          } else if (response instanceof Throwable) {
+            context.executor().execute(() -> future.completeExceptionally((Throwable) response));
+          } else {
+            context.executor().execute(() -> future.complete(response));
+          }
         }
       });
     }
@@ -361,27 +374,27 @@ class ServerStateMachine implements AutoCloseable {
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
     ServerCommit commit = commits.acquire(entry);
     executor.executor().execute(() -> {
-      session.setCurrentEvent(sequence);
       executor.context().update(commit.index(), commit.time(), synchronous, consistency != null ? consistency : Command.ConsistencyLevel.LINEARIZABLE);
 
       try {
         Object result = executor.executeOperation(commit);
+
+        CompletableFuture<Void> sessionFuture = executor.context().commit();
+
         if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
           context.executor().execute(() -> future.complete(result));
         } else {
-          CompletableFuture<Void> sessionFuture = executor.context().futures();
+          session.registerResponse(sequence, result, sessionFuture);
           if (sessionFuture != null) {
             sessionFuture.whenComplete((sessionResult, sessionError) -> {
-              session.registerResponse(sequence, result);
               context.executor().execute(() -> future.complete(result));
             });
           } else {
-            session.registerResponse(sequence, result);
             context.executor().execute(() -> future.complete(result));
           }
         }
       } catch (Exception e) {
-        session.registerResponse(sequence, e);
+        session.registerResponse(sequence, e, null);
         context.executor().execute(() -> future.completeExceptionally(e));
       }
     });

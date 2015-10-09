@@ -100,7 +100,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setSession(1)
         .setTimestamp(timestamp + 1000)
         .setCommandSequence(0)
-        .setEventSequence(0);
+        .setEventVersion(0);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -191,7 +191,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setSession(2)
         .setTimestamp(timestamp + 1000)
         .setCommandSequence(0)
-        .setEventSequence(0);
+        .setEventVersion(0);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNotNull(error);
