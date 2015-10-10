@@ -87,6 +87,7 @@ public class ClientSession implements Session, Managed<Session> {
   private long responseSequence;
   private long responseVersion;
   private long eventVersion;
+  private long completeVersion;
 
   public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer) {
     this.clientId = Assert.notNull(clientId, "clientId");
@@ -608,7 +609,7 @@ public class ClientSession implements Session, Managed<Session> {
         KeepAliveRequest request = KeepAliveRequest.builder()
           .withSession(id)
           .withCommandSequence(commandResponse)
-          .withEventVersion(eventVersion)
+          .withEventVersion(completeVersion)
           .build();
 
         request.acquire();
@@ -677,9 +678,7 @@ public class ClientSession implements Session, Managed<Session> {
     context.executor().execute(() -> {
       Listeners<Object> listeners = eventListeners.get(event);
       if (listeners != null) {
-        for (Consumer<Object> listener : listeners) {
-          listener.accept(message);
-        }
+        listeners.accept(message);
       }
     });
     return this;
@@ -706,21 +705,23 @@ public class ClientSession implements Session, Managed<Session> {
 
     eventVersion = request.eventVersion();
 
+    List<CompletableFuture<Void>> futures = new ArrayList<>(request.events().size());
     for (Event<?> event : request.events()) {
       Listeners<Object> listeners = eventListeners.get(event.name());
       if (listeners != null) {
-        for (Consumer listener : listeners) {
-          listener.accept(event.message());
-        }
+        futures.add(listeners.accept(event.message()));
       }
     }
 
-    request.release();
-
-    return CompletableFuture.completedFuture(PublishResponse.builder()
-      .withStatus(Response.Status.OK)
-      .withVersion(eventVersion)
-      .build());
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
+      .handleAsync((result, error) -> {
+        completeVersion = Math.max(completeVersion, request.eventVersion());
+        request.release();
+        return PublishResponse.builder()
+          .withStatus(Response.Status.OK)
+          .withVersion(eventVersion)
+          .build();
+      }, context.executor());
   }
 
   @Override
