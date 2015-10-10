@@ -140,7 +140,7 @@ public class JoinResponse extends AbstractResponse<JoinResponse> {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, activeMembers=%b, passiveMembers=%s]", getClass().getSimpleName(), status, version, activeMembers, passiveMembers);
+    return String.format("%s[status=%s, version=%d, activeMembers=%s, passiveMembers=%s]", getClass().getSimpleName(), status, version, activeMembers, passiveMembers);
   }
 
   /**

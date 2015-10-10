@@ -17,7 +17,7 @@ package io.atomix.copycat.test;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
-import io.atomix.catalyst.transport.NettyTransport;
+import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
@@ -27,6 +27,7 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -909,28 +910,6 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests session expiring events after a leader failure.
-   */
-  public void testThreeNodeExpireEventAfterLeaderFailure() throws Throwable {
-    testSessionExpireAfterLeaderFailure(3);
-  }
-
-  /**
-   * Tests a session expiring message after a leader failure.
-   */
-  private void testSessionExpireAfterLeaderFailure(int nodes) throws Throwable {
-    createServers(nodes);
-
-    CopycatClient client1 = createClient();
-    CopycatClient client2 = createClient();
-    client1.session().onEvent("expired", this::resume);
-    client1.submit(new TestExpire()).thenRun(this::resume);
-    servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get().close().join();
-    client2.close().thenRun(this::resume);
-    await(Duration.ofSeconds(10).toMillis(), 3);
-  }
-
-  /**
    * Returns the next server address.
    *
    * @return The next server address.
@@ -990,10 +969,8 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatServer createServer(Address address) {
     CopycatServer server = CopycatServer.builder(address, members)
-      .withTransport(new NettyTransport())
-      .withStorage(Storage.builder()
-        .withDirectory(new File(directory, "" + address.hashCode()))
-        .build())
+      .withTransport(new LocalTransport(registry))
+      .withStorage(new Storage(StorageLevel.MEMORY))
       .withStateMachine(new TestStateMachine())
       .build();
     servers.add(server);
@@ -1004,7 +981,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Creates a Copycat client.
    */
   private CopycatClient createClient() throws Throwable {
-    CopycatClient client = CopycatClient.builder(members).withTransport(new NettyTransport()).build();
+    CopycatClient client = CopycatClient.builder(members).withTransport(new LocalTransport(registry)).build();
     client.open().thenRun(this::resume);
     await();
     clients.add(client);
@@ -1015,9 +992,9 @@ public class ClusterTest extends ConcurrentTestCase {
   @AfterMethod
   public void clearTests() throws Exception {
     deleteDirectory(directory);
-    port = 5000;
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
+    port = 5000;
 
     if (!clients.isEmpty()) {
       clients.forEach(c -> c.close().join());
@@ -1025,7 +1002,6 @@ public class ClusterTest extends ConcurrentTestCase {
 
     if (!servers.isEmpty()) {
       servers.forEach(s -> s.close().join());
-      Thread.sleep(2500);
     }
 
     clients = new ArrayList<>();
