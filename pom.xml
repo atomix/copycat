@@ -131,13 +131,19 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>${maven.javadoc.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
         <configuration>
           <show>public</show>
           <excludePackageNames>*.state:io.atomix.copycat.server.util</excludePackageNames>
           <doctitle>Copycat API Reference (${jv})</doctitle>
           <windowtitle>Copycat API Reference (${jv})</windowtitle>
-          <outputDirectory>${project.build.directory}/api</outputDirectory>
-          <destDir>api/${jv}</destDir>
           <aggregate>true</aggregate>
           <additionalparam>
             -Xdoclint:none
