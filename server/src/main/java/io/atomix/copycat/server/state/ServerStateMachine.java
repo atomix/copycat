@@ -274,13 +274,17 @@ class ServerStateMachine implements AutoCloseable {
       ThreadContext context = getContext();
 
       if (session.isSuspect()) {
-        session.expire();
-        stateMachine.expire(session);
+        executor.executor().execute(() -> {
+          session.expire();
+          stateMachine.expire(session);
+          stateMachine.close(session);
+        });
       } else {
-        session.close();
+        executor.executor().execute(() -> {
+          session.close();
+          stateMachine.close(session);
+        });
       }
-
-      stateMachine.close(session);
 
       // Clean the session registration entry from the log.
       cleaner.clean(session.id());
