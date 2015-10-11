@@ -197,7 +197,7 @@ final class FollowerState extends ActiveState {
       if (isOpen()) {
         context.setLeader(0);
         if (context.getLastVotedFor() == 0) {
-          LOGGER.debug("{} - Heartbeat timed out in {} milliseconds", context.getAddress(), delay);
+          LOGGER.debug("{} - Heartbeat timed out in {}", context.getAddress(), delay);
           sendPollRequests();
         } else {
           // If the node voted for a candidate then reset the election timer.
@@ -213,7 +213,7 @@ final class FollowerState extends ActiveState {
   private void sendPollRequests() {
     // Set a new timer within which other nodes must respond in order for this node to transition to candidate.
     heartbeatTimer = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
-      LOGGER.debug("{} - Failed to poll a majority of the cluster in {} milliseconds", context.getAddress(), context.getElectionTimeout());
+      LOGGER.debug("{} - Failed to poll a majority of the cluster in {}", context.getAddress(), context.getElectionTimeout());
       resetHeartbeatTimeout();
     });
 

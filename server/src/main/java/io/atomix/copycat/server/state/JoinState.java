@@ -124,7 +124,7 @@ final class JoinState extends InactiveState {
    */
   private void cancelJoinTimeout() {
     if (joinFuture != null) {
-      LOGGER.info("{} - Cancelling join timeout", context.getAddress());
+      LOGGER.debug("{} - Cancelling join timeout", context.getAddress());
       joinFuture.cancel();
       joinFuture = null;
     }

@@ -56,7 +56,7 @@ final class LeaveState extends InactiveState {
   private void startLeaveTimeout() {
     leaveFuture = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
       if (isOpen()) {
-        LOGGER.warn("{} - Failed to leave the cluster in {} milliseconds", context.getAddress(), context.getElectionTimeout());
+        LOGGER.warn("{} - Failed to leave the cluster in {}", context.getAddress(), context.getElectionTimeout());
         transition(CopycatServer.State.INACTIVE);
       }
     });
@@ -123,7 +123,7 @@ final class LeaveState extends InactiveState {
    */
   private void cancelLeaveTimer() {
     if (leaveFuture != null) {
-      LOGGER.info("{} - Cancelling leave timeout", context.getAddress());
+      LOGGER.debug("{} - Cancelling leave timeout", context.getAddress());
       leaveFuture.cancel();
       leaveFuture = null;
     }

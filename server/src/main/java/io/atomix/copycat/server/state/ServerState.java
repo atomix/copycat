@@ -155,7 +155,7 @@ public class ServerState {
   /**
    * Sets the heartbeat interval.
    *
-   * @param heartbeatInterval The Raft heartbeat interval in milliseconds.
+   * @param heartbeatInterval The Raft heartbeat interval.
    * @return The Raft context.
    */
   public ServerState setHeartbeatInterval(Duration heartbeatInterval) {
@@ -166,7 +166,7 @@ public class ServerState {
   /**
    * Returns the heartbeat interval.
    *
-   * @return The heartbeat interval in milliseconds.
+   * @return The heartbeat interval.
    */
   public Duration getHeartbeatInterval() {
     return heartbeatInterval;
