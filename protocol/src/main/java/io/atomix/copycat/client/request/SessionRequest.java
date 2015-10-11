@@ -20,8 +20,8 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceFactory;
-import io.atomix.catalyst.util.ReferenceManager;
+
+import java.util.function.Supplier;
 
 /**
  * Session request.
@@ -30,13 +30,6 @@ import io.atomix.catalyst.util.ReferenceManager;
  */
 public abstract class SessionRequest<T extends SessionRequest<T>> extends AbstractRequest<T> {
   protected long session;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public SessionRequest(ReferenceManager<T> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the session ID.
@@ -65,14 +58,8 @@ public abstract class SessionRequest<T extends SessionRequest<T>> extends Abstra
     /**
      * @throws NullPointerException if {@code pool} or {@code factory} are null
      */
-    protected Builder(BuilderPool<T, U> pool, ReferenceFactory<U> factory) {
+    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
       super(pool, factory);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.session = 0;
     }
 
     /**

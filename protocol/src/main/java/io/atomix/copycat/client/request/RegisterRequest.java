@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -57,13 +56,6 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
   }
 
   private UUID client;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public RegisterRequest(ReferenceManager<RegisterRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the client ID.
@@ -113,12 +105,6 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
      */
     protected Builder(BuilderPool<Builder, RegisterRequest> pool) {
       super(pool, RegisterRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.client = null;
     }
 
     /**

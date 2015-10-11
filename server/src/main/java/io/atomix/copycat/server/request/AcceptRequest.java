@@ -22,7 +22,6 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.client.request.SessionRequest;
 
 import java.util.Objects;
@@ -58,13 +57,6 @@ public class AcceptRequest extends SessionRequest<AcceptRequest> {
   }
 
   private Address address;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public AcceptRequest(ReferenceManager<AcceptRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the accept server address.
@@ -116,12 +108,6 @@ public class AcceptRequest extends SessionRequest<AcceptRequest> {
      */
     protected Builder(BuilderPool<Builder, AcceptRequest> pool) {
       super(pool, AcceptRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.address = null;
     }
 
     /**

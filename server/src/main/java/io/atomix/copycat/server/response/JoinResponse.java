@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.response;
 
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -24,7 +22,8 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.client.response.AbstractResponse;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -61,13 +60,6 @@ public class JoinResponse extends AbstractResponse<JoinResponse> {
   private long version;
   private Collection<Address> activeMembers;
   private Collection<Address> passiveMembers;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public JoinResponse(ReferenceManager<JoinResponse> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the response version.
@@ -150,14 +142,6 @@ public class JoinResponse extends AbstractResponse<JoinResponse> {
 
     protected Builder(BuilderPool<Builder, JoinResponse> pool) {
       super(pool, JoinResponse::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.version = 0;
-      response.activeMembers = null;
-      response.passiveMembers = null;
     }
 
     /**

@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 
 import java.util.Objects;
 
@@ -57,13 +56,6 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
 
   private long commandSequence;
   private long eventVersion;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public KeepAliveRequest(ReferenceManager<KeepAliveRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the command sequence number.
@@ -128,13 +120,6 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
      */
     protected Builder(BuilderPool<Builder, KeepAliveRequest> pool) {
       super(pool, KeepAliveRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.commandSequence = 0;
-      request.eventVersion = 0;
     }
 
     /**

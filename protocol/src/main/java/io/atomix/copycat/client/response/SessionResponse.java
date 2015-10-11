@@ -16,8 +16,8 @@
 package io.atomix.copycat.client.response;
 
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceFactory;
-import io.atomix.catalyst.util.ReferenceManager;
+
+import java.util.function.Supplier;
 
 /**
  * Session response.
@@ -27,17 +27,10 @@ import io.atomix.catalyst.util.ReferenceManager;
 public abstract class SessionResponse<T extends SessionResponse<T>> extends AbstractResponse<T> {
 
   /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public SessionResponse(ReferenceManager<T> referenceManager) {
-    super(referenceManager);
-  }
-
-  /**
    * Session response builder.
    */
   public static abstract class Builder<T extends Builder<T, U>, U extends SessionResponse<U>> extends AbstractResponse.Builder<T, U> {
-    protected Builder(BuilderPool<T, U> pool, ReferenceFactory<U> factory) {
+    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
       super(pool, factory);
     }
   }

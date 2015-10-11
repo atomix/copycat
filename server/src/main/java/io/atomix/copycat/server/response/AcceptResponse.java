@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.SessionResponse;
 
@@ -55,13 +54,6 @@ public class AcceptResponse extends SessionResponse<AcceptResponse> {
    */
   public static Builder builder(AcceptResponse response) {
     return POOL.acquire(Assert.notNull(response, "response"));
-  }
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public AcceptResponse(ReferenceManager<AcceptResponse> referenceManager) {
-    super(referenceManager);
   }
 
   @Override

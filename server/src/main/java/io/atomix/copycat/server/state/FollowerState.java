@@ -64,106 +64,86 @@ final class FollowerState extends ActiveState {
 
   @Override
   protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        return this.<RegisterRequest, RegisterResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<RegisterRequest, RegisterResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        // Immediately register the session connection and send an accept request to the leader.
-        context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      // Immediately register the session connection and send an accept request to the leader.
+      context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
 
-        AcceptRequest acceptRequest = AcceptRequest.builder()
-          .withSession(request.session())
-          .withAddress(context.getAddress())
-          .build();
-        return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
-          .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
-          .thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+      AcceptRequest acceptRequest = AcceptRequest.builder()
+        .withSession(request.session())
+        .withAddress(context.getAddress())
+        .build();
+      return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
+        .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
+        .thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        return this.<KeepAliveRequest, KeepAliveResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<KeepAliveRequest, KeepAliveResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
-      if (session == null || session.getConnection() == null) {
-        return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-          .build()));
-      } else {
-        return session.getConnection().<PublishRequest, PublishResponse>send(request.acquire());
-      }
-    } finally {
-      request.release();
+    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    if (session == null || session.getConnection() == null) {
+      return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } else {
+      return session.getConnection().<PublishRequest, PublishResponse>send(request);
     }
   }
 
   @Override
   protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
@@ -285,10 +265,7 @@ final class FollowerState extends ActiveState {
                 LOGGER.debug("{} - Received accepted poll from {}", context.getAddress(), member);
                 quorum.succeed();
               }
-              response.release();
             }
-          } else if (response != null) {
-            response.release();
           }
         }, context.getThreadContext().executor());
       });

@@ -18,10 +18,11 @@ package io.atomix.copycat.client.request;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.*;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.util.BuilderPool;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * Abstract request implementation.
@@ -29,15 +30,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class AbstractRequest<T extends Request<T>> implements Request<T> {
-  private final AtomicInteger references = new AtomicInteger();
-  private final ReferenceManager<T> referenceManager;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  protected AbstractRequest(ReferenceManager<T> referenceManager) {
-    this.referenceManager = Assert.notNull(referenceManager, "referenceManager");
-  }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
@@ -47,41 +39,6 @@ public abstract class AbstractRequest<T extends Request<T>> implements Request<T
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
   }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public T acquire() {
-    references.incrementAndGet();
-    return (T) this;
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public boolean release() {
-    int refs = references.decrementAndGet();
-    if (refs == 0) {
-      referenceManager.release((T) this);
-      return true;
-    } else if (refs < 0) {
-      references.set(0);
-      throw new IllegalStateException("cannot dereference non-referenced object");
-    }
-    return false;
-  }
-
-  @Override
-  public int references() {
-    return references.get();
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public void close() {
-    if (references.get() == 0)
-      throw new IllegalStateException("cannot close non-referenced object");
-    references.set(0);
-    referenceManager.release((T) this);
-  }
-
   /**
    * Abstract request builder.
    *
@@ -89,20 +46,20 @@ public abstract class AbstractRequest<T extends Request<T>> implements Request<T
    * @param <U> The request type.
    */
   protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractRequest<U>> extends Request.Builder<T, U> {
-    protected final ReferencePool<U> pool;
+    private final Supplier<U> factory;
     protected U request;
 
     /**
      * @throws NullPointerException if {@code pool} or {@code factory} are null
      */
-    protected Builder(BuilderPool<T, U> pool, ReferenceFactory<U> factory) {
+    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
       super(pool);
-      this.pool = new ReferencePool<>(factory);
+      this.factory = Assert.notNull(factory, "factory");
     }
 
     @Override
     protected void reset() {
-      request = pool.acquire();
+      request = factory.get();
     }
 
     @Override

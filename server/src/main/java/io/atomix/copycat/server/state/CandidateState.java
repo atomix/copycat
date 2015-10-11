@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
@@ -23,7 +24,6 @@ import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
-import io.atomix.catalyst.util.concurrent.Scheduled;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -166,10 +166,7 @@ final class CandidateState extends ActiveState {
                 LOGGER.debug("{} - Received successful vote from {}", context.getAddress(), member);
                 quorum.succeed();
               }
-              response.release();
             }
-          } else if (response != null) {
-            response.release();
           }
         }, context.getThreadContext().executor());
       });
@@ -202,7 +199,6 @@ final class CandidateState extends ActiveState {
     }
 
     // If the vote request is not for this candidate then reject the vote.
-    request.release();
     if (request.candidate() == context.getAddress().hashCode()) {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)

@@ -15,15 +15,14 @@
  */
 package io.atomix.copycat.client.request;
 
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Operation;
 
 import java.util.Objects;
 
@@ -58,13 +57,6 @@ public class CommandRequest extends OperationRequest<CommandRequest> {
   }
 
   private Command command;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public CommandRequest(ReferenceManager<CommandRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the command.
@@ -123,12 +115,6 @@ public class CommandRequest extends OperationRequest<CommandRequest> {
      */
     protected Builder(BuilderPool<Builder, CommandRequest> pool) {
       super(pool, CommandRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.command = null;
     }
 
     /**

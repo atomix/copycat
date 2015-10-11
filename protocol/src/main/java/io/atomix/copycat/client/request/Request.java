@@ -17,14 +17,13 @@ package io.atomix.copycat.client.request;
 
 import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceCounted;
 
 /**
  * Protocol request.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Request<T extends Request<T>> extends ReferenceCounted<T>, CatalystSerializable {
+public interface Request<T extends Request<T>> extends CatalystSerializable {
 
   /**
    * Request builder.

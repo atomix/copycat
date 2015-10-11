@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.JoinRequest;
 import io.atomix.copycat.server.response.JoinResponse;
-import io.atomix.catalyst.util.concurrent.Scheduled;
 
 import java.util.Iterator;
 import java.util.List;
@@ -106,7 +106,6 @@ final class JoinState extends InactiveState {
             LOGGER.debug("{} - Failed to join {}", context.getAddress(), member.getAddress());
             join(iterator);
           }
-          response.release();
         } else {
           LOGGER.debug("{} - Failed to join {}", context.getAddress(), member.getAddress());
           join(iterator);

@@ -15,14 +15,13 @@
  */
 package io.atomix.copycat.server.response;
 
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.client.response.AbstractResponse;
 
 import java.util.Objects;
 
@@ -53,13 +52,6 @@ public class LeaveResponse extends AbstractResponse<LeaveResponse> {
    */
   public static Builder builder(LeaveResponse response) {
     return POOL.acquire(response);
-  }
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public LeaveResponse(ReferenceManager<LeaveResponse> referenceManager) {
-    super(referenceManager);
   }
 
   @Override

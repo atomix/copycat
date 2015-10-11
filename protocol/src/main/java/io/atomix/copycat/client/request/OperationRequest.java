@@ -20,9 +20,9 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceFactory;
-import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.client.Operation;
+
+import java.util.function.Supplier;
 
 /**
  * Operation request.
@@ -31,10 +31,6 @@ import io.atomix.copycat.client.Operation;
  */
 public abstract class OperationRequest<T extends OperationRequest<T>> extends SessionRequest<T> {
   protected long sequence;
-
-  public OperationRequest(ReferenceManager<T> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the request sequence number.
@@ -72,14 +68,8 @@ public abstract class OperationRequest<T extends OperationRequest<T>> extends Se
     /**
      * @throws NullPointerException if {@code pool} or {@code factory} are null
      */
-    protected Builder(BuilderPool<T, U> pool, ReferenceFactory<U> factory) {
+    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
       super(pool, factory);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.sequence = 0;
     }
 
     /**

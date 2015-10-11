@@ -15,16 +15,15 @@
  */
 package io.atomix.copycat.server.response;
 
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.response.AbstractResponse;
-import io.atomix.copycat.client.response.Response;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.client.response.AbstractResponse;
+import io.atomix.copycat.client.response.Response;
 
 import java.util.Objects;
 
@@ -59,13 +58,6 @@ public class PollResponse extends AbstractResponse<PollResponse> {
 
   private long term;
   private boolean accepted;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public PollResponse(ReferenceManager<PollResponse> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the responding node's current term.
@@ -135,13 +127,6 @@ public class PollResponse extends AbstractResponse<PollResponse> {
 
     protected Builder(BuilderPool<Builder, PollResponse> pool) {
       super(pool, PollResponse::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.term = 0;
-      response.accepted = false;
     }
 
     /**

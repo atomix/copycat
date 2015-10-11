@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
@@ -57,13 +56,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
   }
 
   private long version;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public PublishResponse(ReferenceManager<PublishResponse> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the event version number.
@@ -125,12 +117,6 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
      */
     protected Builder(BuilderPool<Builder, PublishResponse> pool) {
       super(pool, PublishResponse::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.version = -1;
     }
 
     /**

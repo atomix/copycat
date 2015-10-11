@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -23,7 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -59,13 +58,6 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
   }
 
   private Collection<Address> members;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public KeepAliveResponse(ReferenceManager<KeepAliveResponse> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the cluster members.
@@ -128,12 +120,6 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
      */
     protected Builder(BuilderPool<Builder, KeepAliveResponse> pool) {
       super(pool, KeepAliveResponse::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.members = null;
     }
 
     /**

@@ -18,7 +18,6 @@ package io.atomix.copycat.client.request;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 
 import java.util.Objects;
 
@@ -50,13 +49,6 @@ public class ConnectRequest extends SessionRequest<ConnectRequest> {
    */
   public static Builder builder(ConnectRequest request) {
     return POOL.acquire(Assert.notNull(request, "request"));
-  }
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public ConnectRequest(ReferenceManager<ConnectRequest> referenceManager) {
-    super(referenceManager);
   }
 
   @Override

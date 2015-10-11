@@ -178,174 +178,153 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<JoinResponse> join(final JoinRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getCluster().getMember(request.member().hashCode()) != null) {
-        return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withVersion(context.getCluster().getVersion())
-          .withActiveMembers(context.getCluster().buildActiveMembers())
-          .withPassiveMembers(context.getCluster().buildPassiveMembers())
-          .build()));
-      }
-
-      final long term = context.getTerm();
-      final long index;
-
-      Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
-      Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
-      passiveMembers.add(request.member());
-
-      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(term)
-          .setActive(activeMembers)
-          .setPassive(passiveMembers);
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
-
-        // Immediately apply the configuration change. No need to validate whether this node was changed
-        // to PASSIVE since it's the leader and would have already transitioned to the LEAVE state if
-        // it were leaving the cluster.
-        context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
-      }
-
-      CompletableFuture<JoinResponse> future = new CompletableFuture<>();
-      replicator.commit(index).whenComplete((commitIndex, commitError) -> {
-        context.checkThread();
-        if (isOpen()) {
-          if (commitError == null) {
-            future.complete(logResponse(JoinResponse.builder()
-              .withStatus(Response.Status.OK)
-              .withVersion(index)
-              .withActiveMembers(activeMembers)
-              .withPassiveMembers(passiveMembers)
-              .build()));
-          } else {
-            future.complete(logResponse(JoinResponse.builder()
-              .withStatus(Response.Status.ERROR)
-              .withError(RaftError.Type.INTERNAL_ERROR)
-              .build()));
-          }
-        }
-      });
-      return future;
-    } finally {
-      request.release();
+    if (context.getCluster().getMember(request.member().hashCode()) != null) {
+      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withVersion(context.getCluster().getVersion())
+        .withActiveMembers(context.getCluster().buildActiveMembers())
+        .withPassiveMembers(context.getCluster().buildPassiveMembers())
+        .build()));
     }
+
+    final long term = context.getTerm();
+    final long index;
+
+    Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
+    Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
+    passiveMembers.add(request.member());
+
+    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+      entry.setTerm(term)
+        .setActive(activeMembers)
+        .setPassive(passiveMembers);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+
+      // Immediately apply the configuration change. No need to validate whether this node was changed
+      // to PASSIVE since it's the leader and would have already transitioned to the LEAVE state if
+      // it were leaving the cluster.
+      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+    }
+
+    CompletableFuture<JoinResponse> future = new CompletableFuture<>();
+    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (commitError == null) {
+          future.complete(logResponse(JoinResponse.builder()
+            .withStatus(Response.Status.OK)
+            .withVersion(index)
+            .withActiveMembers(activeMembers)
+            .withPassiveMembers(passiveMembers)
+            .build()));
+        } else {
+          future.complete(logResponse(JoinResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(RaftError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+    return future;
   }
 
   @Override
   public CompletableFuture<LeaveResponse> leave(final LeaveRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getCluster().getMember(request.member().hashCode()) == null) {
-        return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
-          .withStatus(Response.Status.OK)
-          .build()));
-      }
-
-      final long term = context.getTerm();
-      final long index;
-
-      Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
-      activeMembers.remove(request.member());
-
-      Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
-      passiveMembers.remove(request.member());
-
-      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(term)
-          .setActive(activeMembers)
-          .setPassive(passiveMembers);
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
-
-        // Immediately apply the configuration change. No need to validate whether this node was changed
-        // to PASSIVE since it's the leader and would have already transitioned to the LEAVE state if
-        // it were leaving the cluster.
-        context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
-      }
-
-      CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
-      replicator.commit(index).whenComplete((commitIndex, commitError) -> {
-        context.checkThread();
-        if (isOpen()) {
-          if (commitError == null) {
-            future.complete(logResponse(LeaveResponse.builder()
-              .withStatus(Response.Status.OK)
-              .build()));
-          } else {
-            future.complete(logResponse(LeaveResponse.builder()
-              .withStatus(Response.Status.ERROR)
-              .withError(RaftError.Type.INTERNAL_ERROR)
-              .build()));
-          }
-        }
-      });
-      return future;
-    } finally {
-      request.release();
+    if (context.getCluster().getMember(request.member().hashCode()) == null) {
+      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
+        .withStatus(Response.Status.OK)
+        .build()));
     }
+
+    final long term = context.getTerm();
+    final long index;
+
+    Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
+    activeMembers.remove(request.member());
+
+    Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
+    passiveMembers.remove(request.member());
+
+    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+      entry.setTerm(term)
+        .setActive(activeMembers)
+        .setPassive(passiveMembers);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+
+      // Immediately apply the configuration change. No need to validate whether this node was changed
+      // to PASSIVE since it's the leader and would have already transitioned to the LEAVE state if
+      // it were leaving the cluster.
+      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+    }
+
+    CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
+    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (commitError == null) {
+          future.complete(logResponse(LeaveResponse.builder()
+            .withStatus(Response.Status.OK)
+            .build()));
+        } else {
+          future.complete(logResponse(LeaveResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(RaftError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+    return future;
   }
 
   @Override
   public CompletableFuture<PollResponse> poll(final PollRequest request) {
-    try {
-      return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withAccepted(false)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
+      .withStatus(Response.Status.OK)
+      .withTerm(context.getTerm())
+      .withAccepted(false)
+      .build()));
   }
 
   @Override
   public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
-    try {
-      if (request.term() > context.getTerm()) {
-        LOGGER.debug("{} - Received greater term", context.getAddress());
-        context.setLeader(0);
-        transition(CopycatServer.State.FOLLOWER);
-        request.acquire();
-        return super.vote(request);
-      } else {
-        return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
-          .withVoted(false)
-          .build()));
-      }
-    } finally {
-      request.release();
+    if (request.term() > context.getTerm()) {
+      LOGGER.debug("{} - Received greater term", context.getAddress());
+      context.setLeader(0);
+      transition(CopycatServer.State.FOLLOWER);
+      return super.vote(request);
+    } else {
+      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withVoted(false)
+        .build()));
     }
   }
 
   @Override
   public CompletableFuture<AppendResponse> append(final AppendRequest request) {
-    try {
-      context.checkThread();
-      if (request.term() > context.getTerm()) {
-        return super.append(request);
-      } else if (request.term() < context.getTerm()) {
-        return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
-          .withSucceeded(false)
-          .withLogIndex(context.getLog().lastIndex())
-          .build()));
-      } else {
-        context.setLeader(request.leader());
-        transition(CopycatServer.State.FOLLOWER);
-        return super.append(request);
-      }
-    } finally {
-      request.release();
+    context.checkThread();
+    if (request.term() > context.getTerm()) {
+      return super.append(request);
+    } else if (request.term() < context.getTerm()) {
+      return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withSucceeded(false)
+        .withLogIndex(context.getLog().lastIndex())
+        .build()));
+    } else {
+      context.setLeader(request.leader());
+      transition(CopycatServer.State.FOLLOWER);
+      return super.append(request);
     }
   }
 
@@ -381,20 +360,15 @@ final class LeaderState extends ActiveState {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    try {
-
-      // Create a CommandEntry and append it to the log.
-      try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
-        entry.setTerm(term)
-          .setSession(request.session())
-          .setTimestamp(timestamp)
-          .setSequence(request.sequence())
-          .setCommand(command);
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended entry to log at index {}", context.getAddress(), index);
-      }
-    } finally {
-      request.release();
+    // Create a CommandEntry and append it to the log.
+    try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
+      entry.setTerm(term)
+        .setSession(request.session())
+        .setTimestamp(timestamp)
+        .setSequence(request.sequence())
+        .setCommand(command);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended entry to log at index {}", context.getAddress(), index);
     }
 
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
@@ -452,36 +426,32 @@ final class LeaderState extends ActiveState {
     final long timestamp = System.currentTimeMillis();
     final long index = context.getCommitIndex();
 
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      QueryEntry entry = context.getLog().create(QueryEntry.class)
-        .setIndex(index)
-        .setTerm(context.getTerm())
-        .setTimestamp(timestamp)
-        .setSession(request.session())
-        .setSequence(request.sequence())
-        .setVersion(request.version())
-        .setQuery(query);
+    QueryEntry entry = context.getLog().create(QueryEntry.class)
+      .setIndex(index)
+      .setTerm(context.getTerm())
+      .setTimestamp(timestamp)
+      .setSession(request.session())
+      .setSequence(request.sequence())
+      .setVersion(request.version())
+      .setQuery(query);
 
-      Query.ConsistencyLevel consistency = query.consistency();
-      if (consistency == null)
+    Query.ConsistencyLevel consistency = query.consistency();
+    if (consistency == null)
+      return submitQueryLinearizable(entry);
+
+    switch (consistency) {
+      case CAUSAL:
+      case SEQUENTIAL:
+        return submitQueryLocal(entry);
+      case BOUNDED_LINEARIZABLE:
+        return submitQueryBoundedLinearizable(entry);
+      case LINEARIZABLE:
         return submitQueryLinearizable(entry);
-
-      switch (consistency) {
-        case CAUSAL:
-        case SEQUENTIAL:
-          return submitQueryLocal(entry);
-        case BOUNDED_LINEARIZABLE:
-          return submitQueryBoundedLinearizable(entry);
-        case LINEARIZABLE:
-          return submitQueryLinearizable(entry);
-        default:
-          throw new IllegalStateException("unknown consistency level");
-      }
-    } finally {
-      request.release();
+      default:
+        throw new IllegalStateException("unknown consistency level");
     }
   }
 
@@ -566,20 +536,16 @@ final class LeaderState extends ActiveState {
     final long index;
     final long timeout = context.getSessionTimeout().toMillis();
 
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setTimestamp(timestamp)
-          .setClient(request.client())
-          .setTimeout(timeout);
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
-      }
-    } finally {
-      request.release();
+    try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
+      entry.setTerm(context.getTerm())
+        .setTimestamp(timestamp)
+        .setClient(request.client())
+        .setTimeout(timeout);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
@@ -636,8 +602,7 @@ final class LeaderState extends ActiveState {
       .build();
     return accept(acceptRequest)
       .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
-      .thenApply(this::logResponse)
-      .whenComplete((result, error) -> request.release());
+      .thenApply(this::logResponse);
   }
 
   @Override
@@ -645,20 +610,16 @@ final class LeaderState extends ActiveState {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setSession(request.session())
-          .setTimestamp(timestamp)
-          .setAddress(request.address());
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
-      }
-    } finally {
-      request.release();
+    try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
+      entry.setTerm(context.getTerm())
+        .setSession(request.session())
+        .setTimestamp(timestamp)
+        .setAddress(request.address());
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
     context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
@@ -706,21 +667,17 @@ final class LeaderState extends ActiveState {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setSession(request.session())
-          .setCommandSequence(request.commandSequence())
-          .setEventVersion(request.eventVersion())
-          .setTimestamp(timestamp);
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
-      }
-    } finally {
-      request.release();
+    try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
+      entry.setTerm(context.getTerm())
+        .setSession(request.session())
+        .setCommandSequence(request.commandSequence())
+        .setEventVersion(request.eventVersion())
+        .setTimestamp(timestamp);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
@@ -767,19 +724,15 @@ final class LeaderState extends ActiveState {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setSession(request.session())
-          .setTimestamp(timestamp);
-        index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
-      }
-    } finally {
-      request.release();
+    try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
+      entry.setTerm(context.getTerm())
+        .setSession(request.session())
+        .setTimestamp(timestamp);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
@@ -1129,12 +1082,9 @@ final class LeaderState extends ActiveState {
             } else {
               LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
             }
-            response.release();
           } else {
             failAttempt(member, error);
           }
-        } else if (response != null) {
-          response.release();
         }
       });
     }

@@ -50,39 +50,31 @@ abstract class ActiveState extends PassiveState {
 
   @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
-    try {
-      context.checkThread();
+    context.checkThread();
 
-      // If the request indicates a term that is greater than the current term then
-      // assign that term and leader to the current context and step down as leader.
-      boolean transition = false;
-      if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-        context.setTerm(request.term());
-        context.setLeader(request.leader());
-        transition = true;
-      }
-
-      CompletableFuture<AppendResponse> future = CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
-
-      // If a transition is required then transition back to the follower state.
-      // If the node is already a follower then the transition will be ignored.
-      if (transition) {
-        transition(CopycatServer.State.FOLLOWER);
-      }
-      return future;
-    } finally {
-      request.release();
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    boolean transition = false;
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+      transition = true;
     }
+
+    CompletableFuture<AppendResponse> future = CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
+
+    // If a transition is required then transition back to the follower state.
+    // If the node is already a follower then the transition will be ignored.
+    if (transition) {
+      transition(CopycatServer.State.FOLLOWER);
+    }
+    return future;
   }
 
   @Override
   protected CompletableFuture<PollResponse> poll(PollRequest request) {
-    try {
-      context.checkThread();
-      return CompletableFuture.completedFuture(logResponse(handlePoll(logRequest(request))));
-    } finally {
-      request.release();
-    }
+    context.checkThread();
+    return CompletableFuture.completedFuture(logResponse(handlePoll(logRequest(request))));
   }
 
   /**
@@ -123,12 +115,8 @@ abstract class ActiveState extends PassiveState {
 
   @Override
   protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
-    try {
-      context.checkThread();
-      return CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
-    } finally {
-      request.release();
-    }
+    context.checkThread();
+    return CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
   }
 
   /**
@@ -229,46 +217,38 @@ abstract class ActiveState extends PassiveState {
 
   @Override
   protected CompletableFuture<CommandResponse> command(CommandRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<QueryResponse> query(QueryRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
-      if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL
-        || request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
+    // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
+    if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL
+      || request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
 
-        // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
-        // Forward the request to the leader.
-        if (context.getLog().lastIndex() < context.getCommitIndex()) {
-          LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
-          return queryForward(request);
-        }
-
-        return queryLocal(request);
-      } else {
+      // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
+      // Forward the request to the leader.
+      if (context.getLog().lastIndex() < context.getCommitIndex()) {
+        LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
         return queryForward(request);
       }
-    } finally {
-      request.release();
+
+      return queryLocal(request);
+    } else {
+      return queryForward(request);
     }
   }
 

@@ -15,15 +15,14 @@
  */
 package io.atomix.copycat.server.request;
 
-import io.atomix.copycat.client.request.AbstractRequest;
-import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.request.AbstractRequest;
+import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,13 +65,6 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
   private List<Entry> entries = new ArrayList<>(128);
   private long commitIndex;
   private long globalIndex;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  private AppendRequest(ReferenceManager<AppendRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the requesting node's current term.
@@ -173,25 +165,6 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
   }
 
   @Override
-  public boolean release() {
-    if (super.release()) {
-      for (Entry entry : entries) {
-        entry.release();
-      }
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  public void close() {
-    for (Entry entry : entries) {
-      entry.release();
-    }
-    super.close();
-  }
-
-  @Override
   public int hashCode() {
     return Objects.hash(getClass(), term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
   }
@@ -223,18 +196,6 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
 
     protected Builder(BuilderPool<Builder, AppendRequest> pool) {
       super(pool, AppendRequest::new);
-    }
-
-    @Override
-    public void reset() {
-      super.reset();
-      request.leader = 0;
-      request.term = 0;
-      request.logIndex = 0;
-      request.logTerm = 0;
-      request.entries.clear();
-      request.commitIndex = 0;
-      request.globalIndex = 0;
     }
 
     /**

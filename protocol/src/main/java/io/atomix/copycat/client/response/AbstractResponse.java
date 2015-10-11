@@ -18,11 +18,12 @@ package io.atomix.copycat.client.response;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
-import io.atomix.catalyst.util.*;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * Abstract response implementation.
@@ -30,17 +31,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class AbstractResponse<T extends Response<T>> implements Response<T> {
-  private final AtomicInteger references = new AtomicInteger();
-  private final ReferenceManager<T> referenceManager;
   protected Status status = Status.OK;
   protected RaftError error;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  protected AbstractResponse(ReferenceManager<T> referenceManager) {
-    this.referenceManager = Assert.notNull(referenceManager, "referenceManager");
-  }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
@@ -61,41 +53,6 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public T acquire() {
-    references.incrementAndGet();
-    return (T) this;
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public boolean release() {
-    int refs = references.decrementAndGet();
-    if (refs == 0) {
-      referenceManager.release((T) this);
-      return true;
-    } else if (refs < 0) {
-      references.set(0);
-      throw new IllegalStateException("cannot dereference non-referenced object");
-    }
-    return false;
-  }
-
-  @Override
-  public int references() {
-    return references.get();
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public void close() {
-    if (references.get() == 0)
-      throw new IllegalStateException("cannot close non-referenced object");
-    references.set(0);
-    referenceManager.release((T) this);
-  }
-
-  @Override
   public String toString() {
     return String.format("%s[status=%s]", getClass().getCanonicalName(), status);
   }
@@ -107,22 +64,20 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
    * @param <U> The response type.
    */
   protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractResponse<U>> extends Response.Builder<T, U> {
-    protected final ReferencePool<U> pool;
+    private final Supplier<U> factory;
     protected U response;
 
     /**
      * @throws NullPointerException if {@code factory} is null
      */
-    protected Builder(BuilderPool<T, U> pool, ReferenceFactory<U> factory) {
+    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
       super(pool);
-      this.pool = new ReferencePool<>(Assert.notNull(factory, "factory"));
+      this.factory = Assert.notNull(factory, "factory");
     }
 
     @Override
     protected void reset() {
-      response = pool.acquire();
-      response.status = null;
-      response.error = null;
+      response = factory.get();
     }
 
     @Override

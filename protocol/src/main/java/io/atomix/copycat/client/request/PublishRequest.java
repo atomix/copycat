@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.client.Event;
 
 import java.util.ArrayList;
@@ -62,13 +61,6 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   private long eventVersion;
   private long previousVersion;
   private List<Event<?>> events = new ArrayList<>(8);
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public PublishRequest(ReferenceManager<PublishRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the event version number.
@@ -153,14 +145,6 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
      */
     protected Builder(BuilderPool<Builder, PublishRequest> pool) {
       super(pool, PublishRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.eventVersion = -1;
-      request.previousVersion = -1;
-      request.events.clear();
     }
 
     /**

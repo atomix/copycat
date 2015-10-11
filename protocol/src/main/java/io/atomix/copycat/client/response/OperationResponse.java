@@ -15,16 +15,15 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceFactory;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Operation response.
@@ -34,13 +33,6 @@ import java.util.Objects;
 public abstract class OperationResponse<T extends OperationResponse<T>> extends SessionResponse<T> {
   protected long version;
   protected Object result;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public OperationResponse(ReferenceManager<T> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the query version.
@@ -108,15 +100,8 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
    * Operation response builder.
    */
   public static abstract class Builder<T extends Builder<T, U>, U extends OperationResponse<U>> extends SessionResponse.Builder<T, U> {
-    protected Builder(BuilderPool<T, U> pool, ReferenceFactory<U> factory) {
+    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
       super(pool, factory);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.version = 0;
-      response.result = null;
     }
 
     /**

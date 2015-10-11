@@ -15,14 +15,13 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
 
@@ -54,13 +53,6 @@ public class UnregisterResponse extends SessionResponse<UnregisterResponse> {
    */
   public static Builder builder(UnregisterResponse response) {
     return POOL.acquire(Assert.notNull(response, "response"));
-  }
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public UnregisterResponse(ReferenceManager<UnregisterResponse> referenceManager) {
-    super(referenceManager);
   }
 
   @Override

@@ -50,20 +50,16 @@ class PassiveState extends AbstractState {
 
   @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
-    try {
-      context.checkThread();
+    context.checkThread();
 
-      // If the request indicates a term that is greater than the current term then
-      // assign that term and leader to the current context and step down as leader.
-      if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-        context.setTerm(request.term());
-        context.setLeader(request.leader());
-      }
-
-      return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
-    } finally {
-      request.release();
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
     }
+
+    return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
   }
 
   /**
@@ -267,38 +263,29 @@ class PassiveState extends AbstractState {
 
   @Override
   protected CompletableFuture<PollResponse> poll(PollRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
-      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    context.checkThread();
+    logRequest(request);
+    return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   /**
    * Forwards the given request to the leader if possible.
    */
   protected <T extends Request<T>, U extends Response<U>> CompletableFuture<U> forward(T request) {
-    request.acquire();
     CompletableFuture<U> future = new CompletableFuture<>();
     context.getConnections().getConnection(context.getLeader()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
@@ -309,8 +296,6 @@ class PassiveState extends AbstractState {
             future.completeExceptionally(responseError);
           }
         });
-      } else {
-        request.release();
       }
     });
     return future;
@@ -318,165 +303,125 @@ class PassiveState extends AbstractState {
 
   @Override
   protected CompletableFuture<CommandResponse> command(CommandRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    context.checkThread();
+    logRequest(request);
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<QueryResponse> query(QueryRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.NO_LEADER_ERROR)
-          .build()));
-      } else {
-        return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    context.checkThread();
+    logRequest(request);
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } finally {
-      request.release();
-    }
+    return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
   protected CompletableFuture<JoinResponse> join(JoinRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-          .build()));
-      } else {
-        return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } else {
+      return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
   @Override
   protected CompletableFuture<LeaveResponse> leave(LeaveRequest request) {
-    try {
-      context.checkThread();
-      logRequest(request);
+    context.checkThread();
+    logRequest(request);
 
-      if (context.getLeader() == null) {
-        return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-          .build()));
-      } else {
-        return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
-      }
-    } finally {
-      request.release();
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } else {
+      return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
     }
   }
 

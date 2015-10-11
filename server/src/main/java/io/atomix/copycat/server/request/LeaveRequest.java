@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.request;
 
-import io.atomix.copycat.client.request.AbstractRequest;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -23,7 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.request.AbstractRequest;
 
 import java.util.Objects;
 
@@ -57,13 +56,6 @@ public class LeaveRequest extends AbstractRequest<LeaveRequest> {
   }
 
   private Address member;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  private LeaveRequest(ReferenceManager<LeaveRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the leaving member.
@@ -110,12 +102,6 @@ public class LeaveRequest extends AbstractRequest<LeaveRequest> {
 
     protected Builder(BuilderPool<Builder, LeaveRequest> pool) {
       super(pool, LeaveRequest::new);
-    }
-
-    @Override
-    public void reset() {
-      super.reset();
-      request.member = null;
     }
 
     /**

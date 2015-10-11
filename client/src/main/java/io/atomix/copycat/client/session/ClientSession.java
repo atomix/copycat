@@ -172,7 +172,6 @@ public class ClientSession implements Session, Managed<Session> {
 
     long sequence = ++requestSequence;
 
-    request.acquire();
     this.<CommandRequest, CommandResponse>request(request).whenComplete((response, error) -> {
       if (error == null) {
         long responseSequence = request.sequence();
@@ -183,7 +182,6 @@ public class ClientSession implements Session, Managed<Session> {
       } else {
         future.completeExceptionally(error);
       }
-      request.release();
     });
     return future;
   }
@@ -236,7 +234,6 @@ public class ClientSession implements Session, Managed<Session> {
 
     long sequence = ++requestSequence;
 
-    request.acquire();
     this.<QueryRequest, QueryResponse>request(request).whenComplete((response, error) -> {
       if (error == null) {
         // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
@@ -262,7 +259,6 @@ public class ClientSession implements Session, Managed<Session> {
       } else {
         future.completeExceptionally(error);
       }
-      request.release();
     });
     return future;
   }
@@ -300,7 +296,6 @@ public class ClientSession implements Session, Managed<Session> {
     } else {
       future.completeExceptionally(response.error().createException());
     }
-    response.release();
   }
 
   /**
@@ -426,9 +421,6 @@ public class ClientSession implements Session, Managed<Session> {
    * @return The provided future to be completed once the response is received.
    */
   private <T extends Request<T>, U extends Response<U>> CompletableFuture<U> request(T request, Connection connection, CompletableFuture<U> future, boolean checkOpen, boolean recordFailures) {
-    // Always acquire an additional reference prior to sending a request. The request reference will be released before the response is received.
-    request.acquire();
-
     LOGGER.debug("Sending: {}", request);
     connection.<T, U>send(request).whenComplete((response, error) -> {
       if (!checkOpen || isOpen()) {
@@ -577,7 +569,6 @@ public class ClientSession implements Session, Managed<Session> {
       .withClient(clientId)
       .build();
 
-    request.acquire();
     this.<RegisterRequest, RegisterResponse>request(request, new CompletableFuture<>(), false, true).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
@@ -589,11 +580,9 @@ public class ClientSession implements Session, Managed<Session> {
         } else {
           future.completeExceptionally(response.error().createException());
         }
-        response.release();
       } else {
         future.completeExceptionally(error);
       }
-      request.release();
     });
     return future;
   }
@@ -612,7 +601,6 @@ public class ClientSession implements Session, Managed<Session> {
           .withEventVersion(completeVersion)
           .build();
 
-        request.acquire();
         this.<KeepAliveRequest, KeepAliveResponse>request(request).whenComplete((response, error) -> {
           if (error == null) {
             if (response.status() == Response.Status.OK) {
@@ -621,11 +609,9 @@ public class ClientSession implements Session, Managed<Session> {
             } else if (isOpen()) {
               keepAlive(interval);
             }
-            response.release();
           } else if (isOpen()) {
             keepAlive(interval);
           }
-          request.release();
         });
       }
     });
@@ -716,7 +702,6 @@ public class ClientSession implements Session, Managed<Session> {
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
       .handleAsync((result, error) -> {
         completeVersion = Math.max(completeVersion, request.eventVersion());
-        request.release();
         return PublishResponse.builder()
           .withStatus(Response.Status.OK)
           .withVersion(eventVersion)

@@ -15,17 +15,16 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceCounted;
+import io.atomix.copycat.client.error.RaftError;
 
 /**
  * Protocol response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Response<T extends Response<T>> extends ReferenceCounted<T>, CatalystSerializable {
+public interface Response<T extends Response<T>> extends CatalystSerializable {
 
   /**
    * Response status.

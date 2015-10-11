@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -23,7 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -61,13 +60,6 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
   private long session;
   private Collection<Address> members;
   private long timeout;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public RegisterResponse(ReferenceManager<RegisterResponse> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the registered session ID.
@@ -156,14 +148,6 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
      */
     protected Builder(BuilderPool<Builder, RegisterResponse> pool) {
       super(pool, RegisterResponse::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      response.session = 0;
-      response.members = null;
-      response.timeout = 0;
     }
 
     /**

@@ -15,15 +15,14 @@
  */
 package io.atomix.copycat.client.request;
 
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.Query;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.Operation;
+import io.atomix.copycat.client.Query;
 
 import java.util.Objects;
 
@@ -59,13 +58,6 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
 
   private long version;
   private Query query;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public QueryRequest(ReferenceManager<QueryRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the query version.
@@ -135,13 +127,6 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
      */
     protected Builder(BuilderPool<Builder, QueryRequest> pool) {
       super(pool, QueryRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.version = 0;
-      request.query = null;
     }
 
     /**

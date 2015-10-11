@@ -18,7 +18,6 @@ package io.atomix.copycat.client.response;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
 
 /**
  * Protocol query response.
@@ -48,13 +47,6 @@ public class QueryResponse extends OperationResponse<QueryResponse> {
    */
   public static Builder builder(QueryResponse request) {
     return POOL.acquire(Assert.notNull(request, "request"));
-  }
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public QueryResponse(ReferenceManager<QueryResponse> referenceManager) {
-    super(referenceManager);
   }
 
   /**

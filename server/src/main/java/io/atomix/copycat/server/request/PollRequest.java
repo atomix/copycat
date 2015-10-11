@@ -15,14 +15,13 @@
  */
 package io.atomix.copycat.server.request;
 
-import io.atomix.copycat.client.request.AbstractRequest;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.BuilderPool;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.request.AbstractRequest;
 
 import java.util.Objects;
 
@@ -59,13 +58,6 @@ public class PollRequest extends AbstractRequest<PollRequest> {
   private int candidate;
   private long logIndex = -1;
   private long logTerm = -1;
-
-  /**
-   * @throws NullPointerException if {@code referenceManager} is null
-   */
-  public PollRequest(ReferenceManager<PollRequest> referenceManager) {
-    super(referenceManager);
-  }
 
   /**
    * Returns the requesting node's current term.
@@ -148,15 +140,6 @@ public class PollRequest extends AbstractRequest<PollRequest> {
 
     protected Builder(BuilderPool<Builder, PollRequest> pool) {
       super(pool, PollRequest::new);
-    }
-
-    @Override
-    protected void reset() {
-      super.reset();
-      request.term = -1;
-      request.candidate = 0;
-      request.logIndex = -1;
-      request.logTerm = -1;
     }
 
     /**
