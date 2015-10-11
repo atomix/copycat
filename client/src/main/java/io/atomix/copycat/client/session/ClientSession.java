@@ -461,7 +461,8 @@ public class ClientSession implements Session, Managed<Session> {
         }
         // If an error occurred, attempt to contact the next server recursively.
         else {
-          LOGGER.debug("Request timed out: {}", request);
+          LOGGER.debug("Request failed: {}", request);
+          LOGGER.debug("{}", error.getMessage());
           resetConnection().request(request, future, checkOpen, recordFailures);
         }
       } else {
