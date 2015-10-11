@@ -70,6 +70,7 @@
 
   <modules>
     <module>value-state-machine</module>
+    <module>value-client</module>
   </modules>
 
   <dependencies>
