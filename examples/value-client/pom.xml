@@ -59,7 +59,7 @@
         <version>1.6</version>
         <configuration>
           <createDependencyReducedPom>true</createDependencyReducedPom>
-          <finalName>value-state-machine</finalName>
+          <finalName>value-client</finalName>
           <filters>
             <filter>
               <artifact>*:*</artifact>

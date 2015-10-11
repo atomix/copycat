@@ -38,6 +38,7 @@ public class ValueStateMachine extends StateMachine {
    * Sets the value.
    */
   private Object set(Commit<SetCommand> commit) {
+    System.out.println("Set: " + commit.operation().value());
     try {
       Commit<SetCommand> previous = value;
       value = commit;
