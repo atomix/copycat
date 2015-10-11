@@ -15,10 +15,6 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.catalyst.util.BuilderPool;
-
-import java.util.function.Supplier;
-
 /**
  * Session response.
  *
@@ -30,8 +26,8 @@ public abstract class SessionResponse<T extends SessionResponse<T>> extends Abst
    * Session response builder.
    */
   public static abstract class Builder<T extends Builder<T, U>, U extends SessionResponse<U>> extends AbstractResponse.Builder<T, U> {
-    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
-      super(pool, factory);
+    protected Builder(U response) {
+      super(response);
     }
   }
 

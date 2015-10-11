@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 
@@ -34,15 +33,13 @@ import java.util.Objects;
 @SerializeWith(id=256)
 public class CommandRequest extends OperationRequest<CommandRequest> {
 
-  private static final BuilderPool<Builder, CommandRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new submit request builder.
    *
    * @return A new submit request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new CommandRequest());
   }
 
   /**
@@ -53,7 +50,7 @@ public class CommandRequest extends OperationRequest<CommandRequest> {
    * @throws NullPointerException if {@code request} is null
    */
   public static Builder builder(CommandRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   private Command command;
@@ -109,12 +106,8 @@ public class CommandRequest extends OperationRequest<CommandRequest> {
    * Write request builder.
    */
   public static class Builder extends OperationRequest.Builder<Builder, CommandRequest> {
-    
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, CommandRequest> pool) {
-      super(pool, CommandRequest::new);
+    protected Builder(CommandRequest request) {
+      super(request);
     }
 
     /**

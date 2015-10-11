@@ -16,7 +16,6 @@
 package io.atomix.copycat.client.response;
 
 import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 /**
@@ -96,10 +95,6 @@ public interface Response<T extends Response<T>> extends CatalystSerializable {
    * @param <U> The response type.
    */
   abstract class Builder<T extends Builder<T, U>, U extends Response> extends io.atomix.catalyst.util.Builder<U> {
-
-    protected Builder(BuilderPool pool) {
-      super(pool);
-    }
 
     /**
      * Sets the response status.

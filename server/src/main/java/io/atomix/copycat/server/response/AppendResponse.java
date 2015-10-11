@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.copycat.client.response.Response;
@@ -35,15 +34,13 @@ import java.util.Objects;
 @SerializeWith(id=277)
 public class AppendResponse extends AbstractResponse<AppendResponse> {
 
-  private static final BuilderPool<Builder, AppendResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new append response builder.
    *
    * @return A new append response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new AppendResponse());
   }
 
   /**
@@ -53,7 +50,7 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
    * @return The append response builder.
    */
   public static Builder builder(AppendResponse response) {
-    return POOL.acquire(response);
+    return new Builder(response);
   }
 
   private long term;
@@ -138,9 +135,8 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
    * Append response builder.
    */
   public static class Builder extends AbstractResponse.Builder<Builder, AppendResponse> {
-
-    protected Builder(BuilderPool<Builder, AppendResponse> pool) {
-      super(pool, AppendResponse::new);
+    protected Builder(AppendResponse response) {
+      super(response);
     }
 
     /**

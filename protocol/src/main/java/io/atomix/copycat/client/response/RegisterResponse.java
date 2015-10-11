@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Collection;
@@ -35,15 +34,13 @@ import java.util.Objects;
 @SerializeWith(id=261)
 public class RegisterResponse extends AbstractResponse<RegisterResponse> {
 
-  private static final BuilderPool<Builder, RegisterResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new register client response builder.
    *
    * @return A new register client response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new RegisterResponse());
   }
 
   /**
@@ -54,7 +51,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
    * @throws NullPointerException if {@code response} is null
    */
   public static Builder builder(RegisterResponse response) {
-    return POOL.acquire(Assert.notNull(response, "response"));
+    return new Builder(response);
   }
 
   private long session;
@@ -142,12 +139,8 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
    * Register response builder.
    */
   public static class Builder extends AbstractResponse.Builder<Builder, RegisterResponse> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, RegisterResponse> pool) {
-      super(pool, RegisterResponse::new);
+    protected Builder(RegisterResponse response) {
+      super(response);
     }
 
     /**

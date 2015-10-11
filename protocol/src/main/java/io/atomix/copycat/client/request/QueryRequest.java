@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.Query;
 
@@ -34,15 +33,13 @@ import java.util.Objects;
 @SerializeWith(id=258)
 public class QueryRequest extends OperationRequest<QueryRequest> {
 
-  private static final BuilderPool<Builder, QueryRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new query request builder.
    *
    * @return A new query request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new QueryRequest());
   }
 
   /**
@@ -53,7 +50,7 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
    * @throws IllegalStateException if request is null
    */
   public static Builder builder(QueryRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   private long version;
@@ -121,12 +118,8 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
    * Query request builder.
    */
   public static class Builder extends OperationRequest.Builder<Builder, QueryRequest> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, QueryRequest> pool) {
-      super(pool, QueryRequest::new);
+    protected Builder(QueryRequest request) {
+      super(request);
     }
 
     /**

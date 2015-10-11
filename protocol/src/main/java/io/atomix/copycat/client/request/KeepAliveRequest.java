@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 
 import java.util.Objects;
 
@@ -32,15 +31,13 @@ import java.util.Objects;
 @SerializeWith(id=262)
 public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
 
-  private static final BuilderPool<Builder, KeepAliveRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new keep alive request builder.
    *
    * @return A new keep alive request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new KeepAliveRequest());
   }
 
   /**
@@ -51,7 +48,7 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
    * @throws NullPointerException if {@code request} is null
    */
   public static Builder builder(KeepAliveRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   private long commandSequence;
@@ -114,12 +111,8 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
    * Keep alive request builder.
    */
   public static class Builder extends SessionRequest.Builder<Builder, KeepAliveRequest> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, KeepAliveRequest> pool) {
-      super(pool, KeepAliveRequest::new);
+    protected Builder(KeepAliveRequest request) {
+      super(request);
     }
 
     /**

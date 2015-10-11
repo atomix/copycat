@@ -16,8 +16,6 @@
 package io.atomix.copycat.client.response;
 
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 
 /**
  * Protocol command response.
@@ -27,37 +25,32 @@ import io.atomix.catalyst.util.BuilderPool;
 @SerializeWith(id=257)
 public class CommandResponse extends OperationResponse<CommandResponse> {
 
-  private static final BuilderPool<Builder, CommandResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new submit response builder.
    *
    * @return A new submit response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new CommandResponse());
   }
 
   /**
    * Returns a submit response builder for an existing request.
    *
-   * @param request The response to build.
+   * @param response The response to build.
    * @return The submit response builder.
    * @throws NullPointerException if {@code request} is null
    */
-  public static Builder builder(CommandResponse request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+  public static Builder builder(CommandResponse response) {
+    return new Builder(response);
   }
 
   /**
    * Command response builder.
    */
   public static class Builder extends OperationResponse.Builder<Builder, CommandResponse> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, CommandResponse> pool) {
-      super(pool, CommandResponse::new);
+    protected Builder(CommandResponse response) {
+      super(response);
     }
   }
 

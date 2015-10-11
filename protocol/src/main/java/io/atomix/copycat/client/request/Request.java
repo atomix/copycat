@@ -16,7 +16,6 @@
 package io.atomix.copycat.client.request;
 
 import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.util.BuilderPool;
 
 /**
  * Protocol request.
@@ -31,12 +30,6 @@ public interface Request<T extends Request<T>> extends CatalystSerializable {
    * @param <T> The builder type.
    */
   abstract class Builder<T extends Builder<T, U>, U extends Request> extends io.atomix.catalyst.util.Builder<U> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool pool) {
-      super(pool);
-    }
   }
 
 }

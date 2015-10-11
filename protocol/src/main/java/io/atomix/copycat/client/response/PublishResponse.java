@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
@@ -33,15 +32,13 @@ import java.util.Objects;
 @SerializeWith(id=267)
 public class PublishResponse extends SessionResponse<PublishResponse> {
 
-  private static final BuilderPool<Builder, PublishResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new publish response builder.
    *
    * @return A new publish response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new PublishResponse());
   }
 
   /**
@@ -52,7 +49,7 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
    * @throws NullPointerException if {@code response} is null
    */
   public static Builder builder(PublishResponse response) {
-    return POOL.acquire(Assert.notNull(response, "response"));
+    return new Builder(response);
   }
 
   private long version;
@@ -111,12 +108,8 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
    * Publish response builder.
    */
   public static class Builder extends SessionResponse.Builder<Builder, PublishResponse> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, PublishResponse> pool) {
-      super(pool, PublishResponse::new);
+    protected Builder(PublishResponse response) {
+      super(response);
     }
 
     /**

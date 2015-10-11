@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
 
@@ -36,15 +35,13 @@ import java.util.Objects;
 @SerializeWith(id=269)
 public class JoinResponse extends AbstractResponse<JoinResponse> {
 
-  private static final BuilderPool<Builder, JoinResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new join response builder.
    *
    * @return A new join response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new JoinResponse());
   }
 
   /**
@@ -54,7 +51,7 @@ public class JoinResponse extends AbstractResponse<JoinResponse> {
    * @return The join response builder.
    */
   public static Builder builder(JoinResponse response) {
-    return POOL.acquire(response);
+    return new Builder(response);
   }
 
   private long version;
@@ -139,9 +136,8 @@ public class JoinResponse extends AbstractResponse<JoinResponse> {
    * Join response builder.
    */
   public static class Builder extends AbstractResponse.Builder<Builder, JoinResponse> {
-
-    protected Builder(BuilderPool<Builder, JoinResponse> pool) {
-      super(pool, JoinResponse::new);
+    protected Builder(JoinResponse response) {
+      super(response);
     }
 
     /**

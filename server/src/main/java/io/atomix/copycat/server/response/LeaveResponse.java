@@ -19,7 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
 
@@ -33,15 +32,13 @@ import java.util.Objects;
 @SerializeWith(id=271)
 public class LeaveResponse extends AbstractResponse<LeaveResponse> {
 
-  private static final BuilderPool<Builder, LeaveResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new leave response builder.
    *
    * @return A new leave response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new LeaveResponse());
   }
 
   /**
@@ -51,7 +48,7 @@ public class LeaveResponse extends AbstractResponse<LeaveResponse> {
    * @return The leave response builder.
    */
   public static Builder builder(LeaveResponse response) {
-    return POOL.acquire(response);
+    return new Builder(response);
   }
 
   @Override
@@ -95,9 +92,8 @@ public class LeaveResponse extends AbstractResponse<LeaveResponse> {
    * Leave response builder.
    */
   public static class Builder extends AbstractResponse.Builder<Builder, LeaveResponse> {
-
-    protected Builder(BuilderPool<Builder, LeaveResponse> pool) {
-      super(pool, LeaveResponse::new);
+    protected Builder(LeaveResponse response) {
+      super(response);
     }
 
     @Override

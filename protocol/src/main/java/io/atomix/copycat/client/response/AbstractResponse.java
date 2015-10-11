@@ -19,11 +19,9 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
-import java.util.function.Supplier;
 
 /**
  * Abstract response implementation.
@@ -64,25 +62,13 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
    * @param <U> The response type.
    */
   protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractResponse<U>> extends Response.Builder<T, U> {
-    private final Supplier<U> factory;
     protected U response;
 
     /**
      * @throws NullPointerException if {@code factory} is null
      */
-    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
-      super(pool);
-      this.factory = Assert.notNull(factory, "factory");
-    }
-
-    @Override
-    protected void reset() {
-      response = factory.get();
-    }
-
-    @Override
-    protected void reset(U response) {
-      this.response = Assert.notNull(response, "response");
+    protected Builder(U response) {
+      this.response = response;
     }
 
     @Override
@@ -105,7 +91,6 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
     @Override
     public U build() {
       Assert.stateNot(response.status == null, "status cannot be null");
-      close();
       return response;
     }
 

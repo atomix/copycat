@@ -392,13 +392,6 @@ public class CopycatClient implements Managed<CopycatClient> {
       this.members = new HashSet<>(Assert.notNull(members, "members"));
     }
 
-    @Override
-    protected void reset() {
-      transport = null;
-      serializer = null;
-      members = null;
-    }
-
     /**
      * Sets the client transport.
      * <p>

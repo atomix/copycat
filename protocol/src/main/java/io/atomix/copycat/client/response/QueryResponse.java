@@ -16,8 +16,6 @@
 package io.atomix.copycat.client.response;
 
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 
 /**
  * Protocol query response.
@@ -27,37 +25,32 @@ import io.atomix.catalyst.util.BuilderPool;
 @SerializeWith(id=259)
 public class QueryResponse extends OperationResponse<QueryResponse> {
 
-  private static final BuilderPool<Builder, QueryResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new query response builder.
    *
    * @return A new query response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new QueryResponse());
   }
 
   /**
    * Returns a query response builder for an existing request.
    *
-   * @param request The response to build.
+   * @param response The response to build.
    * @return The query response builder.
    * @throws NullPointerException if {@code request} is null
    */
-  public static Builder builder(QueryResponse request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+  public static Builder builder(QueryResponse response) {
+    return new Builder(response);
   }
 
   /**
    * Query response builder.
    */
   public static class Builder extends OperationResponse.Builder<Builder, QueryResponse> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, QueryResponse> pool) {
-      super(pool, QueryResponse::new);
+    protected Builder(QueryResponse response) {
+      super(response);
     }
   }
 

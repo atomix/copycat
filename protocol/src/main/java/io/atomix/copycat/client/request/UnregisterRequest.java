@@ -16,8 +16,6 @@
 package io.atomix.copycat.client.request;
 
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 
 import java.util.Objects;
 
@@ -29,15 +27,13 @@ import java.util.Objects;
 @SerializeWith(id=264)
 public class UnregisterRequest extends SessionRequest<UnregisterRequest> {
 
-  private static final BuilderPool<Builder, UnregisterRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new unregister request builder.
    *
    * @return A new unregister request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new UnregisterRequest());
   }
 
   /**
@@ -48,7 +44,7 @@ public class UnregisterRequest extends SessionRequest<UnregisterRequest> {
    * @throws NullPointerException if {@code request} is null
    */
   public static Builder builder(UnregisterRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   @Override
@@ -74,11 +70,8 @@ public class UnregisterRequest extends SessionRequest<UnregisterRequest> {
    * Unregister request builder.
    */
   public static class Builder extends SessionRequest.Builder<Builder, UnregisterRequest> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, UnregisterRequest> pool) {
-      super(pool, UnregisterRequest::new);
+    protected Builder(UnregisterRequest request) {
+      super(request);
     }
   }
 

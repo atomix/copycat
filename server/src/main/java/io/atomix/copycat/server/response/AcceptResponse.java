@@ -19,8 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.SessionResponse;
 
@@ -34,15 +32,13 @@ import java.util.Objects;
 @SerializeWith(id=281)
 public class AcceptResponse extends SessionResponse<AcceptResponse> {
 
-  private static final BuilderPool<Builder, AcceptResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new accept client response builder.
    *
    * @return A new accept client response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new AcceptResponse());
   }
 
   /**
@@ -53,7 +49,7 @@ public class AcceptResponse extends SessionResponse<AcceptResponse> {
    * @throws NullPointerException if {@code response} is null
    */
   public static Builder builder(AcceptResponse response) {
-    return POOL.acquire(Assert.notNull(response, "response"));
+    return new Builder(response);
   }
 
   @Override
@@ -97,12 +93,8 @@ public class AcceptResponse extends SessionResponse<AcceptResponse> {
    * Register response builder.
    */
   public static class Builder extends SessionResponse.Builder<Builder, AcceptResponse> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, AcceptResponse> pool) {
-      super(pool, AcceptResponse::new);
+    protected Builder(AcceptResponse response) {
+      super(response);
     }
   }
 

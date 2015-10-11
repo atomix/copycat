@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Collection;
@@ -35,15 +34,13 @@ import java.util.Objects;
 @SerializeWith(id=263)
 public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
 
-  private static final BuilderPool<Builder, KeepAliveResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new keep alive response builder.
    *
    * @return A new keep alive response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new KeepAliveResponse());
   }
 
   /**
@@ -54,7 +51,7 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
    * @throws NullPointerException if {@code response} is null
    */
   public static Builder builder(KeepAliveResponse response) {
-    return POOL.acquire(Assert.notNull(response, "response"));
+    return new Builder(response);
   }
 
   private Collection<Address> members;
@@ -115,11 +112,8 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
    */
   public static class Builder extends SessionResponse.Builder<Builder, KeepAliveResponse> {
 
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, KeepAliveResponse> pool) {
-      super(pool, KeepAliveResponse::new);
+    protected Builder(KeepAliveResponse response) {
+      super(response);
     }
 
     /**

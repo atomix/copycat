@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.Event;
 
 import java.util.ArrayList;
@@ -36,15 +35,13 @@ import java.util.Objects;
 @SerializeWith(id=266)
 public class PublishRequest extends SessionRequest<PublishRequest> {
 
-  private static final BuilderPool<Builder, PublishRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new publish request builder.
    *
    * @return A new publish request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new PublishRequest());
   }
 
   /**
@@ -55,7 +52,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
    * @throws NullPointerException if {@code request} is null
    */
   public static Builder builder(PublishRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   private long eventVersion;
@@ -140,11 +137,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
    * Publish request builder.
    */
   public static class Builder extends SessionRequest.Builder<Builder, PublishRequest> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, PublishRequest> pool) {
-      super(pool, PublishRequest::new);
+    protected Builder(PublishRequest request) {
+      super(request);
     }
 
     /**

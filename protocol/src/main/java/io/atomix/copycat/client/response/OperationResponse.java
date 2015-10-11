@@ -19,11 +19,9 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
-import java.util.function.Supplier;
 
 /**
  * Operation response.
@@ -100,8 +98,8 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
    * Operation response builder.
    */
   public static abstract class Builder<T extends Builder<T, U>, U extends OperationResponse<U>> extends SessionResponse.Builder<T, U> {
-    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
-      super(pool, factory);
+    protected Builder(U response) {
+      super(response);
     }
 
     /**

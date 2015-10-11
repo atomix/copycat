@@ -19,8 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
@@ -33,15 +31,13 @@ import java.util.Objects;
 @SerializeWith(id=279)
 public class ConnectResponse extends SessionResponse<ConnectResponse> {
 
-  private static final BuilderPool<Builder, ConnectResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new connect client response builder.
    *
    * @return A new connect client response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new ConnectResponse());
   }
 
   /**
@@ -52,7 +48,7 @@ public class ConnectResponse extends SessionResponse<ConnectResponse> {
    * @throws NullPointerException if {@code response} is null
    */
   public static Builder builder(ConnectResponse response) {
-    return POOL.acquire(Assert.notNull(response, "response"));
+    return new Builder(response);
   }
 
   @Override
@@ -93,15 +89,11 @@ public class ConnectResponse extends SessionResponse<ConnectResponse> {
   }
 
   /**
-   * Register response builder.
+   * Connect response builder.
    */
   public static class Builder extends SessionResponse.Builder<Builder, ConnectResponse> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, ConnectResponse> pool) {
-      super(pool, ConnectResponse::new);
+    protected Builder(ConnectResponse response) {
+      super(response);
     }
   }
 

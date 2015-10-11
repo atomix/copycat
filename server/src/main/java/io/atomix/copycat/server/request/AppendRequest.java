@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.request.AbstractRequest;
 import io.atomix.copycat.server.storage.entry.Entry;
 
@@ -37,15 +36,13 @@ import java.util.Objects;
 @SerializeWith(id=276)
 public class AppendRequest extends AbstractRequest<AppendRequest> {
 
-  private static final BuilderPool<Builder, AppendRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new append request builder.
    *
    * @return A new append request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new AppendRequest());
   }
 
   /**
@@ -55,7 +52,7 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
    * @return The append request builder.
    */
   public static Builder builder(AppendRequest request) {
-    return POOL.acquire(request);
+    return new Builder(request);
   }
 
   private long term;
@@ -193,9 +190,8 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
    * Append request builder.
    */
   public static class Builder extends AbstractRequest.Builder<Builder, AppendRequest> {
-
-    protected Builder(BuilderPool<Builder, AppendRequest> pool) {
-      super(pool, AppendRequest::new);
+    protected Builder(AppendRequest request) {
+      super(request);
     }
 
     /**

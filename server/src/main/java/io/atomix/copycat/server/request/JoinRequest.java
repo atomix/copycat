@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.request.AbstractRequest;
 
 import java.util.Objects;
@@ -34,15 +33,13 @@ import java.util.Objects;
 @SerializeWith(id=268)
 public class JoinRequest extends AbstractRequest<JoinRequest> {
 
-  private static final BuilderPool<Builder, JoinRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new join request builder.
    *
    * @return A new join request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new JoinRequest());
   }
 
   /**
@@ -52,7 +49,7 @@ public class JoinRequest extends AbstractRequest<JoinRequest> {
    * @return The join request builder.
    */
   public static Builder builder(JoinRequest request) {
-    return POOL.acquire(request);
+    return new Builder(request);
   }
 
   private Address member;
@@ -99,9 +96,8 @@ public class JoinRequest extends AbstractRequest<JoinRequest> {
    * Join request builder.
    */
   public static class Builder extends AbstractRequest.Builder<Builder, JoinRequest> {
-
-    protected Builder(BuilderPool<Builder, JoinRequest> pool) {
-      super(pool, JoinRequest::new);
+    protected Builder(JoinRequest request) {
+      super(request);
     }
 
     /**

@@ -18,11 +18,8 @@ package io.atomix.copycat.client.request;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 
 import java.util.Objects;
-import java.util.function.Supplier;
 
 /**
  * Abstract request implementation.
@@ -46,30 +43,17 @@ public abstract class AbstractRequest<T extends Request<T>> implements Request<T
    * @param <U> The request type.
    */
   protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractRequest<U>> extends Request.Builder<T, U> {
-    private final Supplier<U> factory;
-    protected U request;
+    protected final U request;
 
     /**
      * @throws NullPointerException if {@code pool} or {@code factory} are null
      */
-    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
-      super(pool);
-      this.factory = Assert.notNull(factory, "factory");
-    }
-
-    @Override
-    protected void reset() {
-      request = factory.get();
-    }
-
-    @Override
-    protected void reset(U request) {
-      this.request = Assert.notNull(request, "request");
+    protected Builder(U request) {
+      this.request = request;
     }
 
     @Override
     public U build() {
-      close();
       return request;
     }
 

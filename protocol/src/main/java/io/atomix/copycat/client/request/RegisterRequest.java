@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -33,15 +32,13 @@ import java.util.UUID;
 @SerializeWith(id=260)
 public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
-  private static final BuilderPool<Builder, RegisterRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new register client request builder.
    *
    * @return A new register client request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new RegisterRequest());
   }
 
   /**
@@ -52,7 +49,7 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
    * @throws NullPointerException if {@code request} is null
    */
   public static Builder builder(RegisterRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   private UUID client;
@@ -99,12 +96,8 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
    * Register client request builder.
    */
   public static class Builder extends AbstractRequest.Builder<Builder, RegisterRequest> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, RegisterRequest> pool) {
-      super(pool, RegisterRequest::new);
+    protected Builder(RegisterRequest request) {
+      super(request);
     }
 
     /**

@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.request.AbstractRequest;
 
 import java.util.Objects;
@@ -33,15 +32,13 @@ import java.util.Objects;
 @SerializeWith(id=272)
 public class PollRequest extends AbstractRequest<PollRequest> {
 
-  private static final BuilderPool<Builder, PollRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new poll request builder.
    *
    * @return A new poll request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new PollRequest());
   }
 
   /**
@@ -51,7 +48,7 @@ public class PollRequest extends AbstractRequest<PollRequest> {
    * @return The poll request builder.
    */
   public static Builder builder(PollRequest request) {
-    return POOL.acquire(request);
+    return new Builder(request);
   }
 
   private long term = -1;
@@ -137,9 +134,8 @@ public class PollRequest extends AbstractRequest<PollRequest> {
    * Poll request builder.
    */
   public static class Builder extends AbstractRequest.Builder<Builder, PollRequest> {
-
-    protected Builder(BuilderPool<Builder, PollRequest> pool) {
-      super(pool, PollRequest::new);
+    protected Builder(PollRequest request) {
+      super(request);
     }
 
     /**

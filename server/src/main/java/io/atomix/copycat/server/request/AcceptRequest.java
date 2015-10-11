@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.request.SessionRequest;
 
 import java.util.Objects;
@@ -34,15 +33,13 @@ import java.util.Objects;
 @SerializeWith(id=280)
 public class AcceptRequest extends SessionRequest<AcceptRequest> {
 
-  private static final BuilderPool<Builder, AcceptRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new accept client request builder.
    *
    * @return A new accept client request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new AcceptRequest());
   }
 
   /**
@@ -53,7 +50,7 @@ public class AcceptRequest extends SessionRequest<AcceptRequest> {
    * @throws NullPointerException if {@code request} is null
    */
   public static Builder builder(AcceptRequest request) {
-    return POOL.acquire(Assert.notNull(request, "request"));
+    return new Builder(request);
   }
 
   private Address address;
@@ -102,12 +99,8 @@ public class AcceptRequest extends SessionRequest<AcceptRequest> {
    * Register client request builder.
    */
   public static class Builder extends SessionRequest.Builder<Builder, AcceptRequest> {
-
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, AcceptRequest> pool) {
-      super(pool, AcceptRequest::new);
+    protected Builder(AcceptRequest request) {
+      super(request);
     }
 
     /**

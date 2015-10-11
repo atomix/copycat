@@ -19,9 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
-
-import java.util.function.Supplier;
 
 /**
  * Session request.
@@ -54,12 +51,8 @@ public abstract class SessionRequest<T extends SessionRequest<T>> extends Abstra
    * Session request builder.
    */
   public static abstract class Builder<T extends Builder<T, U>, U extends SessionRequest<U>> extends AbstractRequest.Builder<T, U> {
-
-    /**
-     * @throws NullPointerException if {@code pool} or {@code factory} are null
-     */
-    protected Builder(BuilderPool<T, U> pool, Supplier<U> factory) {
-      super(pool, factory);
+    protected Builder(U request) {
+      super(request);
     }
 
     /**

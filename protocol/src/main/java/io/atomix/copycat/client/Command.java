@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.util.BuilderPool;
-
 /**
  * Raft state commands modify system state.
  * <p>
@@ -127,19 +125,12 @@ public interface Command<T> extends Operation<T> {
   abstract class Builder<T extends Builder<T, U, V>, U extends Command<V>, V> extends Operation.Builder<T, U, V> {
     protected U command;
 
-    protected Builder(BuilderPool<T, U> pool) {
-      super(pool);
-    }
-
-    @Override
-    protected void reset(U command) {
-      super.reset(command);
+    protected Builder(U command) {
       this.command = command;
     }
 
     @Override
     public U build() {
-      close();
       return command;
     }
   }

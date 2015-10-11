@@ -19,8 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.error.RaftError;
 
 import java.util.Objects;
@@ -33,15 +31,13 @@ import java.util.Objects;
 @SerializeWith(id=265)
 public class UnregisterResponse extends SessionResponse<UnregisterResponse> {
 
-  private static final BuilderPool<Builder, UnregisterResponse> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new keep alive response builder.
    *
    * @return A new keep alive response builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new UnregisterResponse());
   }
 
   /**
@@ -52,7 +48,7 @@ public class UnregisterResponse extends SessionResponse<UnregisterResponse> {
    * @throws NullPointerException if {@code response} is null
    */
   public static Builder builder(UnregisterResponse response) {
-    return POOL.acquire(Assert.notNull(response, "response"));
+    return new Builder(response);
   }
 
   @Override
@@ -96,11 +92,8 @@ public class UnregisterResponse extends SessionResponse<UnregisterResponse> {
    * Status response builder.
    */
   public static class Builder extends SessionResponse.Builder<Builder, UnregisterResponse> {
-    /**
-     * @throws NullPointerException if {@code pool} is null
-     */
-    protected Builder(BuilderPool<Builder, UnregisterResponse> pool) {
-      super(pool, UnregisterResponse::new);
+    protected Builder(UnregisterResponse response) {
+      super(response);
     }
   }
 

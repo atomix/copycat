@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.BuilderPool;
 import io.atomix.copycat.client.request.AbstractRequest;
 
 import java.util.Objects;
@@ -34,15 +33,13 @@ import java.util.Objects;
 @SerializeWith(id=270)
 public class LeaveRequest extends AbstractRequest<LeaveRequest> {
 
-  private static final BuilderPool<Builder, LeaveRequest> POOL = new BuilderPool<>(Builder::new);
-
   /**
    * Returns a new leave request builder.
    *
    * @return A new leave request builder.
    */
   public static Builder builder() {
-    return POOL.acquire();
+    return new Builder(new LeaveRequest());
   }
 
   /**
@@ -52,7 +49,7 @@ public class LeaveRequest extends AbstractRequest<LeaveRequest> {
    * @return The leave request builder.
    */
   public static Builder builder(LeaveRequest request) {
-    return POOL.acquire(request);
+    return new Builder(request);
   }
 
   private Address member;
@@ -99,9 +96,8 @@ public class LeaveRequest extends AbstractRequest<LeaveRequest> {
    * Leave request builder.
    */
   public static class Builder extends AbstractRequest.Builder<Builder, LeaveRequest> {
-
-    protected Builder(BuilderPool<Builder, LeaveRequest> pool) {
-      super(pool, LeaveRequest::new);
+    protected Builder(LeaveRequest request) {
+      super(request);
     }
 
     /**

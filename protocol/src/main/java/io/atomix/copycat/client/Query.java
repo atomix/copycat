@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.util.BuilderPool;
-
 /**
  * Raft state queries read system state.
  * <p>
@@ -124,19 +122,12 @@ public interface Query<T> extends Operation<T> {
   abstract class Builder<T extends Builder<T, U, V>, U extends Query<V>, V> extends Operation.Builder<T, U, V> {
     protected U query;
 
-    protected Builder(BuilderPool<T, U> pool) {
-      super(pool);
-    }
-
-    @Override
-    protected void reset(U query) {
-      super.reset(query);
+    public Builder(U query) {
       this.query = query;
     }
 
     @Override
     public U build() {
-      close();
       return query;
     }
   }
