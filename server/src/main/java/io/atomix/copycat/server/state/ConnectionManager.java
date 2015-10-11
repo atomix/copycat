@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
  */
 class ConnectionManager {
   private final Client client;
-  private final Map<Integer, Connection> connections = new HashMap<>();
+  private final Map<Address, Connection> connections = new HashMap<>();
 
   public ConnectionManager(Client client) {
     this.client = client;
@@ -43,7 +43,7 @@ class ConnectionManager {
    * @return A completable future to be called once the connection is received.
    */
   public CompletableFuture<Connection> getConnection(Address address) {
-    Connection connection = connections.get(address.hashCode());
+    Connection connection = connections.get(address);
     return connection == null ? createConnection(address) : CompletableFuture.completedFuture(connection);
   }
 
@@ -55,7 +55,8 @@ class ConnectionManager {
    */
   private CompletableFuture<Connection> createConnection(Address address) {
     return client.connect(address).thenApply(connection -> {
-      connections.put(address.hashCode(), connection);
+      connection.closeListener(c -> connections.remove(address));
+      connections.put(address, connection);
       return connection;
     });
   }
