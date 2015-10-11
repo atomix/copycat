@@ -251,7 +251,7 @@ final class FollowerState extends ActiveState {
       lastTerm = 0;
     }
 
-    LOGGER.debug("{} - Polling members {}", context.getAddress(), votingMembers);
+    LOGGER.info("{} - Polling members {}", context.getAddress(), votingMembers);
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.

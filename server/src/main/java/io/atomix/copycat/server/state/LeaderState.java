@@ -907,7 +907,7 @@ final class LeaderState extends ActiveState {
     private long commitTime() {
       int quorumIndex = quorumIndex();
       if (quorumIndex >= 0) {
-        long commitTime = context.getCluster().getActiveMembers((m1, m2) -> (int) (m2.getTime() - m1.getTime())).get(quorumIndex).getTime();
+        long commitTime = context.getCluster().getActiveMembers((m1, m2) -> (int) (m2.getCommitTime() - m1.getCommitTime())).get(quorumIndex).getCommitTime();
         if (commitTime > 0)
           return commitTime;
       }
@@ -918,7 +918,7 @@ final class LeaderState extends ActiveState {
      * Sets a commit time.
      */
     private void commitTime(MemberState member) {
-      member.setTime(System.currentTimeMillis());
+      member.setCommitTime(System.currentTimeMillis());
 
       // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
       // was contacted. If the current commitFuture's time is less than the commit time then trigger the
@@ -973,7 +973,7 @@ final class LeaderState extends ActiveState {
      * Triggers a commit for the replica.
      */
     private void commit(MemberState member) {
-      if (!committing.contains(member) && isOpen()) {
+      if (!committing.contains(member) && isOpen() && (member.getAttemptCount() == 0 || System.currentTimeMillis() - member.getAttemptTime() > Math.min(Math.pow(member.getAttemptCount(), 2) * 1000, 60000))) {
         // If the log is empty then send an empty commit.
         // If the next index hasn't yet been set then we send an empty commit first.
         // If the next index is greater than the last index then send an empty commit.
@@ -1059,76 +1059,110 @@ final class LeaderState extends ActiveState {
     }
 
     /**
-     * Sends a commit message.
+     * Connects to the member and sends a commit message.
      */
     private void commit(MemberState member, AppendRequest request, boolean recursive) {
       committing.add(member);
 
       LOGGER.debug("{} - Sent {} to {}", context.getAddress(), request, member.getAddress());
-      context.getConnections().getConnection(member.getAddress()).thenAccept(connection -> {
-        connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
-          committing.remove(member);
-          context.checkThread();
+      context.getConnections().getConnection(member.getAddress()).whenComplete((connection, error) -> {
+        context.checkThread();
 
-          if (isOpen()) {
-            if (error == null) {
-              LOGGER.debug("{} - Received {} from {}", context.getAddress(), response, member.getAddress());
-              if (response.status() == Response.Status.OK) {
-                // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
-                commitTime(member);
+        if (isOpen()) {
+          if (error == null) {
+            commit(connection, member, request, recursive);
+          } else {
+            committing.remove(member);
+            failAttempt(member, error);
+          }
+        }
+      });
+    }
 
-                // If replication succeeded then trigger commit futures.
-                if (response.succeeded()) {
-                  updateMatchIndex(member, response);
-                  updateNextIndex(member);
-                  updateConfiguration(member);
+    /**
+     * Sends a commit message.
+     */
+    private void commit(Connection connection, MemberState member, AppendRequest request, boolean recursive) {
+      connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
+        committing.remove(member);
+        context.checkThread();
 
-                  // If entries were committed to the replica then check commit indexes.
-                  if (recursive) {
-                    commitEntries();
-                  }
+        if (isOpen()) {
+          if (error == null) {
+            LOGGER.debug("{} - Received {} from {}", context.getAddress(), response, member.getAddress());
+            succeedAttempt(member);
+            if (response.status() == Response.Status.OK) {
+              // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
+              commitTime(member);
 
-                  // If there are more entries to send then attempt to send another commit.
-                  if (hasMoreEntries(member)) {
-                    commit();
-                  }
-                } else if (response.term() > context.getTerm()) {
-                  context.setLeader(0);
-                  transition(CopycatServer.State.FOLLOWER);
-                } else {
-                  resetMatchIndex(member, response);
-                  resetNextIndex(member);
+              // If replication succeeded then trigger commit futures.
+              if (response.succeeded()) {
+                updateMatchIndex(member, response);
+                updateNextIndex(member);
+                updateConfiguration(member);
 
-                  // If there are more entries to send then attempt to send another commit.
-                  if (hasMoreEntries(member)) {
-                    commit();
-                  }
+                // If entries were committed to the replica then check commit indexes.
+                if (recursive) {
+                  commitEntries();
+                }
+
+                // If there are more entries to send then attempt to send another commit.
+                if (hasMoreEntries(member)) {
+                  commit();
                 }
               } else if (response.term() > context.getTerm()) {
-                LOGGER.debug("{} - Received higher term from {}", context.getAddress(), member.getAddress());
                 context.setLeader(0);
                 transition(CopycatServer.State.FOLLOWER);
               } else {
-                LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
-              }
-              response.release();
-            } else {
-              LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
+                resetMatchIndex(member, response);
+                resetNextIndex(member);
 
-              // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
-              // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
-              // that a partition occurred and transition back to the FOLLOWER state.
-              if (System.currentTimeMillis() - commitTime() > context.getElectionTimeout().toMillis() * 2) {
-                LOGGER.warn("{} - Suspected network partition. Stepping down", context.getAddress());
-                context.setLeader(0);
-                transition(CopycatServer.State.FOLLOWER);
+                // If there are more entries to send then attempt to send another commit.
+                if (hasMoreEntries(member)) {
+                  commit();
+                }
               }
+            } else if (response.term() > context.getTerm()) {
+              LOGGER.debug("{} - Received higher term from {}", context.getAddress(), member.getAddress());
+              context.setLeader(0);
+              transition(CopycatServer.State.FOLLOWER);
+            } else {
+              LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
             }
-          } else if (response != null) {
             response.release();
+          } else {
+            failAttempt(member, error);
           }
-        });
+        } else if (response != null) {
+          response.release();
+        }
       });
+    }
+
+    /**
+     * Succeeds an attempt to contact a member.
+     */
+    private void succeedAttempt(MemberState member) {
+      member.resetAttemptCount();
+    }
+
+    /**
+     * Fails an attempt to contact a member.
+     */
+    private void failAttempt(MemberState member, Throwable error) {
+      LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
+
+      // Increment the commit attempt count for the member.
+      member.incrementAttemptCount().setAttemptTime(System.currentTimeMillis());
+
+      // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
+      // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
+      // that a partition occurred and transition back to the FOLLOWER state.
+      if (System.currentTimeMillis() - commitTime() > context.getElectionTimeout().toMillis() * 2) {
+        LOGGER.warn("{} - Suspected network partition. Stepping down", context.getAddress());
+        context.setLeader(0);
+        transition(CopycatServer.State.FOLLOWER);
+      }
     }
 
     /**
