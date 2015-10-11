@@ -67,19 +67,18 @@ public class TestEntry extends Entry<TestEntry> {
    * @param term The entry term.
    * @return The entry.
    */
-  @SuppressWarnings("unchecked")
   public TestEntry setTerm(long term) {
     this.term = term;
     return this;
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeLong(term).writeBoolean(tombstone);
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     term = buffer.readLong();
     tombstone = buffer.readBoolean();
   }

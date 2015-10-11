@@ -15,9 +15,25 @@
  */
 package io.atomix.copycat.server.state;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
+
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
-import io.atomix.catalyst.transport.*;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Client;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.LocalServerRegistry;
+import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.transport.Server;
+import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
@@ -25,10 +41,12 @@ import io.atomix.copycat.client.request.CommandRequest;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.CommandResponse;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.client.response.Response.Status;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.Testing;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -41,14 +59,6 @@ import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.CommandEntry;
 import net.jodah.concurrentunit.ConcurrentTestCase;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 /**
  * Server context test.
@@ -64,8 +74,8 @@ public class ServerStateTest extends ConcurrentTestCase {
   private Log log;
   private TestStateMachine stateMachine;
   private Serializer serializer;
-  private ThreadContext context;
-  private ThreadContext test;
+  private ThreadContext serverCtx;
+  private ThreadContext clientCtx;
   private Client client;
   private Server server;
   private Connection connection;
@@ -75,7 +85,7 @@ public class ServerStateTest extends ConcurrentTestCase {
    * Sets up a server state.
    */
   @BeforeMethod
-  public void createState() throws Throwable {
+  void createState() throws Throwable {
     serializer = new Serializer();
     serializer.resolve(new ServiceLoaderTypeResolver());
 
@@ -87,20 +97,20 @@ public class ServerStateTest extends ConcurrentTestCase {
     members = createMembers(3);
     log = storage.open("test");
     stateMachine = new TestStateMachine();
-    context = new SingleThreadContext("test-server", serializer);
-    test = new SingleThreadContext("test-context", serializer.clone());
+    serverCtx = new SingleThreadContext("test-server", serializer);
+    clientCtx = new SingleThreadContext("test-context", serializer.clone());
 
     server = transport.server();
     client = transport.client();
 
-    state = new ServerState(members.get(0), members, log, stateMachine, new ConnectionManager(client), context);
+    state = new ServerState(members.get(0), members, log, stateMachine, new ConnectionManager(client), serverCtx);
 
-    context.execute(() -> {
+    serverCtx.execute(() -> {
       server.listen(members.get(0), state::connect).whenComplete((result, error) -> resume());
     });
     await();
 
-    test.execute(() -> {
+    clientCtx.execute(() -> {
       client.connect(members.get(0)).whenComplete((result, error) -> {
         threadAssertNull(error);
         this.connection = result;
@@ -109,12 +119,26 @@ public class ServerStateTest extends ConcurrentTestCase {
     });
     await();
   }
+  
 
   /**
-   * Sets up server state.
+   * Clears test logs.
+   */
+  @AfterMethod
+  void destroyState() throws Throwable {
+    serverCtx.execute(() -> server.close().whenComplete((result, error) -> resume()));
+    clientCtx.execute(() -> client.close().whenComplete((result, error) -> resume()));
+    await(0, 2);
+    log.close();
+    serverCtx.close();
+    clientCtx.close();
+  }
+
+  /**
+   * Configures server state on the server ThreadContext.
    */
   private void configure(Consumer<ServerState> callback) throws Throwable {
-    context.execute(() -> {
+    serverCtx.execute(() -> {
       callback.accept(state);
       resume();
     });
@@ -122,10 +146,10 @@ public class ServerStateTest extends ConcurrentTestCase {
   }
 
   /**
-   * Transitions the server state.
+   * Transitions the server state on the server ThreadContext.
    */
   private void transition(CopycatServer.State state) throws Throwable {
-    context.execute(() -> {
+    serverCtx.execute(() -> {
       this.state.transition(state).join();
       resume();
     });
@@ -133,10 +157,10 @@ public class ServerStateTest extends ConcurrentTestCase {
   }
 
   /**
-   * Appends the given number of entries in the given term.
+   * Appends the given number of entries in the given term on the server ThreadContext.
    */
   private void append(int entries, long term) throws Throwable {
-    context.execute(() -> {
+    serverCtx.execute(() -> {
       for (int i = 0; i < entries; i++) {
         try (TestEntry entry = state.getLog().create(TestEntry.class)) {
           entry.setTerm(term)
@@ -153,7 +177,7 @@ public class ServerStateTest extends ConcurrentTestCase {
    * Tests a server response.
    */
   private <T extends Request<T>, U extends Response<U>> void test(T request, Consumer<U> callback) throws Throwable {
-    test.execute(() -> {
+    clientCtx.execute(() -> {
       connection.<T, U>send(request).whenComplete((response, error) -> {
         threadAssertNull(error);
         callback.accept(response);
@@ -166,7 +190,7 @@ public class ServerStateTest extends ConcurrentTestCase {
   /**
    * Tests a follower handling a vote request with a higher term.
    */
-  public void testFollowerIncrementsTermOnPollRequest() throws Throwable {
+  public void testFollowerSetsTermOnPollRequest() throws Throwable {
     configure(state -> {
       state.setTerm(1).setLeader(0);
     });
@@ -181,6 +205,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       .build();
 
     this.<PollRequest, PollResponse>test(request, response -> {
+      threadAssertEquals(response.status(), Status.OK);
       threadAssertEquals(state.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
@@ -205,6 +230,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       .build();
 
     this.<PollRequest, PollResponse>test(request, response -> {
+      threadAssertEquals(response.status(), Status.OK);
       threadAssertEquals(state.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.accepted());
@@ -229,6 +255,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       .build();
 
     this.<PollRequest, PollResponse>test(request1, response -> {
+      threadAssertEquals(response.status(), Status.OK);
       threadAssertEquals(state.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
@@ -242,6 +269,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       .build();
 
     this.<PollRequest, PollResponse>test(request2, response -> {
+      threadAssertEquals(response.status(), Status.OK);
       threadAssertEquals(state.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
@@ -268,6 +296,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       .build();
 
     this.<PollRequest, PollResponse>test(request, response -> {
+      threadAssertEquals(response.status(), Status.OK);
       threadAssertEquals(state.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.accepted());
@@ -294,6 +323,7 @@ public class ServerStateTest extends ConcurrentTestCase {
       .build();
 
     this.<PollRequest, PollResponse>test(request, response -> {
+      threadAssertEquals(response.status(), Status.OK);
       threadAssertEquals(state.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
@@ -303,7 +333,7 @@ public class ServerStateTest extends ConcurrentTestCase {
   /**
    * Tests a follower handling a vote request.
    */
-  public void testFollowerIncrementsTermOnVoteRequest() throws Throwable {
+  public void testFollowerSetsTermOnVoteRequest() throws Throwable {
     configure(state -> {
       state.setTerm(1).setLeader(0);
     });
@@ -323,16 +353,12 @@ public class ServerStateTest extends ConcurrentTestCase {
       threadAssertTrue(response.voted());
     });
   }
-
+  
   /**
-   * Tests that a follower rejects a vote request
-   * @throws Throwable
+   * Tests that a follower rejects a vote request with a lesser term.
    */
-  public void testFollowerRejectsVoteRequestWithLowerTerm() throws Throwable {
-    configure(state -> {
-      state.setTerm(2).setLeader(0);
-    });
-
+  public void testFollowerRejectsVoteRequestWithLesserTerm() throws Throwable {
+    configure(state -> state.setTerm(2).setLeader(0));
     transition(CopycatServer.State.FOLLOWER);
 
     VoteRequest request = VoteRequest.builder()
@@ -584,7 +610,7 @@ public class ServerStateTest extends ConcurrentTestCase {
 
     AtomicInteger counter = new AtomicInteger();
 
-    test.execute(() -> {
+    clientCtx.execute(() -> {
       connection.<CommandRequest, CommandResponse>send(request1);
       connection.<CommandRequest, CommandResponse>send(request2);
       connection.<CommandRequest, CommandResponse>send(request3);
@@ -638,20 +664,6 @@ public class ServerStateTest extends ConcurrentTestCase {
       members.add(new Address("localhost", 5000 + i));
     }
     return members;
-  }
-
-  /**
-   * Clears test logs.
-   */
-  @AfterMethod
-  public void destroyState() throws Throwable {
-    context.execute(() -> server.close().whenComplete((result, error) -> resume()));
-    await();
-    test.execute(() -> client.close().whenComplete((result, error) -> resume()));
-    await();
-    log.close();
-    context.close();
-    test.close();
   }
 
   /**

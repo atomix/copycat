@@ -40,7 +40,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 /**
- * Raft state context.
+ * Raft server state.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -259,7 +259,7 @@ public class ServerState {
       this.term = term;
       this.leader = 0;
       this.lastVotedFor = 0;
-      LOGGER.debug("{} - Incremented term {}", address, term);
+      LOGGER.debug("{} - Set term {}", address, term);
     }
     return this;
   }

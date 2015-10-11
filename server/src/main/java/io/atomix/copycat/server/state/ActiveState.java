@@ -106,7 +106,7 @@ abstract class ActiveState extends PassiveState {
         .withTerm(context.getTerm())
         .withAccepted(false)
         .build();
-    } else if (logUpToDate(request.logIndex(), request.logTerm(), request)) {
+    } else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -164,7 +164,7 @@ abstract class ActiveState extends PassiveState {
     }
     // If we've already voted for someone else then don't vote again.
     else if (context.getLastVotedFor() == 0 || context.getLastVotedFor() == request.candidate()) {
-      if (logUpToDate(request.logIndex(), request.logTerm(), request)) {
+      if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
         context.setLastVotedFor(request.candidate());
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
@@ -193,7 +193,7 @@ abstract class ActiveState extends PassiveState {
   /**
    * Returns a boolean value indicating whether the given candidate's log is up-to-date.
    */
-  private boolean logUpToDate(long index, long term, Request request) {
+  private boolean isLogUpToDate(long index, long term, Request request) {
     // If the log is empty then vote for the candidate.
     if (context.getLog().isEmpty()) {
       LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
