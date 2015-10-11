@@ -28,11 +28,4 @@ import java.io.Serializable;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public interface Operation<T> extends Serializable {
-
-  /**
-   * Base builder for Raft state operations.
-   */
-  abstract class Builder<T extends Builder<T, U, V>, U extends Operation<V>, V> extends io.atomix.catalyst.util.Builder<U> {
-  }
-
 }

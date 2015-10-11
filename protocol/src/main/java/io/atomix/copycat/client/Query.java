@@ -116,20 +116,4 @@ public interface Query<T> extends Operation<T> {
     return null;
   }
 
-  /**
-   * Base builder for queries.
-   */
-  abstract class Builder<T extends Builder<T, U, V>, U extends Query<V>, V> extends Operation.Builder<T, U, V> {
-    protected U query;
-
-    public Builder(U query) {
-      this.query = query;
-    }
-
-    @Override
-    public U build() {
-      return query;
-    }
-  }
-
 }

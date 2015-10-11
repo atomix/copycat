@@ -119,20 +119,4 @@ public interface Command<T> extends Operation<T> {
     return PersistenceLevel.EPHEMERAL;
   }
 
-  /**
-   * Base builder for commands.
-   */
-  abstract class Builder<T extends Builder<T, U, V>, U extends Command<V>, V> extends Operation.Builder<T, U, V> {
-    protected U command;
-
-    protected Builder(U command) {
-      this.command = command;
-    }
-
-    @Override
-    public U build() {
-      return command;
-    }
-  }
-
 }
