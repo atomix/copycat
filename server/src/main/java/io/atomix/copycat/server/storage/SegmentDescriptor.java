@@ -50,7 +50,7 @@ import io.atomix.catalyst.util.Assert;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public final class SegmentDescriptor implements AutoCloseable {
-  public static final int BYTES = 52;
+  public static final int BYTES = 48;
 
   /**
    * Returns a descriptor builder.
