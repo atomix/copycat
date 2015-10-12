@@ -20,6 +20,8 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class Compactor implements AutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(Compactor.class);
   private final Storage storage;
   private final SegmentManager segments;
   private final ScheduledExecutorService executor;
@@ -64,9 +67,11 @@ public final class Compactor implements AutoCloseable {
    * @param compaction The compaction strategy.
    * @return A completable future to be completed once the log has been compacted.
    */
-  public CompletableFuture<Void> compact(Compaction compaction) {
+  public synchronized CompletableFuture<Void> compact(Compaction compaction) {
     if (future != null)
       return future;
+
+    LOGGER.info("Compacting log with compaction: {}", compaction);
 
     future = new CompletableFuture<>();
 
@@ -77,9 +82,12 @@ public final class Compactor implements AutoCloseable {
 
     List<CompactionTask> tasks = manager.buildTasks(storage, segments);
     if (!tasks.isEmpty()) {
+      LOGGER.debug("Executing {} compaction task(s)", tasks.size());
       for (CompactionTask task : tasks) {
+        LOGGER.debug("Executing {}", task);
         ThreadContext taskThread = new ThreadPoolContext(executor, segments.serializer());
         taskThread.execute(task).whenComplete((result, error) -> {
+          LOGGER.debug("{} complete", task);
           if (counter.incrementAndGet() == tasks.size()) {
             if (compactorThread != null) {
               compactorThread.executor().execute(() -> future.complete(null));
