@@ -433,23 +433,20 @@ public class ServerState {
 
     LOGGER.info("{} - Transitioning to {}", address, state);
 
-    // Force state transitions to occur synchronously in order to prevent race conditions.
     if (this.state != null) {
       try {
         this.state.close().get();
-        this.state = createState(state);
-        this.state.open().get();
       } catch (InterruptedException | ExecutionException e) {
-        throw new IllegalStateException("failed to initialize Raft state", e);
+        throw new IllegalStateException("failed to close Raft state", e);
       }
-    } else {
-      // Force state transitions to occur synchronously in order to prevent race conditions.
-      try {
-        this.state = createState(state);
-        this.state.open().get();
-      } catch (InterruptedException | ExecutionException e) {
-        throw new IllegalStateException("failed to initialize Raft state", e);
-      }
+    }
+        
+    // Force state transitions to occur synchronously in order to prevent race conditions.
+    try {
+      this.state = createState(state);
+      this.state.open().get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IllegalStateException("failed to initialize Raft state", e);
     }
 
     stateChangeListeners.forEach(l -> l.accept(this.state.type()));

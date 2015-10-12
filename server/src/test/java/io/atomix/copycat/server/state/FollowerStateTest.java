@@ -12,9 +12,7 @@ import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
 
 @Test
-public class FollowerStateTest extends AbstractStateTest {
-  FollowerState state;
-
+public class FollowerStateTest extends AbstractStateTest<FollowerState> {
   @BeforeMethod
   @Override
   void beforeMethod() throws Throwable {

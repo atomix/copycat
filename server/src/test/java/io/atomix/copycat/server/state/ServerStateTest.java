@@ -38,7 +38,7 @@ import io.atomix.copycat.client.response.Response;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class ServerStateTest extends AbstractStateTest {
+public class ServerStateTest extends AbstractStateTest<AbstractState> {
   private LocalServerRegistry registry;
   private Transport transport;
   private ThreadContext clientCtx;

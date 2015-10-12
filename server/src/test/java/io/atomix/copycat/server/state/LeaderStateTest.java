@@ -11,7 +11,7 @@ import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.CommandEntry;
 
 @Test
-public class LeaderStateTest extends AbstractStateTest {
+public class LeaderStateTest extends AbstractStateTest<LeaderState> {
   LeaderState state;
 
   @BeforeMethod

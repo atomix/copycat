@@ -5,7 +5,6 @@ import java.util.UUID;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.CommandRequest;
 import io.atomix.copycat.client.request.ConnectRequest;
 import io.atomix.copycat.client.request.KeepAliveRequest;
@@ -13,14 +12,12 @@ import io.atomix.copycat.client.request.PublishRequest;
 import io.atomix.copycat.client.request.QueryRequest;
 import io.atomix.copycat.client.request.RegisterRequest;
 import io.atomix.copycat.client.request.UnregisterRequest;
-import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.copycat.client.response.CommandResponse;
 import io.atomix.copycat.client.response.ConnectResponse;
 import io.atomix.copycat.client.response.KeepAliveResponse;
 import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.RegisterResponse;
-import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.response.Response.Status;
 import io.atomix.copycat.client.response.UnregisterResponse;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
@@ -39,24 +36,12 @@ import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
 
 @Test
-public class PassiveStateTest extends AbstractStateTest {
-  PassiveState state;
-
+public class PassiveStateTest extends AbstractStateTest<PassiveState> {
   @BeforeMethod
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
     state = new PassiveState(serverState);
-  }
-
-  private void assertNoLeaderError(AbstractResponse<?> response) {
-    threadAssertEquals(response.status(), Response.Status.ERROR);
-    threadAssertEquals(response.error(), RaftError.Type.NO_LEADER_ERROR);
-  }
-
-  private void assertIllegalMemberStateError(AbstractResponse<?> response) {
-    threadAssertEquals(response.status(), Response.Status.ERROR);
-    threadAssertEquals(response.error(), RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR);
   }
 
   public void testAccept() throws Throwable {
@@ -178,42 +163,6 @@ public class PassiveStateTest extends AbstractStateTest {
 
   public void testForward() throws Throwable {
     // TODO
-  }
-
-  public void testAppendUpdatesLeaderAndTerm() throws Throwable {
-    runOnServer(() -> {
-      serverState.setTerm(1);
-
-      AppendRequest request = AppendRequest.builder()
-          .withTerm(2)
-          .withLeader(members.get(1).hashCode())
-          .withLogIndex(0)
-          .withLogTerm(0)
-          .withCommitIndex(0)
-          .withGlobalIndex(0)
-          .build();
-
-      AppendResponse response = state.append(request).get();
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLeader(), members.get(1));
-      threadAssertEquals(serverState.getLastVotedFor(), 0);
-      threadAssertEquals(response.term(), 2L);
-      threadAssertTrue(response.succeeded());
-    });
-  }
-
-  public void testAppendRejectedWhenRequestTermIsOld() throws Throwable {
-    runOnServer(() -> {
-      serverState.setTerm(3);
-      AppendRequest request = AppendRequest.builder().withTerm(2).build();
-
-      AppendResponse response = state.append(request).get();
-
-      threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(response.term(), 3L);
-      threadAssertFalse(response.succeeded());
-    });
   }
 
   public void testHandleAppend() throws Throwable {

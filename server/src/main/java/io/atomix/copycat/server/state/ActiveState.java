@@ -15,13 +15,14 @@
  */
 package io.atomix.copycat.server.state;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
-import io.atomix.copycat.client.request.CommandRequest;
 import io.atomix.copycat.client.request.QueryRequest;
 import io.atomix.copycat.client.request.Request;
-import io.atomix.copycat.client.response.CommandResponse;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
@@ -33,9 +34,6 @@ import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
-
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Abstract active state.
@@ -181,7 +179,7 @@ abstract class ActiveState extends PassiveState {
   /**
    * Returns a boolean value indicating whether the given candidate's log is up-to-date.
    */
-  private boolean isLogUpToDate(long index, long term, Request request) {
+  boolean isLogUpToDate(long index, long term, Request request) {
     // If the log is empty then vote for the candidate.
     if (context.getLog().isEmpty()) {
       LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
@@ -212,21 +210,6 @@ abstract class ActiveState extends PassiveState {
       } finally {
         entry.close();
       }
-    }
-  }
-
-  @Override
-  protected CompletableFuture<CommandResponse> command(CommandRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
