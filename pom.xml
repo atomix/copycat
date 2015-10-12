@@ -153,6 +153,7 @@
           <doctitle>Copycat API Reference (${jv})</doctitle>
           <windowtitle>Copycat API Reference (${jv})</windowtitle>
           <aggregate>true</aggregate>
+          <excludePackageNames>io.atomix.copycat.examples*</excludePackageNames>
           <additionalparam>
             -Xdoclint:none
             -notimestamp
