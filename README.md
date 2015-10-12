@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/atomix/copycat.png)](https://travis-ci.org/atomix/copycat)
 
-### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc]
+### [Website][Website] • [Google Group][Google group] • [Javadoc][Javadoc] • [Atomix][Atomix]
 
 Copycat is a feature complete, fully asynchronous implementation of the [Raft consensus algorithm][Raft] in Java 8
 designed for use in [Atomix][Atomix]. The implementation provides a fully featured [client][clients] and [server][servers]
@@ -19,6 +19,14 @@ Additionally, this implementation has undergone [Jepsen testing](http://github.c
 to verify it maintains linearizability in a number of different failure scenarios.
 
 *For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/internals/)*
+
+## Examples
+
+Additionally, the [Atomix][Atomix] project contains a multitude of examples of Copycat state machines, including
+[collections](https://github.com/atomix/atomix/blob/master/collections/src/main/java/io/atomix/collections/state/MapState.java),
+[leader elections](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/LeaderElectionState.java),
+[locks](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/LockState.java),
+[group membership](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/MembershipGroupState.java), and more.
 
 ## Usage
 
