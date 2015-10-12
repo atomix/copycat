@@ -97,6 +97,7 @@ public final class SegmentDescriptor implements AutoCloseable {
     this.maxEntries = buffer.readInt();
     this.updated = buffer.readLong();
     this.locked = buffer.readBoolean();
+    buffer.skip(4);
   }
 
   /**
@@ -218,6 +219,7 @@ public final class SegmentDescriptor implements AutoCloseable {
       .writeInt(maxEntries)
       .writeLong(updated)
       .writeBoolean(locked)
+      .writeInt(0)
       .flush();
     return this;
   }

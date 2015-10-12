@@ -286,7 +286,7 @@ public class SegmentManager implements AutoCloseable {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
     Buffer buffer = FileBuffer.allocate(segmentFile, 1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
-    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
+    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
     return segment;
   }
@@ -298,7 +298,7 @@ public class SegmentManager implements AutoCloseable {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
     Buffer buffer = MappedBuffer.allocate(segmentFile, 1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
-    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
+    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
     return segment;
   }
@@ -309,7 +309,7 @@ public class SegmentManager implements AutoCloseable {
   private Segment createMemorySegment(SegmentDescriptor descriptor) {
     Buffer buffer = HeapBuffer.allocate(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
-    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
+    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
     return segment;
   }
