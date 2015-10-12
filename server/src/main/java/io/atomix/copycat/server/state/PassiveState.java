@@ -403,7 +403,7 @@ class PassiveState extends AbstractState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
@@ -418,7 +418,7 @@ class PassiveState extends AbstractState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);

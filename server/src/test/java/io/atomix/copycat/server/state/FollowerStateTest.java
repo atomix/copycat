@@ -1,0 +1,349 @@
+package io.atomix.copycat.server.state;
+
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import io.atomix.copycat.client.response.Response.Status;
+import io.atomix.copycat.server.request.AppendRequest;
+import io.atomix.copycat.server.request.PollRequest;
+import io.atomix.copycat.server.request.VoteRequest;
+import io.atomix.copycat.server.response.AppendResponse;
+import io.atomix.copycat.server.response.PollResponse;
+import io.atomix.copycat.server.response.VoteResponse;
+
+@Test
+public class FollowerStateTest extends AbstractStateTest {
+  FollowerState state;
+
+  @BeforeMethod
+  @Override
+  void beforeMethod() throws Throwable {
+    super.beforeMethod();
+    state = new FollowerState(serverState);
+  }
+
+  /**
+   * Tests that a follower will accept a poll for many candidates.
+   */
+  public void testFollowerAcceptsPollForMultipleCandidatesPerTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2);
+      PollRequest request1 = PollRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      PollResponse response = state.poll(request1).get();
+
+      threadAssertEquals(response.status(), Status.OK);
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.accepted());
+
+      PollRequest request2 = PollRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(2).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      response = state.poll(request2).get();
+
+      threadAssertEquals(response.status(), Status.OK);
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.accepted());
+    });
+  }
+
+  /**
+   * Tests that a follower rejects a poll when the candidate's log is not up to date.
+   */
+  public void testFollowerRejectsPollWhenLogNotUpToDate() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      append(10, 1);
+      PollRequest request = PollRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(5)
+          .withLogTerm(1)
+          .build();
+
+      PollResponse response = state.poll(request).get();
+
+      threadAssertEquals(response.status(), Status.OK);
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertFalse(response.accepted());
+    });
+  }
+
+  /**
+   * Tests a follower handling a vote request with a higher term.
+   */
+  public void testFollowerSetsTermOnPollRequest() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1).setLeader(0);
+      PollRequest request = PollRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      PollResponse response = state.poll(request).get();
+
+      threadAssertEquals(response.status(), Status.OK);
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.accepted());
+    });
+  }
+
+  /**
+   * Tests that a follower rejects a poll request with a lower term.
+   */
+  public void testFollowerRejectsPollRequestWithLowerTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      PollRequest request = PollRequest.builder()
+          .withTerm(1)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      PollResponse response = state.poll(request).get();
+
+      threadAssertEquals(response.status(), Status.OK);
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertFalse(response.accepted());
+    });
+  }
+
+  /**
+   * Tests that a follower accepts a poll when the candidate's log is up to date.
+   */
+  public void testFollowerAcceptsPollWhenLogUpToDate() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2);
+      append(10, 1);
+      PollRequest request = PollRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(11)
+          .withLogTerm(2)
+          .build();
+
+      PollResponse response = state.poll(request).get();
+
+      threadAssertEquals(response.status(), Status.OK);
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.accepted());
+    });
+  }
+
+  /**
+   * Tests a follower handling a vote request.
+   */
+  public void testFollowerSetsTermOnVoteRequest() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      VoteRequest request = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      VoteResponse response = state.vote(request).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.voted());
+    });
+  }
+
+  /**
+   * Tests that a follower rejects a vote request with a lesser term.
+   */
+  public void testFollowerRejectsVoteRequestWithLesserTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2);
+      VoteRequest request = VoteRequest.builder()
+          .withTerm(1)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      VoteResponse response = state.vote(request).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertFalse(response.voted());
+    });
+  }
+
+  /**
+   * Tests that a follower will only vote for one candidate.
+   */
+  public void testFollowerVotesForOneCandidatePerTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      VoteRequest request1 = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      VoteResponse response = state.vote(request1).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.voted());
+
+      VoteRequest request2 = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(2).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      response = state.vote(request2).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(response.term(), 2L);
+      threadAssertFalse(response.voted());
+    });
+  }
+
+  /**
+   * Tests that a follower overrides a vote from a previous term when the term increases.
+   */
+  public void testFollowerOverridesVoteForNewTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      VoteRequest request1 = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      VoteResponse response1 = state.vote(request1).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(response1.term(), 2L);
+      threadAssertTrue(response1.voted());
+
+      VoteRequest request2 = VoteRequest.builder()
+          .withTerm(3)
+          .withCandidate(members.get(2).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      VoteResponse response2 = state.vote(request2).get();
+
+      threadAssertEquals(serverState.getTerm(), 3L);
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(2).hashCode());
+      threadAssertEquals(response2.term(), 3L);
+      threadAssertTrue(response2.voted());
+    });
+
+  }
+
+  /**
+   * Tests that a follower rejects a vote when the candidate's log is not up to date.
+   */
+  public void testFollowerRejectsVoteWhenLogNotUpToDate() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      append(10, 1);
+      VoteRequest request = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(5)
+          .withLogTerm(1)
+          .build();
+
+      VoteResponse response = state.vote(request).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertFalse(response.voted());
+    });
+  }
+
+  /**
+   * Tests that a follower accepts a vote when the candidate's log is up to date.
+   */
+  public void testFollowerAcceptsVoteWhenLogUpToDate() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      append(10, 1);
+      VoteRequest request = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(11)
+          .withLogTerm(2)
+          .build();
+
+      VoteResponse response = state.vote(request).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.voted());
+    });
+  }
+
+  /**
+   * Tests that a follower updates a leader on append request with new term.
+   */
+  public void testFollowerUpdatesLeaderAndTermOnAppend() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2).setLeader(0);
+      VoteRequest request1 = VoteRequest.builder()
+          .withTerm(2)
+          .withCandidate(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .build();
+
+      VoteResponse response1 = state.vote(request1).get();
+
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(response1.term(), 2L);
+      threadAssertTrue(response1.voted());
+
+      AppendRequest request2 = AppendRequest.builder()
+          .withTerm(3)
+          .withLeader(members.get(2).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .withCommitIndex(0)
+          .withGlobalIndex(0)
+          .build();
+
+      AppendResponse response2 = state.append(request2).get();
+
+      threadAssertEquals(serverState.getTerm(), 3L);
+      threadAssertEquals(serverState.getLeader(), members.get(2));
+      threadAssertEquals(serverState.getLastVotedFor(), 0);
+      threadAssertEquals(response2.term(), 3L);
+      threadAssertTrue(response2.succeeded());
+    });
+  }
+
+}
