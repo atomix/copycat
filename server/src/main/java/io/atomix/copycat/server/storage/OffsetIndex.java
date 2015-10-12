@@ -161,16 +161,16 @@ class OffsetIndex implements AutoCloseable {
    * Finds the relative offset for the given offset.
    */
   public int find(int offset) {
+    if (size == 0) {
+      return -1;
+    }
+
     if (!skipped) {
       return offset;
     }
 
     if (currentOffset != -1 && currentOffset > lastOffset && buffer.readInt((currentOffset + 1) * ENTRY_SIZE) == offset) {
       return ++currentOffset;
-    }
-
-    if (size == 0) {
-      return -1;
     }
 
     int lo = 0;
