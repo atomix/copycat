@@ -90,15 +90,20 @@ public class MinorCompactionManager implements CompactionManager {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.lastIndex() <= manager.commitIndex() && segment.isFull()) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() <= manager.commitIndex())) {
 
-        // Calculate the percentage of entries that have been marked for cleaning in the segment.
-        double cleanPercentage = segment.cleanCount() / (double) segment.length();
-
-        // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
-        // add the segment to the segments list for cleaning.
-        if (cleanPercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
+        // If the segment is small enough that it can be combined with another segment then add it.
+        if (segment.count() < segment.length() / 2) {
           segments.add(segment);
+        } else {
+          // Calculate the percentage of entries that have been marked for cleaning in the segment.
+          double cleanPercentage = segment.cleanCount() / (double) segment.count();
+
+          // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
+          // add the segment to the segments list for cleaning.
+          if (cleanPercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
+            segments.add(segment);
+          }
         }
       }
     }

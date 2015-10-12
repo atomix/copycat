@@ -88,6 +88,15 @@ public class Segment implements AutoCloseable {
   }
 
   /**
+   * Returns a boolean value indicating whether the segment has been compacted.
+   *
+   * @return Indicates whether the segment has been compacted.
+   */
+  public boolean isCompacted() {
+    return descriptor.version() > 1;
+  }
+
+  /**
    * Returns a boolean value indicating whether the segment is full.
    *
    * @return Indicates whether the segment is full.
@@ -122,7 +131,7 @@ public class Segment implements AutoCloseable {
    * @return The count of all entries in the segment.
    */
   public int count() {
-    return offsetIndex.lastOffset() + 1;
+    return offsetIndex.size();
   }
 
   /**
