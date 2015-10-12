@@ -24,7 +24,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Major compaction manager.
+ * Builds tasks for the {@link Compaction#MAJOR} compaction process.
+ * <p>
+ * Major compaction works similarly to minor compaction in that the configured {@link Storage#majorCompactionInterval()}
+ * dictates the interval at which the major compaction process runs. During major compaction, the
+ * {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} iterates through <em>all</em>
+ * {@link io.atomix.copycat.server.storage.Log#commit(long) committed} segments and rewrites them sequentially with
+ * all cleaned entries removed, including tombstones. This ensures that earlier segments are compacted before later
+ * segments, and so stateful entries that were {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} prior
+ * to related tombstones are guaranteed to be removed first.
+ * <p>
+ * As entries are removed from the log during minor and major compaction, log segment files begin to shrink. Copycat
+ * does not want to have a thousand file pointers open, so some mechanism is required to combine segments as disk
+ * space is freed. To that end, as the major compaction process iterates through the set of committed segments and
+ * rewrites live entries, it combines multiple segments up to the configured segment capacity. When a segment becomes
+ * full during major compaction, the compaction process rolls over to a new segment and continues compaction. This results
+ * in a significantly smaller number of files.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

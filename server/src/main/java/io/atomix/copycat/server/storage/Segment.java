@@ -23,7 +23,27 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
- * Log segment.
+ * Stores a set of sequential entries in a single file or memory {@link Buffer}.
+ * <p>
+ * Segments are individual file or memory based groups of sequential entries. Each segment has a fixed capacity
+ * in terms of either number of entries or size in bytes.
+ * <p>
+ * The {@link SegmentDescriptor} describes the metadata for the segment, including the starting {@code index} of
+ * the segment and various configuration options. The descriptor is persisted in 48 bytes at the head of the segment.
+ * <p>
+ * Internally, each segment maintains an in-memory index of entries. The index stores the offset and position of
+ * each entry within the segment's internal {@link io.atomix.catalyst.buffer.Buffer}. For entries that are appended
+ * to the log sequentially, the index has an O(1) lookup time. For instances where entries in a segment have been
+ * skipped (due to log compaction), the lookup time is O(log n) due to binary search. However, due to the nature of
+ * the Raft consensus algorithm, readers should typically benefit from O(1) lookups.
+ * <p>
+ * When a segment is constructed, the segment will attempt to rebuild its index from the underlying segment
+ * {@link Buffer}. This is done by reading a 16-bit unsigned length and 32-bit offset for each entry. Once the
+ * segment has been built, new entries will be {@link #append(Entry) appended} at the end of the segment.
+ * <p>
+ * Additionally, segments are responsible for keeping track of entries that have been {@link #clean(long) cleaned}.
+ * Cleaned entries are tracked in an internal {@link io.atomix.catalyst.buffer.util.BitArray} with a size equal
+ * to the segment's entry {@link #count()}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
