@@ -59,6 +59,10 @@ public class MajorCompactionTask implements CompactionTask {
    * @param segment The segment to clean.
    */
   private void cleanSegment(Segment segment) {
+    // Skip the segment if it's empty. The segment needs to be combined by a minor compaction process.
+    if (segment.isEmpty())
+      return;
+
     // Create a clean segment with a newer version to which to rewrite the segment entries.
     Segment cleanSegment = manager.createSegment(SegmentDescriptor.builder()
       .withId(segment.descriptor().id())
