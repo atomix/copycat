@@ -19,6 +19,7 @@ import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -43,12 +44,52 @@ import java.util.stream.Collectors;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class MajorCompactionManager implements CompactionManager {
+public final class MajorCompactionManager implements CompactionManager {
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
-    List<Segment> cleanableSegments = getCleanableSegments(segments);
-    return !cleanableSegments.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, cleanableSegments)) : Collections.EMPTY_LIST;
+    List<List<Segment>> groups = getCleanableGroups(storage, segments);
+    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups)) : Collections.EMPTY_LIST;
+  }
+
+  /**
+   * Returns a list of segment sets to clean.
+   */
+  private List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
+    List<List<Segment>> clean = new ArrayList<>();
+    List<Segment> segments = null;
+    Segment previousSegment = null;
+    for (Segment segment : getCleanableSegments(manager)) {
+      // If this is the first segment in a segments list, add the segment.
+      if (segments == null) {
+        segments = new ArrayList<>();
+        segments.add(segment);
+      }
+      // If the previous segment is undefined or of a different version, reset the segments.
+      else if (previousSegment != null && previousSegment.descriptor().version() != segment.descriptor().version()) {
+        clean.add(segments);
+        segments = new ArrayList<>();
+        segments.add(segment);
+      }
+      // If the total size of all segments is less than the maximum size of any segment, add the segment to the segments list.
+      else if (segments.stream().mapToLong(Segment::size).sum() + segment.size() < storage.maxSegmentSize()
+        && segments.stream().mapToLong(s -> s.count() - s.cleanCount()).sum() < storage.maxEntriesPerSegment()) {
+        segments.add(segment);
+      }
+      // If there's not enough room to combine segments, reset the segments list.
+      else {
+        clean.add(segments);
+        segments = new ArrayList<>();
+        segments.add(segment);
+      }
+      previousSegment = segment;
+    }
+
+    // Ensure all cleanable segments have been added to the clean segments list.
+    if (segments != null) {
+      clean.add(segments);
+    }
+    return clean;
   }
 
   /**

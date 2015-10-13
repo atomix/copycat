@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.compaction.OffsetCleaner;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
@@ -54,7 +55,7 @@ public class Segment implements AutoCloseable {
   private final OffsetIndex offsetIndex;
   private final OffsetCleaner cleaner;
   private final SegmentManager manager;
-  private int skip = 0;
+  private long skip = 0;
   private boolean open = true;
 
   /**
@@ -72,7 +73,7 @@ public class Segment implements AutoCloseable {
     long position = buffer.mark().position();
     int length = buffer.readUnsignedShort();
     while (length != 0) {
-      int offset = buffer.readInt();
+      long offset = buffer.readLong();
       offsetIndex.index(offset, position);
       position = buffer.skip(length).position();
       length = buffer.mark().readUnsignedShort();
@@ -104,7 +105,7 @@ public class Segment implements AutoCloseable {
    * @return Indicates whether the segment is empty.
    */
   public boolean isEmpty() {
-    return offsetIndex.size() > 0 ? offsetIndex.lastOffset() - offsetIndex.offset() + 1 + skip == 0 : skip == 0;
+    return offsetIndex.size() > 0 ? offsetIndex.lastOffset() + 1 + skip == 0 : skip == 0;
   }
 
   /**
@@ -141,8 +142,8 @@ public class Segment implements AutoCloseable {
    *
    * @return The current range of the segment.
    */
-  public int length() {
-    return !isEmpty() ? offsetIndex.lastOffset() - offsetIndex.offset() + 1 + skip : 0;
+  public long length() {
+    return !isEmpty() ? offsetIndex.lastOffset() + 1 + skip : 0;
   }
 
   /**
@@ -160,7 +161,7 @@ public class Segment implements AutoCloseable {
    * @return The index of the segment.
    */
   long index() {
-    return descriptor.index() + offsetIndex.offset();
+    return descriptor.index();
   }
 
   /**
@@ -171,7 +172,7 @@ public class Segment implements AutoCloseable {
    */
   public long firstIndex() {
     assertSegmentOpen();
-    return !isEmpty() ? descriptor.index() + Math.max(0, offsetIndex.offset()) : 0;
+    return !isEmpty() ? descriptor.index() : 0;
   }
 
   /**
@@ -195,23 +196,20 @@ public class Segment implements AutoCloseable {
   }
 
   /**
-   * Compacts the head of the segment up to the given index.
+   * Returns the offset of the given index within the segment.
    *
-   * @param firstIndex The first index in the segment.
-   * @return The segment.
+   * @param index The index to check.
+   * @return The offset of the given index.
    */
-  public Segment compact(long firstIndex) {
-    if (!isEmpty()) {
-      offsetIndex.resetOffset(offset(firstIndex));
-    }
-    return this;
+  public long offset(long index) {
+    return offsetIndex.find(relativeOffset(index));
   }
 
   /**
    * Returns the offset for the given index.
    */
-  private int offset(long index) {
-    return (int) (index - descriptor.index());
+  private long relativeOffset(long index) {
+    return index - descriptor.index();
   }
 
   /**
@@ -239,22 +237,22 @@ public class Segment implements AutoCloseable {
     Assert.index(index == entry.getIndex(), "inconsistent index: %s", entry.getIndex());
 
     // Calculate the offset of the entry.
-    int offset = offset(index);
+    long offset = relativeOffset(index);
 
     // Mark the starting position of the record and record the starting position of the new entry.
     long position = buffer.mark().position();
 
     // Serialize the object into the segment buffer.
-    serializer.writeObject(entry, buffer.skip(Short.BYTES + Integer.BYTES).limit(buffer.position() + descriptor.maxEntrySize()));
+    serializer.writeObject(entry, buffer.skip(Short.BYTES + Long.BYTES).limit(buffer.position() + descriptor.maxEntrySize()));
 
     // Calculate the length of the serialized bytes based on the resulting buffer position and the starting position.
-    int length = (int) (buffer.position() - (position + Short.BYTES + Integer.BYTES));
+    int length = (int) (buffer.position() - (position + Short.BYTES + Long.BYTES));
 
     // Set the entry size.
     entry.setSize(length);
 
     // Write the length of the entry for indexing.
-    buffer.reset().writeUnsignedShort(length).writeInt(offset).skip(length);
+    buffer.reset().writeUnsignedShort(length).writeLong(offset).skip(length);
 
     // Index the offset, position, and length.
     offsetIndex.index(offset, position);
@@ -277,7 +275,7 @@ public class Segment implements AutoCloseable {
     checkRange(index);
 
     // Get the offset of the index within this segment.
-    int offset = offset(index);
+    long offset = relativeOffset(index);
 
     // Get the start position of the entry from the memory index.
     long position = offsetIndex.position(offset);
@@ -289,11 +287,11 @@ public class Segment implements AutoCloseable {
       int length = buffer.readUnsignedShort(position);
 
       // Verify that the entry at the given offset matches.
-      int entryOffset = buffer.readInt(position + Short.BYTES);
+      long entryOffset = buffer.readLong(position + Short.BYTES);
       Assert.state(entryOffset == offset, "inconsistent index: %s", index);
 
       // Read the entry buffer and deserialize the entry.
-      try (Buffer value = buffer.slice(position + Short.BYTES + Integer.BYTES, length)) {
+      try (Buffer value = buffer.slice(position + Short.BYTES + Long.BYTES, length)) {
         T entry = serializer.readObject(value);
         entry.setIndex(index).setSize(length);
         return entry;
@@ -328,8 +326,17 @@ public class Segment implements AutoCloseable {
       return false;
 
     // Check the memory index first for performance reasons.
-    int offset = offset(index);
+    long offset = relativeOffset(index);
     return offsetIndex.contains(offset);
+  }
+
+  /**
+   * Returns the segment offset cleaner.
+   *
+   * @return The segment offset cleaner.
+   */
+  public OffsetCleaner cleaner() {
+    return cleaner;
   }
 
   /**
@@ -341,7 +348,8 @@ public class Segment implements AutoCloseable {
    */
   public boolean clean(long index) {
     assertSegmentOpen();
-    return cleaner.clean(offsetIndex.find(offset(index)));
+    long offset = offsetIndex.find(relativeOffset(index));
+    return offset != -1 && cleaner.clean(offset);
   }
 
   /**
@@ -353,7 +361,7 @@ public class Segment implements AutoCloseable {
    */
   public boolean isClean(long index) {
     assertSegmentOpen();
-    return cleaner.isClean(offsetIndex.find(offset(index)));
+    return cleaner.isClean(offsetIndex.find(relativeOffset(index)));
   }
 
   /**
@@ -362,7 +370,7 @@ public class Segment implements AutoCloseable {
    * @return The number of entries in the segment that have been cleaned.
    * @throws IllegalStateException if the segment is not open
    */
-  public int cleanCount() {
+  public long cleanCount() {
     assertSegmentOpen();
     return cleaner.count();
   }
@@ -391,11 +399,11 @@ public class Segment implements AutoCloseable {
     assertSegmentOpen();
     Assert.index(index >= manager.commitIndex(), "cannot truncate committed index");
 
-    int offset = offset(index);
-    int lastOffset = offsetIndex.lastOffset();
+    long offset = relativeOffset(index);
+    long lastOffset = offsetIndex.lastOffset();
 
     if (offset < lastOffset) {
-      int diff = lastOffset - offset;
+      long diff = lastOffset - offset;
       skip = Math.max(skip - diff, 0);
 
       long position = offsetIndex.truncate(offset);

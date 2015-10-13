@@ -23,21 +23,21 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
+import java.util.Collections;
 
 /**
  * Minor compaction task.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class MinorCompactionTask implements CompactionTask {
+public final class MinorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MinorCompactionTask.class);
   private final SegmentManager manager;
-  private final List<Segment> segments;
+  private final Segment segment;
 
-  public MinorCompactionTask(SegmentManager manager, List<Segment> segments) {
+  MinorCompactionTask(SegmentManager manager, Segment segment) {
     this.manager = Assert.notNull(manager, "manager");
-    this.segments = Assert.notNull(segments, "segments");
+    this.segment = Assert.notNull(segment, "segment");
   }
 
   @Override
@@ -46,70 +46,46 @@ public class MinorCompactionTask implements CompactionTask {
   }
 
   /**
-   * Cleans all cleanable segments.
+   * Compacts all cleanable segments.
    */
   private void cleanSegments() {
-    // Get the first segment which contains the first index being cleaned. The clean segment will be written
-    // as a newer version of the earliest segment being rewritten.
-    Segment firstSegment = segments.iterator().next();
-
-    // Create a clean segment with a newer version to which to rewrite the segment entries.
-    Segment cleanSegment = manager.createSegment(SegmentDescriptor.builder()
-      .withId(firstSegment.descriptor().id())
-      .withVersion(firstSegment.descriptor().version() + 1)
-      .withIndex(firstSegment.descriptor().index())
-      .withMaxEntrySize(segments.stream().mapToInt(s -> s.descriptor().maxEntrySize()).max().getAsInt())
-      .withMaxSegmentSize(segments.stream().mapToLong(s -> s.descriptor().maxSegmentSize()).max().getAsLong())
-      .withMaxEntries(segments.stream().mapToInt(s -> s.descriptor().maxEntries()).max().getAsInt())
+    // Create a compact segment with a newer version to which to rewrite the segment entries.
+    Segment compactSegment = manager.createSegment(SegmentDescriptor.builder()
+      .withId(segment.descriptor().id())
+      .withVersion(segment.descriptor().version() + 1)
+      .withIndex(segment.descriptor().index())
+      .withMaxEntrySize(segment.descriptor().maxEntrySize())
+      .withMaxSegmentSize(segment.descriptor().maxSegmentSize())
+      .withMaxEntries(segment.descriptor().maxEntries())
       .build());
 
-    // Clean the first entry from the segment to ensure the clean segment is not empty when inserted into the segment manager.
-    cleanEntry(firstSegment.firstIndex(), firstSegment, cleanSegment);
+    cleanEntries(segment, compactSegment);
 
-    // Insert the new clean segment into the segment manager.
-    manager.insertSegment(cleanSegment);
+    // Replace the old segment with the compact segment.
+    manager.replaceSegments(Collections.singletonList(segment), compactSegment);
 
-    // Iterate through all segments being compacted and write entries to a single clean segment.
-    for (Segment segment : segments) {
-      cleanSegment(segment, cleanSegment);
-    }
-
-    // Update the clean segment descriptor and lock the segment.
-    cleanSegment.descriptor().update(System.currentTimeMillis());
-    cleanSegment.descriptor().lock();
-
-    // Delete the old segments.
-    for (Segment segment : segments) {
-      segment.delete();
-    }
+    // Delete the old segment.
+    segment.delete();
   }
 
   /**
-   * Cleans the given segment.
+   * Compacts entries from the given segment, rewriting them to the compact segment.
    *
-   * @param segment The segment to clean.
-   * @param cleanSegment The segment to which to write the cleaned segment.
+   * @param segment The segment to compact.
+   * @param compactSegment The compact segment.
    */
-  private void cleanSegment(Segment segment, Segment cleanSegment) {
-    while (!segment.isEmpty()) {
-      // Logic inside the Segment ensures that the firstIndex() is always reflective of the first index that
-      // has not been compact()ed from the segment.
-      long index = segment.firstIndex();
-
-      // Clean the entry at the current index from the segment.
-      cleanEntry(index, segment, cleanSegment);
-
-      // Once the entry has been cleaned, update the segment manager to point to the correct segment.
-      manager.moveSegment(index, segment);
+  private void cleanEntries(Segment segment, Segment compactSegment) {
+    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
+      cleanEntry(i, segment, compactSegment);
     }
   }
 
   /**
-   * Cleans the entry at the given index.
+   * Compacts the entry at the given index.
    *
-   * @param index The index at which to clean the entry.
-   * @param segment The segment to clean.
-   * @param cleanSegment The segment to which to write the cleaned segment.
+   * @param index The index at which to compact the entry.
+   * @param segment The segment to compact.
+   * @param cleanSegment The segment to which to write the compacted segment.
    */
   private void cleanEntry(long index, Segment segment, Segment cleanSegment) {
     try (Entry entry = segment.get(index)) {
@@ -137,14 +113,11 @@ public class MinorCompactionTask implements CompactionTask {
         cleanSegment.skip(1);
       }
     }
-
-    // Compact the segment to move the segment's firstIndex() to index + 1.
-    segment.compact(index + 1);
   }
 
   @Override
   public String toString() {
-    return String.format("%s%s", getClass().getSimpleName(), segments);
+    return String.format("%s[segment=%s]", getClass().getSimpleName(), segment);
   }
 
 }

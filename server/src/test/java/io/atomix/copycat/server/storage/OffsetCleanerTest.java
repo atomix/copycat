@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.copycat.server.storage.compaction.OffsetCleaner;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.*;

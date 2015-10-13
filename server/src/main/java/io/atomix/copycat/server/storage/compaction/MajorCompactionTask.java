@@ -23,6 +23,8 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -30,121 +32,179 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class MajorCompactionTask implements CompactionTask {
+public final class MajorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MajorCompactionTask.class);
   private final SegmentManager manager;
-  private final List<Segment> segments;
+  private final List<List<Segment>> groups;
+  private List<List<OffsetCleaner>> cleaners;
 
-  public MajorCompactionTask(SegmentManager manager, List<Segment> segments) {
+  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups) {
     this.manager = Assert.notNull(manager, "manager");
-    this.segments = Assert.notNull(segments, "segments");
+    this.groups = Assert.notNull(groups, "segments");
   }
 
   @Override
   public void run() {
-    cleanSegments();
+    storeCleaners();
+    compactGroups();
   }
 
   /**
-   * Cleans all cleanable segments.
+   * Stores cleaned segment offsets.
    */
-  private void cleanSegments() {
-    // Iterate through segments sequentially and rewrite each segment independently.
-    segments.forEach(this::cleanSegment);
+  private void storeCleaners() {
+    // Iterate through the segments in reverse order to prevent race conditions in which entries in later
+    // segments are cleaned after entries in earlier segments.
+    cleaners = new ArrayList<>(groups.size());
+    for (int i = groups.size() - 1; i >= 0; i--) {
+      List<Segment> group = groups.get(i);
+      List<OffsetCleaner> groupCleaners = new ArrayList<>(group.size());
+      for (int j = group.size() - 1; j >= 0; j--) {
+        groupCleaners.add(new OffsetCleaner(group.get(j).cleaner().bits().copy()));
+      }
+      Collections.reverse(groupCleaners);
+      cleaners.add(groupCleaners);
+    }
+    Collections.reverse(cleaners);
   }
 
   /**
-   * Cleans the given segment.
-   *
-   * @param segment The segment to clean.
+   * Compacts all compactable segments.
    */
-  private void cleanSegment(Segment segment) {
-    // Skip the segment if it's empty. The segment needs to be combined by a minor compaction process.
-    if (segment.isEmpty())
-      return;
-
-    // Create a clean segment with a newer version to which to rewrite the segment entries.
-    Segment cleanSegment = manager.createSegment(SegmentDescriptor.builder()
-      .withId(segment.descriptor().id())
-      .withVersion(segment.descriptor().version() + 1)
-      .withIndex(segment.descriptor().index())
-      .withMaxEntrySize(segment.descriptor().maxEntrySize())
-      .withMaxSegmentSize(segment.descriptor().maxSegmentSize())
-      .withMaxEntries(segment.descriptor().maxEntries())
-      .build());
-
-    // Clean the first entry from the segment to ensure the clean segment is not empty when inserted into the segment manager.
-    cleanEntry(segment.firstIndex(), segment, cleanSegment);
-
-    // Insert the new clean segment into the segment manager.
-    manager.insertSegment(cleanSegment);
-
-    // Clean the segment. Note that the segment will actually be cleaned starting from the second index.
-    cleanSegment(segment, cleanSegment);
-
-    // Update the clean segment descriptor and lock the segment.
-    cleanSegment.descriptor().update(System.currentTimeMillis());
-    cleanSegment.descriptor().lock();
-
-    // Delete the old segment.
-    segment.delete();
-  }
-
-  /**
-   * Cleans the given segment.
-   *
-   * @param segment The segment to clean.
-   * @param cleanSegment The segment to which to write the cleaned segment.
-   */
-  private void cleanSegment(Segment segment, Segment cleanSegment) {
-    while (!segment.isEmpty()) {
-      // Logic inside the Segment ensures that the firstIndex() is always reflective of the first index that
-      // has not been compact()ed from the segment.
-      long index = segment.firstIndex();
-
-      // Clean the entry at the current index from the segment.
-      cleanEntry(index, segment, cleanSegment);
-
-      // Once the entry has been cleaned, update the segment manager to point to the correct segment.
-      manager.moveSegment(index, segment);
+  private void compactGroups() {
+    for (int i = 0; i < groups.size(); i++) {
+      List<Segment> group = groups.get(i);
+      List<OffsetCleaner> groupCleaners = cleaners.get(i);
+      Segment segment = compactGroup(group, groupCleaners);
+      updateCleaned(group, groupCleaners, segment);
+      deleteGroup(group);
+      closeCleaners(groupCleaners);
     }
   }
 
   /**
-   * Cleans the entry at the given index.
-   *
-   * @param index The index at which to clean the entry.
-   * @param segment The segment to clean.
-   * @param cleanSegment The segment to which to write the cleaned segment.
+   * Compacts a group.
    */
-  private void cleanEntry(long index, Segment segment, Segment cleanSegment) {
+  private Segment compactGroup(List<Segment> segments, List<OffsetCleaner> cleaners) {
+    // Get the first segment which contains the first index being cleaned. The clean segment will be written
+    // as a newer version of the earliest segment being rewritten.
+    Segment firstSegment = segments.iterator().next();
+
+    // Create a clean segment with a newer version to which to rewrite the segment entries.
+    Segment compactSegment = manager.createSegment(SegmentDescriptor.builder()
+      .withId(firstSegment.descriptor().id())
+      .withVersion(firstSegment.descriptor().version() + 1)
+      .withIndex(firstSegment.descriptor().index())
+      .withMaxEntrySize(segments.stream().mapToInt(s -> s.descriptor().maxEntrySize()).max().getAsInt())
+      .withMaxSegmentSize(segments.stream().mapToLong(s -> s.descriptor().maxSegmentSize()).max().getAsLong())
+      .withMaxEntries(segments.stream().mapToInt(s -> s.descriptor().maxEntries()).max().getAsInt())
+      .build());
+
+    compactGroup(segments, cleaners, compactSegment);
+
+    // Replace the rewritten segments with the updated segment.
+    manager.replaceSegments(segments, compactSegment);
+
+    return compactSegment;
+  }
+
+  /**
+   * Compacts segments in a group sequentially.
+   *
+   * @param segments The segments to compact.
+   * @param compactSegment The compact segment.
+   */
+  private void compactGroup(List<Segment> segments, List<OffsetCleaner> cleaners, Segment compactSegment) {
+    // Iterate through all segments being compacted and write entries to a single compact segment.
+    for (int i = 0; i < segments.size(); i++) {
+      compactSegment(segments.get(i), cleaners.get(i), compactSegment);
+    }
+  }
+
+  /**
+   * Compacts the given segment.
+   *
+   * @param segment The segment to compact.
+   * @param compactSegment The segment to which to write the compacted segment.
+   */
+  private void compactSegment(Segment segment, OffsetCleaner cleaner, Segment compactSegment) {
+    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
+      compactEntry(i, segment, cleaner, compactSegment);
+    }
+  }
+
+  /**
+   * Compacts the entry at the given index.
+   *
+   * @param index The index at which to compact the entry.
+   * @param segment The segment to compact.
+   * @param compactSegment The segment to which to write the cleaned segment.
+   */
+  private void compactEntry(long index, Segment segment, OffsetCleaner cleaner, Segment compactSegment) {
     try (Entry entry = segment.get(index)) {
-      // If an entry was found, only remove the entry from the segment if it's not a tombstone that has been cleaned.
+      // If an entry was found, remove the entry from the segment.
       if (entry != null) {
-        // If the entry has been cleaned, skip the entry in the clean segment.
+        // If the entry has been cleaned, skip the entry in the compact segment.
         // Note that for major compaction this process includes normal and tombstone entries.
-        if (segment.isClean(index)) {
-          cleanSegment.skip(1);
+        long offset = segment.offset(index);
+        if (offset == -1 || cleaner.isClean(offset)) {
+          compactSegment.skip(1);
           LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
         }
         // If the entry hasn't been cleaned, simply transfer it to the new segment.
         else {
-          cleanSegment.append(entry);
+          compactSegment.append(entry);
         }
       }
       // If the entry has already been compacted, skip the index in the segment.
       else {
-        cleanSegment.skip(1);
+        compactSegment.skip(1);
       }
     }
+  }
 
-    // Compact the segment to move the segment's firstIndex() to index + 1.
-    segment.compact(index + 1);
+  /**
+   * Updates the new compact segment with entries that were cleaned during compaction.
+   */
+  private void updateCleaned(List<Segment> segments, List<OffsetCleaner> cleaners, Segment compactSegment) {
+    for (int i = 0; i < segments.size(); i++) {
+      updateCleanedOffsets(segments.get(i), cleaners.get(i), compactSegment);
+    }
+  }
+
+  /**
+   * Updates the new compact segment with entries that were cleaned in the given segment during compaction.
+   */
+  private void updateCleanedOffsets(Segment segment, OffsetCleaner cleaner, Segment compactSegment) {
+    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
+      long offset = segment.offset(i);
+      if (offset != -1 && cleaner.isClean(offset)) {
+        compactSegment.clean(offset);
+      }
+    }
+  }
+
+  /**
+   * Completes compaction by deleting old segments.
+   */
+  private void deleteGroup(List<Segment> group) {
+    // Delete the old segments.
+    for (Segment oldSegment : group) {
+      oldSegment.delete();
+    }
+  }
+
+  /**
+   * Closes stored offset cleaners, freeing memory.
+   */
+  private void closeCleaners(List<OffsetCleaner> cleaners) {
+    cleaners.forEach(OffsetCleaner::close);
+    cleaners.clear();
   }
 
   @Override
   public String toString() {
-    return String.format("%s%s", getClass().getSimpleName(), segments);
+    return String.format("%s[segments=%s]", getClass().getSimpleName(), groups);
   }
 
 }

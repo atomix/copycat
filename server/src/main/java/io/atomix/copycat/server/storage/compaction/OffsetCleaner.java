@@ -13,18 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.catalyst.buffer.util.BitArray;
 import io.atomix.catalyst.util.Assert;
 
 /**
- * Segment cleaner.
+ * Segment offset cleaner.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class OffsetCleaner implements AutoCloseable {
-  private final BitArray bits = BitArray.allocate(1024);
+public final class OffsetCleaner implements AutoCloseable {
+  private final BitArray bits;
+
+  public OffsetCleaner() {
+    this(BitArray.allocate(1024));
+  }
+
+  OffsetCleaner(BitArray bits) {
+    this.bits = Assert.notNull(bits, "bits");
+  }
 
   /**
    * Cleans an offset from the segment.
@@ -32,7 +40,7 @@ class OffsetCleaner implements AutoCloseable {
    * @param offset The offset to clean.
    * @return Indicates whether the offset was newly cleaned.
    */
-  public boolean clean(int offset) {
+  public boolean clean(long offset) {
     Assert.argNot(offset < 0, "offset must be positive");
     if (bits.size() <= offset) {
       while (bits.size() <= offset) {
@@ -48,7 +56,7 @@ class OffsetCleaner implements AutoCloseable {
    * @param offset The offset to check.
    * @return Indicates whether the given offset has been cleaned from the segment.
    */
-  public boolean isClean(int offset) {
+  public boolean isClean(long offset) {
     return offset == -1 || (bits.size() > offset && bits.get(offset));
   }
 
@@ -57,8 +65,17 @@ class OffsetCleaner implements AutoCloseable {
    *
    * @return The number of offsets cleaned from the segment.
    */
-  public int count() {
-    return (int) bits.count();
+  public long count() {
+    return bits.count();
+  }
+
+  /**
+   * Returns the underlying cleaner bit array.
+   *
+   * @return The underlying cleaner bit array.
+   */
+  BitArray bits() {
+    return bits;
   }
 
   @Override

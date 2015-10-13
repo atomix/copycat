@@ -38,58 +38,15 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class MinorCompactionManager implements CompactionManager {
+public final class MinorCompactionManager implements CompactionManager {
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
-    List<List<Segment>> groups = getCleanableGroups(storage, segments);
-    List<CompactionTask> tasks = new ArrayList<>(groups.size());
-    for (List<Segment> group : groups) {
-      tasks.add(new MinorCompactionTask(segments, group));
+    List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
+    for (Segment segment : getCleanableSegments(storage, segments)) {
+      tasks.add(new MinorCompactionTask(segments, segment));
     }
     return tasks;
-  }
-
-  /**
-   * Returns a list of segment sets to clean.
-   *
-   * @return A list of segment sets to clean in the order in which they should be cleaned.
-   */
-  private List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
-    List<List<Segment>> clean = new ArrayList<>();
-    List<Segment> segments = null;
-    Segment previousSegment = null;
-    for (Segment segment : getCleanableSegments(storage, manager)) {
-      if (segments == null) {
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      // If the previous segment is not an instance of the same version as this segment then reset the segments list.
-      // Similarly, if the previous segment doesn't directly end with the index prior to the first index in this segment then
-      // reset the segments list. We can only combine segments that are direct neighbors of one another.
-      else if (previousSegment != null && (previousSegment.descriptor().version() != segment.descriptor().version() || previousSegment.lastIndex() != segment.firstIndex() - 1)) {
-        clean.add(segments);
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      // If the total count of entries in all segments is less then the total slots in any individual segment, combine the segments.
-      else if (segments.stream().mapToLong(Segment::count).sum() + segment.count() < segments.stream().mapToLong(Segment::length).max().getAsLong()) {
-        segments.add(segment);
-      }
-      // If there's not enough room to combine segments, reset the segments list.
-      else {
-        clean.add(segments);
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      previousSegment = segment;
-    }
-
-    // Ensure all cleanable segments have been added to the clean segments list.
-    if (segments != null) {
-      clean.add(segments);
-    }
-    return clean;
   }
 
   /**

@@ -21,6 +21,7 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.compaction.OffsetCleaner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -235,10 +236,23 @@ public class SegmentManager implements AutoCloseable {
    * @param segment The segment to insert.
    * @throws IllegalStateException if the segment is unknown
    */
-  public synchronized void insertSegment(Segment segment) {
-    Segment oldSegment = segments.put(segment.index(), segment);
-    Assert.arg(oldSegment != null, "unknown segment at index: %s", segment.index());
-    segments.put(oldSegment.index(), oldSegment);
+  public synchronized void replaceSegments(Collection<Segment> segments, Segment segment) {
+    // Update the segment descriptor and lock the segment.
+    segment.descriptor().update(System.currentTimeMillis());
+    segment.descriptor().lock();
+
+    // Iterate through old segments and remove them from the segments list.
+    for (Segment oldSegment : segments) {
+      if (!this.segments.containsKey(oldSegment.index())) {
+        throw new IllegalArgumentException("unknown segment at index: " + oldSegment.index());
+      }
+      this.segments.remove(oldSegment.index());
+    }
+
+    // Put the new segment in the segments list.
+    this.segments.put(segment.index(), segment);
+
+    resetCurrentSegment();
   }
 
   /**
@@ -249,18 +263,6 @@ public class SegmentManager implements AutoCloseable {
   public synchronized void removeSegment(Segment segment) {
     segments.remove(segment.index());
     resetCurrentSegment();
-  }
-
-  /**
-   * Moved a segment.
-   *
-   * @param index The index to move.
-   * @param segment The segment to move.
-   */
-  public synchronized void moveSegment(long index, Segment segment) {
-    segments.remove(index);
-    if (!segment.isEmpty())
-      segments.put(segment.index(), segment);
   }
 
   /**
@@ -284,7 +286,7 @@ public class SegmentManager implements AutoCloseable {
    */
   private Segment createDiskSegment(SegmentDescriptor descriptor) {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
-    Buffer buffer = FileBuffer.allocate(segmentFile, 1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
+    Buffer buffer = FileBuffer.allocate(segmentFile, Math.min(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES), descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
     Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
@@ -296,7 +298,7 @@ public class SegmentManager implements AutoCloseable {
    */
   private Segment createMappedSegment(SegmentDescriptor descriptor) {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
-    Buffer buffer = MappedBuffer.allocate(segmentFile, 1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
+    Buffer buffer = MappedBuffer.allocate(segmentFile, Math.min(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES), descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
     Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
@@ -307,7 +309,7 @@ public class SegmentManager implements AutoCloseable {
    * Creates a new segment.
    */
   private Segment createMemorySegment(SegmentDescriptor descriptor) {
-    Buffer buffer = HeapBuffer.allocate(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
+    Buffer buffer = HeapBuffer.allocate(Math.min(1024 * 1024, descriptor.maxSegmentSize() + SegmentDescriptor.BYTES), descriptor.maxSegmentSize() + SegmentDescriptor.BYTES);
     descriptor.copyTo(buffer);
     Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), storage.serializer().clone(), this);
     LOGGER.debug("Created segment: {}", segment);
@@ -420,7 +422,7 @@ public class SegmentManager implements AutoCloseable {
                 segment.delete();
               }
             }
-            // If the next closes existing segment didn't contain this segment's first index, add this segment.
+            // If the next closest existing segment didn't contain this segment's first index, add this segment.
             else {
               LOGGER.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
               segments.put(segment.firstIndex(), segment);

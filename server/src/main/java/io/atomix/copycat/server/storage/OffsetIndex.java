@@ -51,19 +51,19 @@ class OffsetIndex implements AutoCloseable {
    * Returns the count of the index for the given number of entries.
    */
   public static long size(int maxEntries) {
-    return (long) maxEntries * 8 + 16;
+    return (long) maxEntries * 12 + 16;
   }
 
   private static final long MAX_POSITION = (long) Math.pow(2, 32) - 1;
-  private static final int ENTRY_SIZE = 8;
-  private static final int OFFSET_SIZE = 4;
+  private static final int ENTRY_SIZE = 12;
+  private static final int OFFSET_SIZE = 8;
 
   private final Buffer buffer;
   private boolean skipped;
-  private int offset;
   private int size;
-  private int lastOffset = -1;
-  private int currentOffset = -1;
+  private long lastOffset = -1;
+  private long currentOffset = -1;
+  private long currentMatch = -1;
 
   /**
    * @throws NullPointerException if {@code buffer} is null
@@ -73,27 +73,9 @@ class OffsetIndex implements AutoCloseable {
   }
 
   /**
-   * Returns the index offset.
-   *
-   * @return The index offset.
-   */
-  public int offset() {
-    return offset;
-  }
-
-  /**
-   * Resets the index offset.
-   *
-   * @param offset The index offset.
-   */
-  public void resetOffset(int offset) {
-    this.offset = offset;
-  }
-
-  /**
    * Returns the last offset in the index.
    */
-  public int lastOffset() {
+  public long lastOffset() {
     return lastOffset;
   }
 
@@ -105,12 +87,12 @@ class OffsetIndex implements AutoCloseable {
    * @throws IllegalArgumentException if the {@code offset} is less than or equal to the last offset in the index, 
    * or {@code position} is greater than MAX_POSITION
    */
-  public void index(int offset, long position) {
+  public void index(long offset, long position) {
     Assert.argNot(offset, lastOffset > -1 && offset <= lastOffset,
       "offset cannot be less than or equal to the last offset in the index");
     Assert.argNot(position > MAX_POSITION, "position cannot be greater than " + MAX_POSITION);
 
-    buffer.writeInt(offset).writeUnsignedInt(position);
+    buffer.writeLong(offset).writeUnsignedInt(position);
 
     size++;
     if (offset > lastOffset + 1)
@@ -142,7 +124,7 @@ class OffsetIndex implements AutoCloseable {
    * @param offset The offset to check.
    * @return Indicates whether the index contains the given offset.
    */
-  public boolean contains(int offset) {
+  public boolean contains(long offset) {
     return !skipped ? offset <= lastOffset : position(offset) != -1;
   }
 
@@ -152,15 +134,15 @@ class OffsetIndex implements AutoCloseable {
    * @param offset The offset to look up.
    * @return The starting position of the given offset.
    */
-  public long position(int offset) {
-    int relativeOffset = find(offset);
+  public long position(long offset) {
+    long relativeOffset = find(offset);
     return relativeOffset != -1 ? buffer.readUnsignedInt(relativeOffset * ENTRY_SIZE + OFFSET_SIZE) : -1;
   }
 
   /**
-   * Finds the relative offset for the given offset.
+   * Finds the real offset for the given relative offset.
    */
-  public int find(int offset) {
+  public long find(long offset) {
     if (size == 0) {
       return -1;
     }
@@ -169,8 +151,11 @@ class OffsetIndex implements AutoCloseable {
       return offset;
     }
 
-    if (currentOffset != -1 && currentOffset > lastOffset && buffer.readInt((currentOffset + 1) * ENTRY_SIZE) == offset) {
-      return ++currentOffset;
+    if (offset == currentOffset) {
+      return currentMatch;
+    } else if (currentOffset != -1 && buffer.readLong((currentMatch + 1) * ENTRY_SIZE) == offset) {
+      currentOffset = offset;
+      return ++currentMatch;
     }
 
     int lo = 0;
@@ -178,14 +163,16 @@ class OffsetIndex implements AutoCloseable {
 
     while (lo < hi) {
       int mid = lo + (hi - lo) / 2;
-      int i = buffer.readInt(mid * ENTRY_SIZE);
+      long i = buffer.readLong(mid * ENTRY_SIZE);
       if (i == offset) {
-        currentOffset = mid;
+        currentOffset = offset;
+        currentMatch = mid;
         return mid;
       } else if (lo == mid) {
-        i = buffer.readInt(hi * ENTRY_SIZE);
+        i = buffer.readLong(hi * ENTRY_SIZE);
         if (i == offset) {
-          currentOffset = hi;
+          currentOffset = offset;
+          currentMatch = hi;
           return hi;
         }
         return -1;
@@ -196,17 +183,18 @@ class OffsetIndex implements AutoCloseable {
       }
     }
 
-    if (buffer.readInt(hi * ENTRY_SIZE) == offset) {
-      currentOffset = hi;
+    if (buffer.readLong(hi * ENTRY_SIZE) == offset) {
+      currentOffset = offset;
+      currentMatch = hi;
       return hi;
     }
     return -1;
   }
 
   /**
-   * Returns the offset nearest the given offset.
+   * Returns the real offset nearest the given relative offset.
    */
-  private int findAfter(int offset) {
+  private long findAfter(long offset) {
     if (size == 0) {
       return -1;
     }
@@ -221,7 +209,7 @@ class OffsetIndex implements AutoCloseable {
     while (low <= high) {
       int mid = low + ((high - low) / 2);
 
-      int i = buffer.readInt(mid * ENTRY_SIZE);
+      long i = buffer.readLong(mid * ENTRY_SIZE);
       if (i < offset) {
         low = mid + 1;
       } else if (i > offset) {
@@ -242,25 +230,25 @@ class OffsetIndex implements AutoCloseable {
    *
    * @param offset The offset after which to truncate the index.
    */
-  public long truncate(int offset) {
+  public long truncate(long offset) {
     if (offset == lastOffset)
       return -1;
 
     if (offset == -1) {
       buffer.position(0).zero();
-      currentOffset = lastOffset = -1;
+      currentOffset = currentMatch = lastOffset = -1;
       return 0;
     }
 
-    int nearestOffset = findAfter(offset + 1);
+    long nearestOffset = findAfter(offset + 1);
 
     if (nearestOffset == -1)
       return -1;
 
-    int nearestIndex = nearestOffset * ENTRY_SIZE;
+    long nearestIndex = nearestOffset * ENTRY_SIZE;
 
-    int lastOffset = lastOffset();
-    for (int i = lastOffset; i > offset; i--) {
+    long lastOffset = lastOffset();
+    for (long i = lastOffset; i > offset; i--) {
       if (position(i) != -1) {
         size--;
       }
@@ -271,7 +259,7 @@ class OffsetIndex implements AutoCloseable {
     buffer.position(nearestIndex)
       .zero(nearestIndex);
     this.lastOffset = offset;
-    currentOffset = -1;
+    currentOffset = currentMatch = -1;
 
     return position;
   }
