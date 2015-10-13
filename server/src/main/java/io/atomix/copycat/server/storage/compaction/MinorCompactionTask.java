@@ -54,7 +54,6 @@ public final class MinorCompactionTask implements CompactionTask {
       .withId(segment.descriptor().id())
       .withVersion(segment.descriptor().version() + 1)
       .withIndex(segment.descriptor().index())
-      .withMaxEntrySize(segment.descriptor().maxEntrySize())
       .withMaxSegmentSize(segment.descriptor().maxSegmentSize())
       .withMaxEntries(segment.descriptor().maxEntries())
       .build());

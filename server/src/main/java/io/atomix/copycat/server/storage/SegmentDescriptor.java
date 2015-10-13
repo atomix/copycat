@@ -79,7 +79,6 @@ public final class SegmentDescriptor implements AutoCloseable {
   private final long index;
   private final long version;
   private long updated;
-  private final int maxEntrySize;
   private final long maxSegmentSize;
   private final int maxEntries;
   private boolean locked;
@@ -92,12 +91,11 @@ public final class SegmentDescriptor implements AutoCloseable {
     this.id = buffer.readLong();
     this.version = buffer.readLong();
     this.index = buffer.readLong();
-    this.maxEntrySize = buffer.readUnsignedMedium();
     this.maxSegmentSize = buffer.readUnsignedInt();
     this.maxEntries = buffer.readInt();
     this.updated = buffer.readLong();
     this.locked = buffer.readBoolean();
-    buffer.skip(4);
+    buffer.skip(7);
   }
 
   /**
@@ -134,15 +132,6 @@ public final class SegmentDescriptor implements AutoCloseable {
    */
   public long index() {
     return index;
-  }
-
-  /**
-   * Returns the maximum entry count for the segment.
-   *
-   * @return The maximum number of bytes for each entry in the segment.
-   */
-  public int maxEntrySize() {
-    return maxEntrySize;
   }
 
   /**
@@ -214,12 +203,11 @@ public final class SegmentDescriptor implements AutoCloseable {
       .writeLong(id)
       .writeLong(version)
       .writeLong(index)
-      .writeUnsignedMedium(maxEntrySize)
       .writeUnsignedInt(maxSegmentSize)
       .writeInt(maxEntries)
       .writeLong(updated)
       .writeBoolean(locked)
-      .writeInt(0)
+      .skip(7)
       .flush();
     return this;
   }
@@ -281,24 +269,13 @@ public final class SegmentDescriptor implements AutoCloseable {
     }
 
     /**
-     * Sets the maximum entry count for the segment.
-     *
-     * @param maxEntrySize The maximum entry count for the segment.
-     * @return The segment descriptor builder.
-     */
-    public Builder withMaxEntrySize(int maxEntrySize) {
-      buffer.writeUnsignedMedium(24, maxEntrySize);
-      return this;
-    }
-
-    /**
      * Sets maximum count of the segment.
      *
      * @param maxSegmentSize The maximum count of the segment.
      * @return The segment descriptor builder.
      */
     public Builder withMaxSegmentSize(long maxSegmentSize) {
-      buffer.writeUnsignedInt(27, maxSegmentSize);
+      buffer.writeUnsignedInt(24, maxSegmentSize);
       return this;
     }
 
@@ -309,7 +286,7 @@ public final class SegmentDescriptor implements AutoCloseable {
      * @return The segment descriptor builder.
      */
     public Builder withMaxEntries(int maxEntries) {
-      buffer.writeInt(31, maxEntries);
+      buffer.writeInt(28, maxEntries);
       return this;
     }
 
@@ -319,7 +296,7 @@ public final class SegmentDescriptor implements AutoCloseable {
      * @return The built segment descriptor.
      */
     public SegmentDescriptor build() {
-      return new SegmentDescriptor(buffer.writeLong(43, 0).rewind());
+      return new SegmentDescriptor(buffer.writeLong(32, 0).rewind());
     }
 
   }

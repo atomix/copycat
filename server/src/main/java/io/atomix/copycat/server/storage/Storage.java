@@ -58,7 +58,6 @@ public class Storage {
   private StorageLevel storageLevel = StorageLevel.DISK;
   private Serializer serializer = new Serializer(new PooledDirectAllocator());
   private File directory = new File(DEFAULT_DIRECTORY);
-  private int maxEntrySize = DEFAULT_MAX_ENTRY_SIZE;
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
   private int compactionThreads = DEFAULT_COMPACTION_THREADS;
@@ -181,15 +180,6 @@ public class Storage {
    */
   public StorageLevel level() {
     return storageLevel;
-  }
-
-  /**
-   * Returns the maximum storage entry size.
-   *
-   * @return The maximum entry size in bytes.
-   */
-  public int maxEntrySize() {
-    return maxEntrySize;
   }
 
   /**
@@ -322,23 +312,6 @@ public class Storage {
     }
 
     /**
-     * Sets the maximum entry count, returning the builder for method chaining.
-     * <p>
-     * The maximum entry count will be used to place an upper limit on the count of log segments.
-     *
-     * @param maxEntrySize The maximum entry count.
-     * @return The storage builder.
-     * @throws IllegalArgumentException If the {@code maxEntrySize} is not positive or {@code maxEntrySize} is not
-     * less than the max segment size.
-     */
-    public Builder withMaxEntrySize(int maxEntrySize) {
-      Assert.arg(maxEntrySize > 0, "maximum entry size must be positive");
-      Assert.argNot(maxEntrySize > storage.maxSegmentSize, "maximum entry size must be less than maxSegmentSize");
-      storage.maxEntrySize = maxEntrySize;
-      return this;
-    }
-
-    /**
      * Sets the maximum segment count, returning the builder for method chaining.
      *
      * @param maxSegmentSize The maximum segment count.
@@ -348,7 +321,6 @@ public class Storage {
      */
     public Builder withMaxSegmentSize(int maxSegmentSize) {
       Assert.arg(maxSegmentSize > 0, "maxSegmentSize must be positive");
-      Assert.argNot(maxSegmentSize < storage.maxEntrySize, "maximum segment size must be greater than maxEntrySize");
       storage.maxSegmentSize = maxSegmentSize;
       return this;
     }

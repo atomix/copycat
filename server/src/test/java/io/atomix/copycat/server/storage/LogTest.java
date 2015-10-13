@@ -45,7 +45,6 @@ public abstract class LogTest extends AbstractLogTest {
   protected Log createLog(String directory) {
     return tempStorageBuilder()
         .withDirectory(new File(String.format("target/test-logs/%s", directory)))
-        .withMaxEntrySize(1024)
         .withMaxSegmentSize(1024 * 1024)
         .withMaxEntriesPerSegment(1024)
         .withStorageLevel(storageLevel())

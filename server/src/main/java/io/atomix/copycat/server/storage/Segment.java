@@ -123,7 +123,7 @@ public class Segment implements AutoCloseable {
    * @return Indicates whether the segment is full.
    */
   public boolean isFull() {
-    return size() + descriptor.maxEntrySize() >= descriptor.maxSegmentSize()
+    return size() >= descriptor.maxSegmentSize()
       || offsetIndex.size() >= descriptor.maxEntries()
       || offsetIndex.lastOffset() + skip + 1 == Integer.MAX_VALUE;
   }
@@ -243,7 +243,7 @@ public class Segment implements AutoCloseable {
     long position = buffer.mark().position();
 
     // Serialize the object into the segment buffer.
-    serializer.writeObject(entry, buffer.skip(Short.BYTES + Long.BYTES).limit(buffer.position() + descriptor.maxEntrySize()));
+    serializer.writeObject(entry, buffer.skip(Short.BYTES + Long.BYTES));
 
     // Calculate the length of the serialized bytes based on the resulting buffer position and the starting position.
     int length = (int) (buffer.position() - (position + Short.BYTES + Long.BYTES));
