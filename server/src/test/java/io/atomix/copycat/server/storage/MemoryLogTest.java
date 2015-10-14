@@ -15,11 +15,14 @@
  */
 package io.atomix.copycat.server.storage;
 
+import org.testng.annotations.Test;
+
 /**
  * In-memory log test.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
+@Test
 public class MemoryLogTest extends LogTest {
 
   @Override

@@ -22,7 +22,6 @@ import io.atomix.copycat.server.storage.Storage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Builds tasks for the {@link Compaction#MAJOR} compaction process.
@@ -49,7 +48,7 @@ public final class MajorCompactionManager implements CompactionManager {
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<List<Segment>> groups = getCleanableGroups(storage, segments);
-    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups)) : Collections.EMPTY_LIST;
+    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups)) : Collections.emptyList();
   }
 
   /**
@@ -99,7 +98,15 @@ public final class MajorCompactionManager implements CompactionManager {
    * @return A list of cleanable log segments.
    */
   private List<Segment> getCleanableSegments(SegmentManager manager) {
-    return manager.segments().stream().filter(s -> s.lastIndex() <= manager.commitIndex() && s.isFull()).collect(Collectors.toList());
+    List<Segment> segments = new ArrayList<>(manager.segments().size());
+    for (Segment segment : manager.segments()) {
+      if (segment.lastIndex() <= manager.commitIndex() && (segment.isFull() || segment.isCompacted())) {
+        segments.add(segment);
+      } else {
+        break;
+      }
+    }
+    return segments;
   }
 
 }

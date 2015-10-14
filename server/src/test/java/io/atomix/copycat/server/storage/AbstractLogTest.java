@@ -15,33 +15,72 @@
  */
 package io.atomix.copycat.server.storage;
 
-import org.testng.annotations.*;
-
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.UUID;
 
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.AfterTest;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
+
+import io.atomix.catalyst.buffer.Buffer;
+import io.atomix.catalyst.buffer.DirectBuffer;
+import io.atomix.catalyst.serializer.Serializer;
+import static org.testng.Assert.*;
+
 /**
  * Abstract log test.
+ * 
+ * @author Jonathan Halterman
  */
 @Test
 public abstract class AbstractLogTest {
+  protected int maxSegmentSize = 100;
+  protected int maxUsableSegmentSize = maxSegmentSize - SegmentDescriptor.BYTES;
+  protected int maxEntriesPerSegment = 100;
+  protected int entrySize = entrySize();
+  protected int entriesPerSegment = (int) Math.ceil((double) maxUsableSegmentSize / (double) entrySize);
+  protected int maxUsableSegmentSpace = ((entrySize * entriesPerSegment) + SegmentDescriptor.BYTES);
   protected Log log;
   String logId;
 
   protected abstract Log createLog();
 
+  private int entrySize() {
+    Serializer serializer = new Serializer();
+    serializer.register(TestEntry.class);
+    Buffer buffer = DirectBuffer.allocate(1000);
+    serializer.writeObject(new TestEntry(), buffer);
+    return (int) buffer.position() + Short.BYTES + Long.BYTES;
+  }
+
   @BeforeMethod
   void setLog() throws Exception {
     logId = UUID.randomUUID().toString();
     log = createLog();
+    assertTrue(log.isOpen());
+    assertFalse(log.isClosed());
+    assertTrue(log.isEmpty());
   }
 
   @AfterMethod
   protected void deleteLog() {
-    log.delete();
+    try {
+      log.close();
+    } catch (Exception ignore) {
+    } finally {
+      assertFalse(log.isOpen());
+      assertTrue(log.isClosed());
+      log.delete();
+    }
   }
 
   protected Storage.Builder tempStorageBuilder() {

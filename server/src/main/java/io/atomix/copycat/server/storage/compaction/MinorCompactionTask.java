@@ -92,8 +92,8 @@ public final class MinorCompactionTask implements CompactionTask {
       if (entry != null) {
         // If the entry has been cleaned, determine whether it's a tombstone.
         if (segment.isClean(index)) {
+          // If the entry is not a tombstone, clean the entry.
           // If the entry is a tombstone, append the entry to the segment and clean it.
-          // if the entry is not a tombstone, clean the entry.
           if (!entry.isTombstone()) {
             cleanSegment.skip(1);
             LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());

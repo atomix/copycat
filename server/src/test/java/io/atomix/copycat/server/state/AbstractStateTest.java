@@ -32,11 +32,8 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.client.response.Response.Status;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -82,42 +79,6 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     serverCtx.close();
   }
 
-  public void testAppendUpdatesLeaderAndTerm() throws Throwable {
-    runOnServer(() -> {
-      serverState.setTerm(1);
-      AppendRequest request = AppendRequest.builder()
-          .withTerm(2)
-          .withLeader(members.get(1).hashCode())
-          .withLogIndex(0)
-          .withLogTerm(0)
-          .withCommitIndex(0)
-          .withGlobalIndex(0)
-          .build();
-
-      AppendResponse response = state.append(request).get();
-      
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLeader(), members.get(1));
-      threadAssertEquals(serverState.getLastVotedFor(), 0);
-      threadAssertEquals(response.term(), 2L);
-      threadAssertTrue(response.succeeded());
-    });
-  }
-
-  public void testAppendRejectedWhenRequestTermIsOld() throws Throwable {
-    runOnServer(() -> {
-      serverState.setTerm(3);
-      AppendRequest request = AppendRequest.builder().withTerm(2).build();
-
-      AppendResponse response = state.append(request).get();
-
-      threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(response.term(), 3L);
-      threadAssertFalse(response.succeeded());
-    });
-  }
-
   /**
    * Appends the given number of entries in the given term on the server. Must be run on server's ThreadContext.
    */
@@ -131,7 +92,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   }
 
   /**
-   * Runs the runnable on the server context.
+   * Runs the runnable on the server context. Failures within the {@code runnable} are rethrown on the main test thread.
    */
   protected void runOnServer(ThrowableRunnable runnable) throws Throwable {
     serverCtx.execute(() -> {
@@ -167,7 +128,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     threadAssertEquals(response.status(), Response.Status.ERROR);
     threadAssertEquals(response.error(), RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR);
   }
-  
+
   /**
    * Creates a collection of member addresses.
    */

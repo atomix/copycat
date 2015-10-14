@@ -15,15 +15,22 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.copycat.server.storage.entry.Entry;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
-import static org.testng.Assert.*;
+import org.testng.annotations.Test;
+
+import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
  * File log test.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
+@Test
 public class FileLogTest extends LogTest {
 
   @Override
@@ -31,56 +38,57 @@ public class FileLogTest extends LogTest {
     return StorageLevel.DISK;
   }
 
-  /**
-   * Tests recovering the log.
-   */
-  public void testRecover() {
-    appendEntries(log, 1024);
-    assertEquals(log.length(), 1024);
-
-    try (Log log = createLog()) {
-      assertEquals(log.length(), 1024);
-
-      for (long i = log.firstIndex(); i <= log.lastIndex(); i++) {
-        try (Entry entry = log.get(i)) {
-          assertNotNull(entry);
-        }
-      }
-    }
-  }
-
-  /**
-   * Tests recovering the log after compaction.
-   */
-  public void testRecoverAfterCompact() {
-    appendEntries(log, 2048);
-    for (long i = 1; i <= 2048; i++) {
-      if (i % 3 == 0 || i % 3 == 1) {
-        log.clean(i);
-      }
-    }
-
-    for (long i = 1; i <= 2048; i++) {
-      if (i % 3 == 0 || i % 3 == 1) {
-        assertTrue(log.lastIndex() >= i);
-        assertTrue(log.contains(i));
-      }
-    }
-
-    log.commit(2048).compactor().compact().join();
-
-    try (Log log = createLog()) {
-      assertEquals(log.length(), 2048);
-      for (long i = 1; i <= 2048; i++) {
-        if (i % 3 == 0 || i % 3 == 1) {
-          assertTrue(log.lastIndex() >= i);
-          if (i != 1024) {
-            assertFalse(log.contains(i));
-            assertNull(log.get(i));
-          }
-        }
-      }
-    }
-  }
+//  /**
+//   * Tests recovery of a closed log.
+//   */
+//  public void testRecoverAfterClose() {
+//    appendEntries(1024);
+//    assertEquals(log.length(), 1024);
+//    log.close();
+//
+//    try (Log log = createLog()) {
+//      assertEquals(log.length(), 1024);
+//
+//      for (long i = log.firstIndex(); i <= log.lastIndex(); i++) {
+//        try (Entry entry = log.get(i)) {
+//          assertEquals(entry.getIndex(), i);
+//        }
+//      }
+//    }
+//  }
+//
+//  /**
+//   * Tests recovery of a log after compaction.
+//   */
+//  public void testRecoverAfterCompact() {
+//    appendEntries(2048);
+//    for (long i = 1; i <= 2048; i++) {
+//      if (i % 3 == 0 || i % 3 == 1) {
+//        log.clean(i);
+//      }
+//    }
+//
+//    for (long i = 1; i <= 2048; i++) {
+//      if (i % 3 == 0 || i % 3 == 1) {
+//        assertTrue(log.lastIndex() >= i);
+//        assertTrue(log.contains(i));
+//      }
+//    }
+//
+//    log.commit(2048).compactor().compact().join();
+//
+//    try (Log log = createLog()) {
+//      assertEquals(log.length(), 2048);
+//      for (long i = 1; i <= 2048; i++) {
+//        if (i % 3 == 0 || i % 3 == 1) {
+//          assertTrue(log.lastIndex() >= i);
+//          if (i != 1024) {
+//            assertFalse(log.contains(i));
+//            assertNull(log.get(i));
+//          }
+//        }
+//      }
+//    }
+//  }
 
 }

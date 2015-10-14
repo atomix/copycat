@@ -1,5 +1,8 @@
 package io.atomix.copycat.server.state;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 import java.util.UUID;
 
 import org.testng.annotations.BeforeMethod;
@@ -81,6 +84,42 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
     // TODO
   }
 
+  public void testAppendUpdatesLeaderAndTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      AppendRequest request = AppendRequest.builder()
+          .withTerm(2)
+          .withLeader(members.get(1).hashCode())
+          .withLogIndex(0)
+          .withLogTerm(0)
+          .withCommitIndex(0)
+          .withGlobalIndex(0)
+          .build();
+
+      AppendResponse response = state.append(request).get();
+      
+      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverState.getLeader(), members.get(1));
+      threadAssertEquals(serverState.getLastVotedFor(), 0);
+      threadAssertEquals(response.term(), 2L);
+      threadAssertTrue(response.succeeded());
+    });
+  }
+
+  public void testAppendTermUpdated() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      AppendRequest request = AppendRequest.builder().withTerm(2).build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertTrue(response.succeeded());
+      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(response.term(), 2L);
+    });
+  }
+  
   public void testCommandWithoutLeader() throws Throwable {
     runOnServer(() -> {
       CommandRequest request = CommandRequest.builder().withSession(1).withCommand(new TestCommand("test")).build();

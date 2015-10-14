@@ -259,6 +259,8 @@ public class SegmentManager implements AutoCloseable {
    */
   public synchronized void removeSegment(Segment segment) {
     segments.remove(segment.index());
+    segment.close();
+    segment.delete();
     resetCurrentSegment();
   }
 
@@ -455,6 +457,13 @@ public class SegmentManager implements AutoCloseable {
     return segments.values();
   }
 
+  /**
+   * Returns the number of segments being managed.
+   */
+  int count() {
+    return segments.size();
+  }
+  
   @Override
   public void close() {
     segments.values().forEach(s -> {

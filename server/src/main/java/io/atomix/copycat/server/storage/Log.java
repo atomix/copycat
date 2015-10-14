@@ -27,22 +27,21 @@ import java.util.concurrent.Executors;
 /**
  * Stores Raft log entries in a segmented log in memory or on disk.
  * <p>
- * The log is the primary vehicle for storing state changes and managing replication in Raft. The log is used
- * to verify consistency between members and manage cluster configurations, client sessions, state machine
- * operations, and other tasks.
+ * The log is the primary vehicle for storing state changes and managing replication in Raft. The log is used to verify
+ * consistency between members and manage cluster configurations, client sessions, state machine operations, and other
+ * tasks.
  * <p>
- * State changes are written to the log as {@link Entry} objects. Each entry is associated with an {@code index}
- * and {@code term}. The {@code index} is a 1-based entry index from the start of the log. The {@code term} is
- * used for various consistency checks in the Raft algorithm. Raft guarantees that a {@link #commit(long) committed}
- * entry at any index {@code i} that has term {@code t} will also be present in the logs on all other servers in
- * the cluster at the same index {@code i} with term {@code t}. However, note that log compaction may break this
- * contract. Considering log compaction, it's more accurate to say that iff committed entry {@code i} is present
- * in another server's log, that entry has term {@code t} and the same value.
+ * State changes are written to the log as {@link Entry} objects. Each entry is associated with an {@code index} and
+ * {@code term}. The {@code index} is a 1-based entry index from the start of the log. The {@code term} is used for
+ * various consistency checks in the Raft algorithm. Raft guarantees that a {@link #commit(long) committed} entry at any
+ * index {@code i} that has term {@code t} will also be present in the logs on all other servers in the cluster at the
+ * same index {@code i} with term {@code t}. However, note that log compaction may break this contract. Considering log
+ * compaction, it's more accurate to say that iff committed entry {@code i} is present in another server's log, that
+ * entry has term {@code t} and the same value.
  * <p>
- * Entries are written to the log via the {@link #append(Entry)} method. When an entry is appended, it's written
- * to the next sequential index in the log after {@link #lastIndex()}. Entries can be created from a typed entry
- * pool with the {@link #create(Class)} method.
- * <pre>
+ * Entries are written to the log via the {@link #append(Entry)} method. When an entry is appended, it's written to the
+ * next sequential index in the log after {@link #lastIndex()}. Entries can be created from a typed entry pool with the
+ * {@link #create(Class)} method. <pre>
  *   {@code
  *   long index;
  *   try (CommandEntry entry = log.create(CommandEntry.class)) {
@@ -54,76 +53,76 @@ import java.util.concurrent.Executors;
  *   }
  * </pre>
  * <p>
- * {@link Entry entries} are appended to {@link Segment}s in the log. Segments are individual file or memory
- * based groups of sequential entries. Each segment has a fixed capacity in terms of either number of entries or
- * size in bytes. Once the capacity of a segment has been reached, the log rolls over to a new segment for the
- * next entry that's appended.
+ * {@link Entry entries} are appended to {@link Segment}s in the log. Segments are individual file or memory based
+ * groups of sequential entries. Each segment has a fixed capacity in terms of either number of entries or size in
+ * bytes. Once the capacity of a segment has been reached, the log rolls over to a new segment for the next entry that's
+ * appended.
  * <p>
- * Internally, each segment maintains an in-memory index of entries. The index stores the offset and position of
- * each entry within the segment's internal {@link io.atomix.catalyst.buffer.Buffer}. For entries that are appended
- * to the log sequentially, the index has an O(1) lookup time. For instances where entries in a segment have been
- * skipped (due to log compaction), the lookup time is O(log n) due to binary search. However, due to the nature of
- * the Raft consensus algorithm, readers should typically benefit from O(1) lookups.
+ * Internally, each segment maintains an in-memory index of entries. The index stores the offset and position of each
+ * entry within the segment's internal {@link io.atomix.catalyst.buffer.Buffer}. For entries that are appended to the
+ * log sequentially, the index has an O(1) lookup time. For instances where entries in a segment have been skipped (due
+ * to log compaction), the lookup time is O(log n) due to binary search. However, due to the nature of the Raft
+ * consensus algorithm, readers should typically benefit from O(1) lookups.
  * <p>
- * In order to prevent exhausting disk space, the log manages a set of background threads that periodically rewrite
- * and combine segments to free disk space. This is known as log compaction. As entries are committed to the log and
- * applied to the Raft state machine as {@link io.atomix.copycat.server.Commit} objects, state machines {@link #clean(long)}
+ * In order to prevent exhausting disk space, the log manages a set of background threads that periodically rewrite and
+ * combine segments to free disk space. This is known as log compaction. As entries are committed to the log and applied
+ * to the Raft state machine as {@link io.atomix.copycat.server.Commit} objects, state machines {@link #clean(long)}
  * entries that no longer apply to the state machine state. Internally, each log {@link Segment} maintains a compact
  * {@link io.atomix.catalyst.buffer.util.BitArray} to track cleaned entries. When an entry is cleaned, the entry's
  * offset is set in the bit array for the associated segment. The bit array represents the state of entries waiting to
  * be compacted from the log.
  * <p>
- * As entries are written to the log, segments reach their capacity and the log rolls over into new segments. Once
- * a segment is full and all of its entries have been {@link #commit(long) committed}, indicating they cannot be
- * removed, the segment becomes eligible for compaction. Log compaction processes come in two forms:
+ * As entries are written to the log, segments reach their capacity and the log rolls over into new segments. Once a
+ * segment is full and all of its entries have been {@link #commit(long) committed}, indicating they cannot be removed,
+ * the segment becomes eligible for compaction. Log compaction processes come in two forms:
  * {@link io.atomix.copycat.server.storage.compaction.Compaction#MINOR} and
  * {@link io.atomix.copycat.server.storage.compaction.Compaction#MAJOR}, which can be configured in the {@link Storage}
  * configuration. Minor and major compaction serve to remove normal entries and tombstones from the log respectively.
  * <p>
  * Minor compaction is the more frequent and lightweight process. Periodically, according to the configured
- * {@link Storage#minorCompactionInterval()}, a background thread will evaluate the log for minor compaction. The
- * minor compaction process iterates through segments and selects compactable segments based on the ratio of entries
- * that have been {@link #clean(long) cleaned}. Minor compaction is generational. The
+ * {@link Storage#minorCompactionInterval()}, a background thread will evaluate the log for minor compaction. The minor
+ * compaction process iterates through segments and selects compactable segments based on the ratio of entries that have
+ * been {@link #clean(long) cleaned}. Minor compaction is generational. The
  * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} is more likely to select recently written
  * segments than older segments. Once a set of segments have been compacted, for each segment a
  * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask} rewrites the segment without cleaned entries.
- * This rewriting results in a segment with missing entries, and Copycat's Raft implementation accounts for that.
- * For instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being cleaned, and any attempt
- * to {@link #get(long) read} entry {@code 2} will result in a {@code null} entry.
+ * This rewriting results in a segment with missing entries, and Copycat's Raft implementation accounts for that. For
+ * instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being cleaned, and any attempt to
+ * {@link #get(long) read} entry {@code 2} will result in a {@code null} entry.
  * <p>
- * However, note that minor compaction only applies to non-tombstone entries.
- * Tombstones are entries that represent the absence of state, and that requires a more careful and costly compaction
- * process to ensure consistency in the event of a failure. Consider a state machine with the following two commands
- * in the log:
+ * However, note that minor compaction only applies to non-tombstone entries. Tombstones are entries that represent the
+ * absence of state, and that requires a more careful and costly compaction process to ensure consistency in the event
+ * of a failure. Consider a state machine with the following two commands in the log:
  * <ul>
- *   <li>{@code put 1}</li>
- *   <li>{@code remove 1}</li>
+ * <li>{@code put 1}</li>
+ * <li>{@code remove 1}</li>
  * </ul>
- * If the first command is written to segment {@code 1}, and the second command is written to segment {@code 2}, compacting
- * segment {@code 2} without removing the first command from segment {@code 1} would result in an inconsistent state
- * machine state in the event of a failure and replay. Effectively, the log compaction process would have undone the
- * {@code remove} command.
+ * If the first command is written to segment {@code 1}, and the second command is written to segment {@code 2},
+ * compacting segment {@code 2} without removing the first command from segment {@code 1} would result in an
+ * inconsistent state machine state in the event of a failure and replay. Effectively, the log compaction process would
+ * have undone the {@code remove} command.
  * <p>
  * Copycat handles tombstones by allowing tombstone entries to be flagged with the {@link Entry#isTombstone()} boolean.
- * The minor compaction process plainly ignores tombstone entries and leaves them up to the major compaction process
- * to handle. Major compaction works similarly to minor compaction in that the configured {@link Storage#majorCompactionInterval()}
- * dictates the interval at which the major compaction process runs. During major compaction, the
- * {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} iterates through <em>all</em>
- * {@link #commit(long) committed} segments and rewrites them sequentially with all cleaned entries removed, including
- * tombstones. This ensures that earlier segments are compacted before later segments, and so stateful entries that
- * were {@link #clean(long) cleaned} prior to related tombstones are guaranteed to be removed first.
+ * The minor compaction process plainly ignores tombstone entries and leaves them up to the major compaction process to
+ * handle. Major compaction works similarly to minor compaction in that the configured
+ * {@link Storage#majorCompactionInterval()} dictates the interval at which the major compaction process runs. During
+ * major compaction, the {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} iterates through
+ * <em>all</em> {@link #commit(long) committed} segments and rewrites them sequentially with all cleaned entries
+ * removed, including tombstones. This ensures that earlier segments are compacted before later segments, and so
+ * stateful entries that were {@link #clean(long) cleaned} prior to related tombstones are guaranteed to be removed
+ * first.
  * <p>
  * As entries are removed from the log during minor and major compaction, log segment files begin to shrink. Copycat
- * does not want to have a thousand file pointers open, so some mechanism is required to combine segments as disk
- * space is freed. To that end, as the major compaction process iterates through the set of committed segments and
- * rewrites live entries, it combines multiple segments up to the configured segment capacity. When a segment becomes
- * full during major compaction, the compaction process rolls over to a new segment and continues compaction. This results
- * in a significantly smaller number of files.
+ * does not want to have a thousand file pointers open, so some mechanism is required to combine segments as disk space
+ * is freed. To that end, as the major compaction process iterates through the set of committed segments and rewrites
+ * live entries, it combines multiple segments up to the configured segment capacity. When a segment becomes full during
+ * major compaction, the compaction process rolls over to a new segment and continues compaction. This results in a
+ * significantly smaller number of files.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class Log implements AutoCloseable {
-  private final SegmentManager segments;
+  final SegmentManager segments;
   private final Compactor compactor;
   private final TypedEntryPool entryPool = new TypedEntryPool();
   private boolean open = true;
@@ -133,7 +132,8 @@ public class Log implements AutoCloseable {
    */
   protected Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-compactor-%d")));
+    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(),
+        new CatalystThreadFactory("copycat-compactor-%d")));
   }
 
   /**
@@ -165,6 +165,8 @@ public class Log implements AutoCloseable {
 
   /**
    * Asserts that the log is open.
+   * 
+   * @throws IllegalStateException if the log is not open
    */
   private void assertIsOpen() {
     Assert.state(isOpen(), "log is not open");
@@ -172,6 +174,8 @@ public class Log implements AutoCloseable {
 
   /**
    * Asserts that the index is a valid index.
+   * 
+   * @throws IndexOutOfBoundsException if the {@code index} is out of bounds
    */
   private void assertValidIndex(long index) {
     Assert.index(validIndex(index), "invalid log index: %d", index);
@@ -251,8 +255,8 @@ public class Log implements AutoCloseable {
    * Creates a new log entry.
    * <p>
    * Users should ensure that the returned {@link Entry} is closed once the write is complete. Closing the entry will
-   * result in its contents being persisted to the log. Only a single {@link Entry} instance may be open via the
-   * this method at any given time.
+   * result in its contents being persisted to the log. Only a single {@link Entry} instance may be open via the this
+   * method at any given time.
    *
    * @param type The entry type.
    * @return The log entry.
@@ -287,13 +291,12 @@ public class Log implements AutoCloseable {
   /**
    * Gets an entry from the log at the given index.
    * <p>
-   * If the given index is outside of the bounds of the log then a {@link IndexOutOfBoundsException} will be
-   * thrown. If the entry at the given index has been compacted from the then the returned entry will be {@code null}.
+   * If the given index is outside of the bounds of the log then a {@link IndexOutOfBoundsException} will be thrown. If
+   * the entry at the given index has been compacted then the returned entry will be {@code null}.
    * <p>
-   * Entries returned by this method are pooled and {@link io.atomix.catalyst.util.ReferenceCounted}. In order to ensure
-   * the entry is released back to the internal entry pool call {@link Entry#close()} or load the entry in a
-   * try-with-resources statement.
-   * <pre>
+   * Entries returned by this method are pooled and {@link io.atomix.catalyst.util.ReferenceCounted reference counted}.
+   * In order to ensure the entry is released back to the internal entry pool call {@link Entry#close()} or load the
+   * entry in a try-with-resources statement. <pre>
    *   {@code
    *   try (RaftEntry entry = log.get(123)) {
    *     // Do some stuff...
@@ -311,8 +314,7 @@ public class Log implements AutoCloseable {
     assertValidIndex(index);
 
     Segment segment = segments.segment(index);
-    if (segment == null)
-      throw new IndexOutOfBoundsException("invalid index: " + index);
+    Assert.index(segment != null, "invalid index: " + index);
     T entry = segment.get(index);
     return entry != null ? entry : null;
   }
@@ -361,8 +363,7 @@ public class Log implements AutoCloseable {
     assertValidIndex(index);
 
     Segment segment = segments.segment(index);
-    if (segment == null)
-      throw new IndexOutOfBoundsException("invalid index: " + index);
+    Assert.index(segment != null, "invalid index: " + index);
     segment.clean(index);
     return this;
   }
@@ -372,6 +373,7 @@ public class Log implements AutoCloseable {
    *
    * @param index The index up to which to commit entries.
    * @return The log.
+   * @throws IllegalStateException If the log is not open.
    */
   public Log commit(long index) {
     assertIsOpen();
@@ -390,7 +392,8 @@ public class Log implements AutoCloseable {
    * @return The log.
    * @throws IllegalStateException If the log is not open.
    * @throws IllegalArgumentException If the number of entries is less than {@code 1}
-   * @throws IndexOutOfBoundsException If skipping the given number of entries places the index out of the bounds of the log.
+   * @throws IndexOutOfBoundsException If skipping the given number of entries places the index out of the bounds of the
+   *           log.
    */
   public Log skip(long entries) {
     assertIsOpen();
@@ -416,9 +419,11 @@ public class Log implements AutoCloseable {
     if (lastIndex() == index)
       return this;
 
+    boolean first = true;
     for (Segment segment : segments.segments()) {
-      if (index == 0 || segment.validIndex(index)) {
+      if (first && index == 0 || segment.validIndex(index)) {
         segment.truncate(index);
+        first = false;
       } else if (segment.descriptor().index() > index) {
         segments.removeSegment(segment);
       }

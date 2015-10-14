@@ -23,23 +23,41 @@ import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
- * Command entry.
+ * Test entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=1000)
+@SerializeWith(id = 1000)
 public class TestEntry extends Entry<TestEntry> {
-  private long term;
   private boolean tombstone;
+ // private long id;
+
+  public TestEntry() {
+  }
 
   public TestEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
   }
 
+//  public long getId() {
+//    return id;
+//  }
+
   @Override
   public boolean isTombstone() {
     return tombstone;
   }
+
+  @Override
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    setTerm(buffer.readLong());
+    tombstone = buffer.readBoolean();
+   // id = buffer.readLong();
+  }
+
+//  public void setId(long id) {
+//    this.id = id;
+//  }
 
   /**
    * Sets whether the entry is a tombstone.
@@ -52,40 +70,14 @@ public class TestEntry extends Entry<TestEntry> {
     return this;
   }
 
-  /**
-   * Returns the entry term.
-   *
-   * @return The entry term.
-   */
-  public long getTerm() {
-    return term;
-  }
-
-  /**
-   * Sets the entry term.
-   *
-   * @param term The entry term.
-   * @return The entry.
-   */
-  public TestEntry setTerm(long term) {
-    this.term = term;
-    return this;
+  @Override
+  public String toString() {
+    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(),
+        tombstone);
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term).writeBoolean(tombstone);
+    buffer.writeLong(getTerm()).writeBoolean(tombstone);//.writeLong(id);
   }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    term = buffer.readLong();
-    tombstone = buffer.readBoolean();
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), term, tombstone);
-  }
-
 }

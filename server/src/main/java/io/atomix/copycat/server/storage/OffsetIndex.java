@@ -147,7 +147,7 @@ class OffsetIndex implements AutoCloseable {
       return -1;
     }
 
-    if (!skipped) {
+    if (!skipped && offset <= lastOffset) {
       return offset;
     }
 
@@ -199,7 +199,7 @@ class OffsetIndex implements AutoCloseable {
       return -1;
     }
 
-    if (!skipped) {
+    if (!skipped && offset <= lastOffset) {
       return offset;
     }
 

@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
+import io.atomix.catalyst.buffer.SlicedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.compaction.OffsetCleaner;
@@ -437,6 +438,7 @@ public class Segment implements AutoCloseable {
    * Deletes the segment.
    */
   public void delete() {
+    Buffer buffer = this.buffer instanceof SlicedBuffer ? ((SlicedBuffer) this.buffer).root() : this.buffer;
     if (buffer instanceof FileBuffer) {
       ((FileBuffer) buffer).delete();
     } else if (buffer instanceof MappedBuffer) {
@@ -444,7 +446,6 @@ public class Segment implements AutoCloseable {
     }
 
     offsetIndex.delete();
-    descriptor.delete();
   }
 
   @Override
