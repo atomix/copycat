@@ -15,15 +15,8 @@
  */
 package io.atomix.copycat.server.storage;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
-
+import org.testng.annotations.Factory;
 import org.testng.annotations.Test;
-
-import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
  * File log test.
@@ -32,6 +25,10 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 @Test
 public class FileLogTest extends LogTest {
+  @Factory
+  public Object[] createTests() throws Throwable {
+    return testsFor(FileLogTest.class);
+  }
 
   @Override
   protected StorageLevel storageLevel() {

@@ -15,19 +15,22 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
-import io.atomix.copycat.server.storage.compaction.Compaction;
-import io.atomix.copycat.server.storage.entry.Entry;
-
-import org.testng.annotations.Test;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.testng.Assert.*;
+import org.testng.annotations.Test;
+
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
  * Log test.
@@ -43,8 +46,8 @@ public abstract class LogTest extends AbstractLogTest {
   @Override
   protected Log createLog() {
     return tempStorageBuilder().withDirectory(new File(String.format("target/test-logs/%s", logId)))
-        .withMaxSegmentSize(maxSegmentSize)
-        .withMaxEntriesPerSegment(maxEntriesPerSegment)
+        .withMaxSegmentSize(Integer.MAX_VALUE)
+        .withMaxEntriesPerSegment(entriesPerSegment)
         .withStorageLevel(storageLevel())
         .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
         .build()
@@ -55,6 +58,20 @@ public abstract class LogTest extends AbstractLogTest {
    * Returns the log storage level.
    */
   protected abstract StorageLevel storageLevel();
+
+  /**
+   * Returns a set of tests to run for varied log configurations.
+   */
+  protected Object[] testsFor(Class<? extends LogTest> testClass) throws Throwable {
+    List<Object> tests = new ArrayList<>();
+    for (int i = 1; i < 30; i += 3) {
+      LogTest test = testClass.newInstance();
+      test.entriesPerSegment = i;
+      tests.add(test);
+    }
+
+    return tests.toArray(new Object[tests.size()]);
+  }
 
   /**
    * Asserts that entries spanning 3 segments are appended with the expected indexes.
@@ -142,37 +159,29 @@ public abstract class LogTest extends AbstractLogTest {
     for (int i = 1; i <= entriesPerSegment * 3; i++)
       assertTrue(log.contains(i));
     assertFalse(log.contains(entriesPerSegment * 3 + 1));
-    
+
+    // Test after compaction
     log.commit(entriesPerSegment * 3);
-
-    for (long i = log.firstIndex(); i <= log.lastIndex(); i++) {
-      try (Entry entry = log.get(i)) {
-        System.out.println(entry.getIndex());
-      }
-    }
-
+    cleanAndCompact(3, entriesPerSegment + 2);
+    assertTrue(log.contains(2));
     for (int i = 3; i <= entriesPerSegment + 2; i++) {
-      log.clean(i);
-      System.out.println("Cleaning " + i);
+      assertFalse(log.contains(i));
     }
-
-    log.compactor().compact(Compaction.MAJOR).join();
-
-    for (long i = log.firstIndex(); i <= log.lastIndex(); i++) {
-      try (Entry entry = log.get(i)) {
-        System.out.println(entry != null ? entry.getIndex() : null);
-      }
-    }
+    assertTrue(log.contains(entriesPerSegment + 3));
   }
 
   /**
    * Tests {@link Log#firstIndex()} across segments.
    */
   public void testFirstIndex() {
+    assertEquals(log.firstIndex(), 0);
     appendEntries(entriesPerSegment * 3);
     assertEquals(log.firstIndex(), 1);
 
-    // TODO check after compaction
+    // Asserts that firstIndex is unchanged after compaction
+    log.commit(entriesPerSegment * 3);
+    cleanAndCompact(1, entriesPerSegment + 3);
+    assertEquals(log.firstIndex(), 1);
   }
 
   /**
@@ -182,6 +191,11 @@ public abstract class LogTest extends AbstractLogTest {
     appendEntries(entriesPerSegment * 3);
     for (int i = 1; i <= entriesPerSegment * 3; i++)
       assertEquals(log.get(i).getIndex(), i);
+
+    // Asserts get() after compaction
+    log.commit(entriesPerSegment * 3);
+    cleanAndCompact(3, entriesPerSegment * 2 + 3);
+    assertCompacted(3, entriesPerSegment * 2 + 3);
   }
 
   /**
@@ -224,7 +238,10 @@ public abstract class LogTest extends AbstractLogTest {
     appendEntries(entriesPerSegment * 3);
     assertEquals(log.lastIndex(), entriesPerSegment * 3);
 
-    // TODO test after compaction
+    // Asserts that lastIndex is unchanged after compaction
+    log.commit(entriesPerSegment * 3);
+    cleanAndCompact(6, entriesPerSegment * 3);
+    assertEquals(log.lastIndex(), entriesPerSegment * 3);
   }
 
   /**
@@ -241,10 +258,33 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.segments.segments().size(), 5);
     assertEquals(log.length(), entriesPerSegment * 5);
 
-    // TODO compact and assert
-    // log.removeAfter(entriesPerSegment * 2 + 1);
-    // assertEquals(log.segments.count(), 3);
-    // assertEquals(log.length(), (entriesPerSegment * 2 + 1));
+    // Asserts that length is unchanged after compaction
+    log.commit(entriesPerSegment * 5);
+    cleanAndCompact(6, entriesPerSegment * 3);
+    assertEquals(log.length(), entriesPerSegment * 5);
+  }
+
+  /**
+   * Tests {@link Log#size()} across segments.
+   */
+  public void testSize() {
+    assertEquals(log.size(), 48);
+
+    appendEntries(entriesPerSegment * 3);
+    assertEquals(log.segments.segments().size(), 3);
+    assertEquals(log.size(), maxUsableSegmentSpace() * 3);
+    assertFalse(log.isEmpty());
+
+    appendEntries(entriesPerSegment * 2);
+    assertEquals(log.segments.segments().size(), 5);
+    long logSize = log.size();
+    assertEquals(logSize, maxUsableSegmentSpace() * 5);
+
+    // Asserts that size() is changed after compaction
+    log.commit(entriesPerSegment * 5);
+    cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 3);
+    int removedBytes = entrySize * entriesPerSegment * 2;
+    assertEquals(log.size(), logSize - removedBytes);
   }
 
   /**
@@ -329,32 +369,14 @@ public abstract class LogTest extends AbstractLogTest {
    */
   public void testTruncateZero() throws Throwable {
     appendEntries(100);
+    assertEquals(log.firstIndex(), 1);
     assertEquals(log.lastIndex(), 100);
     log.truncate(0);
+    assertEquals(log.firstIndex(), 0);
     assertEquals(log.lastIndex(), 0);
     appendEntries(10);
+    assertEquals(log.firstIndex(), 1);
     assertEquals(log.lastIndex(), 10);
-  }
-
-  /**
-   * Tests {@link Log#size()} across segments.
-   */
-  public void testSize() {
-    assertEquals(log.size(), 64);
-
-    appendEntries(entriesPerSegment * 3);
-    assertEquals(log.segments.segments().size(), 3);
-    assertEquals(log.size(), maxUsableSegmentSpace * 3);
-    assertFalse(log.isEmpty());
-
-    appendEntries(entriesPerSegment * 2);
-    assertEquals(log.segments.segments().size(), 5);
-    assertEquals(log.size(), maxUsableSegmentSpace * 5);
-
-    // TODO compact and assert
-    // log.removeAfter(entriesPerSegment * 2 + 1);
-    // assertEquals(log.segments().size(), 3);
-    // assertEquals(log.size(), entrySize * (entriesPerSegment * 2 + 1));
   }
 
   /**
@@ -372,7 +394,7 @@ public abstract class LogTest extends AbstractLogTest {
     List<Integer> entryIds = IntStream.range(startingId, startingId + numEntries).boxed().collect(Collectors.toList());
     return entryIds.stream().map(entryId -> {
       try (TestEntry entry = log.create(TestEntry.class)) {
-        entry.setTerm(1);
+        entry.setTerm(1).setId(entryId);
         return log.append(entry);
       }
     }).collect(Collectors.toList());
@@ -381,5 +403,19 @@ public abstract class LogTest extends AbstractLogTest {
   protected static void assertIndexes(List<Long> indexes, int start, int end) {
     for (int i = 0, j = start; j <= end; i++, j++)
       assertEquals(indexes.get(i).longValue(), j);
+  }
+
+  protected void cleanAndCompact(int startIndex, int endIndex) {
+    for (int i = startIndex; i <= endIndex; i++) {
+      log.clean(i);
+    }
+
+    log.compactor().compact(Compaction.MAJOR).join();
+  }
+
+  protected void assertCompacted(int startIndex, int endIndex) {
+    for (int i = startIndex; i <= endIndex; i++) {
+      assertNull(log.get(i));
+    }
   }
 }

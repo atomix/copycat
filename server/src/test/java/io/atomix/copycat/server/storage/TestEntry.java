@@ -39,23 +39,8 @@ public class TestEntry extends Entry<TestEntry> {
     super(referenceManager);
   }
 
-  public void setId(long id) {
-    this.id = id;
-  }
-
   public long getId() {
     return id;
-  }
-
-  /**
-   * Sets whether the entry is a tombstone.
-   *
-   * @param tombstone Whether the entry is a tombstone.
-   * @return The test entry.
-   */
-  public TestEntry setTombstone(boolean tombstone) {
-    this.tombstone = tombstone;
-    return this;
   }
 
   @Override
@@ -68,6 +53,21 @@ public class TestEntry extends Entry<TestEntry> {
     setTerm(buffer.readLong());
     tombstone = buffer.readBoolean();
     id = buffer.readLong();
+  }
+
+  public void setId(long id) {
+    this.id = id;
+  }
+
+  /**
+   * Sets whether the entry is a tombstone.
+   *
+   * @param tombstone Whether the entry is a tombstone.
+   * @return The test entry.
+   */
+  public TestEntry setTombstone(boolean tombstone) {
+    this.tombstone = tombstone;
+    return this;
   }
 
   @Override

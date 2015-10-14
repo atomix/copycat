@@ -43,12 +43,12 @@ import static org.testng.Assert.*;
  */
 @Test
 public abstract class AbstractLogTest {
-  protected int maxSegmentSize = 100;
-  protected int maxUsableSegmentSize = maxSegmentSize - SegmentDescriptor.BYTES;
-  protected int maxEntriesPerSegment = 100;
+  // protected int maxSegmentSize = 120;
+  // protected int maxUsableSegmentSize = maxSegmentSize - SegmentDescriptor.BYTES;
+  // protected int maxEntriesPerSegment = 10000;
   protected int entrySize = entrySize();
-  protected int entriesPerSegment = (int) Math.ceil((double) maxUsableSegmentSize / (double) entrySize);
-  protected int maxUsableSegmentSpace = ((entrySize * entriesPerSegment) + SegmentDescriptor.BYTES);
+  protected int entriesPerSegment;// = (int) Math.ceil((double) maxUsableSegmentSize / (double) entrySize);
+  // protected int maxUsableSegmentSpace = ((entrySize * entriesPerSegment) + SegmentDescriptor.BYTES);
   protected Log log;
   String logId;
 
@@ -81,6 +81,10 @@ public abstract class AbstractLogTest {
       assertTrue(log.isClosed());
       log.delete();
     }
+  }
+
+  int maxUsableSegmentSpace() {
+    return entriesPerSegment * entrySize + SegmentDescriptor.BYTES;
   }
 
   protected Storage.Builder tempStorageBuilder() {

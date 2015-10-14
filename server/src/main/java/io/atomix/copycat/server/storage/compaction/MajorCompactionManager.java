@@ -49,7 +49,8 @@ public final class MajorCompactionManager implements CompactionManager {
   }
 
   /**
-   * Returns a list of segment sets to clean.
+   * Returns a list of segments lists to clean, where segments are grouped according to how they will be merged during 
+   * cleaning.
    */
   private List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
