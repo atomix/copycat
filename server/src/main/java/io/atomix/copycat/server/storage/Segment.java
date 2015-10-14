@@ -403,10 +403,10 @@ public class Segment implements AutoCloseable {
     long offset = relativeOffset(index);
     long lastOffset = offsetIndex.lastOffset();
 
-    if (offset < lastOffset) {
-      long diff = lastOffset - offset;
-      skip = Math.max(skip - diff, 0);
+    long diff = Math.abs(lastOffset - offset);
+    skip = Math.max(skip - diff, 0);
 
+    if (offset < lastOffset) {
       long position = offsetIndex.truncate(offset);
       buffer.position(position)
         .zero(position)
