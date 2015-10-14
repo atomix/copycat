@@ -23,7 +23,7 @@ import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -31,7 +31,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Log compactor.
+ * Manages compaction of log {@link io.atomix.copycat.server.storage.Segment}s in a pool of background
+ * threads.
+ * <p>
+ * The compactor is responsible for managing log compaction processes. Log {@link Compaction} processes
+ * are run in a pool of background threads of the configured number of {@link Storage#compactionThreads()}.
+ * {@link Compaction#MINOR} and {@link Compaction#MAJOR} executions are scheduled according to the configured
+ * {@link Storage#minorCompactionInterval()} and {@link Storage#majorCompactionInterval()} respectively.
+ * Compaction can also be run synchronously via {@link Compactor#compact()} or {@link Compactor#compact(Compaction)}.
+ * <p>
+ * When a {@link Compaction} is executed either synchronously or asynchronously, the compaction's associated
+ * {@link CompactionManager} is called to build a list of {@link CompactionTask}s to run. Compaction tasks
+ * are run in parallel in the compaction thread pool. However, the compactor will not allow multiple compaction
+ * executions to run in parallel. If a compaction is attempted while another compaction is already running,
+ * it will be ignored.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -53,7 +66,7 @@ public final class Compactor implements AutoCloseable {
   }
 
   /**
-   * Compacts the log using the minor compaction strategy.
+   * Compacts the log using the default {@link Compaction#MINOR} compaction strategy.
    *
    * @return A completable future to be completed once the log has been compacted.
    */
@@ -62,7 +75,11 @@ public final class Compactor implements AutoCloseable {
   }
 
   /**
-   * Compacts the log using the given compaction strategy.
+   * Compacts the log using the given {@link CompactionManager}.
+   * <p>
+   * The provided {@link CompactionManager} will be queried for a list of {@link CompactionTask}s to run.
+   * Tasks will be run in parallel in a pool of background threads, and the returned {@link CompletableFuture}
+   * will be completed once those tasks have completed.
    *
    * @param compaction The compaction strategy.
    * @return A completable future to be completed once the log has been compacted.
@@ -80,7 +97,7 @@ public final class Compactor implements AutoCloseable {
     CompactionManager manager = compaction.manager();
     AtomicInteger counter = new AtomicInteger();
 
-    List<CompactionTask> tasks = manager.buildTasks(storage, segments);
+    Collection<CompactionTask> tasks = manager.buildTasks(storage, segments);
     if (!tasks.isEmpty()) {
       LOGGER.debug("Executing {} compaction task(s)", tasks.size());
       for (CompactionTask task : tasks) {
@@ -103,6 +120,12 @@ public final class Compactor implements AutoCloseable {
     return future.whenComplete((result, error) -> future = null);
   }
 
+  /**
+   * Closes the log compactor.
+   * <p>
+   * When the compactor is closed, existing compaction tasks will be allowed to complete, future scheduled
+   * compactions will be cancelled, and the underlying {@link ScheduledExecutorService} will be shut down.
+   */
   @Override
   public void close() {
     if (minor != null)

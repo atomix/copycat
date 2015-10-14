@@ -16,7 +16,16 @@
 package io.atomix.copycat.server.storage.compaction;
 
 /**
- * Log compaction.
+ * Log compaction type identifier.
+ * <p>
+ * Log compaction comes in two forms: {@link #MINOR} and {@link #MAJOR}. This enum provides identifiers
+ * to indicate the log compaction type when {@link Compactor#compact(Compaction) compacting} the log.
+ * Passing an explicit {@code Compaction} type will run the appropriate compaction process asynchronously.
+ * <pre>
+ *   {@code
+ *   log.compactor().compact(Compaction.MAJOR);
+ *   }
+ * </pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -24,6 +33,10 @@ public enum Compaction {
 
   /**
    * Represents a minor compaction.
+   * <p>
+   * Minor compaction is the more efficient of the compaction processes which removes
+   * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} non-tombstone entries from individual
+   * {@link io.atomix.copycat.server.storage.Segment}s. See the {@link MinorCompactionTask} for more information.
    */
   MINOR {
     @Override
@@ -34,6 +47,11 @@ public enum Compaction {
 
   /**
    * Represents a major compaction.
+   * <p>
+   * Major compaction is the more heavyweight process of removing all
+   * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} entries that have been
+   * {@link io.atomix.copycat.server.storage.Log#commit(long) committed} to the log and combining segment
+   * files wherever possible. See the {@link MajorCompactionTask} for more information.
    */
   MAJOR {
     @Override
@@ -43,9 +61,9 @@ public enum Compaction {
   };
 
   /**
-   * Returns the compaction manager for the compaction.
+   * Returns the compaction manager for the compaction type.
    *
-   * @return The compaction manager.
+   * @return The compaction manager for the compaction type.
    */
   abstract CompactionManager manager();
 

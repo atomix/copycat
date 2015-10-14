@@ -15,8 +15,14 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.copycat.server.storage.Storage;
+
 /**
- * Log compaction task.
+ * Performs compaction on a set of log {@link io.atomix.copycat.server.storage.Segment}s.
+ * <p>
+ * Compaction tasks are responsible for compacting one or more segments in a
+ * {@link io.atomix.copycat.server.storage.Log}. Tasks are provided by a related {@link CompactionManager}
+ * and are run in parallel in a pool of {@link Storage#compactionThreads()} background threads.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage.compaction;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,16 +26,31 @@ import java.util.List;
 /**
  * Builds tasks for the {@link Compaction#MINOR} compaction process.
  * <p>
- * Minor compaction is the more frequent and lightweight process. Periodically, according to the configured
- * {@link Storage#minorCompactionInterval()}, a background thread will evaluate the log for minor compaction. The
- * minor compaction process iterates through segments and selects compactable segments based on the ratio of entries
- * that have been {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned}. Minor compaction is generational. The
- * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} is more likely to select recently written
- * segments than older segments. Once a set of segments have been compacted, for each segment a
- * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask} rewrites the segment without cleaned entries.
- * This rewriting results in a segment with missing entries, and Copycat's Raft implementation accounts for that.
- * For instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being cleaned, and any attempt
- * to {@link io.atomix.copycat.server.storage.Log#get(long) read} entry {@code 2} will result in a {@code null} entry.
+ * Minor compaction works by rewriting individual segments to remove entries where {@link Entry#isTombstone()}
+ * is {@code false}. The minor compaction manager is responsible for building a list of {@link MinorCompactionTask}s
+ * to compact segments. In the case of minor compaction, each task is responsible for compacting a single segment.
+ * However, in order to ensure segments are not compacted without cause, this compaction manager attempts to
+ * prioritize segments for which compaction will result in greater disk space savings.
+ * <p>
+ * Segments are selected for minor compaction based on several factors:
+ * <ul>
+ *   <li>The number of {@link Entry entries} in the segment that have been {@link Segment#clean(long) cleaned}</li>
+ *   <li>The number of times the segment has been compacted already</li>
+ * </ul>
+ * <p>
+ * Given the number of entries that have been cleaned from the segment, a percentage of entries reclaimed by
+ * compacting the segment is calculated. Then, the percentage of entries that have been cleaned is multiplied
+ * by the number of times the segment has been compacted. If the result of this calculation is greater than
+ * the configured {@link Storage#compactionThreshold()} then the segment is selected for compaction.
+ * <p>
+ * The final formula is as follows:
+ * <pre>
+ *   {@code
+ *   if ((segment.cleanCount() / (double) segment.count()) * segment.descriptor().version() > storage.compactionThreshold()) {
+ *     // Compact the segment
+ *   }
+ *   }
+ * </pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -59,19 +75,13 @@ public final class MinorCompactionManager implements CompactionManager {
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
       if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() <= manager.commitIndex())) {
+        // Calculate the percentage of entries that have been marked for cleaning in the segment.
+        double cleanPercentage = segment.cleanCount() / (double) segment.count();
 
-        // If the segment is small enough that it can be combined with another segment then add it.
-        if (segment.count() < segment.length() / 2) {
+        // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
+        // add the segment to the segments list for cleaning.
+        if (cleanPercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
           segments.add(segment);
-        } else {
-          // Calculate the percentage of entries that have been marked for cleaning in the segment.
-          double cleanPercentage = segment.cleanCount() / (double) segment.count();
-
-          // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
-          // add the segment to the segments list for cleaning.
-          if (cleanPercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
-            segments.add(segment);
-          }
         }
       }
     }

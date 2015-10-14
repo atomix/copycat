@@ -18,10 +18,14 @@ package io.atomix.copycat.server.storage.compaction;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
- * Compaction manager.
+ * Manages a single compaction process.
+ * <p>
+ * Compaction managers are responsible for providing a set of {@link CompactionTask}s to be executed
+ * during log compaction. Each {@link Compaction} type is associated with a compaction manager.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -29,11 +33,15 @@ public interface CompactionManager {
 
   /**
    * Builds compaction tasks for the given segments.
+   * <p>
+   * The collection of compaction tasks will be run in parallel in a pool of
+   * {@link Storage#compactionThreads()} background threads. Implementations should ensure that
+   * individual tasks can be run in parallel by operating on different segments in the log.
    *
    * @param storage The storage configuration.
    * @param segments The segments for which to build compaction tasks.
    * @return An iterable of compaction tasks.
    */
-  List<CompactionTask> buildTasks(Storage storage, SegmentManager segments);
+  Collection<CompactionTask> buildTasks(Storage storage, SegmentManager segments);
 
 }

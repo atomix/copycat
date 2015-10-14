@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentDescriptor;
 import io.atomix.copycat.server.storage.SegmentManager;
@@ -24,11 +25,67 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * Major compaction task.
+ * Removes tombstones from the log and combines {@link Segment}s to reclaim disk space.
+ * <p>
+ * Major compaction is a more heavyweight compaction task which is responsible both for removing <em>tombstone</em>
+ * {@link Entry entries} from the log and combining groups of neighboring log {@link Segment}s together.
+ * <p>
+ * <b>Combining segments</b>
+ * <p>
+ * As entries are written to the log and the log rolls over to new segments, entries are compacted out of individual
+ * segments by {@link MinorCompactionTask}s. However, the minor compaction process only rewrites individual segments
+ * and doesn't combine them. This will result in an ever growing number of open file pointers. During major compaction,
+ * the major compaction task rewrites groups of segments provided by the {@link MajorCompactionManager}. For each group
+ * of segments, a single compact segment will be created with the same {@code version} and starting {@code index} as
+ * the first segment in the group. All entries from all segments in the group that haven't been
+ * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} will then be written to the new compact segment.
+ * Once the rewrite is complete, the compact segment will be locked and the set of old segments deleted.
+ * <p>
+ * <b>Removing tombstones</b>
+ * <p>
+ * Tombstones are {@link Entry entries} in the log which amount to state changes that <em>remove</em> state. That is,
+ * tombstones are an indicator that some set of prior entries no longer contribute to the state of the system. Thus,
+ * it is critical that tombstones remain in the log as long as any prior related entries do. If a tombstone is removed
+ * from the log before its prior related entries, rebuilding state from the log will result in inconsistencies.
+ * <p>
+ * A significant objective of the major compaction task is to remove tombstones from the log in a manor that ensures
+ * failures before, during, or after the compaction task will not result in inconsistencies when state is rebuilt from
+ * the log. In order to ensure tombstones are removed only <em>after</em> any prior related entries, the major compaction
+ * task simply compacts segments in sequential order from the {@link Segment#firstIndex()} of the first segment to the
+ * {@link Segment#lastIndex()} of the last segment. This ensures that if a failure occurs during the compaction process,
+ * only entries earlier in the log will have been removed, and potential tombstones which erase the state of those entries
+ * will remain.
+ * <p>
+ * Nevertheless, there are some significant potential race conditions that must be considered in the implementation of
+ * major compaction. The major compaction task assumes that state machines will always clean <em>related</em> entries
+ * in monotonically increasing order. That is, if a state machines receives a {@link io.atomix.copycat.server.Commit}
+ * {@code remove 1} that deletes the state of a prior {@code Commit} {@code set 1}, the state machine will call
+ * {@link Commit#clean()} on the {@code set 1} commit before cleaning the {@code remove 1} commit. But even if applications
+ * clean entries from the log in monotonic order, and the major compaction task compacts segments in sequential order,
+ * inconsistencies can still arise. Consider the following history:
+ * <ul>
+ *   <li>{@code set 1} is at index {@code 1} in segment {@code 1}</li>
+ *   <li>{@code remove 1} is at index {@code 12345} in segment {@code 8}</li>
+ *   <li>The major compaction task rewrites segment {@code 1}</li>
+ *   <li>The application cleans {@code set 1} at index {@code 1} in the <em>rewritten</em> version of segment {@code 1}</li>
+ *   <li>The application cleans {@code remove 1} at index {@code 12345} in segment {@code 8}, which the compaction task
+ *   has yet to compact</li>
+ *   <li>The compaction task compacts segments {@code 2} through {@code 8}, removing tombstone entry {@code 12345} during
+ *   the process</li>
+ * </ul>
+ * <p>
+ * In the scenario above, the resulting log contains {@code set 1} but not {@code remove 1}. If we replayed those entries
+ * as {@link Commit}s to the log, it would result in an inconsistent state. Worse yet, not only is this server's state
+ * incorrect, but it will be inconsistent with other servers which are likely to have correctly removed both entry
+ * {@code 1} and entry {@code 12345} during major compaction.
+ * <p>
+ * In order to prevent such a scenario from occurring, the major compaction task takes an immutable snapshot of the
+ * {@link OffsetCleaner} (which maintains the offsets of cleaned entries for each segment) underlying all the segments
+ * to be compacted prior to rewriting any entries. This ensures that any entries cleaned after the start of rewriting
+ * segments will not be considered for compaction during the execution of this task.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -53,19 +110,14 @@ public final class MajorCompactionTask implements CompactionTask {
    * Stores cleaned segment offsets.
    */
   private void storeCleaners() {
-    // Iterate through the segments in reverse order to prevent race conditions in which entries in later
-    // segments are cleaned after entries in earlier segments.
     cleaners = new ArrayList<>(groups.size());
-    for (int i = groups.size() - 1; i >= 0; i--) {
-      List<Segment> group = groups.get(i);
+    for (List<Segment> group : groups) {
       List<OffsetCleaner> groupCleaners = new ArrayList<>(group.size());
-      for (int j = group.size() - 1; j >= 0; j--) {
-        groupCleaners.add(new OffsetCleaner(group.get(j).cleaner().bits().copy()));
+      for (Segment segment : group) {
+        groupCleaners.add(new OffsetCleaner(segment.cleaner().bits().copy()));
       }
-      Collections.reverse(groupCleaners);
       cleaners.add(groupCleaners);
     }
-    Collections.reverse(cleaners);
   }
 
   /**

@@ -30,7 +30,7 @@ import io.atomix.copycat.server.storage.entry.Entry;
 @SerializeWith(id = 1000)
 public class TestEntry extends Entry<TestEntry> {
   private boolean tombstone;
- // private long id;
+  private long id;
 
   public TestEntry() {
   }
@@ -39,25 +39,13 @@ public class TestEntry extends Entry<TestEntry> {
     super(referenceManager);
   }
 
-//  public long getId() {
-//    return id;
-//  }
-
-  @Override
-  public boolean isTombstone() {
-    return tombstone;
+  public void setId(long id) {
+    this.id = id;
   }
 
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    setTerm(buffer.readLong());
-    tombstone = buffer.readBoolean();
-   // id = buffer.readLong();
+  public long getId() {
+    return id;
   }
-
-//  public void setId(long id) {
-//    this.id = id;
-//  }
 
   /**
    * Sets whether the entry is a tombstone.
@@ -71,13 +59,25 @@ public class TestEntry extends Entry<TestEntry> {
   }
 
   @Override
-  public String toString() {
-    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(),
-        tombstone);
+  public boolean isTombstone() {
+    return tombstone;
+  }
+
+  @Override
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    setTerm(buffer.readLong());
+    tombstone = buffer.readBoolean();
+    id = buffer.readLong();
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(getTerm()).writeBoolean(tombstone);//.writeLong(id);
+    buffer.writeLong(getTerm()).writeBoolean(tombstone).writeLong(id);
   }
+
+  @Override
+  public String toString() {
+    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(), tombstone);
+  }
+
 }

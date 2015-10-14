@@ -26,7 +26,23 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 
 /**
- * Minor compaction task.
+ * Removes {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} entries from an individual
+ * log {@link Segment} to reclaim disk space.
+ * <p>
+ * The minor compaction task is a lightweight process that rewrites an individual segment to remove entries for
+ * which {@link Entry#isTombstone()} is {@code false}. Tombstones are entries that represent the deletion of
+ * state from the application, and tombstones are not removed during minor compaction since the safety of removing
+ * tombstones relies on expensive context. For more information on the implementation for removing tombstones,
+ * see the {@link MajorCompactionTask}.
+ * <p>
+ * When a segment is rewritten by the minor compaction task, a new compact segment is created with the same starting
+ * index as the segment being compacted and the next greatest version number. The version number allows the
+ * {@link SegmentManager} to account for failures during log compaction when recovering the log from disk. If a failure
+ * occurs during minor compaction, the segment manager will attempt to load the segment with the greatest version
+ * for a given range of entries from disk. If the segment with the greatest version did not finish compaction, it
+ * will be discarded and the old segment will be used. Once the minor compaction task is done rewriting a segment,
+ * it will {@link SegmentDescriptor#lock()} the segment to indicate that the segment has completed compaction and
+ * is safe to read, and the compacted segment will be made available to the {@link io.atomix.copycat.server.storage.Log}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
