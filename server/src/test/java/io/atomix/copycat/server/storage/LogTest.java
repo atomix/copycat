@@ -66,7 +66,7 @@ public abstract class LogTest extends AbstractLogTest {
       }
     }
 
-    assertEquals(log.segments.count(), 3);
+    assertEquals(log.segments.segments().size(), 3);
   }
 
   /**
@@ -234,11 +234,11 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.length(), 0);
 
     appendEntries(entriesPerSegment * 3);
-    assertEquals(log.segments.count(), 3);
+    assertEquals(log.segments.segments().size(), 3);
     assertEquals(log.length(), entriesPerSegment * 3);
 
     appendEntries(entriesPerSegment * 2);
-    assertEquals(log.segments.count(), 5);
+    assertEquals(log.segments.segments().size(), 5);
     assertEquals(log.length(), entriesPerSegment * 5);
 
     // TODO compact and assert
@@ -343,12 +343,12 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.size(), 64);
 
     appendEntries(entriesPerSegment * 3);
-    assertEquals(log.segments.count(), 3);
+    assertEquals(log.segments.segments().size(), 3);
     assertEquals(log.size(), maxUsableSegmentSpace * 3);
     assertFalse(log.isEmpty());
 
     appendEntries(entriesPerSegment * 2);
-    assertEquals(log.segments.count(), 5);
+    assertEquals(log.segments.segments().size(), 5);
     assertEquals(log.size(), maxUsableSegmentSpace * 5);
 
     // TODO compact and assert

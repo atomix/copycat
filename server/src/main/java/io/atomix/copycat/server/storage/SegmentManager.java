@@ -457,13 +457,6 @@ public class SegmentManager implements AutoCloseable {
     return segments.values();
   }
 
-  /**
-   * Returns the number of segments being managed.
-   */
-  int count() {
-    return segments.size();
-  }
-  
   @Override
   public void close() {
     segments.values().forEach(s -> {
