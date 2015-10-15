@@ -99,7 +99,7 @@ public final class MajorCompactionManager implements CompactionManager {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
     Segment lastSegment = manager.lastSegment();
     for (Segment segment : manager.segments()) {
-      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < manager.commitIndex() && lastSegment.firstIndex() >= manager.commitIndex() && !lastSegment.isEmpty()) {
+      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < manager.commitIndex() && lastSegment.firstIndex() <= manager.commitIndex() && !lastSegment.isEmpty()) {
         segments.add(segment);
       } else {
         break;
