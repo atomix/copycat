@@ -23,7 +23,7 @@ import java.io.File;
 import java.time.Duration;
 
 /**
- * Immutable log configuration/factory.
+ * Immutable log configuration and {@link Log} factory.
  * <p>
  * This class provides a factory for {@link Log} objects. {@code Storage} objects are immutable and
  * can be created only via the {@link Storage.Builder}. To create a new
@@ -46,12 +46,22 @@ import java.time.Duration;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class Storage {
+
+  /**
+   * Returns a new storage builder.
+   *
+   * @return A new storage builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
   private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
   private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
-  private static final Duration DEFAULT_MAJOR_COMPACTION_INTERVAL = Duration.ofMinutes(10);
+  private static final Duration DEFAULT_MAJOR_COMPACTION_INTERVAL = Duration.ofHours(1);
   private static final double DEFAULT_COMPACTION_THRESHOLD = 0.5;
 
   private StorageLevel storageLevel = StorageLevel.DISK;
@@ -146,16 +156,12 @@ public class Storage {
   }
 
   /**
-   * Returns a new storage builder.
-   *
-   * @return A new storage builder.
-   */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  /**
    * Returns the storage serializer.
+   * <p>
+   * The serializer is be used to serialize and deserialize entries written to the log. Entries written
+   * to the log must be recognized by the {@link Serializer} either by implementing {@link java.io.Serializable}
+   * or {@link io.atomix.catalyst.serializer.CatalystSerializable} or by registering a custom
+   * {@link io.atomix.catalyst.serializer.TypeSerializer} with the serializer.
    *
    * @return The storage serializer.
    */
@@ -165,6 +171,10 @@ public class Storage {
 
   /**
    * Returns the storage directory.
+   * <p>
+   * The storage directory is the directory to which all {@link Log}s write {@link Segment} files. Segment files
+   * for multiple logs may be stored in the storage directory, and files for each log instance will be identified
+   * by the {@code name} provided when the log is {@link #open(String) opened}.
    *
    * @return The storage directory.
    */
@@ -174,6 +184,8 @@ public class Storage {
 
   /**
    * Returns the storage level.
+   * <p>
+   * The storage level dictates how entries within individual log {@link Segment}s should be stored.
    *
    * @return The storage level.
    */
@@ -182,7 +194,10 @@ public class Storage {
   }
 
   /**
-   * Returns the maximum storage segment size.
+   * Returns the maximum log segment size.
+   * <p>
+   * The maximum segment size dictates the maximum size any {@link Segment} in a {@link Log} may consume
+   * in bytes.
    *
    * @return The maximum segment size in bytes.
    */
@@ -192,6 +207,9 @@ public class Storage {
 
   /**
    * Returns the maximum number of entries per segment.
+   * <p>
+   * The maximum entries per segment dictates the maximum number of {@link io.atomix.copycat.server.storage.entry.Entry entries}
+   * that are allowed to be stored in any {@link Segment} in a {@link Log}.
    *
    * @return The maximum number of entries per segment.
    */
@@ -201,6 +219,9 @@ public class Storage {
 
   /**
    * Returns the number of log compaction threads.
+   * <p>
+   * The compaction thread count dictates the parallelism with which the log
+   * {@link io.atomix.copycat.server.storage.compaction.Compactor} can rewrite segments in the log.
    *
    * @return The number of log compaction threads.
    */
@@ -210,6 +231,10 @@ public class Storage {
 
   /**
    * Returns the minor compaction interval.
+   * <p>
+   * The minor compaction interval dictates the interval at which the
+   * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} should evaluate {@link Segment}s
+   * in the log for minor compaction.
    *
    * @return The minor compaction interval.
    */
@@ -219,6 +244,10 @@ public class Storage {
 
   /**
    * Returns the major compaction interval.
+   * <p>
+   * The major compaction interval dictates the interval at which the
+   * {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} should evaluate {@link Segment}s
+   * in the log for major compaction.
    *
    * @return The major compaction interval.
    */
@@ -228,6 +257,9 @@ public class Storage {
 
   /**
    * Returns the compaction threshold.
+   * <p>
+   * The compaction threshold is used during {@link io.atomix.copycat.server.storage.compaction.Compaction#MINOR minor compaction}
+   * to determine the set of segments to compact.
    *
    * @return The compaction threshold.
    */
@@ -236,7 +268,11 @@ public class Storage {
   }
 
   /**
-   * Opens the underlying log.
+   * Opens a new {@link Log}.
+   * <p>
+   * When a log is opened, the log will attempt to load {@link Segment}s from the storage {@link #directory()}
+   * according to the provided log {@code name}. If segments for the given log name are present on disk, segments
+   * will be loaded and indexes will be rebuilt from disk. If no segments are found, an empty log will be created.
    *
    * @return The opened log.
    */
@@ -250,7 +286,20 @@ public class Storage {
   }
 
   /**
-   * Storage builder.
+   * Builds a {@link Storage} configuration.
+   * <p>
+   * The storage builder provides simplifies building more complex {@link Storage} configurations. To
+   * create a storage builder, use the {@link #builder()} factory method. Set properties of the configured
+   * {@code Storage} object with the various {@code with*} methods. Once the storage has been configured,
+   * call {@link #build()} to build the object.
+   * <pre>
+   *   {@code
+   *   Storage storage = Storage.builder()
+   *     .withDirectory(new File("logs"))
+   *     .withPersistenceLevel(PersistenceLevel.DISK)
+   *     .build();
+   *   }
+   * </pre>
    */
   public static class Builder extends io.atomix.catalyst.util.Builder<Storage> {
     private final Storage storage = new Storage();
@@ -259,7 +308,10 @@ public class Storage {
     }
 
     /**
-     * Sets the log storage level.
+     * Sets the log storage level, returning the builder for method chaining.
+     * <p>
+     * The storage level indicates how individual {@link io.atomix.copycat.server.storage.entry.Entry entries}
+     * should be persisted in the log.
      *
      * @param storageLevel The log storage level.
      * @return The storage builder.
@@ -270,7 +322,12 @@ public class Storage {
     }
 
     /**
-     * Sets the log entry serializer.
+     * Sets the log entry {@link Serializer}, returning the builder for method chaining.
+     * <p>
+     * The serializer will be used to serialize and deserialize entries written to the log. Entries written
+     * to the log must be recognized by the provided {@link Serializer} either by implementing {@link java.io.Serializable}
+     * or {@link io.atomix.catalyst.serializer.CatalystSerializable} or by registering a custom
+     * {@link io.atomix.catalyst.serializer.TypeSerializer} with the serializer.
      *
      * @param serializer The log entry serializer.
      * @return The storage builder.
@@ -284,8 +341,8 @@ public class Storage {
     /**
      * Sets the log directory, returning the builder for method chaining.
      * <p>
-     * The log will write segment files into the provided directory. It is recommended that a unique directory be dedicated
-     * for each unique log instance.
+     * The log will write segment files into the provided directory. If multiple {@link Storage} objects are located
+     * on the same machine, they write logs to different directories.
      *
      * @param directory The log directory.
      * @return The storage builder.
@@ -298,8 +355,8 @@ public class Storage {
     /**
      * Sets the log directory, returning the builder for method chaining.
      * <p>
-     * The log will write segment files into the provided directory. It is recommended that a unique directory be dedicated
-     * for each unique log instance.
+     * The log will write segment files into the provided directory. If multiple {@link Storage} objects are located
+     * on the same machine, they write logs to different directories.
      *
      * @param directory The log directory.
      * @return The storage builder.
@@ -311,12 +368,17 @@ public class Storage {
     }
 
     /**
-     * Sets the maximum segment count, returning the builder for method chaining.
+     * Sets the maximum segment size in bytes, returning the builder for method chaining.
+     * <p>
+     * The maximum segment size dictates when logs should roll over to new segments. As entries are written to
+     * a segment of the log, once the size of the segment surpasses the configured maximum segment size, the
+     * log will create a new segment and append new entries to that segment.
+     * <p>
+     * By default, the maximum segment size is {@code 1024 * 1024 * 32}.
      *
-     * @param maxSegmentSize The maximum segment count.
+     * @param maxSegmentSize The maximum segment size in bytes.
      * @return The storage builder.
-     * @throws IllegalArgumentException If the {@code maxSegmentSize} is not positive or {@code maxSegmentSize} 
-     * is not greater than the maxEntrySize
+     * @throws IllegalArgumentException If the {@code maxSegmentSize} is not positive
      */
     public Builder withMaxSegmentSize(int maxSegmentSize) {
       Assert.arg(maxSegmentSize > SegmentDescriptor.BYTES, "maxSegmentSize must be greater than " + SegmentDescriptor.BYTES);
@@ -325,7 +387,13 @@ public class Storage {
     }
 
     /**
-     * Sets the maximum number of allows entries per segment.
+     * Sets the maximum number of allows entries per segment, returning the builder for method chaining.
+     * <p>
+     * The maximum entry count dictates when logs should roll over to new segments. As entries are written to
+     * a segment of the log, if the entry count in that segment meets the configured maximum entry count, the
+     * log will create a new segment and append new entries to that segment.
+     * <p>
+     * By default, the maximum entries per segment is {@code 1024 * 1024}.
      *
      * @param maxEntriesPerSegment The maximum number of entries allowed per segment.
      * @return The storage builder.
@@ -340,7 +408,11 @@ public class Storage {
     }
 
     /**
-     * Sets the number of log compaction threads.
+     * Sets the number of log compaction threads, returning the builder for method chaining.
+     * <p>
+     * The compaction thread count dictates the parallelism with which the log
+     * {@link io.atomix.copycat.server.storage.compaction.Compactor} can rewrite segments in the log. By default,
+     * the log uses {@code Runtime.getRuntime().availableProcessors() / 2} compaction threads.
      *
      * @param compactionThreads The number of log compaction threads.
      * @return The storage builder.
@@ -352,7 +424,15 @@ public class Storage {
     }
 
     /**
-     * Sets the minor compaction interval.
+     * Sets the minor compaction interval, returning the builder for method chaining.
+     * <p>
+     * The minor compaction interval dictates the interval at which the
+     * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} should evaluate {@link Segment}s
+     * in the log for minor compaction. It is recommended that the minor compaction interval be at least an order
+     * of magnitude smaller than the major compaction interval.
+     *
+     * @see io.atomix.copycat.server.storage.compaction.MinorCompactionManager
+     * @see io.atomix.copycat.server.storage.compaction.MinorCompactionTask
      *
      * @param interval The minor compaction interval.
      * @return The storage builder.
@@ -363,7 +443,15 @@ public class Storage {
     }
 
     /**
-     * Sets the major compaction interval.
+     * Sets the major compaction interval, returning the builder for method chaining.
+     * <p>
+     * The major compaction interval dictates the interval at which the
+     * {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} should evaluate {@link Segment}s
+     * in the log for major compaction. Because of the performance costs of major compaction, it is recommended that
+     * the major compaction interval be at least an order of magnitude greater than the minor compaction interval.
+     *
+     * @see io.atomix.copycat.server.storage.compaction.MajorCompactionManager
+     * @see io.atomix.copycat.server.storage.compaction.MajorCompactionTask
      *
      * @param interval The major compaction interval.
      * @return The storage builder.
@@ -374,7 +462,17 @@ public class Storage {
     }
 
     /**
-     * Sets the percentage of entries in the segment that must be cleaned before a segment can be compacted.
+     * Sets the percentage of entries in the segment that must be cleaned before a segment can be compacted,
+     * returning the builder for method chaining.
+     * <p>
+     * The compaction threshold is used during {@link io.atomix.copycat.server.storage.compaction.Compaction#MINOR minor compaction}
+     * to determine the set of segments to compact. By default, the compaction threshold is {@code 0.5}. Increasing the
+     * compaction threshold will increase the number of {@link io.atomix.copycat.server.storage.entry.Entry entries} that
+     * must be cleaned from the segment before compaction and thus decrease the likelihood that a segment will be compacted.
+     * Conversely, decreasing the compaction threshold will increase the frequency of compaction at the cost of unnecessary
+     * I/O.
+     *
+     * @see io.atomix.copycat.server.storage.compaction.MinorCompactionManager
      *
      * @param threshold The segment compact threshold.
      * @return The storage builder.
@@ -384,6 +482,11 @@ public class Storage {
       return this;
     }
 
+    /**
+     * Builds the {@link Storage} object.
+     *
+     * @return The built storage configuration.
+     */
     @Override
     public Storage build() {
       return storage;
