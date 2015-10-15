@@ -74,7 +74,7 @@ public final class MinorCompactionManager implements CompactionManager {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() <= manager.commitIndex())) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < manager.commitIndex() && manager.currentSegment().firstIndex() >= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
         double cleanPercentage = segment.cleanCount() / (double) segment.count();
 

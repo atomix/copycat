@@ -97,8 +97,9 @@ public final class MajorCompactionManager implements CompactionManager {
    */
   private static List<Segment> getCleanableSegments(SegmentManager manager) {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
+    Segment lastSegment = segments.get(segments.size() - 1);
     for (Segment segment : manager.segments()) {
-      if (segment.lastIndex() <= manager.commitIndex() && (segment.isFull() || segment.isCompacted())) {
+      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < manager.commitIndex() && lastSegment.firstIndex() >= manager.commitIndex() && !lastSegment.isEmpty()) {
         segments.add(segment);
       } else {
         break;
