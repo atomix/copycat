@@ -480,6 +480,7 @@ public class SegmentManager implements AutoCloseable {
   public void delete() {
     loadSegments().forEach(s -> {
       LOGGER.debug("Deleting segment: {}", s.descriptor().id());
+      s.close();
       s.delete();
     });
   }
