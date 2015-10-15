@@ -50,7 +50,7 @@ import io.atomix.catalyst.util.Assert;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public final class SegmentDescriptor implements AutoCloseable {
-  public static final int BYTES = 48;
+  public static final int BYTES = 64;
 
   /**
    * Returns a descriptor builder.
@@ -95,7 +95,7 @@ public final class SegmentDescriptor implements AutoCloseable {
     this.maxEntries = buffer.readInt();
     this.updated = buffer.readLong();
     this.locked = buffer.readBoolean();
-    buffer.skip(7);
+    buffer.skip(23);
   }
 
   /**
@@ -207,7 +207,7 @@ public final class SegmentDescriptor implements AutoCloseable {
       .writeInt(maxEntries)
       .writeLong(updated)
       .writeBoolean(locked)
-      .skip(7)
+      .skip(23)
       .flush();
     return this;
   }

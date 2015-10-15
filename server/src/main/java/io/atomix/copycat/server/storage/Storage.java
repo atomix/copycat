@@ -47,7 +47,6 @@ import java.time.Duration;
  */
 public class Storage {
   private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
-  private static final int DEFAULT_MAX_ENTRY_SIZE = 1024 * 8;
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
   private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
@@ -320,7 +319,7 @@ public class Storage {
      * is not greater than the maxEntrySize
      */
     public Builder withMaxSegmentSize(int maxSegmentSize) {
-      Assert.arg(maxSegmentSize > 0, "maxSegmentSize must be positive");
+      Assert.arg(maxSegmentSize > SegmentDescriptor.BYTES, "maxSegmentSize must be greater than " + SegmentDescriptor.BYTES);
       storage.maxSegmentSize = maxSegmentSize;
       return this;
     }

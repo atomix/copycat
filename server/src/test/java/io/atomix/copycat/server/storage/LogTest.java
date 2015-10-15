@@ -340,7 +340,7 @@ public abstract class LogTest extends AbstractLogTest {
    * Tests {@link Log#size()} across segments.
    */
   public void testSize() {
-    assertEquals(log.size(), 48);
+    assertEquals(log.size(), 64);
 
     appendEntries(entriesPerSegment * 3);
     assertEquals(log.segments.count(), 3);
