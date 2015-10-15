@@ -52,7 +52,7 @@ public final class MajorCompactionManager implements CompactionManager {
    * Returns a list of segments lists to clean, where segments are grouped according to how they will be merged during 
    * cleaning.
    */
-  private List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
+  public static List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
@@ -95,7 +95,7 @@ public final class MajorCompactionManager implements CompactionManager {
    * @param manager The segment manager.
    * @return A list of cleanable log segments.
    */
-  private List<Segment> getCleanableSegments(SegmentManager manager) {
+  private static List<Segment> getCleanableSegments(SegmentManager manager) {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
     for (Segment segment : manager.segments()) {
       if (segment.lastIndex() <= manager.commitIndex() && (segment.isFull() || segment.isCompacted())) {

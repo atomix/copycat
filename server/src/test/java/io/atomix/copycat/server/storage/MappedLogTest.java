@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
+import org.testng.annotations.Factory;
 import org.testng.annotations.Test;
 
 /**
@@ -24,6 +25,10 @@ import org.testng.annotations.Test;
  */
 @Test
 public class MappedLogTest extends FileLogTest {
+  @Factory
+  public Object[] createTests() throws Throwable {
+    return testsFor(MappedLogTest.class);
+  }
 
   @Override
   protected StorageLevel storageLevel() {

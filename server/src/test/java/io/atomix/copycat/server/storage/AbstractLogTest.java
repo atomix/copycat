@@ -15,6 +15,11 @@
  */
 package io.atomix.copycat.server.storage;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -23,7 +28,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterTest;
@@ -34,7 +43,7 @@ import org.testng.annotations.Test;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.DirectBuffer;
 import io.atomix.catalyst.serializer.Serializer;
-import static org.testng.Assert.*;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
  * Abstract log test.
@@ -43,18 +52,28 @@ import static org.testng.Assert.*;
  */
 @Test
 public abstract class AbstractLogTest {
-  // protected int maxSegmentSize = 120;
-  // protected int maxUsableSegmentSize = maxSegmentSize - SegmentDescriptor.BYTES;
-  // protected int maxEntriesPerSegment = 10000;
   protected int entrySize = entrySize();
-  protected int entriesPerSegment;// = (int) Math.ceil((double) maxUsableSegmentSize / (double) entrySize);
-  // protected int maxUsableSegmentSpace = ((entrySize * entriesPerSegment) + SegmentDescriptor.BYTES);
+  protected int entriesPerSegment = 3;
   protected Log log;
   String logId;
 
   protected abstract Log createLog();
 
-  private int entrySize() {
+  /**
+   * Returns a set of tests to run for varied log configurations.
+   */
+  protected Object[] testsFor(Class<? extends LogTest> testClass) throws Throwable {
+    List<Object> tests = new ArrayList<>();
+    for (int i = 1; i < 30; i += 3) {
+      LogTest test = testClass.newInstance();
+      test.entriesPerSegment = i;
+      tests.add(test);
+    }
+
+    return tests.toArray(new Object[tests.size()]);
+  }
+
+  private static int entrySize() {
     Serializer serializer = new Serializer();
     serializer.register(TestEntry.class);
     Buffer buffer = DirectBuffer.allocate(1000);
@@ -83,7 +102,10 @@ public abstract class AbstractLogTest {
     }
   }
 
-  int maxUsableSegmentSpace() {
+  /**
+   * Returns the size of a full segment given the entrySize, entriesPerSegment, and SegmentDescriptor.
+   */
+  int fullSegmentSize() {
     return entriesPerSegment * entrySize + SegmentDescriptor.BYTES;
   }
 
@@ -112,4 +134,43 @@ public abstract class AbstractLogTest {
     }
   }
 
+  /**
+   * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log.
+   */
+  protected List<Long> appendEntries(int numEntries) {
+    return appendEntries(numEntries, (int) log.length() + 1);
+  }
+
+  /**
+   * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log, starting at the
+   * {@code startingId}.
+   */
+  protected List<Long> appendEntries(int numEntries, int startingId) {
+    List<Integer> entryIds = IntStream.range(startingId, startingId + numEntries).boxed().collect(Collectors.toList());
+    return entryIds.stream().map(entryId -> {
+      try (TestEntry entry = log.create(TestEntry.class)) {
+        entry.setTerm(1).setId(entryId);
+        return log.append(entry);
+      }
+    }).collect(Collectors.toList());
+  }
+
+  protected static void assertIndexes(List<Long> indexes, int start, int end) {
+    for (int i = 0, j = start; j <= end; i++, j++)
+      assertEquals(indexes.get(i).longValue(), j);
+  }
+
+  protected void cleanAndCompact(int startIndex, int endIndex) {
+    for (int i = startIndex; i <= endIndex; i++) {
+      log.clean(i);
+    }
+
+    log.compactor().compact(Compaction.MAJOR).join();
+  }
+
+  protected void assertCompacted(int startIndex, int endIndex) {
+    for (int i = startIndex; i <= endIndex; i++) {
+      assertNull(log.get(i));
+    }
+  }
 }
