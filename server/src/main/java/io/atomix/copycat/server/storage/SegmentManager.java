@@ -26,7 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
@@ -409,13 +412,13 @@ public class SegmentManager implements AutoCloseable {
             // whether this segment's first index is contained in that existing index. If it is, determine which segment
             // should take precedence based on segment versions.
             Segment existingSegment = existingEntry.getValue();
-            if (existingSegment.firstIndex() <= segment.firstIndex() && existingSegment.firstIndex() + existingSegment.length() > segment.firstIndex()) {
+            if (existingSegment.index() <= segment.index() && existingSegment.index() + existingSegment.length() > segment.index()) {
               if (existingSegment.descriptor().version() < segment.descriptor().version()) {
                 LOGGER.debug("Replaced segment {} with newer version: {} ({})", existingSegment.descriptor().id(), segment.descriptor().version(), segmentFile.file().getName());
                 segments.remove(existingEntry.getKey());
                 existingSegment.close();
                 existingSegment.delete();
-                segments.put(segment.firstIndex(), segment);
+                segments.put(segment.index(), segment);
               } else {
                 segment.close();
                 segment.delete();
@@ -424,13 +427,13 @@ public class SegmentManager implements AutoCloseable {
             // If the next closest existing segment didn't contain this segment's first index, add this segment.
             else {
               LOGGER.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
-              segments.put(segment.firstIndex(), segment);
+              segments.put(segment.index(), segment);
             }
           }
           // If there was no segment with a starting index close to this segment's index, add this segment.
           else {
             LOGGER.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
-            segments.put(segment.firstIndex(), segment);
+            segments.put(segment.index(), segment);
           }
 
           descriptor.close();
@@ -443,12 +446,12 @@ public class SegmentManager implements AutoCloseable {
       }
     }
 
-    for (Long segmentId : new HashSet<>(segments.keySet())) {
+    for (Long segmentId : segments.keySet()) {
       Segment segment = segments.get(segmentId);
       Map.Entry<Long, Segment> previousEntry = segments.floorEntry(segmentId - 1);
       if (previousEntry != null) {
         Segment previousSegment = previousEntry.getValue();
-        if (previousSegment.index() + previousSegment.length() + 1 < segment.index()) {
+        if (previousSegment.index() + previousSegment.length() - 1 < segment.index()) {
           previousSegment.skip(segment.index() - (previousSegment.index() + previousSegment.length()));
         }
       }
