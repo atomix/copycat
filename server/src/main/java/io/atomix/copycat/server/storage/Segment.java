@@ -21,8 +21,9 @@ import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.buffer.SlicedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.server.storage.compaction.OffsetCleaner;
 import io.atomix.copycat.server.storage.entry.Entry;
+
+import java.util.function.Predicate;
 
 /**
  * Stores a set of sequential entries in a single file or memory {@link Buffer}.
@@ -332,15 +333,6 @@ public class Segment implements AutoCloseable {
   }
 
   /**
-   * Returns the segment offset cleaner.
-   *
-   * @return The segment offset cleaner.
-   */
-  public OffsetCleaner cleaner() {
-    return cleaner;
-  }
-
-  /**
    * Cleans an entry from the segment.
    *
    * @param index The index of the entry to clean.
@@ -374,6 +366,15 @@ public class Segment implements AutoCloseable {
   public long cleanCount() {
     assertSegmentOpen();
     return cleaner.count();
+  }
+
+  /**
+   * Returns a predicate for cleaned offsets in the segment.
+   *
+   * @return A predicate for cleaned offsets in the segment.
+   */
+  public Predicate<Long> cleanPredicate() {
+    return new OffsetCleaner(cleaner.bits().copy());
   }
 
   /**

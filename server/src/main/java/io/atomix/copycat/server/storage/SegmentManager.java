@@ -21,7 +21,6 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.server.storage.compaction.OffsetCleaner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

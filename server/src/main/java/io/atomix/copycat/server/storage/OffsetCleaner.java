@@ -13,17 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage.compaction;
+package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.util.BitArray;
 import io.atomix.catalyst.util.Assert;
+
+import java.util.function.Predicate;
 
 /**
  * Segment offset cleaner.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class OffsetCleaner implements AutoCloseable {
+final class OffsetCleaner implements Predicate<Long>, AutoCloseable {
   private final BitArray bits;
 
   public OffsetCleaner() {
@@ -32,6 +34,11 @@ public final class OffsetCleaner implements AutoCloseable {
 
   OffsetCleaner(BitArray bits) {
     this.bits = Assert.notNull(bits, "bits");
+  }
+
+  @Override
+  public boolean test(Long offset) {
+    return isClean(offset);
   }
 
   /**

@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Removes tombstones from the log and combines {@link Segment}s to reclaim disk space.
@@ -83,9 +84,9 @@ import java.util.List;
  * {@code 1} and entry {@code 12345} during major compaction.
  * <p>
  * In order to prevent such a scenario from occurring, the major compaction task takes an immutable snapshot of the
- * {@link OffsetCleaner} (which maintains the offsets of cleaned entries for each segment) underlying all the segments
- * to be compacted prior to rewriting any entries. This ensures that any entries cleaned after the start of rewriting
- * segments will not be considered for compaction during the execution of this task.
+ * cleaned offsets underlying all the segments to be compacted prior to rewriting any entries. This ensures that any
+ * entries cleaned after the start of rewriting segments will not be considered for compaction during the execution
+ * of this task.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -93,7 +94,7 @@ public final class MajorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MajorCompactionTask.class);
   private final SegmentManager manager;
   private final List<List<Segment>> groups;
-  private List<List<OffsetCleaner>> cleaners;
+  private List<List<Predicate<Long>>> cleaners;
 
   MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups) {
     this.manager = Assert.notNull(manager, "manager");
@@ -112,9 +113,9 @@ public final class MajorCompactionTask implements CompactionTask {
   private void storeCleaners() {
     cleaners = new ArrayList<>(groups.size());
     for (List<Segment> group : groups) {
-      List<OffsetCleaner> groupCleaners = new ArrayList<>(group.size());
+      List<Predicate<Long>> groupCleaners = new ArrayList<>(group.size());
       for (Segment segment : group) {
-        groupCleaners.add(new OffsetCleaner(segment.cleaner().bits().copy()));
+        groupCleaners.add(segment.cleanPredicate());
       }
       cleaners.add(groupCleaners);
     }
@@ -126,18 +127,17 @@ public final class MajorCompactionTask implements CompactionTask {
   private void compactGroups() {
     for (int i = 0; i < groups.size(); i++) {
       List<Segment> group = groups.get(i);
-      List<OffsetCleaner> groupCleaners = cleaners.get(i);
+      List<Predicate<Long>> groupCleaners = cleaners.get(i);
       Segment segment = compactGroup(group, groupCleaners);
       updateCleaned(group, groupCleaners, segment);
       deleteGroup(group);
-      closeCleaners(groupCleaners);
     }
   }
 
   /**
    * Compacts a group.
    */
-  private Segment compactGroup(List<Segment> segments, List<OffsetCleaner> cleaners) {
+  private Segment compactGroup(List<Segment> segments, List<Predicate<Long>> cleaners) {
     // Get the first segment which contains the first index being cleaned. The clean segment will be written
     // as a newer version of the earliest segment being rewritten.
     Segment firstSegment = segments.iterator().next();
@@ -165,7 +165,7 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segments The segments to compact.
    * @param compactSegment The compact segment.
    */
-  private void compactGroup(List<Segment> segments, List<OffsetCleaner> cleaners, Segment compactSegment) {
+  private void compactGroup(List<Segment> segments, List<Predicate<Long>> cleaners, Segment compactSegment) {
     // Iterate through all segments being compacted and write entries to a single compact segment.
     for (int i = 0; i < segments.size(); i++) {
       compactSegment(segments.get(i), cleaners.get(i), compactSegment);
@@ -178,7 +178,7 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segment The segment to compact.
    * @param compactSegment The segment to which to write the compacted segment.
    */
-  private void compactSegment(Segment segment, OffsetCleaner cleaner, Segment compactSegment) {
+  private void compactSegment(Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
       compactEntry(i, segment, cleaner, compactSegment);
     }
@@ -191,14 +191,14 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segment The segment to compact.
    * @param compactSegment The segment to which to write the cleaned segment.
    */
-  private void compactEntry(long index, Segment segment, OffsetCleaner cleaner, Segment compactSegment) {
+  private void compactEntry(long index, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, remove the entry from the segment.
       if (entry != null) {
         // If the entry has been cleaned, skip the entry in the compact segment.
         // Note that for major compaction this process includes normal and tombstone entries.
         long offset = segment.offset(index);
-        if (offset == -1 || cleaner.isClean(offset)) {
+        if (offset == -1 || cleaner.test(offset)) {
           compactSegment.skip(1);
           LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
         }
@@ -217,7 +217,7 @@ public final class MajorCompactionTask implements CompactionTask {
   /**
    * Updates the new compact segment with entries that were cleaned during compaction.
    */
-  private void updateCleaned(List<Segment> segments, List<OffsetCleaner> cleaners, Segment compactSegment) {
+  private void updateCleaned(List<Segment> segments, List<Predicate<Long>> cleaners, Segment compactSegment) {
     for (int i = 0; i < segments.size(); i++) {
       updateCleanedOffsets(segments.get(i), cleaners.get(i), compactSegment);
     }
@@ -226,10 +226,10 @@ public final class MajorCompactionTask implements CompactionTask {
   /**
    * Updates the new compact segment with entries that were cleaned in the given segment during compaction.
    */
-  private void updateCleanedOffsets(Segment segment, OffsetCleaner cleaner, Segment compactSegment) {
+  private void updateCleanedOffsets(Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
       long offset = segment.offset(i);
-      if (offset != -1 && cleaner.isClean(offset)) {
+      if (offset != -1 && cleaner.test(offset)) {
         compactSegment.clean(offset);
       }
     }
@@ -243,14 +243,6 @@ public final class MajorCompactionTask implements CompactionTask {
     for (Segment oldSegment : group) {
       oldSegment.delete();
     }
-  }
-
-  /**
-   * Closes stored offset cleaners, freeing memory.
-   */
-  private void closeCleaners(List<OffsetCleaner> cleaners) {
-    cleaners.forEach(OffsetCleaner::close);
-    cleaners.clear();
   }
 
   @Override
