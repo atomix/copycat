@@ -11,7 +11,10 @@ branches:
   only:
     - master
 
+script:
+  - mvn test -Droot.logging.level=INFO
+
 after_success:
-  - mvn clean test jacoco:report coveralls:report
+  - mvn clean test jacoco:report coveralls:report -Droot.logging.level=INFO
   - bin/ci-push-javadoc.sh
   - bin/ci-deploy-snapshot.sh
