@@ -44,20 +44,20 @@ public class MinorCompactionTest extends AbstractLogTest {
    * Tests compacting the log.
    */
   public void testMinorCompaction() throws Throwable {
-    writeEntries(30);
+    writeEntries(31);
 
-    assertEquals(log.length(), 30L);
+    assertEquals(log.length(), 31L);
 
     for (long index = 21; index < 28; index++) {
       log.clean(index);
     }
-    log.commit(30);
+    log.commit(31);
 
     CountDownLatch latch = new CountDownLatch(1);
     log.compactor().compact(Compaction.MINOR).thenRun(latch::countDown);
     latch.await();
 
-    assertEquals(log.length(), 30L);
+    assertEquals(log.length(), 31L);
 
     for (long index = 21; index < 28; index++) {
       assertTrue(log.lastIndex() >= index);

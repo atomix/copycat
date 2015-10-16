@@ -88,7 +88,7 @@ public class FileLogTest extends LogTest {
       for (long i = 1; i <= entriesPerSegment * 5; i++) {
         if (i % 3 == 0 || i % 3 == 1) {
           assertTrue(log.lastIndex() >= i);
-          if (i != 1024) {
+          if (i <= entriesPerSegment * 4) {
             assertFalse(log.contains(i));
             assertNull(log.get(i));
           }

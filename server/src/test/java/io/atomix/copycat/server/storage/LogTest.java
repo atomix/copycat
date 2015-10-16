@@ -146,7 +146,7 @@ public abstract class LogTest extends AbstractLogTest {
     log.commit(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
     assertTrue(log.contains(entriesPerSegment));
-    for (int i = entriesPerSegment + 1; i <= entriesPerSegment * 2 + 1; i++) {
+    for (int i = entriesPerSegment + 1; i <= entriesPerSegment * 2; i++) {
       assertFalse(log.contains(i));
     }
     if (log.length() > entriesPerSegment * 2 + 1)
@@ -178,7 +178,7 @@ public abstract class LogTest extends AbstractLogTest {
     // Asserts get() after compaction
     log.commit(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
-    assertCompacted(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
+    assertCompacted(entriesPerSegment + 1, entriesPerSegment * 2);
   }
 
   /**
