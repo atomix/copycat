@@ -52,7 +52,7 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
  */
 @Test
 public abstract class AbstractLogTest {
-  protected int entrySize = entrySize();
+  protected int entryPadding;
   protected int entriesPerSegment = 3;
   protected Log log;
   String logId;
@@ -64,20 +64,23 @@ public abstract class AbstractLogTest {
    */
   protected Object[] testsFor(Class<? extends LogTest> testClass) throws Throwable {
     List<Object> tests = new ArrayList<>();
-    for (int i = 1; i < 30; i += 3) {
+    for (int i = 1; i < 30; i++) {
       LogTest test = testClass.newInstance();
       test.entriesPerSegment = i;
+      test.entryPadding = i / 3;
       tests.add(test);
     }
 
     return tests.toArray(new Object[tests.size()]);
   }
 
-  private static int entrySize() {
+  protected int entrySize() {
     Serializer serializer = new Serializer();
     serializer.register(TestEntry.class);
     Buffer buffer = DirectBuffer.allocate(1000);
-    serializer.writeObject(new TestEntry(), buffer);
+    TestEntry entry = new TestEntry();
+    entry.setPadding(entryPadding);
+    serializer.writeObject(entry, buffer);
     return (int) buffer.position() + Short.BYTES + Long.BYTES;
   }
 
@@ -106,7 +109,7 @@ public abstract class AbstractLogTest {
    * Returns the size of a full segment given the entrySize, entriesPerSegment, and SegmentDescriptor.
    */
   int fullSegmentSize() {
-    return entriesPerSegment * entrySize + SegmentDescriptor.BYTES;
+    return entriesPerSegment * entrySize() + SegmentDescriptor.BYTES;
   }
 
   protected Storage.Builder tempStorageBuilder() {
@@ -149,7 +152,7 @@ public abstract class AbstractLogTest {
     List<Integer> entryIds = IntStream.range(startingId, startingId + numEntries).boxed().collect(Collectors.toList());
     return entryIds.stream().map(entryId -> {
       try (TestEntry entry = log.create(TestEntry.class)) {
-        entry.setTerm(1).setId(entryId);
+        entry.setTerm(1).setPadding(entryPadding);
         return log.append(entry);
       }
     }).collect(Collectors.toList());

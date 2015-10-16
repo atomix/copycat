@@ -30,7 +30,9 @@ import io.atomix.copycat.server.storage.entry.Entry;
 @SerializeWith(id = 1000)
 public class TestEntry extends Entry<TestEntry> {
   private boolean tombstone;
-  private long id;
+  /** Padding to vary the stored size of an entry */
+  private int paddingSize;
+  private byte[] padding;
 
   public TestEntry() {
   }
@@ -39,8 +41,8 @@ public class TestEntry extends Entry<TestEntry> {
     super(referenceManager);
   }
 
-  public long getId() {
-    return id;
+  public byte[] getPadding() {
+    return padding;
   }
 
   @Override
@@ -52,11 +54,14 @@ public class TestEntry extends Entry<TestEntry> {
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     setTerm(buffer.readLong());
     tombstone = buffer.readBoolean();
-    id = buffer.readLong();
+    paddingSize = buffer.readInt();
+    padding = new byte[paddingSize];
+    buffer.read(padding);
   }
 
-  public void setId(long id) {
-    this.id = id;
+  public void setPadding(int paddingSize) {
+    this.paddingSize = paddingSize;
+    this.padding = new byte[paddingSize];
   }
 
   /**
@@ -71,13 +76,14 @@ public class TestEntry extends Entry<TestEntry> {
   }
 
   @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(getTerm()).writeBoolean(tombstone).writeLong(id);
+  public String toString() {
+    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(),
+        tombstone);
   }
 
   @Override
-  public String toString() {
-    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(), tombstone);
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    buffer.writeLong(getTerm()).writeBoolean(tombstone).writeInt(paddingSize).write(padding);
   }
 
 }

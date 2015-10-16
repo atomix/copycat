@@ -82,6 +82,7 @@ public class MinorCompactionTest extends AbstractLogTest {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
         entry.setTerm(1);
+        entry.setPadding(1);
         if (entry.getIndex() % 2 == 0) {
           entry.setTombstone(true);
         } else {

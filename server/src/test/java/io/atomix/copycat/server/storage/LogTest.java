@@ -59,12 +59,8 @@ public abstract class LogTest extends AbstractLogTest {
    * Asserts that entries spanning 3 segments are appended with the expected indexes.
    */
   public void testAppend() {
-    for (int i = 1; i <= entriesPerSegment * 3; i++) {
-      try (TestEntry entry = log.create(TestEntry.class)) {
-        assertEquals(log.append(entry), i);
-      }
-    }
-
+    appendEntries(entriesPerSegment * 3);
+    assertEquals(log.length(), entriesPerSegment * 3);
     assertEquals(log.segments.segments().size(), 3);
   }
 
@@ -269,7 +265,7 @@ public abstract class LogTest extends AbstractLogTest {
 
     // Asserts that size() is changed after compaction
     assertEquals(log.size(),
-        (entrySize * entriesPerSegment * 3) + (log.segments.segments().size() * SegmentDescriptor.BYTES));
+        (entrySize() * entriesPerSegment * 3) + (log.segments.segments().size() * SegmentDescriptor.BYTES));
   }
 
   /**
