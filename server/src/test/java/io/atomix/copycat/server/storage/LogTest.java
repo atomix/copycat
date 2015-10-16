@@ -149,7 +149,7 @@ public abstract class LogTest extends AbstractLogTest {
     for (int i = entriesPerSegment + 1; i <= entriesPerSegment * 2; i++) {
       assertFalse(log.contains(i));
     }
-    if (log.length() > entriesPerSegment * 2 + 1)
+    if (log.length() > 3)
       assertTrue(log.contains(entriesPerSegment * 2 + 2));
   }
 

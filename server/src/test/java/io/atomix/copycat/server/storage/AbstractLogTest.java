@@ -173,4 +173,10 @@ public abstract class AbstractLogTest {
       assertNull(log.get(i));
     }
   }
+  
+  protected void printLog() {
+    for (int i = 1; i < log.length(); i++) {
+      System.out.println(log.get(i));
+    }
+  }
 }
