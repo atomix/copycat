@@ -83,24 +83,25 @@ import java.util.concurrent.Executors;
  * {@link Storage#minorCompactionInterval()}, a background thread will evaluate the log for minor compaction. The minor
  * compaction process iterates through segments and selects compactable segments based on the ratio of entries that have
  * been {@link #clean(long) cleaned}. Minor compaction is generational. The
- * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} is more likely to select recently written
- * segments than older segments. Once a set of segments have been compacted, for each segment a
+ * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} is more likely to select segments that haven't
+ * yet been compacted than ones that have. Once a set of segments have been compacted, for each segment a
  * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask} rewrites the segment without cleaned entries.
  * This rewriting results in a segment with missing entries, and Copycat's Raft implementation accounts for that. For
  * instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being cleaned, and any attempt to
  * {@link #get(long) read} entry {@code 2} will result in a {@code null} entry.
  * <p>
  * However, note that minor compaction only applies to non-tombstone entries. Tombstones are entries that represent the
- * absence of state, and that requires a more careful and costly compaction process to ensure consistency in the event
- * of a failure. Consider a state machine with the following two commands in the log:
+ * removal of state from the system, and that requires a more careful and costly compaction process to ensure consistency
+ * in the event of a failure. Consider a state machine with the following two commands in the log:
  * <ul>
  * <li>{@code put 1}</li>
  * <li>{@code remove 1}</li>
  * </ul>
  * If the first command is written to segment {@code 1}, and the second command is written to segment {@code 2},
- * compacting segment {@code 2} without removing the first command from segment {@code 1} would result in an
- * inconsistent state machine state in the event of a failure and replay. Effectively, the log compaction process would
- * have undone the {@code remove} command.
+ * compacting segment {@code 2} (minor compaction may compact segments in any order) without removing the first command
+ * from segment {@code 1} would effectively result in the undoing of the {@code remove 1} command. If the {@code remove 1}
+ * command is removed from the log before {@code put 1}, a restart and replay of the log will result in the application of
+ * {@code put 1} to the state machine, but not {@code remove 1}, thus resulting in an inconsistent state machine state.
  * <p>
  * Copycat handles tombstones by allowing tombstone entries to be flagged with the {@link Entry#isTombstone()} boolean.
  * The minor compaction process plainly ignores tombstone entries and leaves them up to the major compaction process to
@@ -193,9 +194,9 @@ public class Log implements AutoCloseable {
   }
 
   /**
-   * Returns the count of the log on disk in bytes.
+   * Returns the total size of all {@link Segment segments} of the log on disk in bytes.
    *
-   * @return The count of the log in bytes.
+   * @return The total size of all {@link Segment segments} of the log in bytes.
    * @throws IllegalStateException If the log is not open.
    */
   public long size() {
@@ -206,8 +207,8 @@ public class Log implements AutoCloseable {
   /**
    * Returns the number of entries in the log.
    * <p>
-   * The length is the number of physical entries on disk. Note, however, that the length of the log may actually differ
-   * from the number of entries eligible for reads due to deduplication.
+   * The length is the total number of {@link Entry entries} represented by the log on disk. This includes entries
+   * that have been compacted from the log. So, in that sense, the length represents the total range of indexes.
    *
    * @return The number of entries in the log.
    * @throws IllegalStateException If the log is not open.

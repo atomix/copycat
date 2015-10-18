@@ -45,7 +45,7 @@ import io.atomix.catalyst.util.Assert;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class OffsetIndex implements AutoCloseable {
+final class OffsetIndex implements AutoCloseable {
 
   /**
    * Returns the count of the index for the given number of entries.

@@ -84,9 +84,12 @@ public class Segment implements AutoCloseable {
   }
 
   /**
-   * Returns the segment descriptor.
+   * Returns the {@link SegmentDescriptor} for the segment.
+   * <p>
+   * The segment descriptor is stored in {@link SegmentDescriptor#BYTES} bytes at the head of the segment. The descriptor
+   * defines essential information about the segment, including its position in the complete {@link Log} and its {@code version}.
    *
-   * @return The segment descriptor.
+   * @return The segment descriptor stored at the head of the segment.
    */
   public SegmentDescriptor descriptor() {
     return descriptor;
@@ -103,6 +106,9 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns a boolean value indicating whether the segment is empty.
+   * <p>
+   * The segment is considered empty if no entries have been written to the segment and no indexes in the
+   * segment have been {@link #skip(long) skipped}.
    *
    * @return Indicates whether the segment is empty.
    */
@@ -112,6 +118,8 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns a boolean value indicating whether the segment has been compacted.
+   * <p>
+   * The segment is considered compacted if its {@link SegmentDescriptor#version()} is greater than {@code 1}.
    *
    * @return Indicates whether the segment has been compacted.
    */
@@ -121,19 +129,24 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns a boolean value indicating whether the segment is full.
+   * <p>
+   * The segment is considered full if one of the following conditions is met:
+   * <ul>
+   *   <li>{@link #size()} is greater than or equal to {@link SegmentDescriptor#maxSegmentSize()}</li>
+   *   <li>{@link #count()} is greater than or equal to {@link SegmentDescriptor#maxEntries()}</li>
+   * </ul>
    *
    * @return Indicates whether the segment is full.
    */
   public boolean isFull() {
     return size() >= descriptor.maxSegmentSize()
-      || offsetIndex.size() >= descriptor.maxEntries()
-      || offsetIndex.lastOffset() + skip + 1 == Integer.MAX_VALUE;
+      || offsetIndex.size() >= descriptor.maxEntries();
   }
 
   /**
-   * Returns the total count of the segment in bytes.
+   * Returns the total size of the segment in bytes.
    *
-   * @return The count of the segment in bytes.
+   * @return The size of the segment in bytes.
    */
   public long size() {
     return buffer.offset() + buffer.position();
@@ -141,6 +154,8 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns the current range of the segment.
+   * <p>
+   * The length includes entries that may have been {@link #skip(long) skipped} at the end of the segment.
    *
    * @return The current range of the segment.
    */
@@ -150,6 +165,9 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns the count of all entries in the segment.
+   * <p>
+   * The count includes only entries that are physically present in the segment. Entries that have been compacted
+   * out of the segment are not counted towards the count, nor are {@link #skip(long) skipped} entries.
    *
    * @return The count of all entries in the segment.
    */
@@ -158,9 +176,11 @@ public class Segment implements AutoCloseable {
   }
 
   /**
-   * Returns the index of the segment.
+   * Returns the base index of the segment.
+   * <p>
+   * The base index is equivalent to the segment's {@link #firstIndex()} if the segment is not {@link #isEmpty() emtpy}.
    *
-   * @return The index of the segment.
+   * @return The base index of the segment.
    */
   long index() {
     return descriptor.index();
@@ -168,6 +188,8 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns the index of the first entry in the segment.
+   * <p>
+   * If the segment is empty, {@code 0} will be returned regardless of the segment's base index.
    *
    * @return The index of the first entry in the segment or {@code 0} if the segment is empty.
    * @throws IllegalStateException if the segment is not open
@@ -199,6 +221,10 @@ public class Segment implements AutoCloseable {
 
   /**
    * Returns the offset of the given index within the segment.
+   * <p>
+   * The offset reflects the zero-based offset of the given {@code index} in the segment when missing/compacted
+   * entries are taken into account. For instance, if a segment contains entries at indexes {@code {1, 3}}, the
+   * {@code offset} of index {@code 1} will be {@code 0} and index {@code 3} will be {@code 1}.
    *
    * @param index The index to check.
    * @return The offset of the given index.

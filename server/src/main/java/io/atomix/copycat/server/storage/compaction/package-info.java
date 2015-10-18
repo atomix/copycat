@@ -15,7 +15,16 @@
  */
 
 /**
- * Classes that support efficient Raft log compaction.
+ * Classes and interfaces that support efficient Raft {@link io.atomix.copycat.server.storage.Log log} compaction.
+ * <p>
+ * The log compaction package implements compaction for Copycat {@link io.atomix.copycat.server.storage.Log logs} using
+ * a custom log cleaning algorithm. As entries are written to the log and applied to the server's state machine, the
+ * state machine can arbitrarily mark entries for removal from the log. Periodically, a set of log compaction threads
+ * will compact {@link io.atomix.copycat.server.storage.Segment segment}s of the log in the background. Log compaction
+ * is performed in two phases: {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask minor} and
+ * {@link io.atomix.copycat.server.storage.compaction.MajorCompactionTask major}. The minor compaction process efficiently
+ * rewrites individual segments to remove standard entries that have been marked for cleaning. The major compaction process
+ * periodically rewrites the entire log to combine segments that have previously been compacted.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

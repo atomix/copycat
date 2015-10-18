@@ -15,7 +15,7 @@
  */
 
 /**
- * Raft client response classes.
+ * {@link io.atomix.copycat.client.response.Response} implementations for all client communication.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

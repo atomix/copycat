@@ -15,7 +15,7 @@
  */
 
 /**
- * Raft server API.
+ * Provides a standalone, feature-complete implementation of the <a href="https://raft.github.io/">Raft consensus algorithm</a>.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

@@ -15,7 +15,8 @@
  */
 
 /**
- * Asynchronous Raft client API.
+ * Provides classes for communicating with a Raft cluster and submitting
+ * {@link io.atomix.copycat.client.Command commands} and {@link io.atomix.copycat.client.Query queries}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

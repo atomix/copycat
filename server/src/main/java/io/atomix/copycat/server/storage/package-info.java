@@ -17,13 +17,10 @@
 /**
  * Provides a standalone segmented log for Copycat's <a href="https://raftconsensus.github.io/">Raft</a> implementation.
  * <p>
- * The log is designed as a standalone journal built on Copycat's {@link io.atomix.catalyst.buffer.Buffer} abstraction.
- * The buffer abstraction allows Copycat's {@link io.atomix.copycat.server.storage.Log} to write to memory or disk based on the
- * buffer type.
- * <p>
- * While the log is not dependent on the Raft algorithm, it does implement many features in support of the Raft implementation.
- * Specifically, the log is not an append-only log. Rather, it supports appending to, truncating, and compacting the
- * log.
+ * Logs are the vehicle through which Copycat servers persist and replicate state changes. The Copycat log is designed as
+ * a standalone journal built on Copycat's {@link io.atomix.catalyst.buffer.Buffer} abstraction. Entries are written to the
+ * log in many separate buffers known as segments. The buffer abstraction allows Copycat's
+ * {@link io.atomix.copycat.server.storage.Log} to write to memory or disk based on the buffer type.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

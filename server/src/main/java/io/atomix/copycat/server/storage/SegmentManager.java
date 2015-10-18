@@ -32,7 +32,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
- * Log segment manager.
+ * Manages creation and deletion of {@link Segment}s of the {@link Log}.
  * <p>
  * The segment manager keeps track of segments in a given {@link Log} and provides an interface to loading, retrieving,
  * and compacting those segments.

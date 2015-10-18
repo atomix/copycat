@@ -15,9 +15,13 @@
  */
 
 /**
- * Interfaces for managing client {@link io.atomix.copycat.client.session.Session sessions} on a Raft
- * {@link io.atomix.copycat.server.RaftServer server}.
+ * Classes and interfaces for managing client sessions.
+ * <p>
+ * Sessions represent the context in which clients communicate with a Raft cluster. Sessions allow clusters
+ * to process requests according to client state. For instance, sessions are responsible for ensuring operations
+ * are executed in the order specified by the client (sequential consistency) and operations are only applied
+ * to the replicated state machine once (linearizability).
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-package io.atomix.copycat.server.session;
+package io.atomix.copycat.client.session;

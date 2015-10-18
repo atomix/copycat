@@ -125,7 +125,7 @@ public interface Command<T> extends Operation<T> {
    * <p>
    * Commands that remove state from the state machine should <em>always</em> be marked as {@link #PERSISTENT}. This
    * will ensure that the commands remain in the log until after any prior commands are removed. Note that in some cases
-   * it may not be totally evident that a command needs to be parked persistent. For instance, in an imaginary map
+   * it may not be totally evident that a command needs to be marked persistent. For instance, in an imaginary map
    * state machine, a command that sets a key with a TTL (time-to-live) should be marked {@link #PERSISTENT} because,
    * while it contributes to the state machine's state for some time period, ultimately it removes state from the
    * state machine once it expires.

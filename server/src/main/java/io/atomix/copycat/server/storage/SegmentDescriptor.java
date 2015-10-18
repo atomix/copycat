@@ -21,7 +21,7 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
 
 /**
- * Segment descriptor.
+ * Stores information about a {@link Segment} of the log.
  * <p>
  * The segment descriptor manages metadata related to a single segment of the log. Descriptors are stored within the
  * first {@code 48} bytes of each segment in the following order:
