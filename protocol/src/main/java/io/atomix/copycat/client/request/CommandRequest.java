@@ -30,7 +30,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=201)
+@SerializeWith(id=191)
 public class CommandRequest extends OperationRequest<CommandRequest> {
 
   /**

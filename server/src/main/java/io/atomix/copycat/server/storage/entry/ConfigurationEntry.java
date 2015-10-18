@@ -30,7 +30,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=231)
+@SerializeWith(id=221)
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   private Collection<Address> active;
   private Collection<Address> passive;

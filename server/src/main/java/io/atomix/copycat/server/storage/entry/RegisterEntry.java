@@ -29,7 +29,7 @@ import java.util.UUID;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=235)
+@SerializeWith(id=225)
 public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   private UUID client;
   private long timeout;

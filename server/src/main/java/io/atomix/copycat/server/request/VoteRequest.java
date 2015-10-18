@@ -29,7 +29,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=225)
+@SerializeWith(id=215)
 public class VoteRequest extends AbstractRequest<VoteRequest> {
 
   /**

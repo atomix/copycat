@@ -28,7 +28,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=214)
+@SerializeWith(id=204)
 public class UnregisterResponse extends SessionResponse<UnregisterResponse> {
 
   /**

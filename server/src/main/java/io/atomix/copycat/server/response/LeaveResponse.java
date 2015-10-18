@@ -29,7 +29,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=222)
+@SerializeWith(id=212)
 public class LeaveResponse extends AbstractResponse<LeaveResponse> {
 
   /**

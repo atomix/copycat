@@ -23,7 +23,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=233)
+@SerializeWith(id=223)
 public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
 
   public NoOpEntry() {

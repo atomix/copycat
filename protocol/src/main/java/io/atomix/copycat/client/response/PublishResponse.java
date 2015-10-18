@@ -29,7 +29,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=206)
+@SerializeWith(id=196)
 public class PublishResponse extends SessionResponse<PublishResponse> {
 
   /**

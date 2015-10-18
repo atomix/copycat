@@ -24,7 +24,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=213)
+@SerializeWith(id=203)
 public class UnregisterRequest extends SessionRequest<UnregisterRequest> {
 
   /**

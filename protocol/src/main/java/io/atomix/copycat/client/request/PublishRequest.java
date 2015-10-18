@@ -32,7 +32,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=205)
+@SerializeWith(id=195)
 public class PublishRequest extends SessionRequest<PublishRequest> {
 
   /**

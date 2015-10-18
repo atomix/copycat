@@ -28,7 +28,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=236)
+@SerializeWith(id=226)
 public class ConnectEntry extends SessionEntry<ConnectEntry> {
   private Address address;
 

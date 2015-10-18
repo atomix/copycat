@@ -26,7 +26,7 @@ import io.atomix.catalyst.serializer.Serializer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-@SerializeWith(id=200)
+@SerializeWith(id=190)
 public class Event<T> implements CatalystSerializable {
   private String event;
   private Object message;

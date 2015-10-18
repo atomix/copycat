@@ -23,7 +23,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=237)
+@SerializeWith(id=227)
 public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
 
   public UnregisterEntry() {
