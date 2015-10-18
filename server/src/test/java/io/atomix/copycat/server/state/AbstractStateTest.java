@@ -15,18 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
-import static org.mockito.Mockito.mock;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.LocalServerRegistry;
+import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.error.RaftError;
@@ -38,8 +31,18 @@ import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
+import io.atomix.copycat.server.storage.entry.Entry;
 import net.jodah.concurrentunit.ConcurrentTestCase;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Abstract state test.
+ */
 @Test
 public abstract class AbstractStateTest<T extends AbstractState> extends ConcurrentTestCase {
   protected T state;
@@ -48,6 +51,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected Log log;
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
+  protected LocalTransport transport;
   protected ServerState serverState;
   protected List<Address> members;
 
@@ -65,9 +69,10 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     log = storage.open("test");
     stateMachine = new TestStateMachine();
     members = createMembers(3);
+    transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members, log, stateMachine, mock(ConnectionManager.class), serverCtx);
+    serverState = new ServerState(members.get(0), members, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**
@@ -89,6 +94,13 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
         serverState.getLog().append(entry);
       }
     }
+  }
+
+  /**
+   * Gets the entry at the given index.
+   */
+  protected <T extends Entry> T get(long index) throws Throwable {
+    return serverState.getLog().get(index);
   }
 
   /**

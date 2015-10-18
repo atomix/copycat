@@ -15,9 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
@@ -26,6 +23,7 @@ import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -34,6 +32,9 @@ import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * Abstract active state.
@@ -114,19 +115,26 @@ abstract class ActiveState extends PassiveState {
   @Override
   protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
-    return CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
+
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context.
+    boolean transition = false;
+    if (request.term() > context.getTerm()) {
+      context.setTerm(request.term());
+      transition = true;
+    }
+
+    CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
+    if (transition) {
+      transition(RaftServer.State.FOLLOWER);
+    }
+    return future;
   }
 
   /**
    * Handles a vote request.
    */
   protected VoteResponse handleVote(VoteRequest request) {
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context.
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
-    }
-
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.

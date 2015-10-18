@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -59,7 +60,7 @@ final class CandidateState extends ActiveState {
   /**
    * Starts the election.
    */
-  private void startElection() {
+  void startElection() {
     LOGGER.info("{} - Starting election", context.getAddress());
     sendVoteRequests();
   }
@@ -81,7 +82,7 @@ final class CandidateState extends ActiveState {
 
     // When the election timer is reset, increment the current term and
     // restart the election.
-    context.setTerm(context.getTerm() + 1);
+    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getAddress().hashCode());
 
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
     currentTimer = context.getThreadContext().schedule(delay, () -> {
@@ -114,6 +115,8 @@ final class CandidateState extends ActiveState {
       complete.set(true);
       if (elected) {
         transition(CopycatServer.State.LEADER);
+      } else {
+        transition(RaftServer.State.FOLLOWER);
       }
     });
 

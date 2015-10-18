@@ -1,43 +1,38 @@
+/*
+ * Copyright 2015 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License
+ */
 package io.atomix.copycat.server.state;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
-import java.util.UUID;
-
+import io.atomix.copycat.client.request.*;
+import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.response.Response.Status;
+import io.atomix.copycat.server.TestStateMachine.TestCommand;
+import io.atomix.copycat.server.TestStateMachine.TestQuery;
+import io.atomix.copycat.server.request.*;
+import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.storage.TestEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import io.atomix.copycat.client.request.CommandRequest;
-import io.atomix.copycat.client.request.ConnectRequest;
-import io.atomix.copycat.client.request.KeepAliveRequest;
-import io.atomix.copycat.client.request.PublishRequest;
-import io.atomix.copycat.client.request.QueryRequest;
-import io.atomix.copycat.client.request.RegisterRequest;
-import io.atomix.copycat.client.request.UnregisterRequest;
-import io.atomix.copycat.client.response.CommandResponse;
-import io.atomix.copycat.client.response.ConnectResponse;
-import io.atomix.copycat.client.response.KeepAliveResponse;
-import io.atomix.copycat.client.response.PublishResponse;
-import io.atomix.copycat.client.response.QueryResponse;
-import io.atomix.copycat.client.response.RegisterResponse;
-import io.atomix.copycat.client.response.Response.Status;
-import io.atomix.copycat.client.response.UnregisterResponse;
-import io.atomix.copycat.server.TestStateMachine.TestCommand;
-import io.atomix.copycat.server.TestStateMachine.TestQuery;
-import io.atomix.copycat.server.request.AcceptRequest;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.JoinRequest;
-import io.atomix.copycat.server.request.LeaveRequest;
-import io.atomix.copycat.server.request.PollRequest;
-import io.atomix.copycat.server.request.VoteRequest;
-import io.atomix.copycat.server.response.AcceptResponse;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.JoinResponse;
-import io.atomix.copycat.server.response.LeaveResponse;
-import io.atomix.copycat.server.response.PollResponse;
-import io.atomix.copycat.server.response.VoteResponse;
+import java.util.UUID;
 
+import static org.testng.Assert.*;
+
+/**
+ * Passive state tests.
+ */
 @Test
 public class PassiveStateTest extends AbstractStateTest<PassiveState> {
   @BeforeMethod
@@ -106,20 +101,214 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
     });
   }
 
-  public void testAppendTermUpdated() throws Throwable {
+  public void testAppendTermAndLeaderUpdated() throws Throwable {
     runOnServer(() -> {
+      int leader = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
       serverState.setTerm(1);
-      AppendRequest request = AppendRequest.builder().withTerm(2).build();
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(2)
+        .withLeader(leader)
+        .build();
 
       AppendResponse response = state.append(request).get();
 
       assertEquals(response.status(), Status.OK);
       assertTrue(response.succeeded());
       assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLeader().hashCode(), leader);
       assertEquals(response.term(), 2L);
     });
   }
-  
+
+  public void testRejectAppendOnTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2);
+      append(2, 2);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(1)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(2)
+        .withLogTerm(2)
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertFalse(response.succeeded());
+      assertEquals(response.term(), 2L);
+      assertEquals(response.logIndex(), 2L);
+    });
+  }
+
+  public void testRejectAppendOnMissingLogIndex() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2);
+      append(1, 2);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(2)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(2)
+        .withLogTerm(2)
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertFalse(response.succeeded());
+      assertEquals(response.term(), 2L);
+      assertEquals(response.logIndex(), 1L);
+    });
+  }
+
+  public void testRejectAppendOnSkippedLogIndex() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      serverState.getLog().skip(1);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(1)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(1)
+        .withLogTerm(1)
+        .withEntries(new TestEntry().setIndex(2).setTerm(1))
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertFalse(response.succeeded());
+      assertEquals(response.term(), 1L);
+      assertEquals(response.logIndex(), 0L);
+    });
+  }
+
+  public void testRejectAppendOnInconsistentLogTerm() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(2);
+      append(2, 1);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(2)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(2)
+        .withLogTerm(2)
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertFalse(response.succeeded());
+      assertEquals(response.term(), 2L);
+      assertEquals(response.logIndex(), 1L);
+    });
+  }
+
+  public void testAppendOnEmptyLog() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(1)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(0)
+        .withLogTerm(0)
+        .withEntries(new TestEntry().setIndex(1).setTerm(1))
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertTrue(response.succeeded());
+      assertEquals(response.term(), 1L);
+      assertEquals(response.logIndex(), 1L);
+
+      assertEquals(serverState.getLog().length(), 1L);
+      assertNotNull(get(1));
+    });
+  }
+
+  public void testAppendOnNonEmptyLog() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      append(1, 1);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(1)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(0)
+        .withLogTerm(0)
+        .withEntries(new TestEntry().setIndex(2).setTerm(1))
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertTrue(response.succeeded());
+      assertEquals(response.term(), 1L);
+      assertEquals(response.logIndex(), 2L);
+
+      assertEquals(serverState.getLog().length(), 2L);
+      assertNotNull(get(2));
+    });
+  }
+
+  public void testAppendOnPartiallyConflictingEntries() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      append(1, 1);
+      append(2, 2);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(3)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(1)
+        .withLogTerm(1)
+        .withEntries(new TestEntry().setIndex(2).setTerm(2), new TestEntry().setIndex(3).setTerm(3), new TestEntry().setIndex(4).setTerm(3))
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertTrue(response.succeeded());
+      assertEquals(response.term(), 3L);
+      assertEquals(response.logIndex(), 4L);
+
+      assertEquals(serverState.getLog().length(), 4L);
+      assertEquals(get(2).getTerm(), 2L);
+      assertEquals(get(3).getTerm(), 3L);
+      assertEquals(get(4).getTerm(), 3L);
+    });
+  }
+
+  public void testAppendSkippedEntries() throws Throwable {
+    runOnServer(() -> {
+      serverState.setTerm(1);
+      append(1, 1);
+
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(1)
+        .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
+        .withLogIndex(1)
+        .withLogTerm(1)
+        .withEntries(new TestEntry().setIndex(2).setTerm(1), new TestEntry().setIndex(4).setTerm(1))
+        .build();
+
+      AppendResponse response = state.append(request).get();
+
+      assertEquals(response.status(), Status.OK);
+      assertTrue(response.succeeded());
+      assertEquals(response.term(), 1L);
+      assertEquals(response.logIndex(), 4L);
+
+      assertEquals(serverState.getLog().length(), 4L);
+      assertNotNull(get(2));
+      assertNull(get(3));
+      assertNotNull(get(4));
+    });
+  }
+
   public void testCommandWithoutLeader() throws Throwable {
     runOnServer(() -> {
       CommandRequest request = CommandRequest.builder().withSession(1).withCommand(new TestCommand("test")).build();
@@ -221,4 +410,5 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       threadAssertFalse(response.succeeded());
     });
   }
+
 }
