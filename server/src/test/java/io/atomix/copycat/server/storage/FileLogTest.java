@@ -15,15 +15,11 @@
  */
 package io.atomix.copycat.server.storage;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
-
+import io.atomix.copycat.server.storage.entry.Entry;
 import org.testng.annotations.Factory;
 import org.testng.annotations.Test;
 
-import io.atomix.copycat.server.storage.entry.Entry;
+import static org.testng.Assert.*;
 
 /**
  * File log test.
@@ -32,6 +28,7 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 @Test
 public class FileLogTest extends LogTest {
+
   @Factory
   public Object[] createTests() throws Throwable {
     return testsFor(FileLogTest.class);
@@ -94,6 +91,28 @@ public class FileLogTest extends LogTest {
           }
         }
       }
+    }
+  }
+
+  /**
+   * Tests recovering from an inconsistent disk.
+   */
+  public void testRecoverInconsistentDisk() throws Throwable {
+    appendEntries(entriesPerSegment * 2);
+    Segment firstSegment = log.segments.firstSegment();
+    Segment newSegment = log.segments.createSegment(SegmentDescriptor.builder()
+      .withId(firstSegment.descriptor().id())
+      .withIndex(firstSegment.descriptor().index())
+      .withVersion(firstSegment.descriptor().version() + 1)
+      .withMaxSegmentSize(firstSegment.descriptor().maxSegmentSize())
+      .withMaxEntries(firstSegment.descriptor().maxEntries())
+      .build());
+
+    log.close();
+
+    try (Log log = createLog()) {
+      assertEquals(log.length(), entriesPerSegment * 2);
+      assertEquals(log.segments.firstSegment().descriptor().version(), 1);
     }
   }
 

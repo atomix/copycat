@@ -34,6 +34,7 @@ import static org.testng.Assert.*;
  */
 @Test
 public class CandidateStateTest extends AbstractStateTest<CandidateState> {
+
   @BeforeMethod
   @Override
   void beforeMethod() throws Throwable {
@@ -159,20 +160,17 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     runOnServer(() -> {
       int i = 0;
       for (MemberState member : serverState.getCluster().getActiveMembers()) {
-        if (i % 2 == 0) {
-          Server server = transport.server();
-          server.listen(member.getAddress(), c -> {
-            c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
-              .withTerm(2)
-              .withVoted(true)
-              .build()));
-          }).thenRun(this::resume);
-        }
-        i++;
+        Server server = transport.server();
+        server.listen(member.getAddress(), c -> {
+          c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
+            .withTerm(2)
+            .withVoted(true)
+            .build()));
+        }).thenRun(this::resume);
       }
     });
 
-    await(1000, serverState.getCluster().getActiveMembers().size() / 2);
+    await(1000, serverState.getCluster().getActiveMembers().size());
 
     runOnServer(() -> {
       int self = serverState.getAddress().hashCode();

@@ -441,6 +441,7 @@ public class SegmentManager implements AutoCloseable {
         }
         // If the segment descriptor wasn't locked, close and delete the descriptor.
         else {
+          LOGGER.debug("Deleting unlocked segment: {}-{} ({})", descriptor.id(), descriptor.version(), segmentFile.file().getName());
           descriptor.close();
           descriptor.delete();
         }
