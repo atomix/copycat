@@ -42,7 +42,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     state = new CandidateState(serverState);
   }
 
-  public void testHandlesAppendAndTransitionsOnTerm() throws Throwable {
+  public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
       int leader = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
       serverState.setTerm(1);
@@ -158,7 +158,6 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateTransitionsToLeaderOnElection() throws Throwable {
     runOnServer(() -> {
-      int i = 0;
       for (MemberState member : serverState.getCluster().getActiveMembers()) {
         Server server = transport.server();
         server.listen(member.getAddress(), c -> {
@@ -166,7 +165,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
             .withTerm(2)
             .withVoted(true)
             .build()));
-        }).thenRun(this::resume);
+        }).thenRunAsync(this::resume);
       }
     });
 
@@ -198,7 +197,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
             .withTerm(2)
             .withVoted(false)
             .build()));
-        }).thenRun(this::resume);
+        }).thenRunAsync(this::resume);
       }
     });
 
