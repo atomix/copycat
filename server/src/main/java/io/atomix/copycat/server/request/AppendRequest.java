@@ -33,7 +33,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=276)
+@SerializeWith(id=217)
 public class AppendRequest extends AbstractRequest<AppendRequest> {
 
   /**

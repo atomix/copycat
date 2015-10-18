@@ -29,7 +29,7 @@ import io.atomix.copycat.client.Operation;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=306)
+@SerializeWith(id=230)
 public class CommandEntry extends OperationEntry<CommandEntry> {
   private Command command;
 

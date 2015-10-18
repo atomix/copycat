@@ -233,6 +233,15 @@ public class ServerState {
   }
 
   /**
+   * Returns a collection of current members.
+   *
+   * @return A collection of current members.
+   */
+  public Collection<Address> getMembers() {
+    return cluster.buildMembers();
+  }
+
+  /**
    * Returns the state leader.
    *
    * @return The state leader.

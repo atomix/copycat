@@ -30,7 +30,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=280)
+@SerializeWith(id=215)
 public class AcceptRequest extends SessionRequest<AcceptRequest> {
 
   /**

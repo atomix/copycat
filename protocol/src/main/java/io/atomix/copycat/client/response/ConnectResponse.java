@@ -28,7 +28,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=279)
+@SerializeWith(id=212)
 public class ConnectResponse extends SessionResponse<ConnectResponse> {
 
   /**

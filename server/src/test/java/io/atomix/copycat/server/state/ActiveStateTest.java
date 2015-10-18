@@ -6,7 +6,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import io.atomix.copycat.client.response.Response.Status;
-import io.atomix.copycat.server.CopycatServer.State;
+import io.atomix.copycat.server.RaftServer.State;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 

@@ -29,7 +29,7 @@ import java.util.UUID;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=260)
+@SerializeWith(id=209)
 public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
   /**

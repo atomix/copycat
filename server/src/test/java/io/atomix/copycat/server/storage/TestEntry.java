@@ -32,22 +32,13 @@ public class TestEntry extends Entry<TestEntry> {
   private boolean tombstone;
   /** Padding to vary the stored size of an entry */
   private int paddingSize;
-  private byte[] padding;
+  private byte[] padding = new byte[0];
 
   public TestEntry() {
   }
 
   public TestEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
-  }
-
-  public byte[] getPadding() {
-    return padding;
-  }
-
-  @Override
-  public boolean isTombstone() {
-    return tombstone;
   }
 
   @Override
@@ -59,9 +50,23 @@ public class TestEntry extends Entry<TestEntry> {
     buffer.read(padding);
   }
 
+  @Override
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    buffer.writeLong(getTerm()).writeBoolean(tombstone).writeInt(paddingSize).write(padding);
+  }
+
+  public byte[] getPadding() {
+    return padding;
+  }
+
   public void setPadding(int paddingSize) {
     this.paddingSize = paddingSize;
     this.padding = new byte[paddingSize];
+  }
+
+  @Override
+  public boolean isTombstone() {
+    return tombstone;
   }
 
   /**
@@ -77,13 +82,7 @@ public class TestEntry extends Entry<TestEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(),
-        tombstone);
-  }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(getTerm()).writeBoolean(tombstone).writeInt(paddingSize).write(padding);
+    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(), tombstone);
   }
 
 }

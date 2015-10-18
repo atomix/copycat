@@ -254,6 +254,21 @@ class ClusterState {
   }
 
   /**
+   * Builds a list of all members.
+   */
+  Collection<Address> buildMembers() {
+    List<Address> members = new ArrayList<>();
+    for (MemberState member : activeMembers) {
+      members.add(member.getAddress());
+    }
+    for (MemberState member : passiveMembers) {
+      members.add(member.getAddress());
+    }
+    members.add(address);
+    return members;
+  }
+
+  /**
    * Builds a list of active members.
    */
   Collection<Address> buildActiveMembers() {

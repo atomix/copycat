@@ -24,7 +24,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=278)
+@SerializeWith(id=211)
 public class ConnectRequest extends SessionRequest<ConnectRequest> {
 
   /**

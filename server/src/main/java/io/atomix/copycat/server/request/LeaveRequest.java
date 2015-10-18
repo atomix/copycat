@@ -30,7 +30,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=270)
+@SerializeWith(id=221)
 public class LeaveRequest extends AbstractRequest<LeaveRequest> {
 
   /**

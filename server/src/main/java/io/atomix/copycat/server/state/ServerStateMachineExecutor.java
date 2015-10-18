@@ -47,7 +47,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private final List<ServerScheduledTask> tasks = new ArrayList<>();
   private final List<ServerScheduledTask> complete = new ArrayList<>();
   private final Map<Class, Function> operations = new HashMap<>();
-  private Function allOperation;
   private long timestamp;
 
   ServerStateMachineExecutor(ServerStateMachineContext context, ThreadContext executor) {
@@ -102,14 +101,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
 
       // If a parent operation function was found, store the function for future reference.
-      if (function != null) {
-        operations.put(commit.type(), function);
-      }
-    }
-
-    // If no operation function was found, use the all operation and store it as the permanent operation.
-    if (function == null) {
-      function = allOperation;
       if (function != null) {
         operations.put(commit.type(), function);
       }
@@ -182,12 +173,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
     Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
-  }
-
-  @Override
-  public StateMachineExecutor register(Function<Commit<? extends Operation<?>>, ?> callback) {
-    allOperation = Assert.notNull(callback, "callback");
-    return this;
   }
 
   @Override

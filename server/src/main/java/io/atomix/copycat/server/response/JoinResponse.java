@@ -32,7 +32,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=269)
+@SerializeWith(id=220)
 public class JoinResponse extends AbstractResponse<JoinResponse> {
 
   /**

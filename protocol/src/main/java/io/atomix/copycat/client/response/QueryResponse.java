@@ -22,7 +22,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=259)
+@SerializeWith(id=208)
 public class QueryResponse extends OperationResponse<QueryResponse> {
 
   /**

@@ -23,7 +23,6 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
@@ -118,75 +117,7 @@ import java.util.function.Function;
  * @see Storage
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class CopycatServer implements Managed<CopycatServer> {
-
-  /**
-   * Raft server state types.
-   * <p>
-   * States represent the context of the server's internal state machine. Throughout the lifetime of a server,
-   * the server will periodically transition between states based on requests, responses, and timeouts.
-   *
-   * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
-   */
-  public enum State {
-
-    /**
-     * Represents the state of an inactive server.
-     * <p>
-     * All servers start in this state and return to this state when {@link CopycatServer#close() stopped}.
-     */
-    INACTIVE,
-
-    /**
-     * Represents the state of a server attempting to join a cluster.
-     * <p>
-     * When a server is {@link CopycatServer#open() started}, the first state to which it transitions is the join state.
-     * During that period, the server will attempt to join an existing cluster.
-     */
-    JOIN,
-
-    /**
-     * Represents the state of a server attempting to leave a cluster.
-     * <p>
-     * When a server is {@link CopycatServer#close() stopped}, the server will first transition to the leave state and
-     * remove itself from the cluster configuration during this period.
-     */
-    LEAVE,
-
-    /**
-     * Represents the state of a server in the process of catching up its log.
-     * <p>
-     * Upon successfully joining an existing cluster, the server will transition to the passive state and remain there
-     * until the leader determines that the server has caught up enough to be promoted to a full member.
-     */
-    PASSIVE,
-
-    /**
-     * Represents the state of a server participating in normal log replication.
-     * <p>
-     * The follower state is a standard Raft state in which the server receives replicated log entries from the leader.
-     */
-    FOLLOWER,
-
-    /**
-     * Represents the state of a server attempting to become the leader.
-     * <p>
-     * When a server in the follower state fails to receive communication from a valid leader for some time period,
-     * the follower will transition to the candidate state. During this period, the candidate requests votes from
-     * each of the other servers in the cluster. If the candidate wins the election by receiving votes from a majority
-     * of the cluster, it will transition to the leader state.
-     */
-    CANDIDATE,
-
-    /**
-     * Represents the state of a server which is actively coordinating and replicating logs with other servers.
-     * <p>
-     * Leaders are responsible for handling and replicating writes from clients. Note that more than one leader can
-     * exist at any given time, but Raft guarantees that no two leaders will exist for the same {@link CopycatServer#term()}.
-     */
-    LEADER
-
-  }
+public class CopycatServer implements RaftServer {
 
   /**
    * Returns a new Raft server builder.
@@ -229,7 +160,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   private final ServerContext context;
-  private CompletableFuture<CopycatServer> openFuture;
+  private CompletableFuture<RaftServer> openFuture;
   private CompletableFuture<Void> closeFuture;
   private ServerState state;
   private final Duration electionTimeout;
@@ -245,26 +176,12 @@ public class CopycatServer implements Managed<CopycatServer> {
     this.sessionTimeout = sessionTimeout;
   }
 
-  /**
-   * Returns the current Raft term.
-   * <p>
-   * The term is a monotonically increasing number that essentially acts as a logical time for the cluster. For any
-   * given term, Raft guarantees that only one {@link #leader()} can be elected, but note that a leader may also
-   * not yet exist for the term.
-   *
-   * @return The current Raft term.
-   */
+  @Override
   public long term() {
     return state.getTerm();
   }
 
-  /**
-   * Returns the current Raft leader.
-   * <p>
-   * If no leader has been elected, the leader address will be {@code null}.
-   *
-   * @return The current Raft leader or {@code null} if this server does not know of any leader.
-   */
+  @Override
   public Address leader() {
     return state.getLeader();
   }
@@ -286,11 +203,12 @@ public class CopycatServer implements Managed<CopycatServer> {
     return state.onLeaderElection(listener);
   }
 
-  /**
-   * Returns the Raft server state.
-   *
-   * @return The Raft server state.
-   */
+  @Override
+  public Collection<Address> members() {
+    return state.getMembers();
+  }
+
+  @Override
   public State state() {
     return state.getState();
   }
@@ -320,49 +238,20 @@ public class CopycatServer implements Managed<CopycatServer> {
     return state.onStateChange(listener);
   }
 
-  /**
-   * Returns the server execution context.
-   * <p>
-   * The thread context is the event loop that this server uses to communicate other Raft servers.
-   * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
-   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
-   * <p>
-   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
-   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
-   * are not thread safe, so to use the context serializer, users should clone it:
-   * <pre>
-   *   {@code
-   *   Serializer serializer = server.threadContext().serializer().clone();
-   *   Buffer buffer = serializer.writeObject(myObject).flip();
-   *   }
-   * </pre>
-   *
-   * @return The Raft context.
-   */
-  public ThreadContext threadContext() {
+  @Override
+  public ThreadContext context() {
     return state.getThreadContext();
   }
 
-  /**
-   * Starts the Raft server asynchronously.
-   * <p>
-   * When the server is started, the server will attempt to search for an existing cluster by contacting all of
-   * the members in the provided members list. If no existing cluster is found, the server will immediately transition
-   * to the {@link State#FOLLOWER} state and continue normal Raft protocol operations. If a cluster is found, the server
-   * will attempt to join the cluster. Once the server has joined or started a cluster and a leader has been found,
-   * the returned {@link CompletableFuture} will be completed.
-   *
-   * @return A completable future to be completed once the server has joined the cluster and a leader has been found.
-   */
   @Override
-  public CompletableFuture<CopycatServer> open() {
+  public CompletableFuture<RaftServer> open() {
     if (open)
       return CompletableFuture.completedFuture(this);
 
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          Function<ServerState, CompletionStage<CopycatServer>> completionFunction = state -> {
+          Function<ServerState, CompletionStage<RaftServer>> completionFunction = state -> {
             openFuture = null;
             this.state = state;
             state.setElectionTimeout(electionTimeout)
@@ -373,7 +262,7 @@ public class CopycatServer implements Managed<CopycatServer> {
             if (state.getLeader() != null) {
               return CompletableFuture.completedFuture(this);
             } else {
-              CompletableFuture<CopycatServer> future = new CompletableFuture<>();
+              CompletableFuture<RaftServer> future = new CompletableFuture<>();
               electionListener = state.onLeaderElection(leader -> {
                 if (electionListener != null) {
                   open = true;

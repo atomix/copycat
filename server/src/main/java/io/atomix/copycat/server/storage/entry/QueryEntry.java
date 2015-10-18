@@ -29,7 +29,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=307)
+@SerializeWith(id=234)
 public class QueryEntry extends OperationEntry<QueryEntry> {
   private long version;
   private Query query;

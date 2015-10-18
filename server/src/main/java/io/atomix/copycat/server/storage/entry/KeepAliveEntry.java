@@ -26,7 +26,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=304)
+@SerializeWith(id=232)
 public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   private long commandSequence;
   private long eventVersion;

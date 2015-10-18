@@ -16,9 +16,9 @@
 
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.client.Operation;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.session.Sessions;
 
@@ -90,21 +90,12 @@ public interface StateMachineExecutor extends ThreadContext {
    * Returns the state machine context.
    * <p>
    * The context is reflective of the current position and state of the Raft state machine. In particular,
-   * it exposes the current approximate {@link StateMachineContext#now() time} and all open
+   * it exposes the current approximate {@link StateMachineContext#clock() time} and all open
    * {@link Sessions}.
    *
    * @return The state machine context.
    */
   StateMachineContext context();
-
-  /**
-   * Registers a global operation callback.
-   *
-   * @param callback The operation callback.
-   * @return The state machine executor.
-   * @throws NullPointerException if {@code callback} is null
-   */
-  StateMachineExecutor register(Function<Commit<? extends Operation<?>>, ?> callback);
 
   /**
    * Registers a void operation callback.

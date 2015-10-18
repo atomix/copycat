@@ -31,7 +31,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=275)
+@SerializeWith(id=226)
 public class VoteResponse extends AbstractResponse<VoteResponse> {
 
   /**

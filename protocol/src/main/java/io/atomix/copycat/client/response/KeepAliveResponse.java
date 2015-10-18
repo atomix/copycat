@@ -31,7 +31,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=263)
+@SerializeWith(id=204)
 public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
 
   /**

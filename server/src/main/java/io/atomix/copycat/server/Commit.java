@@ -102,7 +102,8 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * Cleans the commit from the underlying log.
    * <p>
    * When the commit is cleaned, it will be removed from the log and may be removed permanently from disk at some
-   * arbitrary point in the future.
+   * arbitrary point in the future. Cleaning the commit effectively closes it, so once this method is called there
+   * is no need to call {@link #close()}.
    */
   void clean();
 
