@@ -35,7 +35,7 @@ import java.util.concurrent.CompletableFuture;
 abstract class AbstractState implements Managed<AbstractState> {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerState context;
-  private volatile boolean open = true;
+  private boolean open = true;
 
   protected AbstractState(ServerState context) {
     this.context = context;

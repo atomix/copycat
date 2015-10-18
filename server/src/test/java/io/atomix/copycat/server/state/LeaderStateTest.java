@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.copycat.server.RaftServer;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -43,12 +44,6 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
    * Tests that a leader steps down when it receives a higher term.
    */
   public void testLeaderStepsDownAndVotesOnHigherTerm() throws Throwable {
-    serverState.onStateChange(state -> {
-      if (state == CopycatServer.State.FOLLOWER) {
-        resume();
-      }
-    });
-
     runOnServer(() -> {
       serverState.setTerm(1).setLeader(0);
       VoteRequest request = VoteRequest.builder()
@@ -64,9 +59,8 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
       threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
+      threadAssertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
     });
-
-    await(5000);
   }
 
   /**
