@@ -29,7 +29,6 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Event;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
@@ -45,7 +44,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * Client session.
+ * Handles submission of client {@link Command commands} and {@link Query queries}.
+ * <p>
+ * The client session handles all aspects of managing a single session for a client. When the session is opened,
+ * it attempts to find a server in the provided servers list and {@link RegisterRequest register} a new session. Once
+ * the session has been registered, it begins sending periodic {@link KeepAliveRequest keep-alive requests} and begins
+ * submitting {@link Command commands} and {@link Query queries} to the cluster.
+ * <p>
+ * Sessions can communicate with any server in the cluster, but they'll attempt to find the best server.
+ * In the event that the session becomes disconnected from the cluster or otherwise can't successfully commit a
+ * keep-alive request, the session will attempt to find a better server with which to communicate. If the session
+ * fails to communicate with the cluster for more than its session timeout, it will assume it expired and the session
+ * will be closed.
+ * <p>
+ * The session is responsible for coordinating with the cluster to ensure consistency constraints are met. Each command
+ * and query submitted to the cluster and each of their responses contains contextual information that helps servers
+ * ensure operations are applied in the proper order and at the proper time. In the event that the session expires
+ * or is closed, consistency guarantees are lost for operations submitted on the session.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

@@ -99,6 +99,11 @@ public interface StateMachineExecutor extends ThreadContext {
 
   /**
    * Registers a void operation callback.
+   * <p>
+   * The registered callback will be called when operations of {@code type} are applied to the state machine.
+   * Because no return value is provided for {@code void} callbacks, the output of the operation will be {@code null}.
+   * <p>
+   * The callback is guaranteed to always be executed in the same thread.
    *
    * @param type The operation type.
    * @param callback The operation callback.
@@ -110,6 +115,12 @@ public interface StateMachineExecutor extends ThreadContext {
 
   /**
    * Registers an operation callback.
+   * <p>
+   * The registered callback will be called when operations of {@code type} are applied to the state machine.
+   * The return value of the provided callback must be synchronous (not a {@link java.util.concurrent.Future} or
+   * {@link java.util.concurrent.CompletableFuture}) and will be sent back to the client as the operation output.
+   * <p>
+   * The callback is guaranteed to always be executed in the same thread.
    *
    * @param type The operation type.
    * @param callback The operation callback.

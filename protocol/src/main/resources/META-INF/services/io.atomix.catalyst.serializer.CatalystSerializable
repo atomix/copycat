@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-io.atomix.copycat.client.Event
+io.atomix.copycat.client.session.Event
 io.atomix.copycat.client.request.CommandRequest
 io.atomix.copycat.client.response.CommandResponse
 io.atomix.copycat.client.request.KeepAliveRequest

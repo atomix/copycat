@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.client;
+package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -22,7 +22,12 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 
 /**
- * Client event.
+ * Transports a named event from a server to a client {@link io.atomix.copycat.client.session.Session}.
+ * <p>
+ * Events are published by server state machines to client sessions as event objects. Each event sent to a session is
+ * associated with a {@link String} event name and value.
+ *
+ * @see Session
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

@@ -21,7 +21,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Event;
+import io.atomix.copycat.client.session.Event;
 import io.atomix.copycat.client.request.PublishRequest;
 import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;

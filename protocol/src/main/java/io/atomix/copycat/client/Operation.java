@@ -20,7 +20,11 @@ import java.io.Serializable;
 /**
  * Base type for Raft state operations.
  * <p>
- * This is a base interface for operations on the Raft cluster state.
+ * This is a base interface for operations on the Raft cluster state. Operations are submitted to Raft clusters
+ * by clients via a {@link io.atomix.copycat.client.session.Session}. All operations are sent over the network
+ * and thus must be serializable by the client and by all servers in the cluster. By default, Java serialization
+ * is used. However, it is recommended that operations implement {@link io.atomix.catalyst.serializer.CatalystSerializable}
+ * or register a {@link io.atomix.catalyst.serializer.TypeSerializer} for better performance.
  *
  * @see Command
  * @see Query

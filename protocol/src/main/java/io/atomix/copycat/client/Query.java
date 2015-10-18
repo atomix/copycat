@@ -16,19 +16,34 @@
 package io.atomix.copycat.client;
 
 /**
- * Raft state queries read system state.
+ * Base interface for operations that read system state.
  * <p>
  * Queries are submitted by clients to a Raft server to read Raft cluster-wide state. In contrast to
- * {@link Command commands}, queries allow for more flexible
- * {@link ConsistencyLevel consistency levels} that trade consistency for performance.
+ * {@link Command commands}, queries allow for more flexible {@link ConsistencyLevel consistency levels} that trade
+ * consistency for performance.
+ * <p>
+ * <b>Consistency levels</b>
  * <p>
  * All queries must specify a {@link #consistency()} with which to execute the query. The provided consistency level
- * dictates how queries are submitted to the Raft cluster. Higher consistency levels like
- * {@link ConsistencyLevel#LINEARIZABLE} and {@link ConsistencyLevel#BOUNDED_LINEARIZABLE}
- * are forwarded to the cluster leader, while lower levels are allowed to read from followers for higher throughput.
+ * dictates how queries are submitted to the Raft cluster. When a query is submitted to the cluster, the query is
+ * sent in a message to the server to which the client is currently connected. The server handles the query requests
+ * based on the configured {@link io.atomix.copycat.client.Query.ConsistencyLevel}. For lower consistency levels
+ * like {@link ConsistencyLevel#CAUSAL} or {@link ConsistencyLevel#SEQUENTIAL}, followers are allowed to execute
+ * queries with certain constraints for faster reads. For higher consistency levels like {@link ConsistencyLevel#LINEARIZABLE}
+ * and {@link ConsistencyLevel#BOUNDED_LINEARIZABLE}, queries are forwarded to the cluster leader. See the
+ * {@link io.atomix.copycat.client.Query.ConsistencyLevel} documentation for more info.
  * <p>
  * By default, all queries should use the strongest consistency level, {@link ConsistencyLevel#LINEARIZABLE}.
  * It is essential that users understand the trade-offs in the various consistency levels before using them.
+ * <p>
+ * <b>Serialization</b>
+ * <p>
+ * Commands must be serializable both by the client and by all servers in the cluster. By default, all operations use
+ * Java serialization. However, default serialization in slow because it requires the full class name and does not allocate
+ * memory efficiently. For this reason, it's recommended that commands implement {@link io.atomix.catalyst.serializer.CatalystSerializable}
+ * or register a custom {@link io.atomix.catalyst.serializer.TypeSerializer} for better performance. Serializable types
+ * can be registered in a {@code META-INF/services/io.atomix.catalyst.serializer.CatalystSerializable} service loader file
+ * or on the associated client/server {@link io.atomix.catalyst.serializer.Serializer} instance.
  *
  * @see ConsistencyLevel
  *

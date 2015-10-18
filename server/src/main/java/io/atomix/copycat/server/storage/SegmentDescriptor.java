@@ -25,27 +25,29 @@ import io.atomix.catalyst.util.Assert;
  * <p>
  * The segment descriptor manages metadata related to a single segment of the log. Descriptors are stored within the
  * first {@code 48} bytes of each segment in the following order:
- * - {@code id} (64-bit signed integer) - A unique segment identifier. This is a monotonically increasing number within
- *   each log. Segments with in-sequence identifiers should contain in-sequence indexes.
- * - {@code index} (64-bit signed integer) - The effective first index of the segment. This indicates the index at which
- *   the first entry should be written to the segment. Indexes are monotonically increasing thereafter.
- * - {@code range} (64-bit signed integer) - The effective length of the segment. Regardless of the actual number of
+ * <ul>
+ *   <li>{@code id} (64-bit signed integer) - A unique segment identifier. This is a monotonically increasing number within
+ *   each log. Segments with in-sequence identifiers should contain in-sequence indexes.</li>
+ *   <li>{@code index} (64-bit signed integer) - The effective first index of the segment. This indicates the index at which
+ *   the first entry should be written to the segment. Indexes are monotonically increasing thereafter.</li>
+ *   <li>{@code range} (64-bit signed integer) - The effective length of the segment. Regardless of the actual number of
  *   entries in the segment, the range indicates the total number of allowed entries within each segment. If a segment's
- *   index is {@code 1} and its range is {@code 10} then the next segment should start at index {@code 11}.
- * - {@code version} (64-bit signed integer) - The version of the segment. Versions are monotonically increasing
+ *   index is {@code 1} and its range is {@code 10} then the next segment should start at index {@code 11}.</li>
+ *   <li>{@code version} (64-bit signed integer) - The version of the segment. Versions are monotonically increasing
  *   starting at {@code 1}. Versions will only be incremented whenever the segment is rewritten to another memory/disk
- *   space, e.g. after log compaction.
- * - {@code updated} (64-bit signed integer) - The last update to the segment in terms of milliseconds since the epoch.
+ *   space, e.g. after log compaction.</li>
+ *   <li>{@code updated} (64-bit signed integer) - The last update to the segment in terms of milliseconds since the epoch.
  *   When the segment is first constructed, the {@code updated} time is {@code 0}. Once all entries in the segment have
  *   been committed, the {@code updated} time should be set to the current time. Log compaction should not result in a
- *   change to {@code updated}.
- * - {@code maxEntrySize} (32-bit signed integer) - The maximum length in bytes of entry values allowed by the segment.
- * - {@code entries} (32-bit signed integer) - The total number of expected entries in the segment. This is the final
+ *   change to {@code updated}.</li>
+ *   <li>{@code maxEntrySize} (32-bit signed integer) - The maximum length in bytes of entry values allowed by the segment.</li>
+ *   <li>{@code entries} (32-bit signed integer) - The total number of expected entries in the segment. This is the final
  *   number of entries allowed within the segment both before and after compaction. This entry count is used to determine
- *   the count of internal indexing and deduplication facilities.
- * - {@code locked} (8-bit boolean) - A boolean indicating whether the segment is locked. Segments will be locked once
+ *   the count of internal indexing and deduplication facilities.</li>
+ *   <li>{@code locked} (8-bit boolean) - A boolean indicating whether the segment is locked. Segments will be locked once
  *   all entries have been committed to the segment. The lock state of each segment is used to determine log compaction
- *   and recovery behavior.
+ *   and recovery behavior.</li>
+ * </ul>
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

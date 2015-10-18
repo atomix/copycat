@@ -30,9 +30,9 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Provides an interface for submitting {@link Command commands} and {@link Query} queries to the Raft cluster.
+ * Provides a feature complex {@link RaftClient}.
  * <p>
- * Raft clients can be constructed using the {@link CopycatClient.Builder}. To create a new client builder, use the
+ * Copycat clients can be constructed using the {@link CopycatClient.Builder}. To create a new client builder, use the
  * static {@link #builder(Address...)} method, passing one or more server {@link Address}:
  * <pre>
  *   {@code
@@ -42,7 +42,7 @@ import java.util.concurrent.CompletableFuture;
  * By default, the client will attempt to use the {@code NettyTransport} to communicate with the cluster. See the {@link CopycatClient.Builder}
  * documentation for client configuration options.
  * <p>
- * Raft clients interact with one or more nodes in a Raft cluster through a session. When the client is {@link #open() opened},
+ * Copycat clients interact with one or more nodes in a cluster through a session. When the client is {@link #open() opened},
  * the client will attempt to one of the known member {@link Address} provided to the builder. As long as the client can
  * communicate with at least one correct member of the cluster, it can open a session. Once the client is able to register a
  * {@link Session}, it will receive an updated list of members for the entire cluster and thereafter be allowed to communicate

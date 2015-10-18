@@ -27,7 +27,45 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Raft client.
+ * Provides an interface for submitting {@link Command commands} and {@link Query} queries to the Raft cluster.
+ * <p>
+ * Raft clients are responsible for connecting to the cluster and submitting {@link Command commands} and {@link Query queries}
+ * that operate on the cluster's replicated state machine. Raft clients interact with one or more nodes in a Raft cluster
+ * through a session. When the client is {@link #open() opened}, the client will attempt to one of the known member
+ * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
+ * cluster, it can open a session. Once the client is able to register a {@link Session}, it will receive an updated list
+ * of members for the entire cluster and thereafter be allowed to communicate with all servers.
+ * <p>
+ * Sessions are created by registering the client through the cluster leader. Clients always connect to a single node in the
+ * cluster, and in the event of a node failure or partition, the client will detect the failure and reconnect to a correct server.
+ * <p>
+ * Clients periodically send <em>keep-alive</em> requests to the server to which they're connected. The keep-alive request
+ * interval is determined by the cluster's session timeout, and the session timeout is determined by the leader's configuration
+ * at the time that the session is registered. This ensures that clients cannot be misconfigured with a keep-alive interval
+ * greater than the cluster's session timeout.
+ * <p>
+ * Clients communicate with the distributed state machine by submitting {@link Command commands} and {@link Query queries} to
+ * the cluster through the {@link #submit(Command)} and {@link #submit(Query)} methods respectively:
+ * <pre>
+ *   {@code
+ *   client.submit(new PutCommand("foo", "Hello world!")).thenAccept(result -> {
+ *     System.out.println("Result is " + result);
+ *   });
+ *   }
+ * </pre>
+ * All client methods are fully asynchronous and return {@link CompletableFuture}. To block until a method is complete, use
+ * the {@link CompletableFuture#get()} or {@link CompletableFuture#join()} methods.
+ * <p>
+ * Sessions work to provide linearizable semantics for client {@link Command commands}. When a command is submitted to the cluster,
+ * the command will be forwarded to the leader where it will be logged and replicated. Once the command is stored on a majority
+ * of servers, the leader will apply it to its state machine and respond according to the command's {@link Command#consistency()}.
+ * See the {@link Command.ConsistencyLevel} documentation for more info.
+ * <p>
+ * Sessions also allow {@link Query queries} (read-only requests) submitted by the client to optionally be executed on follower
+ * nodes. When a query is submitted to the cluster, the query's {@link Query#consistency()} will be used to determine how the
+ * query is handled. For queries with stronger consistency levels, they will be forwarded to the cluster's leader. For weaker
+ * consistency queries, they may be executed on follower nodes according to the consistency level constraints. See the
+ * {@link Query.ConsistencyLevel} documentation for more info.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
