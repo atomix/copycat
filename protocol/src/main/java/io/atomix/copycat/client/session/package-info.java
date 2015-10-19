@@ -16,6 +16,11 @@
 
 /**
  * Classes and interfaces for managing client sessions.
+ * <p>
+ * Sessions represent the context in which clients communicate with a Raft cluster. Sessions allow clusters
+ * to process requests according to client state. For instance, sessions are responsible for ensuring operations
+ * are executed in the order specified by the client (sequential consistency) and operations are only applied
+ * to the replicated state machine once (linearizability).
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
