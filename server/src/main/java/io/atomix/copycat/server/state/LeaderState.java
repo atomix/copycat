@@ -992,13 +992,14 @@ final class LeaderState extends ActiveState {
         long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
 
         int size = 0;
-        while (size < MAX_BATCH_SIZE && index <= context.getLog().lastIndex()) {
+        while (index <= context.getLog().lastIndex()) {
           Entry entry = context.getLog().get(index);
-          if (entry != null && size + entry.size() <= MAX_BATCH_SIZE) {
+          if (entry != null) {
+            if (size + entry.size() > MAX_BATCH_SIZE) {
+              break;
+            }
             size += entry.size();
             builder.addEntry(entry);
-          } else {
-            break;
           }
           index++;
         }
