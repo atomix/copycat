@@ -28,9 +28,8 @@ class MemberState {
   private int index;
   private long matchIndex;
   private long nextIndex;
-  private long attemptTime;
-  private int attemptCount;
   private long commitTime;
+  private long commitStartTime;
 
   public MemberState(Address address) {
     this.address = Assert.notNull(address, "address");
@@ -106,62 +105,32 @@ class MemberState {
   }
 
   /**
-   * Returns the member commit attempt time.
-   *
-   * @return The member commit attempt time.
-   */
-  long getAttemptTime() {
-    return attemptTime;
-  }
-
-  /**
-   * Sets the member commit attempt time.
-   *
-   * @param attemptTime The member commit attempt time.
-   * @return The member state.
-   */
-  MemberState setAttemptTime(long attemptTime) {
-    this.attemptTime = attemptTime;
-    return this;
-  }
-
-  /**
-   * Returns the commit attempt count.
-   *
-   * @return The commit attempt count.
-   */
-  int getAttemptCount() {
-    return attemptCount;
-  }
-
-  /**
-   * Resets the commit attempt count.
-   *
-   * @return The member state.
-   */
-  MemberState resetAttemptCount() {
-    this.attemptCount = 0;
-    this.attemptTime = 0;
-    return this;
-  }
-
-  /**
-   * Increments the commit attempt count.
-   *
-   * @return The member state.
-   */
-  MemberState incrementAttemptCount() {
-    attemptCount++;
-    return this;
-  }
-
-  /**
    * Returns the member commit time.
    *
    * @return The member commit time.
    */
   long getCommitTime() {
     return commitTime;
+  }
+
+  /**
+   * Returns the member commit start time.
+   *
+   * @return The member commit start time.
+   */
+  long getCommitStartTime() {
+    return commitStartTime;
+  }
+
+  /**
+   * Sets the member commit start time.
+   *
+   * @param startTime The member commit attempt start time.
+   * @return The member state.
+   */
+  MemberState setCommitStartTime(long startTime) {
+    this.commitStartTime = startTime;
+    return this;
   }
 
   /**
