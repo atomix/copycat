@@ -26,21 +26,21 @@ to verify it maintains linearizability in a number of different failure scenario
 Copycat is a fault-tolerant framework that provides strong consistency guarantees, and as such we take the responsibility
 to test these claims and document the implementation very seriously. Copycat's implementation of the
 [Raft consensus algorithm](https://raft.github.io/) is well tested, well documented, and verified by
-[Jepsen](https://github.com/atomix/atomix-jepsen) testing. Early Jepsen testing of both Copycat is now complete,
+[Jepsen testing](https://github.com/atomix/atomix-jepsen). Early Jepsen testing of Copycat is now complete,
 and an early release of both Copycat and [Atomix][Atomix] will be pushed to Maven Central in the coming days. In the
 meantime, snapshots are frequently pushed. Documentation for most of Copycat's implementation of the Raft algorithm
 is [available on the Copycat website](http://atomix.github.io/copycat/user-manual/internals/), and users are encouraged
-to explore the [Copycat Javadoc][Javadoc] which is also heavily documented. All documentation remains under continued
-development, and websites for both projects will continue to be updated until and after a release.
+to explore the [Javadoc][Javadoc] which is also heavily documented. All documentation remains under continued
+development, and websites for both Copycat and [Atomix][Atomix] will continue to be updated until and after a release.
 
 ## Examples
 
 The [Atomix][Atomix] project is a collection of standalone Copycat `StateMachine`s and proxies that can be
 multiplexed on a single Raft replicated log.
-* [collections](https://github.com/atomix/atomix/blob/master/collections/src/main/java/io/atomix/collections/state/MapState.java)
-* [leader elections](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/LeaderElectionState.java)
-* [locks](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/LockState.java)
-* [group membership](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/MembershipGroupState.java)
+* [Distributed collections](https://github.com/atomix/atomix/blob/master/collections/src/main/java/io/atomix/collections/state/MapState.java)
+* [Leader elections](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/LeaderElectionState.java)
+* [Locks](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/LockState.java)
+* [Group membership](https://github.com/atomix/atomix/blob/master/coordination/src/main/java/io/atomix/coordination/state/MembershipGroupState.java)
 
 #### [Website][Website] • [Javadoc][Javadoc] • [Atomix][Atomix] • [Jepsen Tests](https://github.com/atomix/atomix-jepsen) • [Google Group][Google group]
 
