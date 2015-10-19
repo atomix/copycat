@@ -110,6 +110,16 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests keeping a client session alive.
+   */
+  public void testClientKeepAlive() throws Throwable {
+    createServers(3);
+    CopycatClient client = createClient();
+    Thread.sleep(Duration.ofSeconds(10).toMillis());
+    threadAssertTrue(client.session().isOpen());
+  }
+
+  /**
    * Tests submitting a command.
    */
   public void testOneNodeSubmitCommandWithNoneConsistency() throws Throwable {

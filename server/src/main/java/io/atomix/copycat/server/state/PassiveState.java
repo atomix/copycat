@@ -296,6 +296,8 @@ class PassiveState extends AbstractState {
             future.completeExceptionally(responseError);
           }
         });
+      } else {
+        future.completeExceptionally(connectError);
       }
     });
     return future;

@@ -21,7 +21,7 @@ to verify it maintains linearizability in a number of different failure scenario
 
 *For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/internals/)*
 
-#### Project status
+### Project status
 
 Copycat is a fault-tolerant framework that provides strong consistency guarantees, and as such we take the responsibility
 to test these claims and document the implementation very seriously. Copycat's implementation of the
