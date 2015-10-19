@@ -27,14 +27,15 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.storage.Log;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -52,7 +53,6 @@ public class ServerState {
   private final StateMachine userStateMachine;
   private final Address address;
   private final ClusterState cluster;
-  private final Map<Integer, Address> members;
   private final Log log;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
@@ -69,9 +69,8 @@ public class ServerState {
   @SuppressWarnings("unchecked")
   ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.address = Assert.notNull(address, "address");
-    this.members = new HashMap<>();
-    members.forEach(m -> this.members.put(m.hashCode(), m));
-    this.members.put(address.hashCode(), address);
+    Set<Address> activeMembers = new HashSet<>(members);
+    activeMembers.add(address);
     this.cluster = new ClusterState(this, address);
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
@@ -82,7 +81,7 @@ public class ServerState {
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
 
-    cluster.configure(0, this.members.values(), Collections.EMPTY_LIST);
+    cluster.configure(0, activeMembers, Collections.EMPTY_LIST);
   }
 
   /**
@@ -201,7 +200,7 @@ public class ServerState {
   ServerState setLeader(int leader) {
     if (this.leader == 0) {
       if (leader != 0) {
-        Address address = members.get(leader);
+        Address address = getMember(leader);
         Assert.state(address != null, "unknown leader: ", leader);
         this.leader = leader;
         this.lastVotedFor = 0;
@@ -210,7 +209,7 @@ public class ServerState {
       }
     } else if (leader != 0) {
       if (this.leader != leader) {
-        Address address = members.get(leader);
+        Address address = getMember(leader);
         Assert.state(address != null, "unknown leader: ", leader);
         this.leader = leader;
         this.lastVotedFor = 0;
@@ -292,8 +291,8 @@ public class ServerState {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
     Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
     Assert.stateNot (leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
-    Address address = members.get(candidate);
-    Assert.state(address != null, "unknown candidate: ", candidate);
+    Address address = getMember(candidate);
+    Assert.state(address != null, "unknown candidate: %d", candidate);
     this.lastVotedFor = candidate;
 
     if (candidate != 0) {
@@ -449,7 +448,7 @@ public class ServerState {
         throw new IllegalStateException("failed to close Raft state", e);
       }
     }
-        
+
     // Force state transitions to occur synchronously in order to prevent race conditions.
     try {
       this.state = createState(state);
@@ -484,6 +483,17 @@ public class ServerState {
       default:
         throw new AssertionError();
     }
+  }
+
+  /**
+   * Returns the cluster member with the corresponding id.
+   */
+  private Address getMember(int id) {
+    if (this.address.hashCode() == id) {
+      return this.address;
+    }
+    MemberState member = cluster.getMember(id);
+    return member != null ? member.getAddress() : null;
   }
 
   @Override
