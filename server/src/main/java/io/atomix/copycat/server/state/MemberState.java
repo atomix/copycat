@@ -30,6 +30,7 @@ class MemberState {
   private long nextIndex;
   private long commitTime;
   private long commitStartTime;
+  private int failures;
 
   public MemberState(Address address) {
     this.address = Assert.notNull(address, "address");
@@ -141,6 +142,34 @@ class MemberState {
    */
   MemberState setCommitTime(long commitTime) {
     this.commitTime = commitTime;
+    return this;
+  }
+
+  /**
+   * Returns the member failure count.
+   *
+   * @return The member failure count.
+   */
+  int getFailureCount() {
+    return failures;
+  }
+
+  /**
+   * Increments the member failure count.
+   *
+   * @return The member state.
+   */
+  int incrementFailureCount() {
+    return ++failures;
+  }
+
+  /**
+   * Resets the member failure count.
+   *
+   * @return The member state.
+   */
+  MemberState resetFailureCount() {
+    failures = 0;
     return this;
   }
 

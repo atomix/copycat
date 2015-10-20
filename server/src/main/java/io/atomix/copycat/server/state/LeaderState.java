@@ -21,6 +21,7 @@ import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.client.request.*;
@@ -875,13 +876,14 @@ final class LeaderState extends ActiveState {
       if (commitFuture == null) {
         return;
       }
+
       boolean completed = false;
       if (error != null && member.getCommitStartTime() == this.commitTime) {
         int activeMemberSize = context.getCluster().getActiveMembers().size() + (context.getCluster().isActive() ? 1 : 0);
         int quorumSize = context.getCluster().getQuorum();
         // If a quorum of successful responses cannot be achieved, fail this commit.
         if (activeMemberSize - quorumSize + 1 <= ++commitFailures) {
-          commitFuture.completeExceptionally(new RaftException(RaftError.Type.INTERNAL_ERROR, "Failed to reach consensus"));
+          commitFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
           completed = true;
         }
       } else {
@@ -895,6 +897,7 @@ final class LeaderState extends ActiveState {
           completed = true;
         }
       }
+
       if (completed) {
         commitFailures = 0;
         commitFuture = nextCommitFuture;
@@ -1065,6 +1068,9 @@ final class LeaderState extends ActiveState {
           if (error == null) {
             LOGGER.debug("{} - Received {} from {}", context.getAddress(), response, member.getAddress());
             if (response.status() == Response.Status.OK) {
+              // Reset the member failure count.
+              member.resetFailureCount();
+
               // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
               commitTime(member, null);
 
@@ -1100,7 +1106,10 @@ final class LeaderState extends ActiveState {
               context.setLeader(0);
               transition(CopycatServer.State.FOLLOWER);
             } else {
-              LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
+              int failures = member.incrementFailureCount();
+              if (failures <= 3 || failures % 100 == 0) {
+                LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
+              }
             }
           } else {
             commitTime(member, error);
@@ -1114,7 +1123,10 @@ final class LeaderState extends ActiveState {
      * Fails an attempt to contact a member.
      */
     private void failAttempt(MemberState member, Throwable error) {
-      LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
+      int failures = member.incrementFailureCount();
+      if (failures <= 3 || failures % 100 == 0) {
+        LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
+      }
 
       // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
       // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
