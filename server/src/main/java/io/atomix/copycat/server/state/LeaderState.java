@@ -951,7 +951,9 @@ final class LeaderState extends ActiveState {
         // If the log is empty then send an empty commit.
         // If the next index hasn't yet been set then we send an empty commit first.
         // If the next index is greater than the last index then send an empty commit.
-        if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex()) {
+        // If the member failed to respond to recent communication send an empty commit. This
+        // helps avoid doing expensive work until we can ascertain the member is back up.
+        if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
           emptyCommit(member);
         } else {
           entriesCommit(member);
