@@ -26,6 +26,7 @@ import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.error.ConfigurationException;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
@@ -107,12 +108,18 @@ public class ServerContext implements Managed<ServerState> {
 
       state.onStateChange(state -> {
         if (this.state != null && state == CopycatServer.State.INACTIVE) {
-          server.close().whenCompleteAsync((r1, e1) -> {
+          boolean succeeded = !this.state.getCluster().isMember();
+
+          server.close().whenCompleteAsync((result, error) -> {
             context.close();
-            if (e1 != null) {
-              future.completeExceptionally(e1);
+            if (succeeded) {
+              if (error == null) {
+                future.complete(null);
+              } else {
+                future.completeExceptionally(error);
+              }
             } else {
-              future.complete(null);
+              future.completeExceptionally(new ConfigurationException("failed to leave the cluster"));
             }
           }, context.executor());
 

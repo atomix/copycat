@@ -15,15 +15,7 @@
  */
 package io.atomix.copycat.server.request;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.request.AbstractRequest;
-
-import java.util.Objects;
 
 /**
  * Protocol join request.
@@ -31,7 +23,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=209)
-public class JoinRequest extends AbstractRequest<JoinRequest> {
+public class JoinRequest extends ConfigurationRequest<JoinRequest> {
 
   /**
    * Returns a new join request builder.
@@ -52,91 +44,13 @@ public class JoinRequest extends AbstractRequest<JoinRequest> {
     return new Builder(request);
   }
 
-  private Address member;
-
-  /**
-   * Returns the joining member.
-   *
-   * @return The joining member.
-   */
-  public Address member() {
-    return member;
-  }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    serializer.writeObject(member, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    member = serializer.readObject(buffer);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), member);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof JoinRequest) {
-      JoinRequest request = (JoinRequest) object;
-      return request.member.equals(member);
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[member=%s]", getClass().getSimpleName(), member);
-  }
-
   /**
    * Join request builder.
    */
-  public static class Builder extends AbstractRequest.Builder<Builder, JoinRequest> {
+  public static class Builder extends ConfigurationRequest.Builder<Builder, JoinRequest> {
     protected Builder(JoinRequest request) {
       super(request);
     }
-
-    /**
-     * Sets the request member.
-     *
-     * @param member The request member.
-     * @return The request builder.
-     * @throws NullPointerException if {@code member} is null
-     */
-    public Builder withMember(Address member) {
-      request.member = Assert.notNull(member, "member");
-      return this;
-    }
-
-    /**
-     * @throws IllegalStateException if member is null
-     */
-    @Override
-    public JoinRequest build() {
-      super.build();
-      Assert.state(request.member != null, "member cannot be null");
-      return request;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }

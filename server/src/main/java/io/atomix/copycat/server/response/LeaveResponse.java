@@ -15,14 +15,7 @@
  */
 package io.atomix.copycat.server.response;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.response.AbstractResponse;
-
-import java.util.Objects;
 
 /**
  * Protocol leave response.
@@ -30,7 +23,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=212)
-public class LeaveResponse extends AbstractResponse<LeaveResponse> {
+public class LeaveResponse extends ConfigurationResponse<LeaveResponse> {
 
   /**
    * Returns a new leave response builder.
@@ -51,66 +44,13 @@ public class LeaveResponse extends AbstractResponse<LeaveResponse> {
     return new Builder(response);
   }
 
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    status = Status.forId(buffer.readByte());
-    if (status == Status.OK) {
-      error = null;
-    } else {
-      error = RaftError.forId(buffer.readByte());
-    }
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    buffer.writeByte(status.id());
-    if (status == Status.ERROR) {
-      buffer.writeByte(error.id());
-    }
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof LeaveResponse) {
-      LeaveResponse response = (LeaveResponse) object;
-      return response.status == status;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
-  }
-
   /**
    * Leave response builder.
    */
-  public static class Builder extends AbstractResponse.Builder<Builder, LeaveResponse> {
+  public static class Builder extends ConfigurationResponse.Builder<Builder, LeaveResponse> {
     protected Builder(LeaveResponse response) {
       super(response);
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

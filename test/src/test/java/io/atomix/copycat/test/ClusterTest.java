@@ -22,10 +22,7 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
-import io.atomix.copycat.server.Commit;
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.*;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import net.jodah.concurrentunit.ConcurrentTestCase;
@@ -105,6 +102,16 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testServerLeave() throws Throwable {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.get(0);
+    server.close().thenRun(this::resume);
+    await();
+  }
+
+  /**
+   * Tests leaving the leader from a cluster.
+   */
+  public void testLeaderLeave() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+    CopycatServer server = servers.stream().filter(s -> s.state() == RaftServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
     await();
   }
@@ -1007,11 +1014,21 @@ public class ClusterTest extends ConcurrentTestCase {
     port = 5000;
 
     if (!clients.isEmpty()) {
-      clients.forEach(c -> c.close().join());
+      clients.forEach(c -> {
+        try {
+          c.close().join();
+        } catch (Exception e) {
+        }
+      });
     }
 
     if (!servers.isEmpty()) {
-      servers.forEach(s -> s.close().join());
+      servers.forEach(s -> {
+        try {
+          s.close().join();
+        } catch (Exception e) {
+        }
+      });
     }
 
     clients = new ArrayList<>();

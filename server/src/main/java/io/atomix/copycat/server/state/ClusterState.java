@@ -59,6 +59,15 @@ class ClusterState {
   }
 
   /**
+   * Returns a boolean value indicating whether the local member is a member of the cluster configuration.
+   *
+   * @return Indicates whether the local member is a member of the cluster configuration.
+   */
+  boolean isMember() {
+    return type != null;
+  }
+
+  /**
    * Returns a boolean value indicating whether the local member is active.
    *
    * @return Indicates whether the local member is active.

@@ -273,6 +273,9 @@ final class LeaderState extends ActiveState {
         if (commitError == null) {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.OK)
+            .withVersion(index)
+            .withActiveMembers(activeMembers)
+            .withPassiveMembers(passiveMembers)
             .build()));
         } else {
           future.complete(logResponse(LeaveResponse.builder()

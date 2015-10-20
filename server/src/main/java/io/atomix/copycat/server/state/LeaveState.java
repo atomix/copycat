@@ -15,12 +15,12 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.LeaveRequest;
 import io.atomix.copycat.server.response.LeaveResponse;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.concurrent.Scheduled;
 
 import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
@@ -32,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
  */
 final class LeaveState extends InactiveState {
   private Scheduled leaveFuture;
+  private int attempts;
 
   public LeaveState(ServerState context) {
     super(context);
@@ -56,8 +57,13 @@ final class LeaveState extends InactiveState {
   private void startLeaveTimeout() {
     leaveFuture = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
       if (isOpen()) {
-        LOGGER.warn("{} - Failed to leave the cluster in {}", context.getAddress(), context.getElectionTimeout());
-        transition(CopycatServer.State.INACTIVE);
+        if (++attempts == 3) {
+          LOGGER.warn("{} - Failed to leave the cluster in {}", context.getAddress(), context.getElectionTimeout());
+          transition(CopycatServer.State.INACTIVE);
+        } else {
+          startLeaveTimeout();
+          leave();
+        }
       }
     });
   }
@@ -95,21 +101,18 @@ final class LeaveState extends InactiveState {
             if (error == null) {
               if (response.status() == Response.Status.OK) {
                 LOGGER.info("{} - Successfully left via {}", context.getAddress(), member);
+                context.getCluster().configure(response.version(), response.activeMembers(), response.passiveMembers());
                 transition(CopycatServer.State.INACTIVE);
               } else {
                 LOGGER.debug("{} - Failed to leave {}", context.getAddress(), member);
                 if (iterator.hasNext()) {
                   leave(iterator.next().getAddress(), iterator);
-                } else {
-                  transition(CopycatServer.State.INACTIVE);
                 }
               }
             } else {
               LOGGER.debug("{} - Failed to leave {}", context.getAddress(), member);
               if (iterator.hasNext()) {
                 leave(iterator.next().getAddress(), iterator);
-              } else {
-                transition(CopycatServer.State.INACTIVE);
               }
             }
           }
