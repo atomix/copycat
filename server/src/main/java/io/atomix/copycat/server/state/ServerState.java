@@ -20,22 +20,22 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
+import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
+import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
+import io.atomix.copycat.server.response.JoinResponse;
 import io.atomix.copycat.server.storage.Log;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -60,6 +60,8 @@ public class ServerState {
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
+  private Scheduled joinTimer;
+  private Scheduled leaveTimer;
   private int leader;
   private long term;
   private int lastVotedFor;
@@ -462,16 +464,148 @@ public class ServerState {
   }
 
   /**
+   * Joins the cluster.
+   */
+  public CompletableFuture<Void> join() {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+
+    List<MemberState> votingMembers = cluster.getActiveMembers();
+    if (votingMembers.isEmpty()) {
+      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", address);
+      transition(CopycatServer.State.LEADER);
+      future.complete(null);
+    } else {
+      joinTimer = threadContext.schedule(electionTimeout, () -> {
+        cluster.setActive(true);
+        transition(CopycatServer.State.FOLLOWER);
+        future.complete(null);
+      });
+
+      join(cluster.getActiveMembers().iterator(), future);
+    }
+
+    return future;
+  }
+
+  /**
+   * Recursively attempts to join the cluster.
+   */
+  private void join(Iterator<MemberState> iterator, CompletableFuture<Void> future) {
+    if (iterator.hasNext()) {
+      MemberState member = iterator.next();
+      LOGGER.debug("{} - Attempting to join via {}", address, member.getAddress());
+
+      connections.getConnection(member.getAddress()).thenCompose(connection -> {
+        JoinRequest request = JoinRequest.builder()
+          .withMember(address)
+          .build();
+        return connection.<JoinRequest, JoinResponse>send(request);
+      }).whenComplete((response, error) -> {
+        if (error == null) {
+          if (response.status() == Response.Status.OK) {
+            LOGGER.info("{} - Successfully joined via {}", address, member.getAddress());
+
+            cluster.configure(response.version(), response.activeMembers(), response.passiveMembers());
+
+            if (cluster.isActive()) {
+              cancelJoinTimer();
+              transition(CopycatServer.State.FOLLOWER);
+              future.complete(null);
+            } else if (cluster.isPassive()) {
+              cancelJoinTimer();
+              transition(CopycatServer.State.PASSIVE);
+              future.complete(null);
+            } else {
+              future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
+            }
+          } else {
+            LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
+            join(iterator, future);
+          }
+        } else {
+          LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
+          join(iterator, future);
+        }
+      });
+    } else {
+      LOGGER.info("{} - Failed to join existing cluster", address);
+      cluster.setActive(true);
+      cancelJoinTimer();
+      transition(CopycatServer.State.FOLLOWER);
+      future.complete(null);
+    }
+  }
+
+  /**
+   * Cancels the join timeout.
+   */
+  private void cancelJoinTimer() {
+    if (joinTimer != null) {
+      LOGGER.debug("{} - Cancelling join timeout", address);
+      joinTimer.cancel();
+      joinTimer = null;
+    }
+  }
+
+  /**
+   * Leaves the cluster.
+   */
+  public CompletableFuture<Void> leave() {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    threadContext.execute(() -> {
+      if (cluster.getActiveMembers().isEmpty()) {
+        LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", address);
+        transition(RaftServer.State.INACTIVE);
+        future.complete(null);
+      } else {
+        leave(future);
+      }
+    });
+    return future;
+  }
+
+  /**
+   * Attempts to leave the cluster.
+   */
+  private void leave(CompletableFuture<Void> future) {
+    // Set a timer to retry the attempt to leave the cluster.
+    leaveTimer = threadContext.schedule(electionTimeout, () -> {
+      leave(future);
+    });
+
+    // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
+    // Non-leader states should forward the request to the leader if there is one. Leader states
+    // will log, replicate, and commit the reconfiguration.
+    state.leave(LeaveRequest.builder()
+      .withMember(address)
+      .build()).whenComplete((response, error) -> {
+      if (error == null && response.status() == Response.Status.OK) {
+        cancelLeaveTimer();
+        cluster.configure(response.version(), response.activeMembers(), response.passiveMembers());
+        transition(RaftServer.State.INACTIVE);
+        future.complete(null);
+      }
+    });
+  }
+
+  /**
+   * Cancels the leave timeout.
+   */
+  private void cancelLeaveTimer() {
+    if (leaveTimer != null) {
+      LOGGER.debug("{} - Cancelling leave timeout", address);
+      leaveTimer.cancel();
+      leaveTimer = null;
+    }
+  }
+
+  /**
    * Creates an internal state for the given state type.
    */
   private AbstractState createState(CopycatServer.State state) {
     switch (state) {
       case INACTIVE:
         return new InactiveState(this);
-      case JOIN:
-        return new JoinState(this);
-      case LEAVE:
-        return new LeaveState(this);
       case PASSIVE:
         return new PassiveState(this);
       case FOLLOWER:
@@ -488,10 +622,11 @@ public class ServerState {
   /**
    * Returns the cluster member with the corresponding id.
    */
-  private Address getMember(int id) {
+  Address getMember(int id) {
     if (this.address.hashCode() == id) {
       return this.address;
     }
+
     MemberState member = cluster.getMember(id);
     return member != null ? member.getAddress() : null;
   }

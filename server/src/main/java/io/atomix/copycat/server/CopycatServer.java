@@ -252,27 +252,32 @@ public class CopycatServer implements RaftServer {
       synchronized (this) {
         if (openFuture == null) {
           Function<ServerState, CompletionStage<RaftServer>> completionFunction = state -> {
+            CompletableFuture<RaftServer> future = new CompletableFuture<>();
             openFuture = null;
             this.state = state;
             state.setElectionTimeout(electionTimeout)
               .setHeartbeatInterval(heartbeatInterval)
               .setSessionTimeout(sessionTimeout)
-              .transition(State.JOIN).join();
-
-            if (state.getLeader() != null) {
-              return CompletableFuture.completedFuture(this);
-            } else {
-              CompletableFuture<RaftServer> future = new CompletableFuture<>();
-              electionListener = state.onLeaderElection(leader -> {
-                if (electionListener != null) {
-                  open = true;
-                  future.complete(null);
-                  electionListener.close();
-                  electionListener = null;
+              .join()
+              .whenComplete((result, error) -> {
+                if (error == null) {
+                  if (state.getLeader() != null) {
+                    future.complete(this);
+                  } else {
+                    electionListener = state.onLeaderElection(leader -> {
+                      if (electionListener != null) {
+                        open = true;
+                        future.complete(this);
+                        electionListener.close();
+                        electionListener = null;
+                      }
+                    });
+                  }
+                } else {
+                  future.completeExceptionally(error);
                 }
               });
-              return future;
-            }
+            return future;
           };
 
           if (closeFuture == null) {
@@ -300,15 +305,13 @@ public class CopycatServer implements RaftServer {
       synchronized (this) {
         if (closeFuture == null) {
           if (openFuture == null) {
-            closeFuture = context.close().thenRun(() -> {
-              closeFuture = null;
-              open = false;
-            });
+            closeFuture = state.leave()
+              .thenCompose(v -> context.close())
+              .whenComplete((result, error) -> state = null);
           } else {
-            closeFuture = openFuture.thenCompose(c -> context.close().thenRun(() -> {
-              closeFuture = null;
-              open = false;
-            }));
+            closeFuture = openFuture.thenCompose(c -> state.leave()
+              .thenCompose(v -> context.close()))
+              .whenComplete((result, error) -> state = null);
           }
         }
       }

@@ -24,9 +24,8 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.error.ConfigurationException;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
@@ -105,34 +104,18 @@ public class ServerContext implements Managed<ServerState> {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.executor().execute(() -> {
       open = false;
+      server.close().whenCompleteAsync((result, error) -> {
+        context.close();
+        future.complete(null);
+      }, context.executor());
 
-      state.onStateChange(state -> {
-        if (this.state != null && state == CopycatServer.State.INACTIVE) {
-          boolean succeeded = !this.state.getCluster().isMember();
-
-          server.close().whenCompleteAsync((result, error) -> {
-            context.close();
-            if (succeeded) {
-              if (error == null) {
-                future.complete(null);
-              } else {
-                future.completeExceptionally(error);
-              }
-            } else {
-              future.completeExceptionally(new ConfigurationException("failed to leave the cluster"));
-            }
-          }, context.executor());
-
-          try {
-            this.state.getLog().close();
-          } catch (Exception e) {
-          }
-          this.state.getStateMachine().close();
-          this.state = null;
-        }
-      });
-
-      state.transition(CopycatServer.State.LEAVE);
+      this.state.transition(RaftServer.State.INACTIVE);
+      try {
+        this.state.getLog().close();
+      } catch (Exception e) {
+      }
+      this.state.getStateMachine().close();
+      this.state = null;
     });
     return future;
   }

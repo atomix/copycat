@@ -66,22 +66,6 @@ public interface RaftServer extends Managed<RaftServer> {
     INACTIVE,
 
     /**
-     * Represents the state of a server attempting to join a cluster.
-     * <p>
-     * When a server is {@link #open() started}, the first state to which it transitions is the join state.
-     * During that period, the server will attempt to join an existing cluster.
-     */
-    JOIN,
-
-    /**
-     * Represents the state of a server attempting to leave a cluster.
-     * <p>
-     * When a server is {@link #close() stopped}, the server will first transition to the leave state and
-     * remove itself from the cluster configuration during this period.
-     */
-    LEAVE,
-
-    /**
      * Represents the state of a server in the process of catching up its log.
      * <p>
      * Upon successfully joining an existing cluster, the server will transition to the passive state and remain there

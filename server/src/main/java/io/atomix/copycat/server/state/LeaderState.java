@@ -238,7 +238,7 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    if (context.getCluster().getMember(request.member().hashCode()) == null) {
+    if (context.getMember(request.member().hashCode()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
         .build()));
