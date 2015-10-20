@@ -794,6 +794,7 @@ final class LeaderState extends ActiveState {
   private class Replicator {
     private final Set<MemberState> committing = new HashSet<>();
     private long commitTime;
+    private int commitFailures;
     private CompletableFuture<Long> commitFuture;
     private CompletableFuture<Long> nextCommitFuture;
     private final TreeMap<Long, CompletableFuture<Long>> commitFutures = new TreeMap<>();
@@ -868,17 +869,34 @@ final class LeaderState extends ActiveState {
     }
 
     /**
-     * Sets a commit time.
+     * Sets a commit time or fails the commit if a quorum of successful responses cannot be achieved.
      */
-    private void commitTime(MemberState member) {
-      member.setCommitTime(System.currentTimeMillis());
+    private void commitTime(MemberState member, Throwable error) {
+      if (commitFuture == null) {
+        return;
+      }
+      boolean completed = false;
+      if (error != null && member.getCommitStartTime() == this.commitTime) {
+        int activeMemberSize = context.getCluster().getActiveMembers().size() + (context.getCluster().isActive() ? 1 : 0);
+        int quorumSize = context.getCluster().getQuorum();
+        // If a quorum of successful responses cannot be achieved, fail this commit.
+        if (activeMemberSize - quorumSize + 1 <= ++commitFailures) {
+          commitFuture.completeExceptionally(new RaftException(RaftError.Type.INTERNAL_ERROR, "Failed to reach consensus"));
+          completed = true;
+        }
+      } else {
+        member.setCommitTime(System.currentTimeMillis());
 
-      // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
-      // was contacted. If the current commitFuture's time is less than the commit time then trigger the
-      // commit future and reset it to the next commit future.
-      long commitTime = commitTime();
-      if (commitFuture != null && this.commitTime <= commitTime) {
-        commitFuture.complete(null);
+        // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
+        // was contacted. If the current commitFuture's time is less than the commit time then trigger the
+        // commit future and reset it to the next commit future.
+        if (this.commitTime <= commitTime()) {
+          commitFuture.complete(null);
+          completed = true;
+        }
+      }
+      if (completed) {
+        commitFailures = 0;
         commitFuture = nextCommitFuture;
         nextCommitFuture = null;
         if (commitFuture != null) {
@@ -926,7 +944,7 @@ final class LeaderState extends ActiveState {
      * Triggers a commit for the replica.
      */
     private void commit(MemberState member) {
-      if (!committing.contains(member) && isOpen() && (member.getAttemptCount() == 0 || System.currentTimeMillis() - member.getAttemptTime() > Math.min(Math.pow(member.getAttemptCount(), 2) * 1000, 60000))) {
+      if (!committing.contains(member) && isOpen()) {
         // If the log is empty then send an empty commit.
         // If the next index hasn't yet been set then we send an empty commit first.
         // If the next index is greater than the last index then send an empty commit.
@@ -1017,6 +1035,7 @@ final class LeaderState extends ActiveState {
      */
     private void commit(MemberState member, AppendRequest request, boolean recursive) {
       committing.add(member);
+      member.setCommitStartTime(commitTime);
 
       LOGGER.debug("{} - Sent {} to {}", context.getAddress(), request, member.getAddress());
       context.getConnections().getConnection(member.getAddress()).whenComplete((connection, error) -> {
@@ -1027,6 +1046,7 @@ final class LeaderState extends ActiveState {
             commit(connection, member, request, recursive);
           } else {
             committing.remove(member);
+            commitTime(member, error);
             failAttempt(member, error);
           }
         }
@@ -1044,10 +1064,9 @@ final class LeaderState extends ActiveState {
         if (isOpen()) {
           if (error == null) {
             LOGGER.debug("{} - Received {} from {}", context.getAddress(), response, member.getAddress());
-            succeedAttempt(member);
             if (response.status() == Response.Status.OK) {
               // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
-              commitTime(member);
+              commitTime(member, null);
 
               // If replication succeeded then trigger commit futures.
               if (response.succeeded()) {
@@ -1084,6 +1103,7 @@ final class LeaderState extends ActiveState {
               LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
             }
           } else {
+            commitTime(member, error);
             failAttempt(member, error);
           }
         }
@@ -1091,20 +1111,10 @@ final class LeaderState extends ActiveState {
     }
 
     /**
-     * Succeeds an attempt to contact a member.
-     */
-    private void succeedAttempt(MemberState member) {
-      member.resetAttemptCount();
-    }
-
-    /**
      * Fails an attempt to contact a member.
      */
     private void failAttempt(MemberState member, Throwable error) {
       LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
-
-      // Increment the commit attempt count for the member.
-      member.incrementAttemptCount().setAttemptTime(System.currentTimeMillis());
 
       // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
       // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
