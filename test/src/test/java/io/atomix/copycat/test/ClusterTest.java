@@ -48,11 +48,11 @@ import java.util.concurrent.atomic.AtomicReference;
 @Test
 public class ClusterTest extends ConcurrentTestCase {
   private static final File directory = new File("target/test-logs");
-  protected LocalServerRegistry registry;
-  protected int port;
-  protected List<Address> members;
-  protected List<CopycatClient> clients = new ArrayList<>();
-  protected List<CopycatServer> servers = new ArrayList<>();
+  protected volatile LocalServerRegistry registry;
+  protected volatile int port;
+  protected volatile List<Address> members;
+  protected volatile List<CopycatClient> clients = new ArrayList<>();
+  protected volatile List<CopycatServer> servers = new ArrayList<>();
 
   /**
    * Tests joining a server to an existing cluster.
@@ -123,9 +123,13 @@ public class ClusterTest extends ConcurrentTestCase {
     RaftServer s1 = createServer(nextAddress()).open().get();
     RaftServer s2 = createServer(nextAddress()).open().get();
     RaftServer s3 = createServer(nextAddress()).open().get();
+    RaftServer s4 = createServer(nextAddress()).open().get();
+    RaftServer s5 = createServer(nextAddress()).open().get();
     s1.close().join();
     s2.close().join();
     s3.close().join();
+    s4.close().join();
+    s5.close().join();
   }
 
   /**
@@ -1024,25 +1028,6 @@ public class ClusterTest extends ConcurrentTestCase {
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
-
-    if (!clients.isEmpty()) {
-      clients.forEach(c -> {
-        try {
-          c.close().join();
-        } catch (Exception e) {
-        }
-      });
-    }
-
-    if (!servers.isEmpty()) {
-      servers.forEach(s -> {
-        try {
-          s.close().join();
-        } catch (Exception e) {
-        }
-      });
-    }
-
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }
