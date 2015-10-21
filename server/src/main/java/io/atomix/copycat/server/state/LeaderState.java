@@ -44,6 +44,7 @@ final class LeaderState extends ActiveState {
   private static final int MAX_BATCH_SIZE = 1024 * 28;
   private Scheduled currentTimer;
   private final Replicator replicator = new Replicator();
+  private long leaderIndex;
 
   public LeaderState(ServerState context) {
     super(context);
@@ -88,6 +89,9 @@ final class LeaderState extends ActiveState {
         .setTimestamp(System.currentTimeMillis());
       index = context.getLog().append(entry);
     }
+
+    // Store the index at which the leader took command.
+    leaderIndex = index;
 
     CompletableFuture<Void> future = new CompletableFuture<>();
     replicator.commit(index).whenComplete((resultIndex, error) -> {
@@ -182,6 +186,16 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
+    // Configuration changes should not be allowed until the leader has committed a no-op entry.
+    // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
+    if (leaderIndex == 0 || context.getCommitIndex() < leaderIndex) {
+      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
+    // If the member is already a known member of the cluster, complete the join successfully.
     if (context.getCluster().getMember(request.member().hashCode()) != null) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
@@ -235,6 +249,16 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
+    // Configuration changes should not be allowed until the leader has committed a no-op entry.
+    // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
+    if (leaderIndex == 0 || context.getCommitIndex() < leaderIndex) {
+      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
+    // If the leaving member is not a known member of the cluster, complete the leave successfully.
     if (context.getMember(request.member().hashCode()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)

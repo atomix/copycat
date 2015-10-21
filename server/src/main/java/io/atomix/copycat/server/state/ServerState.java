@@ -519,7 +519,15 @@ public class ServerState {
             } else {
               future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
             }
+          } else if (response.error() == null) {
+            // If the response error is null, that indicates that no error occurred but the leader was
+            // in a state that was incapable of handling the join request. Attempt to join the leader
+            // again after an election timeout.
+            LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
+            cancelJoinTimer();
+            joinTimer = threadContext.schedule(electionTimeout, this::join);
           } else {
+            // If the response error was non-null, attempt to join via the next server in the members list.
             LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
             join(iterator, future);
           }
