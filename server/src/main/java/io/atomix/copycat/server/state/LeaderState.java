@@ -954,7 +954,7 @@ final class LeaderState extends ActiveState {
       // all tasks up to the given commit.
       long commitIndex = members.get(quorumIndex()).getMatchIndex();
       long globalIndex = members.get(members.size() - 1).getMatchIndex();
-      if (commitIndex > 0) {
+      if (commitIndex > 0 && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
         context.setCommitIndex(commitIndex);
         context.setGlobalIndex(globalIndex);
         context.getLog().commit(globalIndex);
