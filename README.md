@@ -21,16 +21,20 @@ to verify it maintains linearizability in a number of different failure scenario
 
 *For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/internals/)*
 
-### Project status
+### Project status: beta
 
 Copycat is a fault-tolerant framework that provides strong consistency guarantees, and as such we take the responsibility
 to test these claims and document the implementation very seriously. Copycat's implementation of the
-[Raft consensus algorithm](https://raft.github.io/) is well tested, well documented, and verified by
-[Jepsen testing](https://github.com/atomix/atomix-jepsen). Early Jepsen testing of Copycat is now complete,
-and an early release of both Copycat and [Atomix][Atomix] will be pushed to Maven Central in the coming days. In the
-meantime, snapshots are frequently pushed. Documentation for most of Copycat's implementation of the Raft algorithm
-is [available on the Copycat website](http://atomix.github.io/copycat/user-manual/internals/), and users are encouraged
-to explore the [Javadoc][Javadoc] which is also heavily documented. All documentation remains under continued
+[Raft consensus algorithm](https://raft.github.io/) is well tested, well documented, and [verified by
+Jepsen](https://github.com/atomix/atomix-jepsen). But the *beta* label indicates that the implementation
+may still have some bugs or other issues that make it not suitable for production. Once we've reached consensus
+on the lack of significant bugs in the beta release(s), a release candidate will be pushed. Once we've reached
+consensus on the stability of the release candidate(s) and Copycat's production readiness, a full release will be pushed.
+It's all about that **consensus**!
+
+Documentation for most of Copycat's implementation of the Raft algorithm is
+[available on the Copycat website](http://atomix.github.io/copycat/user-manual/internals/), and users are encouraged
+to [explore the Javadoc][Javadoc] which is also heavily documented. All documentation remains under continued
 development, and websites for both Copycat and [Atomix][Atomix] will continue to be updated until and after a release.
 
 ## Examples
