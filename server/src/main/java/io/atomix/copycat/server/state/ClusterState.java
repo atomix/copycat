@@ -244,6 +244,8 @@ class ClusterState {
       type = Type.ACTIVE;
     } else if (passiveMembers.contains(address)) {
       type = Type.PASSIVE;
+    } else {
+      type = null;
     }
 
     this.version = version;
@@ -262,7 +264,10 @@ class ClusterState {
     for (MemberState member : passiveMembers) {
       members.add(member.getAddress());
     }
-    members.add(address);
+
+    if (type != null) {
+      members.add(address);
+    }
     return members;
   }
 
@@ -274,7 +279,10 @@ class ClusterState {
     for (MemberState state : activeMembers) {
       members.add(state.getAddress());
     }
-    members.add(address);
+
+    if (type == Type.ACTIVE) {
+      members.add(address);
+    }
     return members;
   }
 
@@ -285,6 +293,10 @@ class ClusterState {
     List<Address> members = new ArrayList<>();
     for (MemberState state : passiveMembers) {
       members.add(state.getAddress());
+    }
+
+    if (type == Type.PASSIVE) {
+      members.add(address);
     }
     return members;
   }

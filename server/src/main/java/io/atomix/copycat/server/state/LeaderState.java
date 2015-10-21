@@ -205,9 +205,6 @@ final class LeaderState extends ActiveState {
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
-      // Immediately apply the configuration change. No need to validate whether this node was changed
-      // to PASSIVE since it's the leader and would have already transitioned to the LEAVE state if
-      // it were leaving the cluster.
       context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
     }
 
@@ -241,6 +238,8 @@ final class LeaderState extends ActiveState {
     if (context.getMember(request.member().hashCode()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
+        .withActiveMembers(context.getCluster().buildActiveMembers())
+        .withPassiveMembers(context.getCluster().buildPassiveMembers())
         .build()));
     }
 
@@ -260,9 +259,6 @@ final class LeaderState extends ActiveState {
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
-      // Immediately apply the configuration change. No need to validate whether this node was changed
-      // to PASSIVE since it's the leader and would have already transitioned to the LEAVE state if
-      // it were leaving the cluster.
       context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
     }
 
@@ -1172,6 +1168,8 @@ final class LeaderState extends ActiveState {
      */
     private void updateConfiguration(MemberState member) {
       if (context.getCluster().isPassiveMember(member) && member.getMatchIndex() >= context.getCommitIndex()) {
+        LOGGER.info("{} - Promoting {}", context.getAddress(), member);
+
         Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
         activeMembers.add(member.getAddress());
 

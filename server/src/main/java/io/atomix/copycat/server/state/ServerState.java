@@ -472,6 +472,7 @@ public class ServerState {
     List<MemberState> votingMembers = cluster.getActiveMembers();
     if (votingMembers.isEmpty()) {
       LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", address);
+      term++;
       transition(CopycatServer.State.LEADER);
       future.complete(null);
     } else {

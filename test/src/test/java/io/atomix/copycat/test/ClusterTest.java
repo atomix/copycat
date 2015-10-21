@@ -117,6 +117,18 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests scaling the cluster from 1 node to 3 nodes and back.
+   */
+  public void testScale() throws Throwable {
+    RaftServer s1 = createServer(nextAddress()).open().get();
+    RaftServer s2 = createServer(nextAddress()).open().get();
+    RaftServer s3 = createServer(nextAddress()).open().get();
+    s1.close().join();
+    s2.close().join();
+    s3.close().join();
+  }
+
+  /**
    * Tests keeping a client session alive.
    */
   public void testClientKeepAlive() throws Throwable {

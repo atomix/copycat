@@ -262,6 +262,7 @@ public class CopycatServer implements RaftServer {
               .whenComplete((result, error) -> {
                 if (error == null) {
                   if (state.getLeader() != null) {
+                    open = true;
                     future.complete(this);
                   } else {
                     electionListener = state.onLeaderElection(leader -> {
