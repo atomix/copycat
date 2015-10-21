@@ -21,16 +21,17 @@ to verify it maintains linearizability in a number of different failure scenario
 
 *For more information on the Raft implementation itself, see [Raft internals](http://atomix.github.io/copycat/user-manual/internals/)*
 
-### Project status: beta
+### Project Status: BETA
 
 Copycat is a fault-tolerant framework that provides strong consistency guarantees, and as such we take the responsibility
 to test these claims and document the implementation very seriously. Copycat's implementation of the
 [Raft consensus algorithm](https://raft.github.io/) is well tested, well documented, and [verified by
-Jepsen](https://github.com/atomix/atomix-jepsen). But the *beta* label indicates that the implementation
-may still have some bugs or other issues that make it not suitable for production. Once we've reached consensus
-on the lack of significant bugs in the beta release(s), a release candidate will be pushed. Once we've reached
-consensus on the stability of the release candidate(s) and Copycat's production readiness, a full release will be pushed.
-It's all about that **consensus**!
+Jepsen](https://github.com/atomix/atomix-jepsen). *But the beta label indicates that the implementation
+may still have some bugs* or other issues that make it not quite suitable for production. Users are encouraged to
+use Copycat in development and contribute to the increasing stability of the project with [issues](https://github.com/atomix/copycat/issues)
+and [pull requests](https://github.com/atomix/copycat/pulls). Once we've reached consensus on the lack of significant
+bugs in the beta release(s), a release candidate will be pushed. Once we've reached consensus on the stability of the 
+release candidate(s) and Copycat's production readiness, a full release will be pushed. **It's all about that consensus**!
 
 Documentation for most of Copycat's implementation of the Raft algorithm is
 [available on the Copycat website](http://atomix.github.io/copycat/user-manual/internals/), and users are encouraged
