@@ -15,18 +15,15 @@
  */
 package io.atomix.copycat.server.storage;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
+import io.atomix.catalyst.buffer.Buffer;
+import io.atomix.catalyst.buffer.DirectBuffer;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.copycat.server.storage.compaction.Compaction;
+import org.testng.annotations.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
+import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,16 +31,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
-
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.DirectBuffer;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.copycat.server.storage.compaction.Compaction;
+import static org.testng.Assert.*;
 
 /**
  * Abstract log test.
@@ -179,7 +167,7 @@ public abstract class AbstractLogTest {
   
   protected void printLog() {
     for (int i = 1; i < log.length(); i++) {
-      System.out.println(log.get(i));
+      System.out.println(log.get(i).toString());
     }
   }
 }

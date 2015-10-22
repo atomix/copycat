@@ -45,6 +45,7 @@ final class LeaderState extends ActiveState {
   private Scheduled currentTimer;
   private final Replicator replicator = new Replicator();
   private long leaderIndex;
+  private boolean configuring;
 
   public LeaderState(ServerState context) {
     super(context);
@@ -186,6 +187,13 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // If another configuration change is already under way, reject the configuration.
+    if (configuring) {
+      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
@@ -204,6 +212,8 @@ final class LeaderState extends ActiveState {
         .withPassiveMembers(context.getCluster().buildPassiveMembers())
         .build()));
     }
+
+    configuring = true;
 
     final long term = context.getTerm();
     final long index;
@@ -226,6 +236,7 @@ final class LeaderState extends ActiveState {
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
+        configuring = false;
         if (commitError == null) {
           future.complete(logResponse(JoinResponse.builder()
             .withStatus(Response.Status.OK)
@@ -249,6 +260,13 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // If another configuration change is already under way, reject the configuration.
+    if (configuring) {
+      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
@@ -266,6 +284,8 @@ final class LeaderState extends ActiveState {
         .withPassiveMembers(context.getCluster().buildPassiveMembers())
         .build()));
     }
+
+    configuring = true;
 
     final long term = context.getTerm();
     final long index;
@@ -290,6 +310,7 @@ final class LeaderState extends ActiveState {
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
+        configuring = false;
         if (commitError == null) {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.OK)
