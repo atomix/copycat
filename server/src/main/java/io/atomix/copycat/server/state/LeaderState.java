@@ -45,7 +45,7 @@ final class LeaderState extends ActiveState {
   private Scheduled currentTimer;
   private final Replicator replicator = new Replicator();
   private long leaderIndex;
-  private boolean configuring;
+  private long configuring;
 
   public LeaderState(ServerState context) {
     super(context);
@@ -188,7 +188,7 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
-    if (configuring) {
+    if (configuring > 0) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -213,8 +213,6 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
-    configuring = true;
-
     final long term = context.getTerm();
     final long index;
 
@@ -229,6 +227,7 @@ final class LeaderState extends ActiveState {
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
+      configuring = index;
       context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
     }
 
@@ -236,7 +235,7 @@ final class LeaderState extends ActiveState {
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
-        configuring = false;
+        configuring = 0;
         if (commitError == null) {
           future.complete(logResponse(JoinResponse.builder()
             .withStatus(Response.Status.OK)
@@ -261,7 +260,7 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
-    if (configuring) {
+    if (configuring > 0) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -285,8 +284,6 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
-    configuring = true;
-
     final long term = context.getTerm();
     final long index;
 
@@ -303,6 +300,7 @@ final class LeaderState extends ActiveState {
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
+      configuring = index;
       context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
     }
 
@@ -310,7 +308,7 @@ final class LeaderState extends ActiveState {
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
-        configuring = false;
+        configuring = 0;
         if (commitError == null) {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.OK)
@@ -1213,25 +1211,44 @@ final class LeaderState extends ActiveState {
      */
     private void updateConfiguration(MemberState member) {
       if (context.getCluster().isPassiveMember(member) && member.getMatchIndex() >= context.getCommitIndex()) {
-        LOGGER.info("{} - Promoting {}", context.getAddress(), member);
-
-        Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
-        activeMembers.add(member.getAddress());
-
-        Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
-        passiveMembers.remove(member.getAddress());
-
-        try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-          entry.setTerm(context.getTerm())
-            .setActive(activeMembers)
-            .setPassive(passiveMembers);
-          long index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
-
-          // Immediately apply the configuration upon appending the configuration entry.
-          context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+        if (configuring > 0) {
+          commit(configuring).whenComplete((result, error) -> {
+            promoteConfiguration(member);
+          });
+        } else {
+          promoteConfiguration(member);
         }
       }
+    }
+
+    /**
+     * Promotes the given member.
+     */
+    private void promoteConfiguration(MemberState member) {
+      LOGGER.info("{} - Promoting {}", context.getAddress(), member);
+
+      Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
+      activeMembers.add(member.getAddress());
+
+      Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
+      passiveMembers.remove(member.getAddress());
+
+      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+        entry.setTerm(context.getTerm())
+          .setActive(activeMembers)
+          .setPassive(passiveMembers);
+        long index = context.getLog().append(entry);
+        LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+
+        // Immediately apply the configuration upon appending the configuration entry.
+        configuring = index;
+        context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+      }
+
+      commit(configuring).whenComplete((result, error) -> {
+        context.checkThread();
+        configuring = 0;
+      });
     }
 
     /**
