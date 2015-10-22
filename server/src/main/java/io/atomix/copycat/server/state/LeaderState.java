@@ -44,6 +44,7 @@ final class LeaderState extends ActiveState {
   private static final int MAX_BATCH_SIZE = 1024 * 28;
   private Scheduled currentTimer;
   private final Replicator replicator = new Replicator();
+  private long leaderTime = System.currentTimeMillis();
   private long leaderIndex;
   private long configuring;
 
@@ -87,7 +88,7 @@ final class LeaderState extends ActiveState {
     final long index;
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
       entry.setTerm(term)
-        .setTimestamp(System.currentTimeMillis());
+        .setTimestamp(leaderTime);
       index = context.getLog().append(entry);
     }
 
@@ -1173,7 +1174,7 @@ final class LeaderState extends ActiveState {
       // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
       // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
       // that a partition occurred and transition back to the FOLLOWER state.
-      if (System.currentTimeMillis() - commitTime() > context.getElectionTimeout().toMillis() * 2) {
+      if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
         LOGGER.warn("{} - Suspected network partition. Stepping down", context.getAddress());
         context.setLeader(0);
         transition(CopycatServer.State.FOLLOWER);
