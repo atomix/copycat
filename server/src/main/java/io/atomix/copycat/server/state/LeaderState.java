@@ -78,6 +78,7 @@ final class LeaderState extends ActiveState {
    */
   private void takeLeadership() {
     context.setLeader(context.getAddress().hashCode());
+    context.getCluster().getActiveMembers().forEach(m -> m.setNextIndex(Math.max(m.getMatchIndex(), Math.max(context.getLog().lastIndex(), 1))));
   }
 
   /**
