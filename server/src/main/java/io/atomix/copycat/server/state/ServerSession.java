@@ -430,11 +430,13 @@ class ServerSession implements Session {
    * @return The index of the highest event acked for the session.
    */
   long getLastCompleted() {
+    // If there are any queued events, return the index prior to the first event in the queue.
     EventHolder event = events.poll();
     if (event != null && event.eventVersion > eventAckVersion) {
       return event.eventVersion - 1;
     }
-    return eventAckVersion;
+    // If no events are queued, return the highest index applied to the session.
+    return version;
   }
 
   /**
