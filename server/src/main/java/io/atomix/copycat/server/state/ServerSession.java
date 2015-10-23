@@ -21,10 +21,10 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.session.Event;
 import io.atomix.copycat.client.request.PublishRequest;
 import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.client.session.Event;
 import io.atomix.copycat.client.session.Session;
 
 import java.util.*;
@@ -55,7 +55,8 @@ class ServerSession implements Session {
   private final Map<Long, List<Runnable>> versionQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, Object> responses = new HashMap<>();
-  private final Map<Long, EventHolder> events = new HashMap<>();
+  private final Queue<EventHolder> events = new ArrayDeque<>();
+  private EventHolder event;
   private final Map<Long, CompletableFuture<Void>> futures = new HashMap<>();
   private boolean suspect;
   private boolean unregistering;
@@ -386,16 +387,14 @@ class ServerSession implements Session {
       return this;
 
     // If no event has been published for this version yet, create a new event holder.
-    EventHolder holder = events.get(context.version());
-    if (holder == null) {
+    if (this.event == null || this.event.eventVersion != context.version()) {
       long previousVersion = eventVersion;
       eventVersion = context.version();
-      holder = new EventHolder(eventVersion, previousVersion);
-      events.put(eventVersion, holder);
+      this.event = new EventHolder(eventVersion, previousVersion);
     }
 
     // Add the event to the event holder.
-    holder.events.add(new Event<>(event, message));
+    this.event.events.add(new Event<>(event, message));
 
     return this;
   }
@@ -404,8 +403,8 @@ class ServerSession implements Session {
    * Commits events for the given version.
    */
   CompletableFuture<Void> commit(long version) {
-    EventHolder event = events.get(version);
-    if (event != null) {
+    if (event != null && event.eventVersion == version) {
+      events.add(event);
       sendEvent(event);
       return event.future;
     }
@@ -431,6 +430,10 @@ class ServerSession implements Session {
    * @return The index of the highest event acked for the session.
    */
   long getLastCompleted() {
+    EventHolder event = events.poll();
+    if (event != null && event.eventVersion > eventAckVersion) {
+      return event.eventVersion - 1;
+    }
     return eventAckVersion;
   }
 
@@ -442,13 +445,14 @@ class ServerSession implements Session {
    */
   private ServerSession clearEvents(long version) {
     if (version > eventAckVersion) {
-      for (long i = eventAckVersion + 1; i <= version; i++) {
-        eventAckVersion = i;
-        EventHolder event = events.remove(i);
-        if (event != null) {
-          event.future.complete(null);
-        }
+      EventHolder event = events.peek();
+      while (event != null && event.eventVersion <= version) {
+        events.remove();
+        eventAckVersion = event.eventVersion;
+        event.future.complete(null);
+        event = events.peek();
       }
+      eventAckVersion = version;
     }
     return this;
   }
@@ -462,11 +466,8 @@ class ServerSession implements Session {
   ServerSession resendEvents(long version) {
     if (version > eventAckVersion) {
       clearEvents(version);
-      for (long i = version + 1; i <= eventVersion; i++) {
-        EventHolder event = events.get(i);
-        if (event != null) {
-          sendSequentialEvent(event);
-        }
+      for (EventHolder event : events) {
+        sendSequentialEvent(event);
       }
     }
     return this;
@@ -511,7 +512,7 @@ class ServerSession implements Session {
     PublishRequest request = PublishRequest.builder()
       .withSession(id())
       .withEventVersion(event.eventVersion)
-      .withPreviousVersion(event.previousVersion)
+      .withPreviousVersion(Math.max(event.previousVersion, eventAckVersion))
       .withEvents(event.events)
       .build();
 
@@ -623,7 +624,7 @@ class ServerSession implements Session {
   void expire() {
     closed = true;
     expired = true;
-    for (EventHolder event : events.values()) {
+    for (EventHolder event : events) {
       event.future.complete(null);
     }
     for (Listener<Session> listener : closeListeners) {

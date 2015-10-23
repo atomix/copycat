@@ -535,10 +535,14 @@ class ServerStateMachine implements AutoCloseable {
    * Updates the last completed event version based on a commit at the given index.
    */
   private void updateLastCompleted(long index) {
-    lastCompleted = index;
+    long lastCompleted = index;
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
     }
+
+    if (lastCompleted < this.lastCompleted)
+      throw new IllegalStateException("inconsistent session state");
+    this.lastCompleted = lastCompleted;
   }
 
   /**

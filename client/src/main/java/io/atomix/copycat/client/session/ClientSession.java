@@ -639,6 +639,7 @@ public class ClientSession implements Session, Managed<Session> {
   private void onOpen(long sessionId) {
     LOGGER.debug("Registered session: {}", sessionId);
     this.id = sessionId;
+    this.eventVersion = id;
     this.state = State.OPEN;
     for (Consumer<Session> listener : openListeners) {
       listener.accept(this);
