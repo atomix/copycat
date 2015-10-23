@@ -404,7 +404,7 @@ class ServerStateMachine implements AutoCloseable {
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-    ServerCommit commit = commits.acquire(entry);
+    ServerCommit commit = commits.acquire(entry, executor.timestamp());
     executor.executor().execute(() -> {
       executor.context().update(commit.index(), commit.time(), synchronous, consistency != null ? consistency : Command.ConsistencyLevel.LINEARIZABLE);
 
@@ -468,7 +468,7 @@ class ServerStateMachine implements AutoCloseable {
 
       // Once the query has met its sequence requirement, check whether it has also met its version requirement. If the version
       // requirement is not yet met, queue the query for the state machine to catch up to the required version.
-      ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
+      ServerCommit commit = commits.acquire(entry, executor.timestamp());
       session.registerSequenceQuery(sequence, () -> {
         context.checkThread();
         if (version > session.getVersion()) {
@@ -488,14 +488,14 @@ class ServerStateMachine implements AutoCloseable {
 
       ThreadContext context = getContext();
 
-      ServerCommit commit = commits.acquire(entry.setTimestamp(executor.timestamp()));
+      ServerCommit commit = commits.acquire(entry, executor.timestamp());
       session.registerVersionQuery(entry.getVersion(), () -> {
         context.checkThread();
         executeQuery(commit, future, context);
       });
       return future;
     } else {
-      return executeQuery(commits.acquire(entry.setTimestamp(executor.timestamp())), new CompletableFuture<>(), getContext());
+      return executeQuery(commits.acquire(entry, executor.timestamp()), new CompletableFuture<>(), getContext());
     }
   }
 

@@ -50,10 +50,10 @@ class ServerCommit implements Commit<Operation<?>> {
    *
    * @param entry The entry.
    */
-  void reset(OperationEntry<?> entry) {
+  void reset(OperationEntry<?> entry, long timestamp) {
     this.index = entry.getIndex();
     this.session = sessions.getSession(entry.getSession());
-    this.instant = Instant.ofEpochMilli(entry.getTimestamp());
+    this.instant = Instant.ofEpochMilli(timestamp);
     this.operation = entry.getOperation();
     open = true;
   }
