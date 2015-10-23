@@ -135,6 +135,9 @@ class ServerSession implements Session {
   ServerSession setRequest(long request) {
     if (request > this.request) {
       this.request = request;
+
+      // When the request sequence number is incremented, get the next queued request callback and call it.
+      // This will allow the command request to be evaluated in sequence.
       Runnable command = this.commands.remove(nextRequest());
       if (command != null) {
         command.run();
@@ -182,7 +185,8 @@ class ServerSession implements Session {
     }
 
     // If the request sequence number is less than the applied sequence number, update the request
-    // sequence number to ensure followers can correctly handle request sequencing if they become the leader.
+    // sequence number. This is necessary to ensure that if the local server is a follower that is
+    // later elected leader, its sequences are consistent for commands.
     if (sequence > request) {
       // Only attempt to trigger command callbacks if any are registered.
       if (!this.commands.isEmpty()) {
@@ -212,22 +216,15 @@ class ServerSession implements Session {
   }
 
   /**
-   * Returns the next session version.
-   *
-   * @return The next session version.
-   */
-  long nextVersion() {
-    return version + 1;
-  }
-
-  /**
    * Sets the session version.
    *
    * @param version The session version.
    * @return The server session.
    */
   ServerSession setVersion(long version) {
-    // For each increment of the version number, trigger query callbacks that are dependent on the specific version.
+    // Query callbacks for this session are added to the versionQueries map to be executed once the required version
+    // for the query is reached. For each increment of the version number, trigger query callbacks that are dependent
+    // on the specific version.
     for (long i = this.version + 1; i <= version; i++) {
       this.version = i;
       List<Runnable> queries = this.versionQueries.remove(this.version);
@@ -263,6 +260,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession registerSequenceQuery(long sequence, Runnable query) {
+    // Add a query to be run once the session's sequence number reaches the given sequence number.
     List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
@@ -279,6 +277,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession registerVersionQuery(long version, Runnable query) {
+    // Add a query to be run once the session's version number reaches the given version number.
     List<Runnable> queries = this.versionQueries.computeIfAbsent(version, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
@@ -289,6 +288,10 @@ class ServerSession implements Session {
 
   /**
    * Registers a session response.
+   * <p>
+   * Responses are stored in memory on all servers in order to provide linearizable semantics. When a command
+   * is applied to the state machine, the command's return value is stored with the sequence number. Once the
+   * client acknowledges receipt of the command output the response will be cleared from memory.
    *
    * @param sequence The response sequence number.
    * @param response The response.
@@ -303,6 +306,10 @@ class ServerSession implements Session {
 
   /**
    * Clears command responses up to the given version.
+   * <p>
+   * Command output is removed from memory up to the given sequence number. Additionally, since we know the
+   * client received a response for all commands up to the given sequence number, command futures are removed
+   * from memory as well.
    *
    * @param sequence The sequence to clear.
    * @return The server session.

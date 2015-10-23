@@ -806,7 +806,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(5000, 2);
+      await(10000, 2);
     }
   }
 
@@ -903,7 +903,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(5000, 4);
+      await(10000, 4);
     }
   }
 
