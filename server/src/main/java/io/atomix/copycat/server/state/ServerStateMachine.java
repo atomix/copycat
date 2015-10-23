@@ -27,6 +27,7 @@ import io.atomix.copycat.server.storage.entry.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -41,6 +42,7 @@ class ServerStateMachine implements AutoCloseable {
   private final ServerCommitCleaner cleaner;
   private final ServerCommitPool commits;
   private long lastApplied;
+  private long lastCompleted;
   private long configuration;
 
   ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
@@ -93,6 +95,15 @@ class ServerStateMachine implements AutoCloseable {
   }
 
   /**
+   * Returns the highest index completed for all sessions.
+   *
+   * @return The highest index completed for all sessions.
+   */
+  long getLastCompleted() {
+    return lastCompleted > 0 ? lastCompleted : lastApplied;
+  }
+
+  /**
    * Returns the current thread context.
    *
    * @return The current thread context.
@@ -129,7 +140,7 @@ class ServerStateMachine implements AutoCloseable {
       } else if (entry instanceof KeepAliveEntry) {
         return apply((KeepAliveEntry) entry);
       } else if (entry instanceof UnregisterEntry) {
-        return apply((UnregisterEntry) entry);
+        return apply((UnregisterEntry) entry, expectResult);
       } else if (entry instanceof NoOpEntry) {
         return apply((NoOpEntry) entry);
       } else if (entry instanceof ConnectEntry) {
@@ -195,6 +206,9 @@ class ServerStateMachine implements AutoCloseable {
       context.execute(() -> future.complete(index));
     });
 
+    // Update the highest index completed for all sessions.
+    updateLastCompleted(entry.getIndex());
+
     return future;
   }
 
@@ -236,6 +250,9 @@ class ServerStateMachine implements AutoCloseable {
 
       executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventVersion));
 
+      // Update the highest index completed for all sessions.
+      updateLastCompleted(entry.getIndex());
+
       future = new CompletableFuture<>();
       context.execute(() -> future.complete(null));
     }
@@ -252,7 +269,7 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  private CompletableFuture<Void> apply(UnregisterEntry entry) {
+  private CompletableFuture<Void> apply(UnregisterEntry entry, boolean synchronous) {
     ServerSession session = executor.context().sessions().unregisterSession(entry.getSession());
 
     // Allow the executor to execute any scheduled events.
@@ -272,25 +289,36 @@ class ServerStateMachine implements AutoCloseable {
     // managed to receive a keep alive request from the client before it was removed.
     else {
       ThreadContext context = getContext();
+      future = new CompletableFuture<>();
+
+      long index = entry.getIndex();
 
       if (session.isSuspect()) {
         executor.executor().execute(() -> {
+          executor.context().update(index, Instant.ofEpochMilli(executor.timestamp()), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
           session.expire();
           stateMachine.expire(session);
           stateMachine.close(session);
+          executor.context().commit().whenComplete((result, error) -> {
+            context.executor().execute(() -> future.complete(null));
+          });
         });
       } else {
         executor.executor().execute(() -> {
+          executor.context().update(index, Instant.ofEpochMilli(executor.timestamp()), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
           session.close();
           stateMachine.close(session);
+          executor.context().commit().whenComplete((result, error) -> {
+            context.executor().execute(() -> future.complete(null));
+          });
         });
       }
 
       // Clean the session registration entry from the log.
       cleaner.clean(session.id());
 
-      future = new CompletableFuture<>();
-      context.execute(() -> future.complete(null));
+      // Update the highest index completed for all sessions.
+      updateLastCompleted(entry.getIndex());
     }
 
     // Immediately clean the unregister entry from the log.
@@ -501,6 +529,16 @@ class ServerStateMachine implements AutoCloseable {
     }
     cleaner.clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), getContext().executor());
+  }
+
+  /**
+   * Updates the last completed event version based on a commit at the given index.
+   */
+  private void updateLastCompleted(long index) {
+    lastCompleted = index;
+    for (ServerSession session : executor.context().sessions().sessions.values()) {
+      lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
+    }
   }
 
   /**

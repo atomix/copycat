@@ -17,15 +17,12 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.client.Command;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachineContext;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -34,11 +31,9 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 class ServerStateMachineContext implements StateMachineContext {
-  private CopycatServer.State state = CopycatServer.State.INACTIVE;
   private final ServerClock clock = new ServerClock();
   private final ConnectionManager connections;
   private final ServerSessionManager sessions;
-  private final Map<Long, CompletableFuture<Void>> futures = new HashMap<>();
   private long version;
   private boolean synchronous;
   private Command.ConsistencyLevel consistency;
@@ -46,15 +41,6 @@ class ServerStateMachineContext implements StateMachineContext {
   public ServerStateMachineContext(ConnectionManager connections, ServerSessionManager sessions) {
     this.connections = connections;
     this.sessions = sessions;
-  }
-
-  /**
-   * Returns the server state.
-   *
-   * @return The server state.
-   */
-  CopycatServer.State state() {
-    return state;
   }
 
   /**

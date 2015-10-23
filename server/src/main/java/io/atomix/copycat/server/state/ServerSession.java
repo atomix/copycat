@@ -67,6 +67,7 @@ class ServerSession implements Session {
 
   ServerSession(long id, ServerStateMachineContext context, long timeout) {
     this.id = id;
+    this.eventAckVersion = id;
     this.version = id - 1;
     this.context = context;
     this.timeout = timeout;
@@ -425,13 +426,22 @@ class ServerSession implements Session {
   }
 
   /**
+   * Returns the index of the highest event acked for the session.
+   *
+   * @return The index of the highest event acked for the session.
+   */
+  long getLastCompleted() {
+    return eventAckVersion;
+  }
+
+  /**
    * Clears events up to the given sequence.
    *
    * @param version The version to clear.
    * @return The server session.
    */
   private ServerSession clearEvents(long version) {
-    if (version >= eventAckVersion) {
+    if (version > eventAckVersion) {
       for (long i = eventAckVersion + 1; i <= version; i++) {
         eventAckVersion = i;
         EventHolder event = events.remove(i);
@@ -450,7 +460,7 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession resendEvents(long version) {
-    if (version >= eventAckVersion) {
+    if (version > eventAckVersion) {
       clearEvents(version);
       for (long i = version + 1; i <= eventVersion; i++) {
         EventHolder event = events.get(i);
@@ -469,7 +479,7 @@ class ServerSession implements Session {
     // Linearizable events must be sent synchronously, so only send them within a synchronous context.
     if (context.synchronous() && context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
       sendLinearizableEvent(event);
-    } else if (context.consistency() != Command.ConsistencyLevel.LINEARIZABLE) {
+    } else {
       sendSequentialEvent(event);
     }
   }

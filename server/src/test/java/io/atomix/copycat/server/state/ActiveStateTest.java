@@ -51,7 +51,6 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
-          .withGlobalIndex(0)
           .build();
 
       AppendResponse response = state.append(request).get();

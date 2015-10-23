@@ -130,6 +130,7 @@ final class LeaderState extends ActiveState {
       }
 
       LOGGER.debug("{} - Applied {} entries to log", context.getAddress(), count);
+      context.getLog().commit(context.getLastCompleted());
     }
   }
 
@@ -150,7 +151,9 @@ final class LeaderState extends ActiveState {
   private void heartbeatMembers() {
     context.checkThread();
     if (isOpen()) {
-      replicator.commit();
+      replicator.commit().whenComplete((result, error) -> {
+        context.getLog().commit(context.getLastCompleted());
+      });
     }
   }
 
@@ -973,11 +976,8 @@ final class LeaderState extends ActiveState {
       // Set the commit index. Once the commit index has been set we can run
       // all tasks up to the given commit.
       long commitIndex = members.get(quorumIndex()).getMatchIndex();
-      long globalIndex = members.get(members.size() - 1).getMatchIndex();
       if (commitIndex > 0 && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
         context.setCommitIndex(commitIndex);
-        context.setGlobalIndex(globalIndex);
-        context.getLog().commit(globalIndex);
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());
@@ -1033,8 +1033,7 @@ final class LeaderState extends ActiveState {
         .withLeader(context.getAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex())
-        .withGlobalIndex(context.getGlobalIndex());
+        .withCommitIndex(context.getCommitIndex());
 
       commit(member, builder.build(), false);
     }
@@ -1051,8 +1050,7 @@ final class LeaderState extends ActiveState {
         .withLeader(context.getAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex())
-        .withGlobalIndex(context.getGlobalIndex());
+        .withCommitIndex(context.getCommitIndex());
 
       if (!context.getLog().isEmpty()) {
         long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();

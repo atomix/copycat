@@ -61,7 +61,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatServer joiner = createServer(nextAddress());
     joiner.open().thenRun(this::resume);
-    await();
+    await(5000);
   }
 
   /**
@@ -71,15 +71,15 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatClient client = createClient();
     submit(client, 0, 10000);
-    await();
+    await(30000);
     CopycatServer joiner = createServer(nextAddress());
     joiner.open().thenRun(this::resume);
-    await();
+    await(30000);
     joiner.onStateChange(state -> {
       if (state == CopycatServer.State.FOLLOWER)
         resume();
     });
-    await();
+    await(30000);
   }
 
   /**
@@ -103,7 +103,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.get(0);
     server.close().thenRun(this::resume);
-    await();
+    await(5000);
   }
 
   /**
@@ -113,7 +113,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.stream().filter(s -> s.state() == RaftServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
-    await();
+    await(5000);
   }
 
   /**
@@ -259,7 +259,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await();
+    await(5000);
   }
 
   /**
@@ -337,7 +337,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await();
+    await(5000);
   }
 
   /**
@@ -492,7 +492,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await();
+    await(5000);
   }
 
   /**
@@ -547,7 +547,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(0, 2);
+    await(5000, 2);
   }
 
   /**
@@ -610,7 +610,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(0, 4);
+    await(5000, 4);
   }
 
   /**
@@ -669,7 +669,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(0, 2);
+    await(5000, 2);
   }
 
   /**
@@ -738,7 +738,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(0, 4);
+    await(5000, 4);
   }
 
   /**
@@ -774,7 +774,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(0, 3);
+    await(5000, 3);
   }
 
   /**
@@ -806,7 +806,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(0, 2);
+      await(5000, 2);
     }
   }
 
@@ -846,7 +846,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(0, 2);
+      await(5000, 2);
     }
 
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
@@ -860,7 +860,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(0, 2);
+      await(5000, 2);
     }
   }
 
@@ -903,7 +903,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(0, 4);
+      await(5000, 4);
     }
   }
 
@@ -970,7 +970,7 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(0, nodes);
+    await(5000, nodes);
 
     return servers;
   }
@@ -992,7 +992,7 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(0, live);
+    await(5000, live);
 
     return servers;
   }
@@ -1016,7 +1016,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder(members).withTransport(new LocalTransport(registry)).build();
     client.open().thenRun(this::resume);
-    await();
+    await(5000);
     clients.add(client);
     return client;
   }

@@ -337,27 +337,6 @@ public class ServerState {
   }
 
   /**
-   * Sets the recycle index.
-   *
-   * @param globalIndex The recycle index.
-   * @return The Raft context.
-   */
-  ServerState setGlobalIndex(long globalIndex) {
-    Assert.argNot(globalIndex < 0, "global index must be positive");
-    this.globalIndex = Math.max(this.globalIndex, globalIndex);
-    return this;
-  }
-
-  /**
-   * Returns the recycle index.
-   *
-   * @return The state recycle index.
-   */
-  public long getGlobalIndex() {
-    return globalIndex;
-  }
-
-  /**
    * Returns the server state machine.
    *
    * @return The server state machine.
@@ -373,6 +352,15 @@ public class ServerState {
    */
   public long getLastApplied() {
     return stateMachine.getLastApplied();
+  }
+
+  /**
+   * Returns the last index completed for all sessions.
+   *
+   * @return The last index completed for all sessions.
+   */
+  public long getLastCompleted() {
+    return stateMachine.getLastCompleted();
   }
 
   /**
