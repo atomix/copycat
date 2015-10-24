@@ -31,8 +31,6 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +45,6 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Test
 public class ClusterTest extends ConcurrentTestCase {
-  private static final File directory = new File("target/test-logs");
   protected volatile LocalServerRegistry registry;
   protected volatile int port;
   protected volatile List<Address> members;
@@ -71,15 +68,15 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatClient client = createClient();
     submit(client, 0, 10000);
-    await(10000);
+    await(30000);
     CopycatServer joiner = createServer(nextAddress());
     joiner.open().thenRun(this::resume);
-    await(10000);
+    await(30000);
     joiner.onStateChange(state -> {
       if (state == CopycatServer.State.FOLLOWER)
         resume();
     });
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -806,7 +803,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
   }
 
@@ -846,7 +843,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
 
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
@@ -860,7 +857,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
   }
 
@@ -903,7 +900,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 4);
+      await(30000, 4);
     }
   }
 
@@ -1003,7 +1000,13 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatServer createServer(Address address) {
     CopycatServer server = CopycatServer.builder(address, members)
       .withTransport(new LocalTransport(registry))
-      .withStorage(new Storage(StorageLevel.MEMORY))
+      .withStorage(Storage.builder()
+        .withStorageLevel(StorageLevel.MEMORY)
+        .withMaxSegmentSize(1024 * 1024)
+        .withMaxEntriesPerSegment(128)
+        .withMinorCompactionInterval(Duration.ofSeconds(3))
+        .withMajorCompactionInterval(Duration.ofSeconds(7))
+        .build())
       .withStateMachine(new TestStateMachine())
       .build();
     servers.add(server);
@@ -1024,31 +1027,17 @@ public class ClusterTest extends ConcurrentTestCase {
   @BeforeMethod
   @AfterMethod
   public void clearTests() throws Exception {
-    deleteDirectory(directory);
+    clients.forEach(c -> c.close().join());
+    servers.forEach(s -> {
+      s.close().join();
+      s.delete().join();
+    });
+
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
     clients = new ArrayList<>();
     servers = new ArrayList<>();
-  }
-
-  /**
-   * Deletes a directory recursively.
-   */
-  private void deleteDirectory(File directory) throws IOException {
-    if (directory.exists()) {
-      File[] files = directory.listFiles();
-      if (files != null) {
-        for (File file : files) {
-          if (file.isDirectory()) {
-            deleteDirectory(file);
-          } else {
-            Files.delete(file.toPath());
-          }
-        }
-      }
-      Files.delete(directory.toPath());
-    }
   }
 
   /**
