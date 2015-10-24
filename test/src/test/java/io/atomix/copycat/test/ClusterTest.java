@@ -30,7 +30,6 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +49,7 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile List<Address> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
+  private int count;
 
   /**
    * Tests joining a server to an existing cluster.
@@ -968,6 +968,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     await(10000, nodes);
+    count = nodes;
 
     return servers;
   }
@@ -990,6 +991,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     await(10000, live);
+    count = total;
 
     return servers;
   }
@@ -1028,6 +1030,12 @@ public class ClusterTest extends ConcurrentTestCase {
   @AfterMethod
   public void clearTests() throws Exception {
     clients.forEach(c -> c.close().join());
+    if (servers.size() < count) {
+      for (int i = servers.size(); i < count; i++) {
+        createServer(new Address("localhost", 5000 + i)).open().join();
+      }
+    }
+
     servers.forEach(s -> {
       s.close().join();
       s.delete().join();
