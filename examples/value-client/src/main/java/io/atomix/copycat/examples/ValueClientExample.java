@@ -63,8 +63,7 @@ public class ValueClientExample {
   private static void recursiveSet(CopycatClient client) {
     client.submit(new SetCommand(UUID.randomUUID().toString())).thenRun(() -> {
       client.submit(new GetQuery()).thenAccept(value -> {
-        System.out.println("Value is: " + value);
-        client.context().schedule(Duration.ofSeconds(1), () -> recursiveSet(client));
+        client.context().schedule(Duration.ofMillis(10), () -> recursiveSet(client));
       });
     });
   }
