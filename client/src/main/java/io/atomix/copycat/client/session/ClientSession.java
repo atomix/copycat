@@ -42,6 +42,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
 /**
@@ -95,8 +96,8 @@ public class ClientSession implements Session, Managed<Session> {
   private final List<Runnable> retries = new ArrayList<>();
   private Scheduled keepAliveFuture;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
-  private final Listeners<Session> openListeners = new Listeners<>();
-  private final Listeners<Session> closeListeners = new Listeners<>();
+  private final Set<Consumer<Session>> openListeners = new CopyOnWriteArraySet<>();
+  private final Set<Consumer<Session>> closeListeners = new CopyOnWriteArraySet<>();
   private final Map<Long, Runnable> responses = new ConcurrentHashMap<>();
   private long commandRequest;
   private long commandResponse;
@@ -695,7 +696,9 @@ public class ClientSession implements Session, Managed<Session> {
 
   @Override
   public Listener<Session> onOpen(Consumer<Session> listener) {
-    return openListeners.add(Assert.notNull(listener, "listener"));
+    Listener<Session> wrapper = new SessionListener(Assert.notNull(listener, "listener"));
+    openListeners.add(wrapper);
+    return wrapper;
   }
 
   @Override
@@ -822,7 +825,9 @@ public class ClientSession implements Session, Managed<Session> {
 
   @Override
   public Listener<Session> onClose(Consumer<Session> listener) {
-    return closeListeners.add(Assert.notNull(listener, "listener"));
+    Listener<Session> wrapper = new SessionListener(Assert.notNull(listener, "listener"));
+    closeListeners.add(wrapper);
+    return wrapper;
   }
 
   /**
@@ -857,6 +862,27 @@ public class ClientSession implements Session, Managed<Session> {
   @Override
   public String toString() {
     return String.format("%s[id=%d]", getClass().getSimpleName(), id);
+  }
+
+  /**
+   * Session listener holder.
+   */
+  private class SessionListener implements Listener<Session> {
+    private final Consumer<Session> listener;
+
+    private SessionListener(Consumer<Session> listener) {
+      this.listener = listener;
+    }
+
+    @Override
+    public void accept(Session event) {
+      listener.accept(event);
+    }
+
+    @Override
+    public void close() {
+      closeListeners.remove(this);
+    }
   }
 
 }
