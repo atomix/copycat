@@ -179,7 +179,8 @@ final class LeaderState extends ActiveState {
         replicator.commit(index).whenComplete((result, error) -> {
           if (isOpen()) {
             UnregisterEntry entry = context.getLog().get(index);
-            applyEntry(entry);
+            LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+            context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
           }
         });
         session.unregister();
@@ -789,16 +790,18 @@ final class LeaderState extends ActiveState {
       if (isOpen()) {
         if (commitError == null) {
           UnregisterEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
+
+          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
-              if (sessionError == null) {
+              if (unregisterError == null) {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.OK)
                   .build()));
-              } else if (sessionError instanceof RaftException) {
+              } else if (unregisterError instanceof RaftException) {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) sessionError).getType())
+                  .withError(((RaftException) unregisterError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(UnregisterResponse.builder()
@@ -809,7 +812,7 @@ final class LeaderState extends ActiveState {
               checkSessions();
             }
             entry.release();
-          }, context.getThreadContext().executor());
+          });
         } else {
           future.complete(logResponse(UnregisterResponse.builder()
             .withStatus(Response.Status.ERROR)

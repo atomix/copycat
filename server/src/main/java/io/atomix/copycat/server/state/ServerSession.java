@@ -489,7 +489,7 @@ class ServerSession implements Session {
     // Linearizable events must be sent synchronously, so only send them within a synchronous context.
     if (context.synchronous() && context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
       sendLinearizableEvent(event);
-    } else {
+    } else if (context.consistency() != Command.ConsistencyLevel.LINEARIZABLE) {
       sendSequentialEvent(event);
     }
   }
