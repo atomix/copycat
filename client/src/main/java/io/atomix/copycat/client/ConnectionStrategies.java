@@ -41,8 +41,7 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    */
   ANY {
     @Override
-    public Iterable<Address> getConnections(Address leader, List<Address> servers) {
-      Collections.shuffle(servers);
+    public List<Address> getConnections(Address leader, List<Address> servers) {
       return servers;
     }
   },
@@ -58,8 +57,7 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    */
   LEADER {
     @Override
-    public Iterable<Address> getConnections(Address leader, List<Address> servers) {
-      Collections.shuffle(servers);
+    public List<Address> getConnections(Address leader, List<Address> servers) {
       return leader != null ? Collections.singletonList(leader) : servers;
     }
   },
@@ -73,8 +71,7 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    */
   FOLLOWERS {
     @Override
-    public Iterable<Address> getConnections(Address leader, List<Address> servers) {
-      Collections.shuffle(servers);
+    public List<Address> getConnections(Address leader, List<Address> servers) {
       return servers.size() > 1 ? servers.stream().filter(a -> !a.equals(leader)).collect(Collectors.toList()) : servers;
     }
   }

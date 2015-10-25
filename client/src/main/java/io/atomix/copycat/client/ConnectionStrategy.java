@@ -35,6 +35,6 @@ public interface ConnectionStrategy {
    * @param servers The current list of servers.
    * @return A collection of servers to which the client can connect.
    */
-  Iterable<Address> getConnections(Address leader, List<Address> servers);
+  List<Address> getConnections(Address leader, List<Address> servers);
 
 }

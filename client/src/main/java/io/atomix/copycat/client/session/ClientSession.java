@@ -79,13 +79,14 @@ public class ClientSession implements Session, Managed<Session> {
     EXPIRED
   }
 
+  private final Random random = new Random(System.currentTimeMillis());
   private final UUID clientId;
   private final Client client;
   private Address leader;
   private Set<Address> members;
   private final ThreadContext context;
   private final ConnectionStrategy connectionStrategy;
-  private Iterator<Address> connectMembers;
+  private List<Address> connectMembers;
   private Connection connection;
   private volatile State state = State.CLOSED;
   private volatile long id;
@@ -113,7 +114,7 @@ public class ClientSession implements Session, Managed<Session> {
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members)).iterator();
+    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
   }
 
   @Override
@@ -133,8 +134,18 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Sets the leader.
    */
-  private void setLeader(Address leader) {
-    this.leader = leader;
+  private boolean setLeader(Address leader) {
+    if (this.leader == null && leader != null) {
+      this.leader = leader;
+      return true;
+    } else if (this.leader != null && leader == null) {
+      this.leader = null;
+      return true;
+    } else if (this.leader != null && !this.leader.equals(leader)) {
+      this.leader = leader;
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -142,7 +153,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members)).iterator();
+    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members));
   }
 
   /**
@@ -367,7 +378,7 @@ public class ClientSession implements Session, Managed<Session> {
     // session based on the responses from servers with which we did successfully communicate and the
     // time we were last able to successfully communicate with a correct server process. The failureTime
     // indicates the first time we received a NO_LEADER_ERROR from a server.
-    if (!connectMembers.hasNext()) {
+    if (connectMembers.isEmpty()) {
       // If open checks are not being performed, don't retry connecting to the servers. Simply fail.
       if (!checkOpen) {
         LOGGER.warn("Failed to connect to cluster");
@@ -397,7 +408,7 @@ public class ClientSession implements Session, Managed<Session> {
     }
 
     // Remove the next random member from the members list.
-    Address member = connectMembers.next();
+    Address member = connectMembers.remove(random.nextInt(connectMembers.size()));
 
     // Connect to the server. If the connection fails, recursively attempt to connect to the next server,
     // otherwise setup the connection and send the request.
@@ -560,7 +571,9 @@ public class ClientSession implements Session, Managed<Session> {
    * Resets the members to which to connect.
    */
   private ClientSession resetMembers() {
-    connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members)).iterator();
+    if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
+      connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+    }
     return this;
   }
 
@@ -637,10 +650,7 @@ public class ClientSession implements Session, Managed<Session> {
             }
           });
         } else if (isOpen()) {
-          if ((leader == null && response.leader() != null)
-            || (leader != null && response.leader() == null)
-            || (leader != null && response.leader() != null && !leader.equals(response.leader()))) {
-            setLeader(response.leader());
+          if (setLeader(response.leader())) {
             resetMembers();
           }
 
