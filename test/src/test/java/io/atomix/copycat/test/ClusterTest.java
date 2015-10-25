@@ -892,7 +892,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 1000; i++) {
+    for (int i = 0; i < 10000; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -900,7 +900,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(30000, 4);
+      await(5000, 4);
     }
   }
 

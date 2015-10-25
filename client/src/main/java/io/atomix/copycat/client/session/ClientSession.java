@@ -695,19 +695,32 @@ public class ClientSession implements Session, Managed<Session> {
    */
   @SuppressWarnings("unchecked")
   private CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
-    if (request.session() != id)
-      return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
+    LOGGER.debug("{} - Received {}", id, request);
 
+    // If the request is for another session ID, this may be a session that was previously opened
+    // for this client.
+    if (request.session() != id) {
+      LOGGER.debug("{} - Inconsistent session ID: {}", id, request.session());
+      return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
+    }
+
+    // If the request's previous event version doesn't equal the previous received event version,
+    // respond with an undefined error and the last version received. This will cause the cluster
+    // to resend events starting at eventVersion + 1.
     if (request.previousVersion() != eventVersion) {
+      LOGGER.debug("{} - Inconsistent event version: {}", id, request.previousVersion());
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.INTERNAL_ERROR)
         .withVersion(eventVersion)
         .build());
     }
 
+    // Store the event version. This will be used to verify that events are received in sequential order.
     eventVersion = request.eventVersion();
 
+    // For each event in the events batch, call the appropriate event listener and create a CompletableFuture
+    // to be called once the event callback is complete. Futures will ensure that an event is not acknowledged
+    // until all event callbacks have completed.
     List<CompletableFuture<Void>> futures = new ArrayList<>(request.events().size());
     for (Event<?> event : request.events()) {
       Listeners<Object> listeners = eventListeners.get(event.name());
@@ -716,9 +729,15 @@ public class ClientSession implements Session, Managed<Session> {
       }
     }
 
+    // Wait for all event listeners to complete and then respond to the event message. This ensures that
+    // linearizable events are completed between their invocation and response. If the async queue is backed
+    // up and we don't wait for callbacks to complete, the cluster will believe an event to have been received
+    // and handled before it has indeed been received and handled.
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
       .handleAsync((result, error) -> {
+        // Store the highest version for which event callbacks have completed.
         completeVersion = Math.max(completeVersion, request.eventVersion());
+
         return PublishResponse.builder()
           .withStatus(Response.Status.OK)
           .withVersion(eventVersion)

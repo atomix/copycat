@@ -68,20 +68,23 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
-      version = buffer.readLong();
-    } else {
+    } else if (buffer.readBoolean()) {
       error = RaftError.forId(buffer.readByte());
     }
+    version = buffer.readLong();
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(status.id());
-    if (status == Status.OK) {
-      buffer.writeLong(version);
-    } else {
-      buffer.writeByte(error.id());
+    if (status == Status.ERROR) {
+      if (error != null) {
+        buffer.writeBoolean(true).writeByte(error.id());
+      } else {
+        buffer.writeBoolean(false);
+      }
     }
+    buffer.writeLong(version);
   }
 
   @Override

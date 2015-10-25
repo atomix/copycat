@@ -26,6 +26,8 @@ import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.session.Event;
 import io.atomix.copycat.client.session.Session;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -38,6 +40,7 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSession implements Session {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerSession.class);
   private final long id;
   private final ServerStateMachineContext context;
   private final long timeout;
@@ -454,6 +457,7 @@ class ServerSession implements Session {
    */
   private ServerSession clearEvents(long version) {
     if (version > eventAckVersion) {
+      LOGGER.debug("{} - Clearing events up to {}", id, version);
       EventHolder event = events.peek();
       while (event != null && event.eventVersion <= version) {
         events.remove();
@@ -525,11 +529,12 @@ class ServerSession implements Session {
       .withEvents(event.events)
       .build();
 
+    LOGGER.debug("{} - Sending {}", id, request);
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (isOpen() && error == null) {
         if (response.status() == Response.Status.OK) {
           clearEvents(response.version());
-        } else {
+        } else if (response.error() == null) {
           resendEvents(response.version());
         }
       }
