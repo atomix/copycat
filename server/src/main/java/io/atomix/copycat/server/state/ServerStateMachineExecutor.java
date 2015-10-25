@@ -26,6 +26,7 @@ import io.atomix.copycat.client.error.ApplicationException;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachineExecutor;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +43,7 @@ import java.util.function.Supplier;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 class ServerStateMachineExecutor implements StateMachineExecutor {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachineExecutor.class);
   private final ThreadContext executor;
   private final ServerStateMachineContext context;
   private final List<ServerScheduledTask> tasks = new ArrayList<>();
@@ -166,12 +168,14 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   @Override
   public Scheduled schedule(Duration delay, Runnable callback) {
     Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
+    LOGGER.debug("Scheduled callback {} with delay {}", callback, delay);
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
     Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
+    LOGGER.debug("Scheduled repeating callback {} with initial delay {} and interval {}", callback, initialDelay, interval);
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }
 
@@ -183,6 +187,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       callback.accept(commit);
       return null;
     });
+    LOGGER.debug("Registered void operation callback {}", type);
     return this;
   }
 
@@ -191,6 +196,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
     Assert.notNull(type, "type");
     Assert.notNull(callback, "callback");
     operations.put(type, callback);
+    LOGGER.debug("Registered value operation callback {}", type);
     return this;
   }
 
