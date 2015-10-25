@@ -116,16 +116,18 @@ public class CopycatClient implements RaftClient {
   private final Collection<Address> members;
   private final Serializer serializer;
   private final ConnectionStrategy connectionStrategy;
+  private final RecoveryStrategy recoveryStrategy;
   private ClientSession session;
   private CompletableFuture<RaftClient> openFuture;
   private CompletableFuture<Void> closeFuture;
 
-  protected CopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy) {
+  protected CopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
     serializer.resolve(new ServiceLoaderTypeResolver());
     this.transport = Assert.notNull(transport, "transport");
     this.members = Assert.notNull(members, "members");
     this.serializer = Assert.notNull(serializer, "serializer");
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
+    this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
   }
 
   @Override
@@ -178,6 +180,7 @@ public class CopycatClient implements RaftClient {
               synchronized (this) {
                 openFuture = null;
                 this.session = session;
+                registerStrategies(session);
                 return this;
               }
             });
@@ -186,6 +189,7 @@ public class CopycatClient implements RaftClient {
               synchronized (this) {
                 openFuture = null;
                 this.session = session;
+                registerStrategies(session);
                 return this;
               }
             }));
@@ -199,6 +203,18 @@ public class CopycatClient implements RaftClient {
   @Override
   public boolean isOpen() {
     return session != null && session.isOpen();
+  }
+
+  /**
+   * Registers strategies on the client's session.
+   */
+  private void registerStrategies(Session session) {
+    session.onClose(s -> {
+      this.session = null;
+      if (s.isExpired()) {
+        recoveryStrategy.recover(this);
+      }
+    });
   }
 
   @Override
@@ -256,6 +272,7 @@ public class CopycatClient implements RaftClient {
     private Serializer serializer;
     private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.FOLLOWERS;
+    private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
     private Builder(Collection<Address> members) {
       this.members = new HashSet<>(Assert.notNull(members, "members"));
@@ -302,6 +319,17 @@ public class CopycatClient implements RaftClient {
     }
 
     /**
+     * Sets the client recovery strategy.
+     *
+     * @param recoveryStrategy The client recovery strategy.
+     * @return The client builder.
+     */
+    public Builder withRecoveryStrategy(RecoveryStrategy recoveryStrategy) {
+      this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
+      return this;
+    }
+
+    /**
      * @throws ConfigurationException if transport is not configured and {@code io.atomix.catalyst.transport.NettyTransport}
      * is not found on the classpath
      */
@@ -320,7 +348,7 @@ public class CopycatClient implements RaftClient {
       if (serializer == null) {
         serializer = new Serializer();
       }
-      return new CopycatClient(transport, members, serializer, connectionStrategy);
+      return new CopycatClient(transport, members, serializer, connectionStrategy, recoveryStrategy);
     }
   }
 
