@@ -788,7 +788,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          KeepAliveEntry entry = context.getLog().get(index);
+          UnregisterEntry entry = context.getLog().get(index);
           applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
