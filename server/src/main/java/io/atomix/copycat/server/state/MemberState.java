@@ -17,6 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Log;
 
 /**
  * Cluster member state.
@@ -34,6 +35,17 @@ class MemberState {
 
   public MemberState(Address address) {
     this.address = Assert.notNull(address, "address");
+  }
+
+  /**
+   * Resets the member state.
+   */
+  void resetState(Log log) {
+    matchIndex = 0;
+    nextIndex = log.lastIndex() + 1;
+    commitTime = 0;
+    commitStartTime = 0;
+    failures = 0;
   }
 
   /**
@@ -81,7 +93,7 @@ class MemberState {
    * @return The member state.
    */
   MemberState setMatchIndex(long matchIndex) {
-    this.matchIndex = matchIndex;
+    this.matchIndex = Assert.argNot(matchIndex, matchIndex < this.matchIndex, "matchIndex cannot be decreased");
     return this;
   }
 
@@ -101,7 +113,7 @@ class MemberState {
    * @return The member state.
    */
   MemberState setNextIndex(long nextIndex) {
-    this.nextIndex = nextIndex;
+    this.nextIndex = Assert.argNot(nextIndex, nextIndex <= matchIndex, "nextIndex cannot be less than or equal to matchIndex");
     return this;
   }
 
@@ -112,6 +124,17 @@ class MemberState {
    */
   long getCommitTime() {
     return commitTime;
+  }
+
+  /**
+   * Sets the member commit time.
+   *
+   * @param commitTime The member commit time.
+   * @return The member state.
+   */
+  MemberState setCommitTime(long commitTime) {
+    this.commitTime = commitTime;
+    return this;
   }
 
   /**
@@ -131,17 +154,6 @@ class MemberState {
    */
   MemberState setCommitStartTime(long startTime) {
     this.commitStartTime = startTime;
-    return this;
-  }
-
-  /**
-   * Sets the member commit time.
-   *
-   * @param commitTime The member commit time.
-   * @return The member state.
-   */
-  MemberState setCommitTime(long commitTime) {
-    this.commitTime = commitTime;
     return this;
   }
 

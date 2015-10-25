@@ -78,6 +78,7 @@ final class LeaderState extends ActiveState {
    */
   private void takeLeadership() {
     context.setLeader(context.getAddress().hashCode());
+    context.getCluster().getActiveMembers().forEach(m -> m.resetState(context.getLog()));
   }
 
   /**
@@ -908,9 +909,7 @@ final class LeaderState extends ActiveState {
     private long commitTime() {
       int quorumIndex = quorumIndex();
       if (quorumIndex >= 0) {
-        long commitTime = context.getCluster().getActiveMembers((m1, m2) -> (int) (m2.getCommitTime() - m1.getCommitTime())).get(quorumIndex).getCommitTime();
-        if (commitTime > 0)
-          return commitTime;
+        return context.getCluster().getActiveMembers((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
       }
       return System.currentTimeMillis();
     }

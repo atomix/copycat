@@ -308,10 +308,11 @@ class ClusterState {
     List<MemberState> states = new ArrayList<>(members.size());
     for (Address address : members) {
       if (!address.equals(this.address)) {
+        // If the member doesn't already exist, create a new MemberState and initialize the state.
         MemberState state = membersMap.get(address.hashCode());
         if (state == null) {
           state = new MemberState(address);
-          state.setNextIndex(Math.max(state.getMatchIndex(), Math.max(context.getLog().lastIndex(), 1)));
+          state.resetState(context.getLog());
         }
         states.add(state);
       }

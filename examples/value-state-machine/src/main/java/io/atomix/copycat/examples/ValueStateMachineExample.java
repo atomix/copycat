@@ -21,6 +21,7 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.storage.Storage;
 
 import java.net.InetAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +54,11 @@ public class ValueStateMachineExample {
       .withStateMachine(new ValueStateMachine())
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
-        .withDirectory(System.getProperty("user.dir") + "/logs/" + UUID.randomUUID().toString())
+        .withDirectory(System.getProperty("user.dir") + "/logs/" + port)
+        // Limit the number of entries per segment and compaction intervals to demonstrate compaction.
+        .withMaxEntriesPerSegment(1024)
+        .withMinorCompactionInterval(Duration.ofSeconds(27))
+        .withMajorCompactionInterval(Duration.ofSeconds(31))
         .build())
       .build();
 

@@ -30,9 +30,6 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,12 +44,12 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Test
 public class ClusterTest extends ConcurrentTestCase {
-  private static final File directory = new File("target/test-logs");
   protected volatile LocalServerRegistry registry;
   protected volatile int port;
   protected volatile List<Address> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
+  private int count;
 
   /**
    * Tests joining a server to an existing cluster.
@@ -61,7 +58,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatServer joiner = createServer(nextAddress());
     joiner.open().thenRun(this::resume);
-    await(5000);
+    await(10000);
   }
 
   /**
@@ -103,7 +100,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.get(0);
     server.close().thenRun(this::resume);
-    await(5000);
+    await(10000);
   }
 
   /**
@@ -113,7 +110,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.stream().filter(s -> s.state() == RaftServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
-    await(5000);
+    await(10000);
   }
 
   /**
@@ -259,7 +256,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000);
+    await(10000);
   }
 
   /**
@@ -337,7 +334,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000);
+    await(10000);
   }
 
   /**
@@ -492,7 +489,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000);
+    await(10000);
   }
 
   /**
@@ -547,7 +544,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000, 2);
+    await(10000, 2);
   }
 
   /**
@@ -610,7 +607,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000, 4);
+    await(10000, 4);
   }
 
   /**
@@ -669,7 +666,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000, 2);
+    await(10000, 2);
   }
 
   /**
@@ -738,7 +735,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000, 4);
+    await(10000, 4);
   }
 
   /**
@@ -774,7 +771,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(5000, 3);
+    await(10000, 3);
   }
 
   /**
@@ -806,7 +803,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
   }
 
@@ -846,7 +843,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(5000, 2);
+      await(30000, 2);
     }
 
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
@@ -860,7 +857,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(5000, 2);
+      await(30000, 2);
     }
   }
 
@@ -903,7 +900,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 4);
+      await(30000, 4);
     }
   }
 
@@ -970,7 +967,8 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(5000, nodes);
+    await(10000, nodes);
+    count = nodes;
 
     return servers;
   }
@@ -992,7 +990,8 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(5000, live);
+    await(10000, live);
+    count = total;
 
     return servers;
   }
@@ -1003,7 +1002,13 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatServer createServer(Address address) {
     CopycatServer server = CopycatServer.builder(address, members)
       .withTransport(new LocalTransport(registry))
-      .withStorage(new Storage(StorageLevel.MEMORY))
+      .withStorage(Storage.builder()
+        .withStorageLevel(StorageLevel.MEMORY)
+        .withMaxSegmentSize(1024 * 1024)
+        .withMaxEntriesPerSegment(128)
+        .withMinorCompactionInterval(Duration.ofSeconds(3))
+        .withMajorCompactionInterval(Duration.ofSeconds(7))
+        .build())
       .withStateMachine(new TestStateMachine())
       .build();
     servers.add(server);
@@ -1016,7 +1021,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder(members).withTransport(new LocalTransport(registry)).build();
     client.open().thenRun(this::resume);
-    await(5000);
+    await(10000);
     clients.add(client);
     return client;
   }
@@ -1024,31 +1029,23 @@ public class ClusterTest extends ConcurrentTestCase {
   @BeforeMethod
   @AfterMethod
   public void clearTests() throws Exception {
-    deleteDirectory(directory);
+    clients.forEach(c -> c.close().join());
+    if (servers.size() < count) {
+      for (int i = servers.size(); i < count; i++) {
+        createServer(new Address("localhost", 5000 + i)).open().join();
+      }
+    }
+
+    servers.forEach(s -> {
+      s.close().join();
+      s.delete().join();
+    });
+
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
     clients = new ArrayList<>();
     servers = new ArrayList<>();
-  }
-
-  /**
-   * Deletes a directory recursively.
-   */
-  private void deleteDirectory(File directory) throws IOException {
-    if (directory.exists()) {
-      File[] files = directory.listFiles();
-      if (files != null) {
-        for (File file : files) {
-          if (file.isDirectory()) {
-            deleteDirectory(file);
-          } else {
-            Files.delete(file.toPath());
-          }
-        }
-      }
-      Files.delete(directory.toPath());
-    }
   }
 
   /**

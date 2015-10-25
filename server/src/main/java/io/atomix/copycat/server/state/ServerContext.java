@@ -131,9 +131,10 @@ public class ServerContext implements Managed<ServerState> {
   public CompletableFuture<Void> delete() {
     if (open)
       return Futures.exceptionalFuture(new IllegalStateException("cannot delete open context"));
-    return CompletableFuture.runAsync(() -> {
-      storage.open("copycat").delete();
-    }, context.executor());
+    Log log = storage.open("copycat");
+    log.close();
+    log.delete();
+    return CompletableFuture.completedFuture(null);
   }
 
 }
