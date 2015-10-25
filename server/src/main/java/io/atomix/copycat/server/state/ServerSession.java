@@ -441,7 +441,7 @@ class ServerSession implements Session {
    */
   long getLastCompleted() {
     // If there are any queued events, return the index prior to the first event in the queue.
-    EventHolder event = events.poll();
+    EventHolder event = events.peek();
     if (event != null && event.eventVersion > eventAckVersion) {
       return event.eventVersion - 1;
     }
@@ -457,7 +457,6 @@ class ServerSession implements Session {
    */
   private ServerSession clearEvents(long version) {
     if (version > eventAckVersion) {
-      LOGGER.debug("{} - Clearing events up to {}", id, version);
       EventHolder event = events.peek();
       while (event != null && event.eventVersion <= version) {
         events.remove();

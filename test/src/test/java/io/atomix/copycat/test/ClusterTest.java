@@ -283,21 +283,21 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testTwoOfFourNodeSubmitCommandWithNoneConsistency() throws Throwable {
+  public void testThreeOfFourNodeSubmitCommandWithNoneConsistency() throws Throwable {
     testSubmitCommand(3, 4, Command.ConsistencyLevel.NONE);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testTwoOfFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
+  public void testThreeOfFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
     testSubmitCommand(3, 4, Command.ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testTwoOfFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
+  public void testThreeOfFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
     testSubmitCommand(3, 4, Command.ConsistencyLevel.LINEARIZABLE);
   }
 
@@ -900,7 +900,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(5000, 4);
+      await(2000, 4);
     }
   }
 

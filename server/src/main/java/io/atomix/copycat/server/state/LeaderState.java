@@ -417,7 +417,7 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended entry to log at index {}", context.getAddress(), index);
+      LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
     }
 
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
