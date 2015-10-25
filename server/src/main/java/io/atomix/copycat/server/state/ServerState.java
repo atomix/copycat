@@ -66,7 +66,6 @@ public class ServerState {
   private long term;
   private int lastVotedFor;
   private long commitIndex;
-  private long globalIndex;
 
   @SuppressWarnings("unchecked")
   ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
