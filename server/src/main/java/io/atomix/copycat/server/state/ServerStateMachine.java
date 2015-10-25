@@ -311,9 +311,14 @@ class ServerStateMachine implements AutoCloseable {
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
           // to all sessions.
-          executor.context().commit().whenComplete((result, error) -> {
+          CompletableFuture<Void> sessionFuture = executor.context().commit();
+          if (sessionFuture != null) {
+            sessionFuture.whenComplete((result, error) -> {
+              context.executor().execute(() -> future.complete(null));
+            });
+          } else {
             context.executor().execute(() -> future.complete(null));
-          });
+          }
         });
       } else {
         executor.executor().execute(() -> {
@@ -329,9 +334,14 @@ class ServerStateMachine implements AutoCloseable {
           // Once close callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
           // to all sessions.
-          executor.context().commit().whenComplete((result, error) -> {
+          CompletableFuture<Void> sessionFuture = executor.context().commit();
+          if (sessionFuture != null) {
+            sessionFuture.whenComplete((result, error) -> {
+              context.executor().execute(() -> future.complete(null));
+            });
+          } else {
             context.executor().execute(() -> future.complete(null));
-          });
+          }
         });
       }
 
