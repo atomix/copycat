@@ -610,6 +610,7 @@ final class LeaderState extends ActiveState {
                   .withStatus(Response.Status.OK)
                   .withSession((Long) sessionId)
                   .withTimeout(timeout)
+                  .withLeader(context.getAddress())
                   .withMembers(context.getCluster().buildActiveMembers())
                   .build()));
               } else if (sessionError instanceof RaftException) {
@@ -740,16 +741,19 @@ final class LeaderState extends ActiveState {
               if (sessionError == null) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.OK)
+                  .withLeader(context.getAddress())
                   .withMembers(context.getCluster().buildActiveMembers())
                   .build()));
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
+                  .withLeader(context.getAddress())
                   .withError(((RaftException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
+                  .withLeader(context.getAddress())
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -760,6 +764,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
+            .withLeader(context.getAddress())
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }

@@ -29,6 +29,7 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
@@ -77,12 +78,13 @@ public class ClientSession implements Session, Managed<Session> {
     EXPIRED
   }
 
-  private final Random random = new Random();
   private final UUID clientId;
   private final Client client;
+  private Address leader;
   private Set<Address> members;
   private final ThreadContext context;
-  private List<Address> connectMembers;
+  private final ConnectionStrategy connectionStrategy;
+  private Iterator<Address> connectMembers;
   private Connection connection;
   private volatile State state = State.CLOSED;
   private volatile long id;
@@ -104,12 +106,13 @@ public class ClientSession implements Session, Managed<Session> {
   private long eventVersion;
   private long completeVersion;
 
-  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer) {
+  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.client = Assert.notNull(transport, "transport").client();
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
-    this.connectMembers = new ArrayList<>(members);
+    this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
+    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members)).iterator();
   }
 
   @Override
@@ -127,11 +130,18 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   /**
+   * Sets the leader.
+   */
+  private void setLeader(Address leader) {
+    this.leader = leader;
+  }
+
+  /**
    * Sets the client remote members.
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = new ArrayList<>(this.members);
+    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members)).iterator();
   }
 
   /**
@@ -356,7 +366,7 @@ public class ClientSession implements Session, Managed<Session> {
     // session based on the responses from servers with which we did successfully communicate and the
     // time we were last able to successfully communicate with a correct server process. The failureTime
     // indicates the first time we received a NO_LEADER_ERROR from a server.
-    if (connectMembers.isEmpty()) {
+    if (!connectMembers.hasNext()) {
       // If open checks are not being performed, don't retry connecting to the servers. Simply fail.
       if (!checkOpen) {
         LOGGER.warn("Failed to connect to cluster");
@@ -380,13 +390,13 @@ public class ClientSession implements Session, Managed<Session> {
       else {
         LOGGER.warn("Failed to communicate with cluster. Retrying");
         retryFuture = context.schedule(Duration.ofMillis(200), this::retryRequests);
-        retries.add(() -> resetMembers().request(request, future, true, true));
+        retries.add(() -> request(request, future, true, true));
       }
       return future;
     }
 
     // Remove the next random member from the members list.
-    Address member = connectMembers.remove(random.nextInt(connectMembers.size()));
+    Address member = connectMembers.next();
 
     // Connect to the server. If the connection fails, recursively attempt to connect to the next server,
     // otherwise setup the connection and send the request.
@@ -549,9 +559,7 @@ public class ClientSession implements Session, Managed<Session> {
    * Resets the members to which to connect.
    */
   private ClientSession resetMembers() {
-    if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = new ArrayList<>(members);
-    }
+    connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members)).iterator();
     return this;
   }
 
@@ -588,11 +596,12 @@ public class ClientSession implements Session, Managed<Session> {
     this.<RegisterRequest, RegisterResponse>request(request, new CompletableFuture<>(), false, true).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
+          setLeader(response.leader());
           setMembers(response.members());
           setTimeout(response.timeout());
           onOpen(response.session());
           setupConnection(connection).whenComplete((setupResult, setupError) -> future.complete(null));
-          resetMembers().keepAlive(Duration.ofMillis(Math.round(response.timeout() * KEEP_ALIVE_RATIO)));
+          resetConnection().resetMembers().keepAlive(Duration.ofMillis(Math.round(response.timeout() * KEEP_ALIVE_RATIO)));
         } else {
           future.completeExceptionally(response.error().createException());
         }
@@ -607,25 +616,44 @@ public class ClientSession implements Session, Managed<Session> {
    * Sends and reschedules keep alive request.
    */
   private void keepAlive(Duration interval) {
-    keepAliveFuture = context.schedule(interval, () -> {
-      if (isOpen()) {
-        context.checkThread();
+    KeepAliveRequest request = KeepAliveRequest.builder()
+      .withSession(id)
+      .withCommandSequence(commandResponse)
+      .withEventVersion(completeVersion)
+      .build();
 
-        KeepAliveRequest request = KeepAliveRequest.builder()
-          .withSession(id)
-          .withCommandSequence(commandResponse)
-          .withEventVersion(completeVersion)
-          .build();
+    this.<KeepAliveRequest, KeepAliveResponse>request(request).whenComplete((response, error) -> {
+      if (error == null) {
+        if (response.status() == Response.Status.OK) {
+          setLeader(response.leader());
+          setMembers(response.members());
+          resetMembers();
 
-        this.<KeepAliveRequest, KeepAliveResponse>request(request).whenComplete((response, error) -> {
-          if (error == null) {
-            if (response.status() == Response.Status.OK) {
-              setMembers(response.members());
-              resetMembers().keepAlive(interval);
-            } else if (isOpen()) {
+          keepAliveFuture = context.schedule(interval, () -> {
+            if (isOpen()) {
+              context.checkThread();
               keepAlive(interval);
             }
-          } else if (isOpen()) {
+          });
+        } else if (isOpen()) {
+          if ((leader == null && response.leader() != null)
+            || (leader != null && response.leader() == null)
+            || (leader != null && response.leader() != null && !leader.equals(response.leader()))) {
+            setLeader(response.leader());
+            resetMembers();
+          }
+
+          keepAliveFuture = context.schedule(interval, () -> {
+            if (isOpen()) {
+              context.checkThread();
+              keepAlive(interval);
+            }
+          });
+        }
+      } else if (isOpen()) {
+        keepAliveFuture = context.schedule(interval, () -> {
+          if (isOpen()) {
+            context.checkThread();
             keepAlive(interval);
           }
         });

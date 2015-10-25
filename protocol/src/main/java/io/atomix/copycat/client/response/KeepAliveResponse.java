@@ -54,7 +54,17 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
     return new Builder(response);
   }
 
+  private Address leader;
   private Collection<Address> members;
+
+  /**
+   * Returns the cluster leader.
+   *
+   * @return The cluster leader.
+   */
+  public Address leader() {
+    return leader;
+  }
 
   /**
    * Returns the cluster members.
@@ -70,9 +80,11 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
+      leader = serializer.readObject(buffer);
       members = serializer.readObject(buffer);
     } else {
       error = RaftError.forId(buffer.readByte());
+      leader = serializer.readObject(buffer);
     }
   }
 
@@ -80,15 +92,17 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
+      serializer.writeObject(leader, buffer);
       serializer.writeObject(members, buffer);
     } else {
       buffer.writeByte(error.id());
+      serializer.writeObject(leader, buffer);
     }
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status);
+    return Objects.hash(getClass(), status, leader, members);
   }
 
   @Override
@@ -96,6 +110,8 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
     if (object instanceof KeepAliveResponse) {
       KeepAliveResponse response = (KeepAliveResponse) object;
       return response.status == status
+        && ((response.leader == null && leader == null)
+        || (response.leader != null && leader != null && response.leader.equals(leader)))
         && ((response.members == null && members == null)
         || (response.members != null && members != null && response.members.equals(members)));
     }
@@ -104,7 +120,7 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, members=%s]", getClass().getSimpleName(), status, members);
+    return String.format("%s[status=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, leader, members);
   }
 
   /**
@@ -114,6 +130,17 @@ public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
 
     protected Builder(KeepAliveResponse response) {
       super(response);
+    }
+
+    /**
+     * Sets the response leader.
+     *
+     * @param leader The response leader.
+     * @return The response builder.
+     */
+    public Builder withLeader(Address leader) {
+      response.leader = leader;
+      return this;
     }
 
     /**

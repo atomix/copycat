@@ -55,6 +55,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
   }
 
   private long session;
+  private Address leader;
   private Collection<Address> members;
   private long timeout;
 
@@ -65,6 +66,15 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
    */
   public long session() {
     return session;
+  }
+
+  /**
+   * Returns the cluster leader.
+   *
+   * @return The cluster leader.
+   */
+  public Address leader() {
+    return leader;
   }
 
   /**
@@ -92,6 +102,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
       error = null;
       session = buffer.readLong();
       timeout = buffer.readLong();
+      leader = serializer.readObject(buffer);
       members = serializer.readObject(buffer);
     } else {
       error = RaftError.forId(buffer.readByte());
@@ -106,6 +117,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
     if (status == Status.OK) {
       buffer.writeLong(session);
       buffer.writeLong(timeout);
+      serializer.writeObject(leader, buffer);
       serializer.writeObject(members, buffer);
     } else {
       buffer.writeByte(error.id());
@@ -114,7 +126,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, session, members);
+    return Objects.hash(getClass(), status, session, leader, members);
   }
 
   @Override
@@ -123,6 +135,8 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
       RegisterResponse response = (RegisterResponse) object;
       return response.status == status
         && response.session == session
+        && ((response.leader == null && leader == null)
+        || (response.leader != null && leader != null && response.leader.equals(leader)))
         && ((response.members == null && members == null)
         || (response.members != null && members != null && response.members.equals(members)))
         && response.timeout == timeout;
@@ -132,7 +146,7 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, session=%d, members=%s]", getClass().getSimpleName(), status, session, members);
+    return String.format("%s[status=%s, session=%d, leader=%s, members=%s]", getClass().getSimpleName(), status, session, leader, members);
   }
 
   /**
@@ -152,6 +166,17 @@ public class RegisterResponse extends AbstractResponse<RegisterResponse> {
      */
     public Builder withSession(long session) {
       response.session = Assert.argNot(session, session < 1, "session must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the response leader.
+     *
+     * @param leader The response leader.
+     * @return The response builder.
+     */
+    public Builder withLeader(Address leader) {
+      response.leader = leader;
       return this;
     }
 

@@ -115,15 +115,17 @@ public class CopycatClient implements RaftClient {
   private final Transport transport;
   private final Collection<Address> members;
   private final Serializer serializer;
+  private final ConnectionStrategy connectionStrategy;
   private ClientSession session;
   private CompletableFuture<RaftClient> openFuture;
   private CompletableFuture<Void> closeFuture;
 
-  protected CopycatClient(Transport transport, Collection<Address> members, Serializer serializer) {
+  protected CopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy) {
     serializer.resolve(new ServiceLoaderTypeResolver());
     this.transport = Assert.notNull(transport, "transport");
     this.members = Assert.notNull(members, "members");
     this.serializer = Assert.notNull(serializer, "serializer");
+    this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
   }
 
   @Override
@@ -170,7 +172,7 @@ public class CopycatClient implements RaftClient {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          ClientSession session = new ClientSession(id, transport, members, serializer);
+          ClientSession session = new ClientSession(id, transport, members, serializer, connectionStrategy);
           if (closeFuture == null) {
             openFuture = session.open().thenApply(s -> {
               synchronized (this) {
@@ -253,6 +255,7 @@ public class CopycatClient implements RaftClient {
     private Transport transport;
     private Serializer serializer;
     private Set<Address> members;
+    private ConnectionStrategy connectionStrategy = ConnectionStrategies.FOLLOWERS;
 
     private Builder(Collection<Address> members) {
       this.members = new HashSet<>(Assert.notNull(members, "members"));
@@ -288,6 +291,17 @@ public class CopycatClient implements RaftClient {
     }
 
     /**
+     * Sets the client connection strategy.
+     *
+     * @param connectionStrategy The client connection strategy.
+     * @return The client builder.
+     */
+    public Builder withConnectionStrategy(ConnectionStrategy connectionStrategy) {
+      this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
+      return this;
+    }
+
+    /**
      * @throws ConfigurationException if transport is not configured and {@code io.atomix.catalyst.transport.NettyTransport}
      * is not found on the classpath
      */
@@ -306,7 +320,7 @@ public class CopycatClient implements RaftClient {
       if (serializer == null) {
         serializer = new Serializer();
       }
-      return new CopycatClient(transport, members, serializer);
+      return new CopycatClient(transport, members, serializer, connectionStrategy);
     }
   }
 

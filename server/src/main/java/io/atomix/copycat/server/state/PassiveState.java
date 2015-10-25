@@ -369,6 +369,7 @@ class PassiveState extends AbstractState {
 
     return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
       .withStatus(Response.Status.ERROR)
+      .withLeader(context.getLeader())
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
