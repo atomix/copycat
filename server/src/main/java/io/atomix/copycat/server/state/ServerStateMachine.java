@@ -130,11 +130,12 @@ class ServerStateMachine implements AutoCloseable {
    * @return The result.
    */
   CompletableFuture<?> apply(Entry entry, boolean expectResult) {
+    boolean apply = !(entry instanceof QueryEntry);
     try {
-      if (entry instanceof CommandEntry) {
-        return apply((CommandEntry) entry, expectResult);
-      } else if (entry instanceof QueryEntry) {
+      if (!apply) {
         return apply((QueryEntry) entry);
+      } else if (entry instanceof CommandEntry) {
+        return apply((CommandEntry) entry, expectResult);
       } else if (entry instanceof RegisterEntry) {
         return apply((RegisterEntry) entry);
       } else if (entry instanceof KeepAliveEntry) {
@@ -150,7 +151,9 @@ class ServerStateMachine implements AutoCloseable {
       }
       return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
     } finally {
-      setLastApplied(entry.getIndex());
+      if (apply) {
+        setLastApplied(entry.getIndex());
+      }
     }
   }
 
