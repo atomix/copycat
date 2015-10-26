@@ -58,34 +58,47 @@ class ServerCommit implements Commit<Operation<?>> {
     open = true;
   }
 
+  /**
+   * Checks whether the commit is open and throws an exception if not.
+   */
+  private void checkOpen() {
+    Assert.state(open, "commit not open");
+  }
+
   @Override
   public long index() {
+    checkOpen();
     return index;
   }
 
   @Override
   public Session session() {
+    checkOpen();
     return session;
   }
 
   @Override
   public Instant time() {
+    checkOpen();
     return instant;
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public Class type() {
+    checkOpen();
     return operation != null ? operation.getClass() : null;
   }
 
   @Override
   public Operation<?> operation() {
+    checkOpen();
     return operation;
   }
 
   @Override
   public void clean() {
-    Assert.state(open, "commit closed");
+    checkOpen();
     if (operation instanceof Command)
       cleaner.clean(index);
     close();
@@ -111,7 +124,11 @@ class ServerCommit implements Commit<Operation<?>> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
+    if (open) {
+      return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
+    } else {
+      return String.format("%s[index=unknown]", getClass().getSimpleName());
+    }
   }
 
 }

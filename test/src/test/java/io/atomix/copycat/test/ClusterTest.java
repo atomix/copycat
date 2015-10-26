@@ -22,7 +22,10 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
-import io.atomix.copycat.server.*;
+import io.atomix.copycat.server.Commit;
+import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
+import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import net.jodah.concurrentunit.ConcurrentTestCase;
@@ -1055,20 +1058,12 @@ public class ClusterTest extends ConcurrentTestCase {
     private Commit<TestExpire> expire;
 
     @Override
-    protected void configure(StateMachineExecutor executor) {
-      executor.register(TestCommand.class, this::command);
-      executor.register(TestQuery.class, this::query);
-      executor.register(TestEvent.class, this::event);
-      executor.<TestExpire>register(TestExpire.class, this::expire);
-    }
-
-    @Override
     public void expire(Session session) {
       if (expire != null)
         expire.session().publish("expired");
     }
 
-    private String command(Commit<TestCommand> commit) {
+    public String command(Commit<TestCommand> commit) {
       try {
         return commit.operation().value();
       } finally {
@@ -1076,7 +1071,7 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     }
 
-    private String query(Commit<TestQuery> commit) {
+    public String query(Commit<TestQuery> commit) {
       try {
         return commit.operation().value();
       } finally {
@@ -1084,7 +1079,7 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     }
 
-    private String event(Commit<TestEvent> commit) {
+    public String event(Commit<TestEvent> commit) {
       try {
         if (commit.operation().own()) {
           commit.session().publish("test", commit.operation().value());
@@ -1099,7 +1094,7 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     }
 
-    private void expire(Commit<TestExpire> commit) {
+    public void expire(Commit<TestExpire> commit) {
       this.expire = commit;
     }
   }

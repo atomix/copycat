@@ -23,21 +23,21 @@ import java.util.function.Consumer;
 /**
  * Provides event-based methods for monitoring Raft sessions and communicating between Raft clients and servers.
  * <p>
- * Each client or server connected to any server in a Raft cluster must open a {@link Session}.
- * Sessions can be used by both clients and servers to monitor the connection status of another client or server. When
- * a client first connects to a server, it must register a new session. Once the session has been registered, listeners
- * registered via {@link #onOpen(Consumer)} will be called on <em>both the client and server side</em>. Thereafter, the
- * session can be used to {@link #publish(String, Object)} and {@link #onEvent(String, Consumer) receive} events between client and
- * server.
+ * Each client that connects to a Raft cluster must open a {@link Session} in order to submit operations to the cluster.
+ * When a client first connects to a server, it must register a new session. Once the session has been registered,
+ * it can be used to submit {@link io.atomix.copycat.client.Command commands} and {@link io.atomix.copycat.client.Query queries}
+ * or {@link #publish(String, Object) publish} and {@link #onEvent(String, Consumer) receive} session events.
  * <p>
  * Sessions represent a connection between a single client and all servers in a Raft cluster. Session information
  * is replicated via the Raft consensus algorithm, and clients can safely switch connections between servers without
- * losing their session. Session implementations guarantee linearizability for session messages by coordinating
- * between the client and a single server at any given time. This means messages {@link #publish(String, Object) published}
+ * losing their session. All consistency guarantees are provided within the context of a session. Once a session is
+ * expired or closed, linearizability, sequential consistency, and other guarantees for events and operations are
+ * effectively lost. Session implementations guarantee linearizability for session messages by coordinating between
+ * the client and a single server at any given time. This means messages {@link #publish(String, Object) published}
  * via the {@link Session} are guaranteed to arrive on the other side of the connection exactly once and in the order
- * in which they are sent. In the event of a server-to-client message being lost, the message will be resent so long
- * as at least one Raft server is able to communicate with the client and the client's session does not {@link #isExpired()
- * expire} while switching between servers.
+ * in which they are sent by replicated state machines. In the event of a server-to-client message being lost, the
+ * message will be resent so long as at least one Raft server is able to communicate with the client and the client's
+ * session does not {@link #isExpired() expire} while switching between servers.
  * <p>
  * Messages are sent to the other side of the session using the {@link #publish(String, Object)} method:
  * <pre>
@@ -92,13 +92,14 @@ public interface Session {
   Listener<Session> onOpen(Consumer<Session> listener);
 
   /**
-   * Publishes an empty event to the session.
+   * Publishes a {@code null} named event to the session.
    * <p>
    * When an event is published via the {@link Session}, it is sent to the other side of the session's
-   * connection. If the event is sent from the client-side of the session, the event will be handled on
-   * the client side as well. Sessions guarantee serializable consistency. If an event is sent from a Raft
-   * server to a client that is disconnected or otherwise can't receive the event, the event will be resent
-   * once the client connects to another server as long as its session has not {@link #isExpired() expired}.
+   * connection. Events can only be sent from a server-side replicated state machine to a client. Attempts
+   * to send events from the client-side of the session will result in the event being handled by the client,
+   * Sessions guarantee serializable consistency. If an event is sent from a Raft server to a client that is
+   * disconnected or otherwise can't receive the event, the event will be resent once the client connects to
+   * another server as long as its session has not {@link #isExpired() expired}.
    * <p>
    * Event messages must be serializable. For fast serialization, message types should implement
    * {@link io.atomix.catalyst.serializer.CatalystSerializable} or register a custom
@@ -120,10 +121,11 @@ public interface Session {
    * Publishes an event to the session.
    * <p>
    * When an event is published via the {@link Session}, it is sent to the other side of the session's
-   * connection. If the event is sent from the client-side of the session, the event will be handled on
-   * the client side as well. Sessions guarantee serializable consistency. If an event is sent from a Raft
-   * server to a client that is disconnected or otherwise can't receive the event, the event will be resent
-   * once the client connects to another server as long as its session has not {@link #isExpired() expired}.
+   * connection. Events can only be sent from a server-side replicated state machine to a client. Attempts
+   * to send events from the client-side of the session will result in the event being handled by the client,
+   * Sessions guarantee serializable consistency. If an event is sent from a Raft server to a client that is
+   * disconnected or otherwise can't receive the event, the event will be resent once the client connects to
+   * another server as long as its session has not {@link #isExpired() expired}.
    * <p>
    * Event messages must be serializable. For fast serialization, message types should implement
    * {@link io.atomix.catalyst.serializer.CatalystSerializable} or register a custom

@@ -32,28 +32,44 @@ import java.util.function.Function;
  * <p>
  * Users should extend this class to create a state machine for use within a {@link CopycatServer}.
  * <p>
- * State machines are responsible for handling {@link Operation operations} submitted to the Raft
- * cluster and filtering {@link Commit committed} operations out of the Raft log. The most
- * important rule of state machines is that <em>state machines must be deterministic</em> in order to maintain Copycat's
- * consistency guarantees. That is, state machines must not change their behavior based on external influences and have
- * no side effects. Users should <em>never</em> use {@code System} time to control behavior within a state machine.
+ * State machines are responsible for handling {@link Operation operations} submitted to the Raft cluster and
+ * filtering {@link Commit committed} operations out of the Raft log. The most important rule of state machines is
+ * that <em>state machines must be deterministic</em> in order to maintain Copycat's consistency guarantees. That is,
+ * state machines must not change their behavior based on external influences and have no side effects. Users should
+ * <em>never</em> use {@code System} time to control behavior within a state machine.
  * <p>
- * When {@link Command commands} and {@link Query queries} (i.e. <em>operations</em>) are submitted
- * to the Raft cluster, the {@link CopycatServer} will log and replicate them as necessary
- * and, once complete, apply them to the configured state machine.
+ * When {@link Command commands} and {@link Query queries} (i.e. <em>operations</em>) are submitted to the Raft cluster,
+ * the {@link CopycatServer} will log and replicate them as necessary and, once complete, apply them to the configured
+ * state machine.
  * <p>
- * Override the {@link #configure(StateMachineExecutor)} method to register state machine operations.
+ * <b>State machine operations</b>
+ * <p>
+ * State machine operations are implemented as methods on the state machine. Operations can be automatically detected
+ * by the state machine during setup or can be explicitly registered by overriding the {@link #configure(StateMachineExecutor)}
+ * method. Each operation method must take a single {@link Commit} argument for a specific operation type.
  * <pre>
  *   {@code
  *   public class MapStateMachine extends StateMachine {
- *     private final Map<Object, Commit<Put>> map = new HashMap<>();
  *
- *     protected void configure(StateMachineExecutor executor) {
- *       executor.register(PutCommand.class, this::put);
+ *     public Object put(Commit<Put> commit) {
+ *       Commit<Put> previous = map.put(commit.operation().key(), commit);
+ *       if (previous != null) {
+ *         try {
+ *           return previous.operation().value();
+ *         } finally {
+ *           previous.clean();
+ *         }
+ *       }
+ *       return null;
  *     }
  *
- *     private Object put(Commit<Put> commit) {
- *       return map.put(commit.operation().key(), commit);
+ *     public Object get(Commit<Get> commit) {
+ *       try {
+ *         Commit<Put> current = map.get(commit.operation().key());
+ *         return current != null ? current.operation().value() : null;
+ *       } finally {
+ *         commit.close();
+ *       }
  *     }
  *   }
  *   }
@@ -71,10 +87,23 @@ import java.util.function.Function;
  * same output (return value). The return value of each operation callback is the response value that will be sent back
  * to the client.
  * <p>
+ * <b>Deterministic scheduling</b>
+ * <p>
  * The {@link StateMachineExecutor} is responsible for executing state machine operations sequentially and provides an
  * interface similar to that of {@link java.util.concurrent.ScheduledExecutorService} to allow state machines to schedule
  * time-based callbacks. Because of the determinism requirement, scheduled callbacks are guaranteed to be executed
- * deterministically as well. See the {@link StateMachineExecutor} documentation for more information.
+ * deterministically as well. The executor can be accessed via the {@link #executor()} accessor method.
+ * See the {@link StateMachineExecutor} documentation for more information.
+ * <pre>
+ *   {@code
+ *   public void putWithTtl(Commit<PutWithTtl> commit) {
+ *     map.put(commit.operation().key(), commit);
+ *     executor.schedule(Duration.ofMillis(commit.operation().ttl()), () -> {
+ *       map.remove(commit.operation().key()).clean();
+ *     });
+ *   }
+ *   }
+ * </pre>
  * <p>
  * During command or scheduled callbacks, {@link Sessions} can be used to send state machine events back to the client.
  * For instance, a lock state machine might use a client's {@link Session} to send a lock event to the client.
@@ -92,6 +121,9 @@ import java.util.function.Function;
  *   }
  *   }
  * </pre>
+ * Attempts to {@link Session#publish(String, Object) publish} events during the execution will result in an
+ * {@link IllegalStateException}.
+ * <p>
  * As with other operations, state machines should ensure that the publishing of session events is deterministic.
  * Messages published via a {@link Session} will be managed according to the {@link Command.ConsistencyLevel}
  * of the command being executed at the time the event was {@link Session#publish(String, Object) published}. Each command may
@@ -105,11 +137,26 @@ import java.util.function.Function;
  * consistency and fault tolerance. In the event that a server fails after publishing a session event, the client will transparently
  * reconnect to another server and retrieve lost event messages.
  * <p>
+ * <b>Cleaning commits</b>
+ * <p>
+ * As operations are logged, replicated, committed, and applied to the state machine, the underlying
+ * {@link io.atomix.copycat.server.storage.Log} grows. Without freeing unnecessary commits from the log it would eventually
+ * consume all available disk or memory. Copycat uses a log cleaning algorithm to remove {@link Commit}s that no longer
+ * contribute to the state machine's state from the log. To aid in this process, it's the responsibility of state machine
+ * implementations to indicate when each commit is no longer needed by calling {@link Commit#clean()}.
+ * <p>
  * State machines should hold on to the {@link Commit} object passed to operation callbacks for as long as the commit
  * contributes to the state machine's state. Once a commit is no longer needed, {@link Query} commits should be
  * {@link Commit#close() closed} and {@link Command} commits should be {@link Commit#clean() cleaned}. Cleaning notifies
- * the log compaction algorithm that it's safe to remove the commit from the internal commit log. Note that if commits
- * are not properly cleaned from the log and is instead garbage collected, a warning will be logged.
+ * the log compaction algorithm that it's safe to remove the commit from the internal commit log. Copycat will guarantee
+ * that {@link Commit}s are persisted in the underlying {@link io.atomix.copycat.server.storage.Log} as long as is
+ * necessary (even after a commit is cleaned) to ensure all operations are applied to a majority of servers and to
+ * guarantee delivery of {@link Session#publish(String, Object) session events} published as a result of specific
+ * operations. State machines only need to specify when it's safe to remove each commit from the log.
+ * <p>
+ * Note that if commits are not properly cleaned from the log and are instead garbage collected, a warning will be logged.
+ * Failure to {@link Commit#clean()} a {@link Command} commit from the log should be considered a critical bug since
+ * instances of the command can eventually fill up disk.
  *
  * @see Commit
  * @see Command
@@ -137,11 +184,80 @@ public abstract class StateMachine implements AutoCloseable {
 
   /**
    * Configures the state machine.
+   * <p>
+   * By default, this method will configure state machine operations by extracting public methods with
+   * a single {@link Commit} parameter via reflection. Override this method to explicitly register
+   * state machine operations via the provided {@link StateMachineExecutor}.
    *
    * @param executor The state machine executor.
    */
   protected void configure(StateMachineExecutor executor) {
     registerOperations();
+  }
+
+  /**
+   * Returns the state machine executor.
+   * <p>
+   * The executor can be used to register state machine {@link Operation operations} or to schedule
+   * time-based callbacks.
+   *
+   * @return The state machine executor.
+   */
+  protected StateMachineExecutor executor() {
+    return executor;
+  }
+
+  /**
+   * Returns the state machine sessions.
+   *
+   * @return The state machine sessions.
+   */
+  protected Sessions sessions() {
+    return executor.context().sessions();
+  }
+
+  /**
+   * Returns the state machine's deterministic clock.
+   *
+   * @return The state machine's deterministic clock.
+   */
+  protected Clock clock() {
+    return executor.context().clock();
+  }
+
+  /**
+   * Called when a new session is registered.
+   *
+   * @param session The session that was registered.
+   */
+  public void register(Session session) {
+
+  }
+
+  /**
+   * Called when a session is expired.
+   *
+   * @param session The expired session.
+   */
+  public void expire(Session session) {
+
+  }
+
+  /**
+   * Called when a session is closed.
+   *
+   * @param session The session that was closed.
+   */
+  public void close(Session session) {
+
+  }
+
+  /**
+   * Closes the state machine.
+   */
+  @Override
+  public void close() {
+
   }
 
   /**
@@ -260,68 +376,6 @@ public abstract class StateMachine implements AutoCloseable {
         throw new AssertionError();
       }
     };
-  }
-
-  /**
-   * Returns the state machine executor.
-   *
-   * @return The state machine executor.
-   */
-  protected StateMachineExecutor executor() {
-    return executor;
-  }
-
-  /**
-   * Returns the state machine sessions.
-   *
-   * @return The state machine sessions.
-   */
-  protected Sessions sessions() {
-    return executor.context().sessions();
-  }
-
-  /**
-   * Returns the state machine's deterministic clock.
-   *
-   * @return The state machine's deterministic clock.
-   */
-  protected Clock clock() {
-    return executor.context().clock();
-  }
-
-  /**
-   * Called when a new session is registered.
-   *
-   * @param session The session that was registered.
-   */
-  public void register(Session session) {
-
-  }
-
-  /**
-   * Called when a session is expired.
-   *
-   * @param session The expired session.
-   */
-  public void expire(Session session) {
-
-  }
-
-  /**
-   * Called when a session is closed.
-   *
-   * @param session The session that was closed.
-   */
-  public void close(Session session) {
-
-  }
-
-  /**
-   * Closes the state machine.
-   */
-  @Override
-  public void close() {
-
   }
 
 }
