@@ -78,7 +78,7 @@ final class LeaderState extends ActiveState {
    */
   private void takeLeadership() {
     context.setLeader(context.getAddress().hashCode());
-    context.getCluster().getActiveMembers().forEach(m -> m.resetState(context.getLog()));
+    context.getCluster().getMembers().forEach(m -> m.resetState(context.getLog()));
   }
 
   /**
@@ -898,7 +898,7 @@ final class LeaderState extends ActiveState {
       if (index == 0)
         return commit();
 
-      if (context.getCluster().getActiveMembers().isEmpty()) {
+      if (context.getCluster().getMembers().isEmpty()) {
         context.setCommitIndex(index);
         context.setGlobalIndex(index);
         return CompletableFuture.completedFuture(index);
@@ -977,17 +977,18 @@ final class LeaderState extends ActiveState {
       List<MemberState> members = context.getCluster().getActiveMembers((m1, m2) ->
         Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
 
-      // Set the current commit index as the median replicated index.
-      // Since replicas is a list with zero based indexes, use the negation of
-      // the required quorum count to get the index of the replica with the least
-      // possible quorum replication. That replica's match index is the commit index.
-      // Set the commit index. Once the commit index has been set we can run
-      // all tasks up to the given commit.
+      // Set the current commit index as the median matchIndex.
       long commitIndex = members.get(quorumIndex()).getMatchIndex();
-      long globalIndex = members.get(members.size() - 1).getMatchIndex();
-      if (commitIndex > 0 && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
+
+      // The global index may have increased even if the commit index didn't. Update the global index.
+      // The global index is calculated by the maximum matchIndex for *all* servers in the cluster, including
+      // passive members. This is critical since passive members still have state machines and thus it's still
+      // important to ensure that tombstones are applied to their state machines.
+      context.setGlobalIndex(context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).max().getAsLong());
+
+      // Once the commit index is set, complete futures up to the given index.
+      if (commitIndex > 0 && commitIndex > context.getCommitIndex() && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
         context.setCommitIndex(commitIndex);
-        context.setGlobalIndex(globalIndex);
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());
