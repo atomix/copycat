@@ -137,7 +137,7 @@ class ServerStateMachine implements AutoCloseable {
       } else if (entry instanceof CommandEntry) {
         return apply((CommandEntry) entry, expectResult);
       } else if (entry instanceof RegisterEntry) {
-        return apply((RegisterEntry) entry);
+        return apply((RegisterEntry) entry, expectResult);
       } else if (entry instanceof KeepAliveEntry) {
         return apply((KeepAliveEntry) entry);
       } else if (entry instanceof UnregisterEntry) {
@@ -189,7 +189,7 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  private CompletableFuture<Long> apply(RegisterEntry entry) {
+  private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
     ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
     executor.context().sessions().registerSession(session).setTimestamp(entry.getTimestamp());
 
@@ -201,10 +201,17 @@ class ServerStateMachine implements AutoCloseable {
 
     ThreadContext context = getContext();
     long index = entry.getIndex();
+    long timestamp = executor.timestamp();
 
     // Set last applied only after the operation has been submitted to the state machine executor.
     CompletableFuture<Long> future = new ComposableFuture<>();
     executor.executor().execute(() -> {
+      // Update the state machine context with the register entry's index. This ensures that events published
+      // within the register method will be properly associated with the unregister entry's index. All events
+      // published during registration of a session are linearizable to ensure that clients receive related events
+      // before the registration is completed.
+      executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+
       stateMachine.register(session);
       context.execute(() -> future.complete(index));
     });

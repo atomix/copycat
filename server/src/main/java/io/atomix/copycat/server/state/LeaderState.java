@@ -603,7 +603,9 @@ final class LeaderState extends ActiveState {
       if (isOpen()) {
         if (commitError == null) {
           RegisterEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenComplete((sessionId, sessionError) -> {
+
+          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(RegisterResponse.builder()
