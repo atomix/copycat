@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
@@ -41,16 +42,16 @@ import java.util.List;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class MajorCompactionManager implements CompactionManager {
-  private long compactIndex;
+  private final Compactor compactor;
 
-  public MajorCompactionManager(long compactIndex) {
-    this.compactIndex = compactIndex;
+  MajorCompactionManager(Compactor compactor) {
+    this.compactor = Assert.notNull(compactor, "compactor");
   }
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<List<Segment>> groups = getCleanableGroups(storage, segments);
-    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups)) : Collections.emptyList();
+    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, compactor.majorIndex())) : Collections.emptyList();
   }
 
   /**
@@ -104,7 +105,7 @@ public final class MajorCompactionManager implements CompactionManager {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
     Segment lastSegment = manager.lastSegment();
     for (Segment segment : manager.segments()) {
-      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < compactIndex && lastSegment.firstIndex() <= compactIndex && !lastSegment.isEmpty()) {
+      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < compactor.minorIndex() && lastSegment.firstIndex() <= compactor.minorIndex() && !lastSegment.isEmpty()) {
         segments.add(segment);
       } else {
         break;

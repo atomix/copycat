@@ -41,7 +41,7 @@ public enum Compaction {
   MINOR {
     @Override
     CompactionManager manager(Compactor compactor) {
-      return new MinorCompactionManager(compactor.minorIndex());
+      return new MinorCompactionManager(compactor);
     }
   },
 
@@ -56,7 +56,7 @@ public enum Compaction {
   MAJOR {
     @Override
     CompactionManager manager(Compactor compactor) {
-      return new MajorCompactionManager(compactor.majorIndex());
+      return new MajorCompactionManager(compactor);
     }
   };
 

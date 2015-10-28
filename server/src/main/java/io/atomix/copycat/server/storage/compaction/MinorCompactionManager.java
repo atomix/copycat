@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
@@ -55,10 +56,10 @@ import java.util.List;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class MinorCompactionManager implements CompactionManager {
-  private long compactIndex;
+  private final Compactor compactor;
 
-  public MinorCompactionManager(long compactIndex) {
-    this.compactIndex = compactIndex;
+  MinorCompactionManager(Compactor compactor) {
+    this.compactor = Assert.notNull(compactor, "compactor");
   }
 
   @Override
@@ -79,7 +80,7 @@ public final class MinorCompactionManager implements CompactionManager {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactIndex && manager.currentSegment().firstIndex() <= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && manager.currentSegment().firstIndex() <= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
         double cleanPercentage = segment.cleanCount() / (double) segment.count();
 
