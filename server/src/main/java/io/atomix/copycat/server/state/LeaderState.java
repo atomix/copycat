@@ -1013,6 +1013,7 @@ final class LeaderState extends ActiveState {
       // If the active members list is empty (a configuration change occurred between an append request/response)
       // ensure all commit futures are completed and cleared.
       if (members.isEmpty()) {
+        context.setCommitIndex(context.getLog().lastIndex());
         for (Map.Entry<Long, CompletableFuture<Long>> entry : commitFutures.entrySet()) {
           entry.getValue().complete(entry.getKey());
         }
