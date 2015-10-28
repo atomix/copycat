@@ -88,6 +88,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
+          .withGlobalIndex(0)
           .build();
 
       AppendResponse response = state.append(request).get();
@@ -107,6 +108,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -129,6 +132,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(2)
         .withLogTerm(2)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -150,6 +155,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(2)
         .withLogTerm(2)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -171,6 +178,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(1)
         .withLogTerm(1)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .withEntries(new TestEntry().setIndex(2).setTerm(1))
         .build();
 
@@ -193,6 +202,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(2)
         .withLogTerm(2)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -213,6 +224,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(0)
         .withLogTerm(0)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .withEntries(new TestEntry().setIndex(1).setTerm(1))
         .build();
 
@@ -238,6 +251,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(0)
         .withLogTerm(0)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .withEntries(new TestEntry().setIndex(2).setTerm(1))
         .build();
 
@@ -264,6 +279,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(1)
         .withLogTerm(1)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .withEntries(new TestEntry().setIndex(2).setTerm(2), new TestEntry().setIndex(3).setTerm(3), new TestEntry().setIndex(4).setTerm(3))
         .build();
 
@@ -291,6 +308,8 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode())
         .withLogIndex(1)
         .withLogTerm(1)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .withEntries(new TestEntry().setIndex(2).setTerm(1), new TestEntry().setIndex(4).setTerm(1))
         .build();
 
@@ -385,28 +404,6 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       VoteRequest request = VoteRequest.builder().withCandidate(1).withLogIndex(1).withLogTerm(1).withTerm(1).build();
       VoteResponse response = state.vote(request).get();
       assertIllegalMemberStateError(response);
-    });
-  }
-
-  public void testForward() throws Throwable {
-    // TODO
-  }
-
-  public void testHandleAppend() throws Throwable {
-    // TODO
-  }
-
-  public void testHandleAppendRejectedWhenRequestTermIsOld() throws Throwable {
-    runOnServer(() -> {
-      serverState.setTerm(3);
-      AppendRequest request = AppendRequest.builder().withTerm(2).build();
-
-      AppendResponse response = state.handleAppend(request);
-
-      threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(response.term(), 3L);
-      threadAssertFalse(response.succeeded());
     });
   }
 

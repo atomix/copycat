@@ -131,7 +131,7 @@ final class LeaderState extends ActiveState {
       }
 
       LOGGER.debug("{} - Applied {} entries to log", context.getAddress(), count);
-      context.getLog().commit(context.getLastCompleted());
+      context.getLog().compactor().minorIndex(context.getLastCompleted());
     }
   }
 
@@ -153,7 +153,7 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     if (isOpen()) {
       replicator.commit().whenComplete((result, error) -> {
-        context.getLog().commit(context.getLastCompleted());
+        context.getLog().compactor().minorIndex(context.getLastCompleted());
       });
     }
   }
@@ -900,6 +900,7 @@ final class LeaderState extends ActiveState {
 
       if (context.getCluster().getActiveMembers().isEmpty()) {
         context.setCommitIndex(index);
+        context.setGlobalIndex(index);
         return CompletableFuture.completedFuture(index);
       }
 
@@ -983,8 +984,10 @@ final class LeaderState extends ActiveState {
       // Set the commit index. Once the commit index has been set we can run
       // all tasks up to the given commit.
       long commitIndex = members.get(quorumIndex()).getMatchIndex();
+      long globalIndex = members.get(members.size() - 1).getMatchIndex();
       if (commitIndex > 0 && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
         context.setCommitIndex(commitIndex);
+        context.setGlobalIndex(globalIndex);
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());
@@ -1040,7 +1043,8 @@ final class LeaderState extends ActiveState {
         .withLeader(context.getAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex());
+        .withCommitIndex(context.getCommitIndex())
+        .withGlobalIndex(context.getGlobalIndex());
 
       commit(member, builder.build(), false);
     }
@@ -1057,7 +1061,8 @@ final class LeaderState extends ActiveState {
         .withLeader(context.getAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex());
+        .withCommitIndex(context.getCommitIndex())
+        .withGlobalIndex(context.getGlobalIndex());
 
       if (!context.getLog().isEmpty()) {
         long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();

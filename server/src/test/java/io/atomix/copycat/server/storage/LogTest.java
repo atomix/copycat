@@ -139,7 +139,7 @@ public abstract class LogTest extends AbstractLogTest {
     assertFalse(log.contains(entriesPerSegment * 3 + 1));
 
     // Test after compaction
-    log.commit(entriesPerSegment * 3);
+    log.commit(entriesPerSegment * 3).compactor().majorIndex(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
     assertTrue(log.contains(entriesPerSegment));
     for (int i = entriesPerSegment + 1; i <= entriesPerSegment * 2; i++) {
@@ -172,7 +172,7 @@ public abstract class LogTest extends AbstractLogTest {
       assertEquals(log.get(i).getIndex(), i);
 
     // Asserts get() after compaction
-    log.commit(entriesPerSegment * 3);
+    log.commit(entriesPerSegment * 3).compactor().majorIndex(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
     assertCompacted(entriesPerSegment + 1, entriesPerSegment * 2);
   }
@@ -258,14 +258,13 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.segments.segments().size(), 5);
     assertEquals(log.size(), fullSegmentSize() * 5);
 
-    log.commit(entriesPerSegment * 5);
+    log.commit(entriesPerSegment * 5).compactor().majorIndex(entriesPerSegment * 5);
 
     // Compact 2nd and 3rd segments
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 3);
 
     // Asserts that size() is changed after compaction
-    assertEquals(log.size(),
-        (entrySize() * entriesPerSegment * 3) + (log.segments.segments().size() * SegmentDescriptor.BYTES));
+    assertEquals(log.size(), (entrySize() * entriesPerSegment * 3) + (log.segments.segments().size() * SegmentDescriptor.BYTES));
   }
 
   /**

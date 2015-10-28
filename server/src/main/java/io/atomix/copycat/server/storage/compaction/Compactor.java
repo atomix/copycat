@@ -53,6 +53,8 @@ public final class Compactor implements AutoCloseable {
   private final Storage storage;
   private final SegmentManager segments;
   private final ScheduledExecutorService executor;
+  private long minorIndex;
+  private long majorIndex;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
   private CompletableFuture<Void> future;
@@ -63,6 +65,46 @@ public final class Compactor implements AutoCloseable {
     this.executor = Assert.notNull(executor, "executor");
     minor = executor.scheduleAtFixedRate(() -> compact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
     major = executor.scheduleAtFixedRate(() -> compact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Sets the maximum compaction index for minor compaction.
+   *
+   * @param index The maximum compaction index for minor compaction.
+   * @return The log compactor.
+   */
+  public Compactor minorIndex(long index) {
+    this.minorIndex = Math.max(this.minorIndex, index);
+    return this;
+  }
+
+  /**
+   * Returns the maximum compaction index for minor compaction.
+   *
+   * @return The maximum compaction index for minor compaction.
+   */
+  public long minorIndex() {
+    return minorIndex;
+  }
+
+  /**
+   * Sets the maximum compaction index for major compaction.
+   *
+   * @param index The maximum compaction index for major compaction.
+   * @return The log compactor.
+   */
+  public Compactor majorIndex(long index) {
+    this.majorIndex = Math.max(this.majorIndex, index);
+    return this;
+  }
+
+  /**
+   * Returns the maximum compaction index for major compaction.
+   *
+   * @return The maximum compaction index for major compaction.
+   */
+  public long majorIndex() {
+    return majorIndex;
   }
 
   /**
@@ -94,7 +136,7 @@ public final class Compactor implements AutoCloseable {
 
     ThreadContext compactorThread = ThreadContext.currentContext();
 
-    CompactionManager manager = compaction.manager();
+    CompactionManager manager = compaction.manager(this);
     AtomicInteger counter = new AtomicInteger();
 
     Collection<CompactionTask> tasks = manager.buildTasks(storage, segments);

@@ -51,7 +51,7 @@ public class MinorCompactionTest extends AbstractLogTest {
     for (long index = 21; index < 28; index++) {
       log.clean(index);
     }
-    log.commit(31);
+    log.commit(31).compactor().minorIndex(31);
 
     CountDownLatch latch = new CountDownLatch(1);
     log.compactor().compact(Compaction.MINOR).thenRun(latch::countDown);

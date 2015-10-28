@@ -55,6 +55,11 @@ import java.util.List;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class MinorCompactionManager implements CompactionManager {
+  private long compactIndex;
+
+  public MinorCompactionManager(long compactIndex) {
+    this.compactIndex = compactIndex;
+  }
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
@@ -74,7 +79,7 @@ public final class MinorCompactionManager implements CompactionManager {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < manager.commitIndex() && manager.currentSegment().firstIndex() <= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactIndex && manager.currentSegment().firstIndex() <= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
         double cleanPercentage = segment.cleanCount() / (double) segment.count();
 

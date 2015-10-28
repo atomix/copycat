@@ -60,7 +60,8 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
   private long logIndex;
   private long logTerm;
   private List<Entry> entries = new ArrayList<>(128);
-  private long commitIndex;
+  private long commitIndex = -1;
+  private long globalIndex = -1;
 
   /**
    * Returns the requesting node's current term.
@@ -116,13 +117,23 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
     return commitIndex;
   }
 
+  /**
+   * Returns the leader's global index.
+   *
+   * @return The leader global index.
+   */
+  public long globalIndex() {
+    return globalIndex;
+  }
+
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeLong(term)
       .writeInt(leader)
       .writeLong(logIndex)
       .writeLong(logTerm)
-      .writeLong(commitIndex);
+      .writeLong(commitIndex)
+      .writeLong(globalIndex);
 
     buffer.writeInt(entries.size());
     for (Entry entry : entries) {
@@ -138,6 +149,7 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
     logIndex = buffer.readLong();
     logTerm = buffer.readLong();
     commitIndex = buffer.readLong();
+    globalIndex = buffer.readLong();
 
     int numEntries = buffer.readInt();
     entries.clear();
@@ -151,7 +163,7 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, logIndex, logTerm, entries, commitIndex);
+    return Objects.hash(getClass(), term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
   }
 
   @Override
@@ -163,14 +175,15 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
         && request.logIndex == logIndex
         && request.logTerm == logTerm
         && request.entries.equals(entries)
-        && request.commitIndex == commitIndex;
+        && request.commitIndex == commitIndex
+        && request.globalIndex == globalIndex;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%s, logIndex=%d, logTerm=%d, entries=[%d], commitIndex=%d]", getClass().getSimpleName(), term, leader, logIndex, logTerm, entries.size(), commitIndex);
+    return String.format("%s[term=%d, leader=%s, logIndex=%d, logTerm=%d, entries=[%d], commitIndex=%d, globalIndex=%d]", getClass().getSimpleName(), term, leader, logIndex, logTerm, entries.size(), commitIndex, globalIndex);
   }
 
   /**
@@ -278,6 +291,18 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
     }
 
     /**
+     * Sets the request global index.
+     *
+     * @param index The request global index.
+     * @return The append request builder.
+     * @throws IllegalArgumentException if index is not positive
+     */
+    public Builder withGlobalIndex(long index) {
+      request.globalIndex = Assert.argNot(index, index < 0, "global index must not be negative");
+      return this;
+    }
+
+    /**
      * @throws IllegalStateException if the term, log term, log index, commit index, or global index are not positive, or 
      * if entries is null 
      */
@@ -289,6 +314,7 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
       Assert.stateNot(request.logTerm < 0, "log term must not be negative");
       Assert.stateNot(request.entries == null, "entries cannot be null");
       Assert.stateNot(request.commitIndex < 0, "commit index must not be negative");
+      Assert.stateNot(request.globalIndex < 0, "global index must not be negative");
       return request;
     }
 

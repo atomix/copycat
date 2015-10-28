@@ -41,6 +41,11 @@ import java.util.List;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class MajorCompactionManager implements CompactionManager {
+  private long compactIndex;
+
+  public MajorCompactionManager(long compactIndex) {
+    this.compactIndex = compactIndex;
+  }
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
@@ -52,7 +57,7 @@ public final class MajorCompactionManager implements CompactionManager {
    * Returns a list of segments lists to clean, where segments are grouped according to how they will be merged during 
    * cleaning.
    */
-  public static List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
+  public List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
@@ -95,11 +100,11 @@ public final class MajorCompactionManager implements CompactionManager {
    * @param manager The segment manager.
    * @return A list of cleanable log segments.
    */
-  private static List<Segment> getCleanableSegments(SegmentManager manager) {
+  private List<Segment> getCleanableSegments(SegmentManager manager) {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
     Segment lastSegment = manager.lastSegment();
     for (Segment segment : manager.segments()) {
-      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < manager.commitIndex() && lastSegment.firstIndex() <= manager.commitIndex() && !lastSegment.isEmpty()) {
+      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < compactIndex && lastSegment.firstIndex() <= compactIndex && !lastSegment.isEmpty()) {
         segments.add(segment);
       } else {
         break;
