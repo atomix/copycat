@@ -997,11 +997,11 @@ final class LeaderState extends ActiveState {
       context.checkThread();
 
       // The global index may have increased even if the commit index didn't. Update the global index.
-      // The global index is calculated by the maximum matchIndex for *all* servers in the cluster, including
+      // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
       // passive members. This is critical since passive members still have state machines and thus it's still
       // important to ensure that tombstones are applied to their state machines.
       // If the members list is empty, use the local server's last log index as the global index.
-      context.setGlobalIndex(context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).max().orElse(context.getLog().lastIndex()));
+      context.setGlobalIndex(context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex()));
 
       // Sort the list of replicas, order by the last index that was replicated to the replica. This will allow
       // us to determine the median index for all known replicated entries across all cluster members.
