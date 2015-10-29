@@ -185,7 +185,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(serverState.getLastVotedFor(), self);
     });
-    await();
+    await(1000);
   }
 
   public void testCandidateTransitionsToFollowerOnRejection() throws Throwable {
@@ -217,7 +217,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(serverState.getLastVotedFor(), self);
     });
-    await();
+    await(1000);
   }
 
 }
