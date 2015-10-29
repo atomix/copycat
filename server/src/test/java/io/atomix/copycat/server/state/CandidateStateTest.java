@@ -189,6 +189,11 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   }
 
   public void testCandidateTransitionsToFollowerOnRejection() throws Throwable {
+    serverState.onStateChange(state -> {
+      if (state == RaftServer.State.FOLLOWER)
+        resume();
+    });
+
     runOnServer(() -> {
       for (MemberState member : serverState.getCluster().getActiveMembers()) {
         Server server = transport.server();
@@ -211,11 +216,6 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(serverState.getLastVotedFor(), self);
-    });
-
-    serverState.onStateChange(state -> {
-      if (state == RaftServer.State.FOLLOWER)
-        resume();
     });
     await();
   }
