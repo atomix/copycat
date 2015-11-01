@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
 import java.io.File;
@@ -103,6 +104,34 @@ public abstract class LogTest extends AbstractLogTest {
       assertFalse(log.segments.segment(i).isClean(i));
       log.clean(i);
       assertTrue(log.segments.segment(i).isClean(i));
+    }
+  }
+
+  /**
+   * Asserts that {@link Log#clean(long)} prevents non-tombstone entries from being read.
+   */
+  public void testCleanGet() {
+    appendEntries(entriesPerSegment * 3);
+    for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
+      assertFalse(log.segments.segment(i).isClean(i));
+      log.clean(i);
+      assertNull(log.get(i));
+    }
+  }
+
+  /**
+   * Asserts that {@link Log#clean(long)} prevents tombstone entries from being read if the globalIndex is greater than the tombstone index.
+   */
+  public void testCleanGetTombstones() {
+    appendEntries(entriesPerSegment * 3, true);
+    for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
+      assertFalse(log.segments.segment(i).isClean(i));
+      log.clean(i);
+      assertNotNull(log.get(i));
+    }
+    log.compactor().majorIndex(entriesPerSegment * 2);
+    for (int i = entriesPerSegment; i <= entriesPerSegment * 2; i++) {
+      assertNull(log.get(i));
     }
   }
 

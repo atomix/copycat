@@ -129,18 +129,25 @@ public abstract class AbstractLogTest {
    * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log.
    */
   protected List<Long> appendEntries(int numEntries) {
-    return appendEntries(numEntries, (int) log.length() + 1);
+    return appendEntries(numEntries, (int) log.length() + 1, false);
+  }
+
+  /**
+   * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log.
+   */
+  protected List<Long> appendEntries(int numEntries, boolean tombstone) {
+    return appendEntries(numEntries, (int) log.length() + 1, tombstone);
   }
 
   /**
    * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log, starting at the
    * {@code startingId}.
    */
-  protected List<Long> appendEntries(int numEntries, int startingId) {
+  protected List<Long> appendEntries(int numEntries, int startingId, boolean tombstone) {
     List<Integer> entryIds = IntStream.range(startingId, startingId + numEntries).boxed().collect(Collectors.toList());
     return entryIds.stream().map(entryId -> {
       try (TestEntry entry = log.create(TestEntry.class)) {
-        entry.setTerm(1).setPadding(entryPadding);
+        entry.setTerm(1).setTombstone(tombstone).setPadding(entryPadding);
         return log.append(entry);
       }
     }).collect(Collectors.toList());
