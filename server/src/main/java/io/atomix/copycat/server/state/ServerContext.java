@@ -20,6 +20,7 @@ import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Server;
 import io.atomix.catalyst.transport.Transport;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
@@ -41,23 +42,26 @@ import java.util.concurrent.CompletableFuture;
  */
 public class ServerContext implements Managed<ServerState> {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
-  private final Address address;
+  private final Address clientAddress;
+  private final Address serverAddress;
   private final Collection<Address> members;
   private final StateMachine userStateMachine;
   private final Transport transport;
   private final Storage storage;
   private final ThreadContext context;
-  private Server server;
+  private Server clientServer;
+  private Server internalServer;
   private ServerState state;
   private volatile boolean open;
 
-  public ServerContext(Address address, Collection<Address> members, StateMachine stateMachine, Transport transport, Storage storage, Serializer serializer) {
-    this.address = address;
-    this.members = members;
-    this.userStateMachine = stateMachine;
-    this.transport = transport;
-    this.storage = storage;
-    this.context = new SingleThreadContext("copycat-server-" + address, serializer);
+  public ServerContext(Address clientAddress, Address serverAddress, Collection<Address> members, StateMachine stateMachine, Transport transport, Storage storage, Serializer serializer) {
+    this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
+    this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
+    this.members = Assert.notNull(members, "members");
+    this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
+    this.transport = Assert.notNull(transport, "transport");
+    this.storage = Assert.notNull(storage, "storage");
+    this.context = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
 
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
     serializer.resolve(new ServiceLoaderTypeResolver());
@@ -72,13 +76,20 @@ public class ServerContext implements Managed<ServerState> {
       Log log = storage.open("copycat");
 
       // Setup the server and connection manager.
-      server = transport.server();
+      internalServer = transport.server();
       ConnectionManager connections = new ConnectionManager(transport.client());
 
-      server.listen(address, c -> state.connect(c)).thenRun(() -> {
-        state = new ServerState(address, members, log, userStateMachine, connections, context);
-        open = true;
-        future.complete(state);
+      internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
+        if (internalError == null) {
+          state = new ServerState(new Member(serverAddress, clientAddress), members, log, userStateMachine, connections, context);
+          clientServer = transport.server();
+          clientServer.listen(clientAddress, c -> state.connectClient(c)).whenComplete((clientResult, clientError) -> {
+            open = true;
+            future.complete(state);
+          });
+        } else {
+          future.completeExceptionally(internalError);
+        }
       });
     });
 
@@ -104,9 +115,17 @@ public class ServerContext implements Managed<ServerState> {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.executor().execute(() -> {
       open = false;
-      server.close().whenCompleteAsync((result, error) -> {
-        context.close();
-        future.complete(null);
+      clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
+        internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
+          if (internalError != null) {
+            future.completeExceptionally(internalError);
+          } else if (clientError != null) {
+            future.completeExceptionally(clientError);
+          } else {
+            future.complete(null);
+          }
+          context.close();
+        }, context.executor());
       }, context.executor());
 
       this.state.transition(RaftServer.State.INACTIVE);

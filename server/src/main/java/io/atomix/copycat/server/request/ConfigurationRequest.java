@@ -18,9 +18,9 @@ package io.atomix.copycat.server.request;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Objects;
 
@@ -30,14 +30,14 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends AbstractRequest<T> {
-  protected Address member;
+  protected Member member;
 
   /**
    * Returns the joining member.
    *
    * @return The joining member.
    */
-  public Address member() {
+  public Member member() {
     return member;
   }
 
@@ -82,7 +82,7 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
      * @throws NullPointerException if {@code member} is null
      */
     @SuppressWarnings("unchecked")
-    public T withMember(Address member) {
+    public T withMember(Member member) {
       request.member = Assert.notNull(member, "member");
       return (T) this;
     }

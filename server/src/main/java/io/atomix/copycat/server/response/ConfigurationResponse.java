@@ -18,10 +18,10 @@ package io.atomix.copycat.server.response;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -33,8 +33,8 @@ import java.util.Objects;
  */
 public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends AbstractResponse<T> {
   protected long version;
-  protected Collection<Address> activeMembers;
-  protected Collection<Address> passiveMembers;
+  protected Collection<Member> activeMembers;
+  protected Collection<Member> passiveMembers;
 
   /**
    * Returns the response version.
@@ -50,7 +50,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
    *
    * @return The configuration members list.
    */
-  public Collection<Address> activeMembers() {
+  public Collection<Member> activeMembers() {
     return activeMembers;
   }
 
@@ -59,7 +59,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
    *
    * @return The configuration members list.
    */
-  public Collection<Address> passiveMembers() {
+  public Collection<Member> passiveMembers() {
     return passiveMembers;
   }
 
@@ -139,7 +139,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws NullPointerException if {@code members} is null
      */
     @SuppressWarnings("unchecked")
-    public T withActiveMembers(Collection<Address> members) {
+    public T withActiveMembers(Collection<Member> members) {
       response.activeMembers = Assert.notNull(members, "members");
       return (T) this;
     }
@@ -152,7 +152,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws NullPointerException if {@code members} is null
      */
     @SuppressWarnings("unchecked")
-    public T withPassiveMembers(Collection<Address> members) {
+    public T withPassiveMembers(Collection<Member> members) {
       response.passiveMembers = Assert.notNull(members, "members");
       return (T) this;
     }

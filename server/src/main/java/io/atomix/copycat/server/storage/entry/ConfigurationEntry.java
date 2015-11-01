@@ -19,9 +19,9 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Collection;
 
@@ -32,8 +32,8 @@ import java.util.Collection;
  */
 @SerializeWith(id=221)
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
-  private Collection<Address> active;
-  private Collection<Address> passive;
+  private Collection<Member> active;
+  private Collection<Member> passive;
 
   public ConfigurationEntry() {
   }
@@ -47,7 +47,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    *
    * @return The active members.
    */
-  public Collection<Address> getActive() {
+  public Collection<Member> getActive() {
     return active;
   }
 
@@ -58,7 +58,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setActive(Collection<Address> members) {
+  public ConfigurationEntry setActive(Collection<Member> members) {
     this.active = Assert.notNull(members, "members");
     return this;
   }
@@ -68,7 +68,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    *
    * @return The passive members.
    */
-  public Collection<Address> getPassive() {
+  public Collection<Member> getPassive() {
     return passive;
   }
 
@@ -79,7 +79,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setPassive(Collection<Address> members) {
+  public ConfigurationEntry setPassive(Collection<Member> members) {
     this.passive = Assert.notNull(members, "members");
     return this;
   }

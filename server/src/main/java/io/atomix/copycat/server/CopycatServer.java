@@ -131,12 +131,13 @@ public class CopycatServer implements RaftServer {
    * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
    * file to your {@code META-INF/services} folder on the classpath.
    *
-   * @param address The local server member ID. This must be the ID of a member listed in the provided members list.
+   * @param clientAddress The address through which clients connect to the server.
+   * @param serverAddress The local server member address.
    * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
-  public static Builder builder(Address address, Address... cluster) {
-    return builder(address, Arrays.asList(cluster));
+  public static Builder builder(Address clientAddress, Address serverAddress, Address... cluster) {
+    return builder(clientAddress, serverAddress, Arrays.asList(cluster));
   }
 
   /**
@@ -151,12 +152,13 @@ public class CopycatServer implements RaftServer {
    * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
    * file to your {@code META-INF/services} folder on the classpath.
    *
-   * @param address The local server member ID. This must be the ID of a member listed in the provided members list.
+   * @param clientAddress The address through which clients connect to the server.
+   * @param serverAddress The local server member address.
    * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
-  public static Builder builder(Address address, Collection<Address> cluster) {
-    return new Builder(address, cluster);
+  public static Builder builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
+    return new Builder(clientAddress, serverAddress, cluster);
   }
 
   private final ServerContext context;
@@ -346,16 +348,18 @@ public class CopycatServer implements RaftServer {
     private Storage storage;
     private Serializer serializer;
     private StateMachine stateMachine;
-    private Address address;
+    private Address clientAddress;
+    private Address serverAddress;
     private Set<Address> cluster;
     private Duration electionTimeout = DEFAULT_RAFT_ELECTION_TIMEOUT;
     private Duration heartbeatInterval = DEFAULT_RAFT_HEARTBEAT_INTERVAL;
     private Duration sessionTimeout = DEFAULT_RAFT_SESSION_TIMEOUT;
 
-    private Builder(Address address, Collection<Address> cluster) {
-      this.address = Assert.notNull(address, "address");
+    private Builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
+      this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
+      this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
       this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
-      this.cluster.add(address);
+      this.cluster.add(serverAddress);
     }
 
     /**
@@ -483,7 +487,7 @@ public class CopycatServer implements RaftServer {
           .build();
       }
 
-      ServerContext context = new ServerContext(address, cluster, stateMachine, transport, storage, serializer);
+      ServerContext context = new ServerContext(clientAddress, serverAddress, cluster, stateMachine, transport, storage, serializer);
       return new CopycatServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
     }
   }

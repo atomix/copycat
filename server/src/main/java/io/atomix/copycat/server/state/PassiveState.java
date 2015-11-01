@@ -70,7 +70,7 @@ class PassiveState extends AbstractState {
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
     if (request.term() < context.getTerm()) {
-      LOGGER.warn("{} - Rejected {}: request term is less than the current term ({})", context.getAddress(), request, context.getTerm());
+      LOGGER.warn("{} - Rejected {}: request term is less than the current term ({})", context.getMember().serverAddress(), request, context.getTerm());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -89,7 +89,7 @@ class PassiveState extends AbstractState {
    */
   protected AppendResponse doCheckPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -97,7 +97,7 @@ class PassiveState extends AbstractState {
         .withLogIndex(context.getLog().lastIndex())
         .build();
     } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -109,7 +109,7 @@ class PassiveState extends AbstractState {
     // If the previous entry term doesn't match the local previous term then reject the request.
     try (Entry entry = context.getLog().get(request.logIndex())) {
       if (entry == null || entry.getTerm() != request.logTerm()) {
-        LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getAddress(), request, entry != null ? entry.getTerm() : "unknown");
+        LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getMember().serverAddress(), request, entry != null ? entry.getTerm() : "unknown");
         return AppendResponse.builder()
           .withStatus(Response.Status.OK)
           .withTerm(context.getTerm())
@@ -135,7 +135,7 @@ class PassiveState extends AbstractState {
         // If the entry index is greater than the last log index, skip missing entries.
         if (context.getLog().lastIndex() < entry.getIndex()) {
           context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+          LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, entry.getIndex());
         } else {
           // Compare the term of the received entry with the matching entry in the log.
           try (Entry match = context.getLog().get(entry.getIndex())) {
@@ -143,13 +143,13 @@ class PassiveState extends AbstractState {
               if (entry.getTerm() != match.getTerm()) {
                 // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
                 // If appending to the log fails, apply commits and reply false to the append request.
-                LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getAddress());
+                LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getMember().serverAddress());
                 context.getLog().truncate(entry.getIndex() - 1).append(entry);
-                LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+                LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, entry.getIndex());
               }
             } else {
               context.getLog().truncate(entry.getIndex() - 1).append(entry);
-              LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+              LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, entry.getIndex());
             }
           }
         }
@@ -205,7 +205,7 @@ class PassiveState extends AbstractState {
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
     if (effectiveIndex > lastApplied) {
       long entriesToApply = effectiveIndex - lastApplied;
-      LOGGER.debug("{} - Applying {} commits", context.getAddress(), entriesToApply);
+      LOGGER.debug("{} - Applying {} commits", context.getMember().serverAddress(), entriesToApply);
 
       CompletableFuture<Void> future = new CompletableFuture<>();
 
@@ -217,7 +217,7 @@ class PassiveState extends AbstractState {
         if (entry != null) {
           applyEntry(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getAddress(), error.getMessage());
+              LOGGER.info("{} - An application error occurred: {}", context.getMember().serverAddress(), error.getMessage());
             }
 
             if (counter.incrementAndGet() == entriesToApply) {
@@ -255,7 +255,7 @@ class PassiveState extends AbstractState {
    * Applies an entry to the state machine.
    */
   protected CompletableFuture<?> applyEntry(Entry entry) {
-    LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+    LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
     return context.getStateMachine().apply(entry);
   }
 

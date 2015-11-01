@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 
 import java.util.*;
@@ -27,7 +26,7 @@ import java.util.*;
  */
 class ClusterState {
   private final ServerState context;
-  private final Address address;
+  private final Member member;
   private Type type = Type.PASSIVE;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
@@ -44,18 +43,18 @@ class ClusterState {
     PASSIVE
   }
 
-  ClusterState(ServerState context, Address address) {
+  ClusterState(ServerState context, Member member) {
     this.context = Assert.notNull(context, "context");
-    this.address = Assert.notNull(address, "address");
+    this.member = Assert.notNull(member, "member");
   }
 
   /**
-   * Returns the local cluster member address.
+   * Returns the local cluster member.
    *
-   * @return The local cluster member address.
+   * @return The local cluster member.
    */
-  Address getAddress() {
-    return address;
+  Member getMember() {
+    return member;
   }
 
   /**
@@ -147,7 +146,7 @@ class ClusterState {
    * @return Indicates whether the member is active.
    */
   boolean isActiveMember(MemberState member) {
-    return types.get(member.getAddress().hashCode()) == Type.ACTIVE;
+    return types.get(member.getServerAddress().hashCode()) == Type.ACTIVE;
   }
 
   /**
@@ -157,7 +156,7 @@ class ClusterState {
    * @return Indicates whether the member is passive.
    */
   boolean isPassiveMember(MemberState member) {
-    return types.get(member.getAddress().hashCode()) == Type.PASSIVE;
+    return types.get(member.getServerAddress().hashCode()) == Type.PASSIVE;
   }
 
   /**
@@ -217,7 +216,7 @@ class ClusterState {
    * @param passiveMembers The passive members.
    * @return The cluster state.
    */
-  ClusterState configure(long version, Collection<Address> activeMembers, Collection<Address> passiveMembers) {
+  ClusterState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers) {
     if (version <= this.version)
       return this;
 
@@ -227,22 +226,22 @@ class ClusterState {
     clearMembers();
 
     for (MemberState member : newActiveMembers) {
-      membersMap.put(member.getAddress().hashCode(), member);
+      membersMap.put(member.getServerAddress().hashCode(), member);
       members.add(member);
       this.activeMembers.add(member);
-      types.put(member.getAddress().hashCode(), Type.ACTIVE);
+      types.put(member.getServerAddress().hashCode(), Type.ACTIVE);
     }
 
     for (MemberState member : newPassiveMembers) {
-      membersMap.put(member.getAddress().hashCode(), member);
+      membersMap.put(member.getServerAddress().hashCode(), member);
       members.add(member);
       this.passiveMembers.add(member);
-      types.put(member.getAddress().hashCode(), Type.PASSIVE);
+      types.put(member.getServerAddress().hashCode(), Type.PASSIVE);
     }
 
-    if (activeMembers.contains(address)) {
+    if (activeMembers.contains(member)) {
       type = Type.ACTIVE;
-    } else if (passiveMembers.contains(address)) {
+    } else if (passiveMembers.contains(member)) {
       type = Type.PASSIVE;
     } else {
       type = null;
@@ -256,17 +255,17 @@ class ClusterState {
   /**
    * Builds a list of all members.
    */
-  Collection<Address> buildMembers() {
-    List<Address> members = new ArrayList<>();
+  Collection<Member> buildMembers() {
+    List<Member> members = new ArrayList<>();
     for (MemberState member : activeMembers) {
-      members.add(member.getAddress());
+      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
     for (MemberState member : passiveMembers) {
-      members.add(member.getAddress());
+      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
 
     if (type != null) {
-      members.add(address);
+      members.add(member);
     }
     return members;
   }
@@ -274,14 +273,14 @@ class ClusterState {
   /**
    * Builds a list of active members.
    */
-  Collection<Address> buildActiveMembers() {
-    List<Address> members = new ArrayList<>();
-    for (MemberState state : activeMembers) {
-      members.add(state.getAddress());
+  Collection<Member> buildActiveMembers() {
+    List<Member> members = new ArrayList<>();
+    for (MemberState member : activeMembers) {
+      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
 
     if (type == Type.ACTIVE) {
-      members.add(address);
+      members.add(member);
     }
     return members;
   }
@@ -289,14 +288,14 @@ class ClusterState {
   /**
    * Builds a list of passive members.
    */
-  Collection<Address> buildPassiveMembers() {
-    List<Address> members = new ArrayList<>();
-    for (MemberState state : passiveMembers) {
-      members.add(state.getAddress());
+  Collection<Member> buildPassiveMembers() {
+    List<Member> members = new ArrayList<>();
+    for (MemberState member : passiveMembers) {
+      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
 
     if (type == Type.PASSIVE) {
-      members.add(address);
+      members.add(member);
     }
     return members;
   }
@@ -304,17 +303,17 @@ class ClusterState {
   /**
    * Builds a members list.
    */
-  private List<MemberState> buildMembers(Collection<Address> members) {
+  private List<MemberState> buildMembers(Collection<Member> members) {
     List<MemberState> states = new ArrayList<>(members.size());
-    for (Address address : members) {
-      if (!address.equals(this.address)) {
+    for (Member member : members) {
+      if (!member.equals(this.member)) {
         // If the member doesn't already exist, create a new MemberState and initialize the state.
-        MemberState state = membersMap.get(address.hashCode());
+        MemberState state = membersMap.get(member.hashCode());
         if (state == null) {
-          state = new MemberState(address);
+          state = new MemberState(member.serverAddress());
           state.resetState(context.getLog());
         }
-        states.add(state);
+        states.add(state.setClientAddress(member.clientAddress()));
       }
     }
     return states;

@@ -44,7 +44,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
+      int leader = serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode();
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
@@ -64,7 +64,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateIncrementsTermVotesForSelfOnElection() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getMember().serverAddress().hashCode();
       serverState.setTerm(2);
 
       state.startElection();
@@ -76,7 +76,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesForSelfOnRequest() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getMember().serverAddress().hashCode();
       serverState.setTerm(2);
 
       state.startElection();
@@ -102,7 +102,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
+      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode();
       serverState.setTerm(1);
 
       state.startElection();
@@ -129,7 +129,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
+      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode();
       serverState.setTerm(1);
 
       append(2, 1);
@@ -165,7 +165,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     runOnServer(() -> {
       for (MemberState member : serverState.getCluster().getActiveMembers()) {
         Server server = transport.server();
-        server.listen(member.getAddress(), c -> {
+        server.listen(member.getServerAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(true)
@@ -177,7 +177,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     await(1000, serverState.getCluster().getActiveMembers().size());
 
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getMember().serverAddress().hashCode();
       serverState.setTerm(1);
 
       state.startElection();
@@ -197,7 +197,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     runOnServer(() -> {
       for (MemberState member : serverState.getCluster().getActiveMembers()) {
         Server server = transport.server();
-        server.listen(member.getAddress(), c -> {
+        server.listen(member.getServerAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(false)
@@ -209,7 +209,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     await(1000, serverState.getCluster().getActiveMembers().size());
 
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getMember().serverAddress().hashCode();
       serverState.setTerm(1);
 
       state.startElection();
