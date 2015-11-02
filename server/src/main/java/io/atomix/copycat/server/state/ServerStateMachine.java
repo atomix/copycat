@@ -137,7 +137,7 @@ class ServerStateMachine implements AutoCloseable {
       } else if (entry instanceof CommandEntry) {
         return apply((CommandEntry) entry, expectResult);
       } else if (entry instanceof RegisterEntry) {
-        return apply((RegisterEntry) entry);
+        return apply((RegisterEntry) entry, expectResult);
       } else if (entry instanceof KeepAliveEntry) {
         return apply((KeepAliveEntry) entry);
       } else if (entry instanceof UnregisterEntry) {
@@ -189,7 +189,7 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  private CompletableFuture<Long> apply(RegisterEntry entry) {
+  private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
     ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
     executor.context().sessions().registerSession(session).setTimestamp(entry.getTimestamp());
 
@@ -201,12 +201,33 @@ class ServerStateMachine implements AutoCloseable {
 
     ThreadContext context = getContext();
     long index = entry.getIndex();
+    long timestamp = executor.timestamp();
 
     // Set last applied only after the operation has been submitted to the state machine executor.
     CompletableFuture<Long> future = new ComposableFuture<>();
     executor.executor().execute(() -> {
+      // Update the state machine context with the register entry's index. This ensures that events published
+      // within the register method will be properly associated with the unregister entry's index. All events
+      // published during registration of a session are linearizable to ensure that clients receive related events
+      // before the registration is completed.
+      executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+
+      // Register the session and then open it. This ensures that state machines cannot publish events to this
+      // session before the client has learned of the session ID.
       stateMachine.register(session);
-      context.execute(() -> future.complete(index));
+      session.open();
+
+      // Once register callbacks have been completed, ensure that events published during the callbacks are
+      // received by clients. The state machine context will generate an event future for all published events
+      // to all sessions.
+      CompletableFuture<Void> sessionFuture = executor.context().commit();
+      if (sessionFuture != null) {
+        sessionFuture.whenComplete((result, error) -> {
+          context.executor().execute(() -> future.complete(index));
+        });
+      } else {
+        context.executor().execute(() -> future.complete(index));
+      }
     });
 
     // Update the highest index completed for all sessions.
@@ -257,7 +278,7 @@ class ServerStateMachine implements AutoCloseable {
       updateLastCompleted(entry.getIndex());
 
       future = new CompletableFuture<>();
-      context.execute(() -> future.complete(null));
+      context.executor().execute(() -> future.complete(null));
     }
 
     // Immediately clean the keep alive entry from the log.
@@ -311,8 +332,8 @@ class ServerStateMachine implements AutoCloseable {
           stateMachine.expire(session);
           stateMachine.close(session);
 
-          // Once expiration callbacks have been completed, ensure that events published during the callbacks
-          // are published in batch. The state machine context will generate an event future for all published events
+          // Once expiration callbacks have been completed, ensure that events published during the callbacks are
+          // received by clients. The state machine context will generate an event future for all published events
           // to all sessions.
           CompletableFuture<Void> sessionFuture = executor.context().commit();
           if (sessionFuture != null) {
@@ -334,8 +355,8 @@ class ServerStateMachine implements AutoCloseable {
           session.close();
           stateMachine.close(session);
 
-          // Once close callbacks have been completed, ensure that events published during the callbacks
-          // are published in batch. The state machine context will generate an event future for all published events
+          // Once close callbacks have been completed, ensure that events published during the callbacks are
+          // received by clients. The state machine context will generate an event future for all published events
           // to all sessions.
           CompletableFuture<Void> sessionFuture = executor.context().commit();
           if (sessionFuture != null) {
