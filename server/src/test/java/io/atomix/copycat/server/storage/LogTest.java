@@ -115,6 +115,10 @@ public abstract class LogTest extends AbstractLogTest {
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
       log.clean(i);
+      assertNotNull(log.get(i));
+    }
+    log.compactor().majorIndex(entriesPerSegment * 2);
+    for (int i = entriesPerSegment; i <= entriesPerSegment * 2; i++) {
       assertNull(log.get(i));
     }
   }
