@@ -171,6 +171,7 @@ final class LeaderState extends ActiveState {
         try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
           entry.setTerm(term)
             .setSession(session.id())
+            .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
           LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
@@ -609,7 +610,9 @@ final class LeaderState extends ActiveState {
       if (isOpen()) {
         if (commitError == null) {
           RegisterEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenComplete((sessionId, sessionError) -> {
+
+          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(RegisterResponse.builder()
@@ -790,6 +793,7 @@ final class LeaderState extends ActiveState {
     try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
+        .setExpired(false)
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
