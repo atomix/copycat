@@ -343,8 +343,9 @@ class ServerStateMachine implements AutoCloseable {
 
       long index = entry.getIndex();
 
-      // If the session is marked suspect, that indicates that it expired.
-      if (session.isSuspect()) {
+      // If the entry was marked expired, that indicates that the leader explicitly expired the session due to
+      // the session not being kept alive by the client. In all other cases, we close the session normally.
+      if (entry.isExpired()) {
         executor.executor().execute(() -> {
           // Update the state machine context with the unregister entry's index. This ensures that events published
           // within the expire or close methods will be properly associated with the unregister entry's index.
