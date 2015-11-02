@@ -72,7 +72,10 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       activeMembers = serializer.readObject(buffer);
       passiveMembers = serializer.readObject(buffer);
     } else {
-      error = RaftError.forId(buffer.readByte());
+      int errorCode = buffer.readByte();
+      if (errorCode != 0) {
+        error = RaftError.forId(errorCode);
+      }
     }
   }
 
@@ -84,7 +87,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       serializer.writeObject(activeMembers, buffer);
       serializer.writeObject(passiveMembers, buffer);
     } else {
-      buffer.writeByte(error.id());
+      buffer.writeByte(error != null ? error.id() : 0);
     }
   }
 

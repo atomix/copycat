@@ -76,7 +76,7 @@ public class FileLogTest extends LogTest {
       }
     }
 
-    log.commit(entriesPerSegment * 5).compactor().compact().join();
+    log.commit(entriesPerSegment * 5).compactor().minorIndex(entriesPerSegment * 5).compact().join();
     log.close();
 
     try (Log log = createLog()) {

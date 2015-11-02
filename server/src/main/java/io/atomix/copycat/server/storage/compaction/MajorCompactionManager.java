@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
@@ -41,18 +42,23 @@ import java.util.List;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class MajorCompactionManager implements CompactionManager {
+  private final Compactor compactor;
+
+  MajorCompactionManager(Compactor compactor) {
+    this.compactor = Assert.notNull(compactor, "compactor");
+  }
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<List<Segment>> groups = getCleanableGroups(storage, segments);
-    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups)) : Collections.emptyList();
+    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, compactor.majorIndex())) : Collections.emptyList();
   }
 
   /**
    * Returns a list of segments lists to clean, where segments are grouped according to how they will be merged during 
    * cleaning.
    */
-  public static List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
+  public List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
@@ -95,11 +101,11 @@ public final class MajorCompactionManager implements CompactionManager {
    * @param manager The segment manager.
    * @return A list of cleanable log segments.
    */
-  private static List<Segment> getCleanableSegments(SegmentManager manager) {
+  private List<Segment> getCleanableSegments(SegmentManager manager) {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
     Segment lastSegment = manager.lastSegment();
     for (Segment segment : manager.segments()) {
-      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < manager.commitIndex() && lastSegment.firstIndex() <= manager.commitIndex() && !lastSegment.isEmpty()) {
+      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < compactor.minorIndex() && lastSegment.firstIndex() <= compactor.minorIndex() && !lastSegment.isEmpty()) {
         segments.add(segment);
       } else {
         break;
