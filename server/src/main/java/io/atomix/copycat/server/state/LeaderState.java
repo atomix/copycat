@@ -211,7 +211,8 @@ final class LeaderState extends ActiveState {
     }
 
     // If the member is already a known member of the cluster, complete the join successfully.
-    if (context.getCluster().getMember(request.member().hashCode()) != null) {
+    MemberState existingMember = context.getCluster().getMember(request.member().hashCode());
+    if (existingMember != null && existingMember.getClientAddress() != null && existingMember.getClientAddress().equals(request.member().clientAddress())) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
         .withVersion(context.getCluster().getVersion())
