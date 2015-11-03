@@ -54,9 +54,9 @@ abstract class ActiveState extends PassiveState {
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as leader.
     boolean transition = false;
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
+    if (request.term() > context.getLog().getTerm() || (request.term() == context.getLog().getTerm() && context.getLeader() == null)) {
+      context.getLog().setTerm(request.term());
+      context.getLog().setLeader(request.leader());
       transition = true;
     }
 
@@ -82,31 +82,31 @@ abstract class ActiveState extends PassiveState {
   protected PollResponse handlePoll(PollRequest request) {
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context.
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
+    if (request.term() > context.getLog().getTerm()) {
+      context.getLog().setTerm(request.term());
     }
 
 
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
-    if (request.term() < context.getTerm()) {
+    if (request.term() < context.getLog().getTerm()) {
       LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withAccepted(false)
         .build();
     } else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withAccepted(true)
         .build();
     } else {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withAccepted(false)
         .build();
     }
@@ -119,8 +119,8 @@ abstract class ActiveState extends PassiveState {
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context.
     boolean transition = false;
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
+    if (request.term() > context.getLog().getTerm()) {
+      context.getLog().setTerm(request.term());
       transition = true;
     }
 
@@ -138,11 +138,11 @@ abstract class ActiveState extends PassiveState {
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
-    if (request.term() < context.getTerm()) {
+    if (request.term() < context.getLog().getTerm()) {
       LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withVoted(false)
         .build();
     }
@@ -152,33 +152,33 @@ abstract class ActiveState extends PassiveState {
       LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withVoted(false)
         .build();
     }
     // If we've already voted for someone else then don't vote again.
-    else if (context.getLastVotedFor() == 0 || context.getLastVotedFor() == request.candidate()) {
+    else if (context.getLog().getLastVote() == 0 || context.getLog().getLastVote() == request.candidate()) {
       if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
-        context.setLastVotedFor(request.candidate());
+        context.getLog().setLastVote(request.candidate());
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
+          .withTerm(context.getLog().getTerm())
           .withVoted(true)
           .build();
       } else {
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
+          .withTerm(context.getLog().getTerm())
           .withVoted(false)
           .build();
       }
     }
     // In this case, we've already voted for someone else.
     else {
-      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getAddress(), request, context.getLastVotedFor());
+      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getAddress(), request, context.getLog().getLastVote());
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withVoted(false)
         .build();
     }
@@ -195,8 +195,8 @@ abstract class ActiveState extends PassiveState {
     } else {
       // Otherwise, load the last entry in the log. The last entry should be
       // at least as up to date as the candidates entry and term.
-      long lastIndex = context.getLog().lastIndex();
-      Entry entry = context.getLog().get(lastIndex);
+      long lastIndex = context.getLog().getLastIndex();
+      Entry entry = context.getLog().getEntry(lastIndex);
       if (entry == null) {
         LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
         return true;
@@ -232,7 +232,7 @@ abstract class ActiveState extends PassiveState {
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
-      if (context.getLog().lastIndex() < context.getCommitIndex()) {
+      if (context.getLog().getLastIndex() < context.getLog().getCommitIndex()) {
         LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
         return queryForward(request);
       }
@@ -264,9 +264,9 @@ abstract class ActiveState extends PassiveState {
   private CompletableFuture<QueryResponse> queryLocal(QueryRequest request) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(context.getCommitIndex())
-      .setTerm(context.getTerm())
+    QueryEntry entry = context.getLog().createEntry(QueryEntry.class)
+      .setIndex(context.getLog().getCommitIndex())
+      .setTerm(context.getLog().getTerm())
       .setTimestamp(System.currentTimeMillis())
       .setSession(request.session())
       .setSequence(request.sequence())
@@ -278,9 +278,9 @@ abstract class ActiveState extends PassiveState {
     // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
     final long version;
     if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      version = context.getStateMachine().getLastApplied();
+      version = context.getLog().getLastApplied();
     } else {
-      version = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+      version = Math.max(request.sequence(), context.getLog().getLastApplied());
     }
 
     context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {

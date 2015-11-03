@@ -42,7 +42,7 @@ class MemberState {
    */
   void resetState(Log log) {
     matchIndex = 0;
-    nextIndex = log.lastIndex() + 1;
+    nextIndex = log.getLastIndex() + 1;
     commitTime = 0;
     commitStartTime = 0;
     failures = 0;

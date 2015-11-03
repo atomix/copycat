@@ -15,16 +15,14 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.RaftServer;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import io.atomix.copycat.client.request.CommandRequest;
-import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.CommandEntry;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Leader state test.
@@ -45,7 +43,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
    */
   public void testLeaderStepsDownAndVotesOnHigherTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1).setLeader(0);
+      serverState.getLog().setTerm(1).setLeader(0);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -55,8 +53,8 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
 
       VoteResponse response = state.vote(request).get();
       
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverState.getLog().getTerm(), 2L);
+      threadAssertEquals(serverState.getLog().getLastVote(), members.get(1).hashCode());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
       threadAssertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
@@ -68,9 +66,9 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
    */
   public void testLeaderSequencesCommands() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1)
-          .setLeader(members.get(0).hashCode())
-          .getStateMachine()
+      serverState.getLog().setTerm(1)
+          .setLeader(members.get(0).hashCode());
+      serverState.getStateMachine()
           .executor()
           .context()
           .sessions()
@@ -99,15 +97,15 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
     Thread.sleep(1000);
 
     serverState.getThreadContext().execute(() -> {
-      try (CommandEntry entry = serverState.getLog().get(1)) {
+      try (CommandEntry entry = serverState.getLog().getEntry(1)) {
         threadAssertEquals("foo", ((TestCommand) entry.getOperation()).value);
       }
 
-      try (CommandEntry entry = serverState.getLog().get(2)) {
+      try (CommandEntry entry = serverState.getLog().getEntry(2)) {
         threadAssertEquals("bar", ((TestCommand) entry.getOperation()).value);
       }
 
-      try (CommandEntry entry = serverState.getLog().get(3)) {
+      try (CommandEntry entry = serverState.getLog().getEntry(3)) {
         threadAssertEquals("baz", ((TestCommand) entry.getOperation()).value);
       }
 

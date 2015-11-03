@@ -146,9 +146,9 @@ public abstract class AbstractLogTest {
   protected List<Long> appendEntries(int numEntries, int startingId, boolean tombstone) {
     List<Integer> entryIds = IntStream.range(startingId, startingId + numEntries).boxed().collect(Collectors.toList());
     return entryIds.stream().map(entryId -> {
-      try (TestEntry entry = log.create(TestEntry.class)) {
+      try (TestEntry entry = log.createEntry(TestEntry.class)) {
         entry.setTerm(1).setTombstone(tombstone).setPadding(entryPadding);
-        return log.append(entry);
+        return log.appendEntry(entry);
       }
     }).collect(Collectors.toList());
   }
@@ -160,7 +160,7 @@ public abstract class AbstractLogTest {
 
   protected void cleanAndCompact(int startIndex, int endIndex) {
     for (int i = startIndex; i <= endIndex; i++) {
-      log.clean(i);
+      log.cleanEntry(i);
     }
 
     log.compactor().compact(Compaction.MAJOR).join();
@@ -168,13 +168,13 @@ public abstract class AbstractLogTest {
 
   protected void assertCompacted(int startIndex, int endIndex) {
     for (int i = startIndex; i <= endIndex; i++) {
-      assertNull(log.get(i));
+      assertNull(log.getEntry(i));
     }
   }
   
   protected void printLog() {
     for (int i = 1; i < log.length(); i++) {
-      System.out.println(log.get(i).toString());
+      System.out.println(log.getEntry(i).toString());
     }
   }
 }

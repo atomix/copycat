@@ -82,7 +82,7 @@ final class CandidateState extends ActiveState {
 
     // When the election timer is reset, increment the current term and
     // restart the election.
-    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getAddress().hashCode());
+    context.getLog().setTerm(context.getLog().getTerm() + 1).setLastVote(context.getAddress().hashCode());
 
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
     currentTimer = context.getThreadContext().schedule(delay, () -> {
@@ -122,8 +122,8 @@ final class CandidateState extends ActiveState {
 
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
-    long lastIndex = context.getLog().lastIndex();
-    Entry lastEntry = lastIndex != 0 ? context.getLog().get(lastIndex) : null;
+    long lastIndex = context.getLog().getLastIndex();
+    Entry lastEntry = lastIndex != 0 ? context.getLog().getEntry(lastIndex) : null;
 
     final long lastTerm;
     if (lastEntry != null) {
@@ -138,9 +138,9 @@ final class CandidateState extends ActiveState {
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
     for (MemberState member : votingMembers) {
-      LOGGER.debug("{} - Requesting vote from {} for term {}", context.getAddress(), member, context.getTerm());
+      LOGGER.debug("{} - Requesting vote from {} for term {}", context.getAddress(), member, context.getLog().getTerm());
       VoteRequest request = VoteRequest.builder()
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withCandidate(context.getAddress().hashCode())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
@@ -154,15 +154,15 @@ final class CandidateState extends ActiveState {
               LOGGER.warn(error.getMessage());
               quorum.fail();
             } else {
-              if (response.term() > context.getTerm()) {
+              if (response.term() > context.getLog().getTerm()) {
                 LOGGER.debug("{} - Received greater term from {}", context.getAddress(), member);
-                context.setTerm(response.term());
+                context.getLog().setTerm(response.term());
                 complete.set(true);
                 transition(CopycatServer.State.FOLLOWER);
               } else if (!response.voted()) {
                 LOGGER.debug("{} - Received rejected vote from {}", context.getAddress(), member);
                 quorum.fail();
-              } else if (response.term() != context.getTerm()) {
+              } else if (response.term() != context.getLog().getTerm()) {
                 LOGGER.debug("{} - Received successful vote for a different term from {}", context.getAddress(), member);
                 quorum.fail();
               } else {
@@ -182,8 +182,8 @@ final class CandidateState extends ActiveState {
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as a candidate.
-    if (request.term() >= context.getTerm()) {
-      context.setTerm(request.term());
+    if (request.term() >= context.getLog().getTerm()) {
+      context.getLog().setTerm(request.term());
       transition(CopycatServer.State.FOLLOWER);
     }
     return super.append(request);
@@ -195,8 +195,8 @@ final class CandidateState extends ActiveState {
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as a candidate.
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
+    if (request.term() > context.getLog().getTerm()) {
+      context.getLog().setTerm(request.term());
       transition(CopycatServer.State.FOLLOWER);
       return super.vote(request);
     }
@@ -205,13 +205,13 @@ final class CandidateState extends ActiveState {
     if (request.candidate() == context.getAddress().hashCode()) {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withVoted(true)
         .build()));
     } else {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withVoted(false)
         .build()));
     }

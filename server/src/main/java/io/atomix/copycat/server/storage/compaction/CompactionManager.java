@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
 
@@ -39,9 +40,10 @@ public interface CompactionManager {
    * individual tasks can be run in parallel by operating on different segments in the log.
    *
    * @param storage The storage configuration.
+   * @param log The log.
    * @param segments The segments for which to build compaction tasks.
    * @return An iterable of compaction tasks.
    */
-  Collection<CompactionTask> buildTasks(Storage storage, SegmentManager segments);
+  Collection<CompactionTask> buildTasks(Storage storage, Log log, SegmentManager segments);
 
 }

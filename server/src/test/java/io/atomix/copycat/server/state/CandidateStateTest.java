@@ -45,7 +45,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
       int leader = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
@@ -57,7 +57,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.succeeded());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(serverState.getLeader().hashCode(), leader);
       assertEquals(response.term(), 2L);
       assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
@@ -67,23 +67,23 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   public void testCandidateIncrementsTermVotesForSelfOnElection() throws Throwable {
     runOnServer(() -> {
       int self = serverState.getAddress().hashCode();
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverState.getLog().getTerm(), 3L);
+      assertEquals(serverState.getLog().getLastVote(), self);
     });
   }
 
   public void testCandidateVotesForSelfOnRequest() throws Throwable {
     runOnServer(() -> {
       int self = serverState.getAddress().hashCode();
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 3L);
+      assertEquals(serverState.getLog().getTerm(), 3L);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(3)
@@ -96,8 +96,8 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.voted());
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverState.getLog().getTerm(), 3L);
+      assertEquals(serverState.getLog().getLastVote(), self);
       assertEquals(response.term(), 3L);
     });
   }
@@ -105,11 +105,11 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
       int candidate = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(3)
@@ -122,8 +122,8 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.voted());
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), candidate);
+      assertEquals(serverState.getLog().getTerm(), 3L);
+      assertEquals(serverState.getLog().getLastVote(), candidate);
       assertEquals(response.term(), 3L);
       assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
     });
@@ -132,13 +132,13 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
       int candidate = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       append(2, 1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(3)
@@ -151,8 +151,8 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertFalse(response.voted());
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), 0);
+      assertEquals(serverState.getLog().getTerm(), 3L);
+      assertEquals(serverState.getLog().getLastVote(), 0);
       assertEquals(response.term(), 3L);
       assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
     });
@@ -180,12 +180,12 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
     runOnServer(() -> {
       int self = serverState.getAddress().hashCode();
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverState.getLog().getTerm(), 2L);
+      assertEquals(serverState.getLog().getLastVote(), self);
     });
     await(1000);
   }
@@ -212,12 +212,12 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
     runOnServer(() -> {
       int self = serverState.getAddress().hashCode();
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverState.getLog().getTerm(), 2L);
+      assertEquals(serverState.getLog().getLastVote(), self);
     });
     await(1000);
   }

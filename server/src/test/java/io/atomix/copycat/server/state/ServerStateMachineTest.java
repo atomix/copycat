@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.transport.Transport;
@@ -26,14 +27,15 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -49,10 +51,10 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private ThreadContext callerContext;
   private ThreadContext stateContext;
   private Transport transport;
+  private Log log;
   private ServerStateMachine stateMachine;
   private long timestamp;
   private AtomicLong sequence;
-  private Set<Long> cleaned;
 
   @BeforeMethod
   public void createStateMachine() {
@@ -60,8 +62,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     stateContext = new SingleThreadContext("state", new Serializer());
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
-    cleaned = new HashSet<>();
-    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaned::add, stateContext);
+    log = new Storage(StorageLevel.MEMORY, new Serializer(new ServiceLoaderTypeResolver())).open("test");
+    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), log, stateContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }
@@ -78,6 +80,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp)
         .setTimeout(500)
         .setClient(UUID.randomUUID());
+      log.appendEntry(entry);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -101,6 +104,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp + 1000)
         .setCommandSequence(0)
         .setEventVersion(0);
+      log.appendEntry(entry);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -125,6 +129,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp)
         .setTimeout(500)
         .setClient(UUID.randomUUID());
+      log.appendEntry(entry);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -145,6 +150,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setIndex(2)
         .setTerm(1)
         .setTimestamp(timestamp + 100);
+      log.appendEntry(entry);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -169,6 +175,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp)
         .setTimeout(500)
         .setClient(UUID.randomUUID());
+      log.appendEntry(entry);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -186,12 +193,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       KeepAliveEntry entry = new KeepAliveEntry()
-        .setIndex(3)
+        .setIndex(2)
         .setTerm(1)
         .setSession(2)
         .setTimestamp(timestamp + 1000)
         .setCommandSequence(0)
         .setEventVersion(0);
+      log.appendEntry(entry);
 
       stateMachine.apply(entry).whenComplete((result, error) -> {
         threadAssertNotNull(error);
@@ -311,7 +319,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         resume();
       });
 
-      threadAssertEquals(stateMachine.getLastApplied(), 1l);
+      threadAssertEquals(log.getLastApplied(), 1l);
     });
 
     await();
@@ -325,7 +333,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       QueryEntry entry = new QueryEntry()
-        .setIndex(stateMachine.getLastApplied())
+        .setIndex(log.getLastApplied())
         .setTerm(1)
         .setSession(1)
         .setTimestamp(timestamp + 200)
@@ -355,7 +363,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         resume();
       });
 
-      threadAssertEquals(stateMachine.getLastApplied(), 2l);
+      threadAssertEquals(log.getLastApplied(), 2l);
     });
 
     await(1000, 2);

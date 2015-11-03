@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 
 /**
- * Removes {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} entries from an individual
+ * Removes {@link io.atomix.copycat.server.storage.Log#cleanEntry(long) cleaned} entries from an individual
  * log {@link Segment} to reclaim disk space.
  * <p>
  * The minor compaction task is a lightweight process that rewrites an individual segment to remove entries for

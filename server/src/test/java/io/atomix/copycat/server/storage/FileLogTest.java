@@ -50,8 +50,8 @@ public class FileLogTest extends LogTest {
     try (Log log = createLog()) {
       assertEquals(log.length(), entriesPerSegment * 5);
 
-      for (long i = log.firstIndex(); i <= log.lastIndex(); i++) {
-        try (Entry entry = log.get(i)) {
+      for (long i = log.getFirstIndex(); i <= log.getLastIndex(); i++) {
+        try (Entry entry = log.getEntry(i)) {
           assertEquals(entry.getIndex(), i);
         }
       }
@@ -65,18 +65,18 @@ public class FileLogTest extends LogTest {
     appendEntries(entriesPerSegment * 5);
     for (long i = 1; i <= entriesPerSegment * 5; i++) {
       if (i % 3 == 0 || i % 3 == 1) {
-        log.clean(i);
+        log.cleanEntry(i);
       }
     }
 
     for (long i = 1; i <= entriesPerSegment * 5; i++) {
       if (i % 3 == 0 || i % 3 == 1) {
-        assertTrue(log.lastIndex() >= i);
-        assertTrue(log.contains(i));
+        assertTrue(log.getLastIndex() >= i);
+        assertTrue(log.containsEntry(i));
       }
     }
 
-    log.commit(entriesPerSegment * 5).compactor().minorIndex(entriesPerSegment * 5).compact().join();
+    log.setCommitIndex(entriesPerSegment * 5).setCompactIndex(entriesPerSegment * 5).compactor().compact().join();
     log.close();
 
     try (Log log = createLog()) {
@@ -84,10 +84,10 @@ public class FileLogTest extends LogTest {
       
       for (long i = 1; i <= entriesPerSegment * 5; i++) {
         if (i % 3 == 0 || i % 3 == 1) {
-          assertTrue(log.lastIndex() >= i);
+          assertTrue(log.getLastIndex() >= i);
           if (i <= entriesPerSegment * 4) {
-            assertFalse(log.contains(i));
-            assertNull(log.get(i));
+            assertFalse(log.containsEntry(i));
+            assertNull(log.getEntry(i));
           }
         }
       }

@@ -49,9 +49,9 @@ public class MinorCompactionTest extends AbstractLogTest {
     assertEquals(log.length(), 31L);
 
     for (long index = 21; index < 28; index++) {
-      log.clean(index);
+      log.cleanEntry(index);
     }
-    log.commit(31).compactor().minorIndex(31);
+    log.setCommitIndex(31).setCompactIndex(31);
 
     CountDownLatch latch = new CountDownLatch(1);
     log.compactor().compact(Compaction.MINOR).thenRun(latch::countDown);
@@ -60,15 +60,15 @@ public class MinorCompactionTest extends AbstractLogTest {
     assertEquals(log.length(), 31L);
 
     for (long index = 21; index < 28; index++) {
-      assertTrue(log.lastIndex() >= index);
+      assertTrue(log.getLastIndex() >= index);
       if (index % 2 != 0) {
-        assertFalse(log.contains(index));
-        try (TestEntry entry = log.get(index)) {
+        assertFalse(log.containsEntry(index));
+        try (TestEntry entry = log.getEntry(index)) {
           assertNull(entry);
         }
       } else {
-        assertTrue(log.contains(index));
-        try (TestEntry entry = log.get(index)) {
+        assertTrue(log.containsEntry(index));
+        try (TestEntry entry = log.getEntry(index)) {
           assertNotNull(entry);
         }
       }
@@ -80,7 +80,7 @@ public class MinorCompactionTest extends AbstractLogTest {
    */
   private void writeEntries(int entries) {
     for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = log.create(TestEntry.class)) {
+      try (TestEntry entry = log.createEntry(TestEntry.class)) {
         entry.setTerm(1);
         entry.setPadding(1);
         if (entry.getIndex() % 2 == 0) {
@@ -88,7 +88,7 @@ public class MinorCompactionTest extends AbstractLogTest {
         } else {
           entry.setTombstone(false);
         }
-        log.append(entry);
+        log.appendEntry(entry);
       }
     }
   }

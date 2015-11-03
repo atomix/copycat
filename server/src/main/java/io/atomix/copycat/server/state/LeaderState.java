@@ -77,7 +77,7 @@ final class LeaderState extends ActiveState {
    * Sets the current node as the cluster leader.
    */
   private void takeLeadership() {
-    context.setLeader(context.getAddress().hashCode());
+    context.getLog().setLeader(context.getAddress().hashCode());
     context.getCluster().getMembers().forEach(m -> m.resetState(context.getLog()));
   }
 
@@ -85,12 +85,12 @@ final class LeaderState extends ActiveState {
    * Commits a no-op entry to the log, ensuring any entries from a previous term are committed.
    */
   private CompletableFuture<Void> commitEntries() {
-    final long term = context.getTerm();
+    final long term = context.getLog().getTerm();
     final long index;
-    try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
+    try (NoOpEntry entry = context.getLog().createEntry(NoOpEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(leaderTime);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
     }
 
     // Store the index at which the leader took command.
@@ -117,8 +117,8 @@ final class LeaderState extends ActiveState {
   private void applyEntries(long index) {
     if (!context.getLog().isEmpty()) {
       int count = 0;
-      for (long lastApplied = Math.max(context.getLastApplied(), context.getLog().firstIndex()); lastApplied <= index; lastApplied++) {
-        Entry entry = context.getLog().get(lastApplied);
+      for (long lastApplied = Math.max(context.getLog().getLastApplied(), context.getLog().getFirstIndex()); lastApplied <= index; lastApplied++) {
+        Entry entry = context.getLog().getEntry(lastApplied);
         if (entry != null) {
           context.getStateMachine().apply(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
@@ -131,7 +131,6 @@ final class LeaderState extends ActiveState {
       }
 
       LOGGER.debug("{} - Applied {} entries to log", context.getAddress(), count);
-      context.getLog().compactor().minorIndex(context.getLastCompleted());
     }
   }
 
@@ -152,9 +151,7 @@ final class LeaderState extends ActiveState {
   private void heartbeatMembers() {
     context.checkThread();
     if (isOpen()) {
-      replicator.commit().whenComplete((result, error) -> {
-        context.getLog().compactor().minorIndex(context.getLastCompleted());
-      });
+      replicator.commit();
     }
   }
 
@@ -162,24 +159,24 @@ final class LeaderState extends ActiveState {
    * Checks for expired sessions.
    */
   private void checkSessions() {
-    long term = context.getTerm();
+    long term = context.getLog().getTerm();
     for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
       if (!session.isUnregistering() && session.isSuspect()) {
         LOGGER.debug("{} - Detected expired session: {}", context.getAddress(), session.id());
 
         final long index;
-        try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
+        try (UnregisterEntry entry = context.getLog().createEntry(UnregisterEntry.class)) {
           entry.setTerm(term)
             .setSession(session.id())
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
-          index = context.getLog().append(entry);
+          index = context.getLog().appendEntry(entry);
           LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
         }
 
         replicator.commit(index).whenComplete((result, error) -> {
           if (isOpen()) {
-            UnregisterEntry entry = context.getLog().get(index);
+            UnregisterEntry entry = context.getLog().getEntry(index);
             LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
             context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
           }
@@ -204,7 +201,7 @@ final class LeaderState extends ActiveState {
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-    if (leaderIndex == 0 || context.getCommitIndex() < leaderIndex) {
+    if (leaderIndex == 0 || context.getLog().getCommitIndex() < leaderIndex) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -220,18 +217,18 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
-    final long term = context.getTerm();
+    final long term = context.getLog().getTerm();
     final long index;
 
     Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
     Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
     passiveMembers.add(request.member());
 
-    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+    try (ConfigurationEntry entry = context.getLog().createEntry(ConfigurationEntry.class)) {
       entry.setTerm(term)
         .setActive(activeMembers)
         .setPassive(passiveMembers);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
@@ -279,7 +276,7 @@ final class LeaderState extends ActiveState {
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-    if (leaderIndex == 0 || context.getCommitIndex() < leaderIndex) {
+    if (leaderIndex == 0 || context.getLog().getCommitIndex() < leaderIndex) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -294,7 +291,7 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
-    final long term = context.getTerm();
+    final long term = context.getLog().getTerm();
     final long index;
 
     Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
@@ -303,11 +300,11 @@ final class LeaderState extends ActiveState {
     Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
     passiveMembers.remove(request.member());
 
-    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+    try (ConfigurationEntry entry = context.getLog().createEntry(ConfigurationEntry.class)) {
       entry.setTerm(term)
         .setActive(activeMembers)
         .setPassive(passiveMembers);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
@@ -344,22 +341,22 @@ final class LeaderState extends ActiveState {
   public CompletableFuture<PollResponse> poll(final PollRequest request) {
     return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(Response.Status.OK)
-      .withTerm(context.getTerm())
+      .withTerm(context.getLog().getTerm())
       .withAccepted(false)
       .build()));
   }
 
   @Override
   public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
-    if (request.term() > context.getTerm()) {
+    if (request.term() > context.getLog().getTerm()) {
       LOGGER.debug("{} - Received greater term", context.getAddress());
-      context.setLeader(0);
+      context.getLog().setLeader(0);
       transition(CopycatServer.State.FOLLOWER);
       return super.vote(request);
     } else {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withVoted(false)
         .build()));
     }
@@ -368,17 +365,17 @@ final class LeaderState extends ActiveState {
   @Override
   public CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
-    if (request.term() > context.getTerm()) {
+    if (request.term() > context.getLog().getTerm()) {
       return super.append(request);
-    } else if (request.term() < context.getTerm()) {
+    } else if (request.term() < context.getLog().getTerm()) {
       return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(context.getLog().getLastIndex())
         .build()));
     } else {
-      context.setLeader(request.leader());
+      context.getLog().setLeader(request.leader());
       transition(CopycatServer.State.FOLLOWER);
       return super.append(request);
     }
@@ -412,18 +409,18 @@ final class LeaderState extends ActiveState {
       return future;
     }
 
-    final long term = context.getTerm();
+    final long term = context.getLog().getTerm();
     final long timestamp = System.currentTimeMillis();
     final long index;
 
     // Create a CommandEntry and append it to the log.
-    try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
+    try (CommandEntry entry = context.getLog().createEntry(CommandEntry.class)) {
       entry.setTerm(term)
         .setSession(request.session())
         .setTimestamp(timestamp)
         .setSequence(request.sequence())
         .setCommand(command);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
     }
 
@@ -431,7 +428,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          CommandEntry entry = context.getLog().get(index);
+          CommandEntry entry = context.getLog().getEntry(index);
 
           LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((result, error) -> {
@@ -480,14 +477,14 @@ final class LeaderState extends ActiveState {
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
-    final long index = context.getCommitIndex();
+    final long index = context.getLog().getCommitIndex();
 
     context.checkThread();
     logRequest(request);
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
+    QueryEntry entry = context.getLog().createEntry(QueryEntry.class)
       .setIndex(index)
-      .setTerm(context.getTerm())
+      .setTerm(context.getLog().getTerm())
       .setTimestamp(timestamp)
       .setSession(request.session())
       .setSequence(request.sequence())
@@ -559,7 +556,7 @@ final class LeaderState extends ActiveState {
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // versions will be the last applied index.
-    final long version = context.getStateMachine().getLastApplied();
+    final long version = context.getLog().getLastApplied();
     applyEntry(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
@@ -595,12 +592,12 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (RegisterEntry entry = context.getLog().createEntry(RegisterEntry.class)) {
+      entry.setTerm(context.getLog().getTerm())
         .setTimestamp(timestamp)
         .setClient(request.client())
         .setTimeout(timeout);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
@@ -609,7 +606,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          RegisterEntry entry = context.getLog().get(index);
+          RegisterEntry entry = context.getLog().getEntry(index);
 
           LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
@@ -672,12 +669,12 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (ConnectEntry entry = context.getLog().createEntry(ConnectEntry.class)) {
+      entry.setTerm(context.getLog().getTerm())
         .setSession(request.session())
         .setTimestamp(timestamp)
         .setAddress(request.address());
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
@@ -688,7 +685,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          ConnectEntry entry = context.getLog().get(index);
+          ConnectEntry entry = context.getLog().getEntry(index);
           applyEntry(entry).whenComplete((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
@@ -729,13 +726,13 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (KeepAliveEntry entry = context.getLog().createEntry(KeepAliveEntry.class)) {
+      entry.setTerm(context.getLog().getTerm())
         .setSession(request.session())
         .setCommandSequence(request.commandSequence())
         .setEventVersion(request.eventVersion())
         .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
@@ -744,7 +741,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          KeepAliveEntry entry = context.getLog().get(index);
+          KeepAliveEntry entry = context.getLog().getEntry(index);
           applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
@@ -790,12 +787,12 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (UnregisterEntry entry = context.getLog().createEntry(UnregisterEntry.class)) {
+      entry.setTerm(context.getLog().getTerm())
         .setSession(request.session())
         .setExpired(false)
         .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
+      index = context.getLog().appendEntry(entry);
       LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
     }
 
@@ -804,7 +801,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          UnregisterEntry entry = context.getLog().get(index);
+          UnregisterEntry entry = context.getLog().getEntry(index);
 
           LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
@@ -918,14 +915,14 @@ final class LeaderState extends ActiveState {
 
       // If there are no other servers in the cluster, immediately commit the index.
       if (context.getCluster().getMembers().isEmpty()) {
-        context.setCommitIndex(index);
-        context.setGlobalIndex(index);
+        context.getLog().setCommitIndex(index);
+        context.getLog().setGlobalIndex(index);
         return CompletableFuture.completedFuture(index);
       }
       // If there are no other active members in the cluster, update the commit index and complete
       // the commit but ensure append entries requests are sent to passive members.
       else if (context.getCluster().getActiveMembers().isEmpty()) {
-        context.setCommitIndex(index);
+        context.getLog().setCommitIndex(index);
         for (MemberState member : context.getCluster().getMembers()) {
           commit(member);
         }
@@ -1005,7 +1002,7 @@ final class LeaderState extends ActiveState {
       // passive members. This is critical since passive members still have state machines and thus it's still
       // important to ensure that tombstones are applied to their state machines.
       // If the members list is empty, use the local server's last log index as the global index.
-      context.setGlobalIndex(context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex()));
+      context.getLog().setGlobalIndex(context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().getLastIndex()));
 
       // Sort the list of replicas, order by the last index that was replicated to the replica. This will allow
       // us to determine the median index for all known replicated entries across all cluster members.
@@ -1017,7 +1014,7 @@ final class LeaderState extends ActiveState {
       // If the active members list is empty (a configuration change occurred between an append request/response)
       // ensure all commit futures are completed and cleared.
       if (members.isEmpty()) {
-        context.setCommitIndex(context.getLog().lastIndex());
+        context.getLog().setCommitIndex(context.getLog().getLastIndex());
         for (Map.Entry<Long, CompletableFuture<Long>> entry : commitFutures.entrySet()) {
           entry.getValue().complete(entry.getKey());
         }
@@ -1031,8 +1028,8 @@ final class LeaderState extends ActiveState {
       // If the commit index has increased then update the commit index. Note that in order to ensure
       // the leader completeness property holds, verify that the commit index is greater than or equal to
       // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
-      if (commitIndex > 0 && commitIndex > context.getCommitIndex() && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
-        context.setCommitIndex(commitIndex);
+      if (commitIndex > 0 && commitIndex > context.getLog().getCommitIndex() && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
+        context.getLog().setCommitIndex(commitIndex);
 
         // TODO: This seems like an annoyingly expensive operation to perform on every response.
         // Futures could simply be stored in a hash map and we could use a sequential index starting
@@ -1056,7 +1053,7 @@ final class LeaderState extends ActiveState {
         // If the next index is greater than the last index then send an empty commit.
         // If the member failed to respond to recent communication send an empty commit. This
         // helps avoid doing expensive work until we can ascertain the member is back up.
-        if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
+        if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().getLastIndex() || member.getFailureCount() > 0) {
           emptyCommit(member);
         } else {
           entriesCommit(member);
@@ -1076,7 +1073,7 @@ final class LeaderState extends ActiveState {
      */
     private Entry getPrevEntry(MemberState member, long prevIndex) {
       if (prevIndex > 0) {
-        return context.getLog().get(prevIndex);
+        return context.getLog().getEntry(prevIndex);
       }
       return null;
     }
@@ -1089,12 +1086,12 @@ final class LeaderState extends ActiveState {
       Entry prevEntry = getPrevEntry(member, prevIndex);
 
       AppendRequest.Builder builder = AppendRequest.builder()
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withLeader(context.getAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex())
-        .withGlobalIndex(context.getGlobalIndex());
+        .withCommitIndex(context.getLog().getCommitIndex())
+        .withGlobalIndex(context.getLog().getGlobalIndex());
 
       commit(member, builder.build(), false);
     }
@@ -1107,24 +1104,24 @@ final class LeaderState extends ActiveState {
       Entry prevEntry = getPrevEntry(member, prevIndex);
 
       AppendRequest.Builder builder = AppendRequest.builder()
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withLeader(context.getAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex())
-        .withGlobalIndex(context.getGlobalIndex());
+        .withCommitIndex(context.getLog().getCommitIndex())
+        .withGlobalIndex(context.getLog().getGlobalIndex());
 
       // Build a list of entries to send to the member.
       if (!context.getLog().isEmpty()) {
-        long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
+        long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().getFirstIndex();
 
         // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
         // be null if they've been compacted and the member to which we're sending entries is just
         // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
         // counted towards the size of the batch.
         int size = 0;
-        while (index <= context.getLog().lastIndex()) {
-          Entry entry = context.getLog().get(index);
+        while (index <= context.getLog().getLastIndex()) {
+          Entry entry = context.getLog().getEntry(index);
           if (entry != null) {
             if (size + entry.size() > MAX_BATCH_SIZE) {
               break;
@@ -1200,8 +1197,8 @@ final class LeaderState extends ActiveState {
                 if (hasMoreEntries(member)) {
                   commit();
                 }
-              } else if (response.term() > context.getTerm()) {
-                context.setLeader(0);
+              } else if (response.term() > context.getLog().getTerm()) {
+                context.getLog().setLeader(0);
                 transition(CopycatServer.State.FOLLOWER);
               } else {
                 resetMatchIndex(member, response);
@@ -1212,14 +1209,14 @@ final class LeaderState extends ActiveState {
                   commit();
                 }
               }
-            } else if (response.term() > context.getTerm()) {
+            } else if (response.term() > context.getLog().getTerm()) {
               LOGGER.debug("{} - Received higher term from {}", context.getAddress(), member.getAddress());
-              context.setLeader(0);
+              context.getLog().setLeader(0);
               transition(CopycatServer.State.FOLLOWER);
             } else {
               int failures = member.incrementFailureCount();
               if (failures <= 3 || failures % 100 == 0) {
-                LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getAddress(), member.getAddress(), response.error() != null ? response.error() : "");
+                LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
               }
             }
           } else {
@@ -1244,7 +1241,7 @@ final class LeaderState extends ActiveState {
       // that a partition occurred and transition back to the FOLLOWER state.
       if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
         LOGGER.warn("{} - Suspected network partition. Stepping down", context.getAddress());
-        context.setLeader(0);
+        context.getLog().setLeader(0);
         transition(CopycatServer.State.FOLLOWER);
       }
     }
@@ -1253,7 +1250,7 @@ final class LeaderState extends ActiveState {
      * Returns a boolean value indicating whether there are more entries to send.
      */
     private boolean hasMoreEntries(MemberState member) {
-      return member.getNextIndex() < context.getLog().lastIndex();
+      return member.getNextIndex() < context.getLog().getLastIndex();
     }
 
     /**
@@ -1276,7 +1273,7 @@ final class LeaderState extends ActiveState {
      * Updates the cluster configuration for the given member.
      */
     private void updateConfiguration(MemberState member) {
-      if (context.getCluster().isPassiveMember(member) && member.getMatchIndex() >= context.getCommitIndex()) {
+      if (context.getCluster().isPassiveMember(member) && member.getMatchIndex() >= context.getLog().getCommitIndex()) {
         if (configuring > 0) {
           commit(configuring).whenComplete((result, error) -> {
             promoteConfiguration(member);
@@ -1299,11 +1296,11 @@ final class LeaderState extends ActiveState {
       Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
       passiveMembers.remove(member.getAddress());
 
-      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(context.getTerm())
+      try (ConfigurationEntry entry = context.getLog().createEntry(ConfigurationEntry.class)) {
+        entry.setTerm(context.getLog().getTerm())
           .setActive(activeMembers)
           .setPassive(passiveMembers);
-        long index = context.getLog().append(entry);
+        long index = context.getLog().appendEntry(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
 
         // Immediately apply the configuration upon appending the configuration entry.
@@ -1334,7 +1331,7 @@ final class LeaderState extends ActiveState {
       if (member.getMatchIndex() != 0) {
         member.setNextIndex(member.getMatchIndex() + 1);
       } else {
-        member.setNextIndex(context.getLog().firstIndex());
+        member.setNextIndex(context.getLog().getFirstIndex());
       }
       LOGGER.debug("{} - Reset next index for {} to {}", context.getAddress(), member, member.getNextIndex());
     }

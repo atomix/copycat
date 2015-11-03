@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.transport.Transport;
@@ -25,15 +26,21 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 
 /**
  * State machine test case.
@@ -44,37 +51,23 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
   private ThreadContext callerContext;
   private ThreadContext stateContext;
   private ServerStateMachine stateMachine;
+  private Log log;
   private Map<Long, Long> sequence;
-  private Set<Long> cleaned;
 
   @BeforeMethod
   public void setupStateMachine() {
     sequence = new HashMap<>();
-    cleaned = new HashSet<>();
+    log = new Storage(StorageLevel.MEMORY, new Serializer(new ServiceLoaderTypeResolver())).open("test");
     callerContext = new SingleThreadContext("caller", new Serializer());
     stateContext = new SingleThreadContext("state", new Serializer());
     Transport transport = new LocalTransport(new LocalServerRegistry());
-    stateMachine = new ServerStateMachine(createStateMachine(), new ServerStateMachineContext(new ConnectionManager(transport.client()), new ServerSessionManager()), cleaned::add, stateContext);
+    stateMachine = new ServerStateMachine(createStateMachine(), new ServerStateMachineContext(new ConnectionManager(transport.client()), new ServerSessionManager()), log, stateContext);
   }
 
   /**
    * Creates a new state machine.
    */
   protected abstract StateMachine createStateMachine();
-
-  /**
-   * Asserts that the given index has been cleaned from the log.
-   */
-  protected void assertCleaned(long index) {
-    assertTrue(cleaned.contains(index));
-  }
-
-  /**
-   * Asserts that the given index has not been cleaned from the log.
-   */
-  protected void assertNotCleaned(long index) {
-    assertFalse(cleaned.contains(index));
-  }
 
   /**
    * Registers a new session.
@@ -163,7 +156,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
    */
   protected <T> T apply(long timestamp, Session session, Query<T> query) throws Throwable {
     QueryEntry entry = new QueryEntry()
-      .setIndex(stateMachine.getLastApplied())
+      .setIndex(log.getLastApplied())
       .setTerm(1)
       .setSession(session.id())
       .setTimestamp(timestamp)

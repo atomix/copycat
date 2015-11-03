@@ -175,8 +175,8 @@ final class FollowerState extends ActiveState {
     heartbeatTimer = context.getThreadContext().schedule(delay, () -> {
       heartbeatTimer = null;
       if (isOpen()) {
-        context.setLeader(0);
-        if (context.getLastVotedFor() == 0) {
+        context.getLog().setLeader(0);
+        if (context.getLog().getLastVote() == 0) {
           LOGGER.debug("{} - Heartbeat timed out in {}", context.getAddress(), delay);
           sendPollRequests();
         } else {
@@ -220,8 +220,8 @@ final class FollowerState extends ActiveState {
 
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
-    long lastIndex = context.getLog().lastIndex();
-    Entry lastEntry = lastIndex > 0 ? context.getLog().get(lastIndex) : null;
+    long lastIndex = context.getLog().getLastIndex();
+    Entry lastEntry = lastIndex > 0 ? context.getLog().getEntry(lastIndex) : null;
 
     final long lastTerm;
     if (lastEntry != null) {
@@ -236,9 +236,9 @@ final class FollowerState extends ActiveState {
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
     for (MemberState member : votingMembers) {
-      LOGGER.debug("{} - Polling {} for next term {}", context.getAddress(), member, context.getTerm() + 1);
+      LOGGER.debug("{} - Polling {} for next term {}", context.getAddress(), member, context.getLog().getTerm() + 1);
       PollRequest request = PollRequest.builder()
-        .withTerm(context.getTerm())
+        .withTerm(context.getLog().getTerm())
         .withCandidate(context.getAddress().hashCode())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
@@ -251,14 +251,14 @@ final class FollowerState extends ActiveState {
               LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
               quorum.fail();
             } else {
-              if (response.term() > context.getTerm()) {
-                context.setTerm(response.term());
+              if (response.term() > context.getLog().getTerm()) {
+                context.getLog().setTerm(response.term());
               }
 
               if (!response.accepted()) {
                 LOGGER.debug("{} - Received rejected poll from {}", context.getAddress(), member);
                 quorum.fail();
-              } else if (response.term() != context.getTerm()) {
+              } else if (response.term() != context.getLog().getTerm()) {
                 LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getAddress(), member);
                 quorum.fail();
               } else {

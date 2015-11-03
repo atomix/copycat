@@ -15,19 +15,14 @@
  */
 package io.atomix.copycat.server.storage;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import org.testng.annotations.Test;
 
 import java.io.File;
 import java.util.List;
 
-import org.testng.annotations.Test;
-
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import static org.testng.Assert.*;
 
 /**
  * Log test.
@@ -72,20 +67,20 @@ public abstract class LogTest extends AbstractLogTest {
     // Append 3 segments
     List<Long> indexes = appendEntries(entriesPerSegment * 3);
     assertFalse(log.isEmpty());
-    assertFalse(log.contains(0));
+    assertFalse(log.containsEntry(0));
 
     // Assert that entries can be retrieved
-    indexes.stream().forEach(i -> assertEquals(log.get(i).getIndex(), i.longValue()));
-    assertFalse(log.contains(indexes.size() + 1));
+    indexes.stream().forEach(i -> assertEquals(log.getEntry(i).getIndex(), i.longValue()));
+    assertFalse(log.containsEntry(indexes.size() + 1));
 
     // Append 2 more segments
     List<Long> moreIndexes = appendEntries(entriesPerSegment * 2);
-    moreIndexes.stream().forEach(i -> assertEquals(log.get(i).getIndex(), i.longValue()));
-    assertFalse(log.contains(indexes.size() + moreIndexes.size() + 1));
+    moreIndexes.stream().forEach(i -> assertEquals(log.getEntry(i).getIndex(), i.longValue()));
+    assertFalse(log.containsEntry(indexes.size() + moreIndexes.size() + 1));
 
     // Fetch 3 segments worth of entries, spanning 4 segments
     for (long index = 3; index <= entriesPerSegment * 3 + 2; index++) {
-      assertEquals(log.get(index).getIndex(), index);
+      assertEquals(log.getEntry(index).getIndex(), index);
     }
   }
 
@@ -96,46 +91,46 @@ public abstract class LogTest extends AbstractLogTest {
   }
 
   /**
-   * Asserts that {@link Log#clean(long)} works as expected across segments.
+   * Asserts that {@link Log#cleanEntry(long)} works as expected across segments.
    */
   public void testClean() {
     appendEntries(entriesPerSegment * 3);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
-      log.clean(i);
+      log.cleanEntry(i);
       assertTrue(log.segments.segment(i).isClean(i));
     }
   }
 
   /**
-   * Asserts that {@link Log#clean(long)} prevents non-tombstone entries from being read.
+   * Asserts that {@link Log#cleanEntry(long)} prevents non-tombstone entries from being read.
    */
   public void testCleanGet() {
     appendEntries(entriesPerSegment * 3);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
-      log.clean(i);
-      assertNotNull(log.get(i));
+      log.cleanEntry(i);
+      assertNotNull(log.getEntry(i));
     }
-    log.compactor().majorIndex(entriesPerSegment * 2);
+    log.setGlobalIndex(entriesPerSegment * 2);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2; i++) {
-      assertNull(log.get(i));
+      assertNull(log.getEntry(i));
     }
   }
 
   /**
-   * Asserts that {@link Log#clean(long)} prevents tombstone entries from being read if the globalIndex is greater than the tombstone index.
+   * Asserts that {@link Log#cleanEntry(long)} prevents tombstone entries from being read if the globalIndex is greater than the tombstone index.
    */
   public void testCleanGetTombstones() {
     appendEntries(entriesPerSegment * 3, true);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
-      log.clean(i);
-      assertNotNull(log.get(i));
+      log.cleanEntry(i);
+      assertNotNull(log.getEntry(i));
     }
-    log.compactor().majorIndex(entriesPerSegment * 2);
+    log.setGlobalIndex(entriesPerSegment * 2);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2; i++) {
-      assertNull(log.get(i));
+      assertNull(log.getEntry(i));
     }
   }
 
@@ -150,62 +145,62 @@ public abstract class LogTest extends AbstractLogTest {
   }
 
   /**
-   * Tests {@link Log#commit(long)}
+   * Tests {@link Log#setCommitIndex(long)}
    */
   public void testCommit() {
     appendEntries(5);
-    log.commit(3);
-    assertEquals(log.segments.commitIndex(), 3);
+    log.setCommitIndex(3);
+    assertEquals(log.getCommitIndex(), 3);
   }
 
   /**
-   * Asserts that {@link Log#contains(long)} works as expected across segments and after compaction.
+   * Asserts that {@link Log#containsEntry(long)} works as expected across segments and after compaction.
    */
   public void testContains() {
-    assertFalse(log.contains(0));
-    assertFalse(log.contains(1));
+    assertFalse(log.containsEntry(0));
+    assertFalse(log.containsEntry(1));
 
     List<Long> indexes = appendEntries(entriesPerSegment * 3);
     assertIndexes(indexes, 1, entriesPerSegment * 3);
     for (int i = 1; i <= entriesPerSegment * 3; i++)
-      assertTrue(log.contains(i));
-    assertFalse(log.contains(entriesPerSegment * 3 + 1));
+      assertTrue(log.containsEntry(i));
+    assertFalse(log.containsEntry(entriesPerSegment * 3 + 1));
 
     // Test after compaction
-    log.commit(entriesPerSegment * 3).compactor().minorIndex(entriesPerSegment * 3).majorIndex(entriesPerSegment * 3);
+    log.setCommitIndex(entriesPerSegment * 3).setCompactIndex(entriesPerSegment * 3).setGlobalIndex(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
-    assertTrue(log.contains(entriesPerSegment));
+    assertTrue(log.containsEntry(entriesPerSegment));
     for (int i = entriesPerSegment + 1; i <= entriesPerSegment * 2; i++) {
-      assertFalse(log.contains(i));
+      assertFalse(log.containsEntry(i));
     }
     if (log.length() > 3)
-      assertTrue(log.contains(entriesPerSegment * 2 + 2));
+      assertTrue(log.containsEntry(entriesPerSegment * 2 + 2));
   }
 
   /**
-   * Tests {@link Log#firstIndex()} across segments.
+   * Tests {@link Log#getFirstIndex()} across segments.
    */
   public void testFirstIndex() {
-    assertEquals(log.firstIndex(), 0);
+    assertEquals(log.getFirstIndex(), 0);
     appendEntries(entriesPerSegment * 3);
-    assertEquals(log.firstIndex(), 1);
+    assertEquals(log.getFirstIndex(), 1);
 
     // Asserts that firstIndex is unchanged after compaction
-    log.commit(entriesPerSegment * 3);
+    log.setCommitIndex(entriesPerSegment * 3);
     cleanAndCompact(1, entriesPerSegment * 2 + 1);
-    assertEquals(log.firstIndex(), 1);
+    assertEquals(log.getFirstIndex(), 1);
   }
 
   /**
-   * Tests {@link Log#get(long)} across segments.
+   * Tests {@link Log#getEntry(long)} across segments.
    */
   public void testGet() {
     appendEntries(entriesPerSegment * 3);
     for (int i = 1; i <= entriesPerSegment * 3; i++)
-      assertEquals(log.get(i).getIndex(), i);
+      assertEquals(log.getEntry(i).getIndex(), i);
 
     // Asserts get() after compaction
-    log.commit(entriesPerSegment * 3).compactor().minorIndex(entriesPerSegment * 3).majorIndex(entriesPerSegment * 3);
+    log.setCommitIndex(entriesPerSegment * 3).setCompactIndex(entriesPerSegment * 3).setGlobalIndex(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
     assertCompacted(entriesPerSegment + 1, entriesPerSegment * 2);
   }
@@ -244,16 +239,16 @@ public abstract class LogTest extends AbstractLogTest {
   }
 
   /**
-   * Tests {@link Log#lastIndex()} across segments.
+   * Tests {@link Log#getLastIndex()} across segments.
    */
   public void testLastIndex() {
     appendEntries(entriesPerSegment * 3);
-    assertEquals(log.lastIndex(), entriesPerSegment * 3);
+    assertEquals(log.getLastIndex(), entriesPerSegment * 3);
 
     // Asserts that lastIndex is unchanged after compaction
-    log.commit(entriesPerSegment * 3);
+    log.setCommitIndex(entriesPerSegment * 3);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 2 + 1);
-    assertEquals(log.lastIndex(), entriesPerSegment * 3);
+    assertEquals(log.getLastIndex(), entriesPerSegment * 3);
   }
 
   /**
@@ -271,7 +266,7 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.length(), entriesPerSegment * 5);
 
     // Asserts that length is unchanged after compaction
-    log.commit(entriesPerSegment * 5);
+    log.setCommitIndex(entriesPerSegment * 5);
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 3);
     assertEquals(log.length(), entriesPerSegment * 5);
   }
@@ -291,7 +286,7 @@ public abstract class LogTest extends AbstractLogTest {
     assertEquals(log.segments.segments().size(), 5);
     assertEquals(log.size(), fullSegmentSize() * 5);
 
-    log.commit(entriesPerSegment * 5).compactor().minorIndex(entriesPerSegment * 5).majorIndex(entriesPerSegment * 5);
+    log.setCommitIndex(entriesPerSegment * 5).setCompactIndex(entriesPerSegment * 5).setGlobalIndex(entriesPerSegment * 5);
 
     // Compact 2nd and 3rd segments
     cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 3);
@@ -307,17 +302,17 @@ public abstract class LogTest extends AbstractLogTest {
     appendEntries(100);
 
     log.skip(10);
-    assertEquals(log.lastIndex(), 110);
+    assertEquals(log.getLastIndex(), 110);
 
     long index = appendEntries(1).get(0);
     assertEquals(log.length(), 111);
 
-    log.commit(111);
-    try (TestEntry entry = log.get(101)) {
+    log.setCommitIndex(111);
+    try (TestEntry entry = log.getEntry(101)) {
       assertNull(entry);
     }
 
-    try (TestEntry entry = log.get(index)) {
+    try (TestEntry entry = log.getEntry(index)) {
       assertEquals(entry.getTerm(), 1);
     }
   }
@@ -327,11 +322,11 @@ public abstract class LogTest extends AbstractLogTest {
    */
   public void testTruncate() throws Throwable {
     appendEntries(100);
-    assertEquals(log.lastIndex(), 100);
+    assertEquals(log.getLastIndex(), 100);
     log.truncate(10);
-    assertEquals(log.lastIndex(), 10);
+    assertEquals(log.getLastIndex(), 10);
     appendEntries(10);
-    assertEquals(log.lastIndex(), 20);
+    assertEquals(log.getLastIndex(), 20);
   }
 
   /**
@@ -339,12 +334,12 @@ public abstract class LogTest extends AbstractLogTest {
    */
   public void testTruncateAppend() throws Throwable {
     appendEntries(10);
-    assertEquals(log.lastIndex(), 10);
-    TestEntry entry = log.create(TestEntry.class).setIndex(10).setTerm(2);
-    log.truncate(entry.getIndex() - 1).append(entry);
-    TestEntry result89 = log.get(9);
+    assertEquals(log.getLastIndex(), 10);
+    TestEntry entry = log.createEntry(TestEntry.class).setIndex(10).setTerm(2);
+    log.truncate(entry.getIndex() - 1).appendEntry(entry);
+    TestEntry result89 = log.getEntry(9);
     assertEquals(result89.getTerm(), 1);
-    TestEntry result90 = log.get(10);
+    TestEntry result90 = log.getEntry(10);
     assertEquals(result90.getTerm(), 2);
   }
 
@@ -353,13 +348,13 @@ public abstract class LogTest extends AbstractLogTest {
    */
   public void testTruncateUncommitted() throws Throwable {
     appendEntries(10);
-    log.commit(1);
-    assertEquals(log.lastIndex(), 10);
-    TestEntry entry = log.create(TestEntry.class).setIndex(10).setTerm(2);
-    log.truncate(entry.getIndex() - 1).append(entry);
-    TestEntry result89 = log.get(9);
+    log.setCommitIndex(1);
+    assertEquals(log.getLastIndex(), 10);
+    TestEntry entry = log.createEntry(TestEntry.class).setIndex(10).setTerm(2);
+    log.truncate(entry.getIndex() - 1).appendEntry(entry);
+    TestEntry result89 = log.getEntry(9);
     assertEquals(result89.getTerm(), 1);
-    TestEntry result90 = log.get(10);
+    TestEntry result90 = log.getEntry(10);
     assertEquals(result90.getTerm(), 2);
   }
 
@@ -368,13 +363,13 @@ public abstract class LogTest extends AbstractLogTest {
    */
   public void testTruncateSkipped() throws Throwable {
     appendEntries(100);
-    assertEquals(log.lastIndex(), 100);
+    assertEquals(log.getLastIndex(), 100);
     log.skip(10);
     appendEntries(100);
-    assertEquals(log.lastIndex(), 210);
+    assertEquals(log.getLastIndex(), 210);
     log.truncate(105);
-    assertEquals(log.lastIndex(), 105);
-    assertNull(log.commit(105).get(105));
+    assertEquals(log.getLastIndex(), 105);
+    assertNull(log.setCommitIndex(105).getEntry(105));
   }
 
   /**
@@ -382,13 +377,13 @@ public abstract class LogTest extends AbstractLogTest {
    */
   public void testTruncateZero() throws Throwable {
     appendEntries(100);
-    assertEquals(log.firstIndex(), 1);
-    assertEquals(log.lastIndex(), 100);
+    assertEquals(log.getFirstIndex(), 1);
+    assertEquals(log.getLastIndex(), 100);
     log.truncate(0);
-    assertEquals(log.firstIndex(), 0);
-    assertEquals(log.lastIndex(), 0);
+    assertEquals(log.getFirstIndex(), 0);
+    assertEquals(log.getLastIndex(), 0);
     appendEntries(10);
-    assertEquals(log.firstIndex(), 1);
-    assertEquals(log.lastIndex(), 10);
+    assertEquals(log.getFirstIndex(), 1);
+    assertEquals(log.getLastIndex(), 10);
   }
 }
