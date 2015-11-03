@@ -489,9 +489,20 @@ public class Log implements AutoCloseable {
     if (entry != null) {
       // If the entry has not been cleaned by the state machine, return it. Note that the call to isClean()
       // on the segment will be done in O(1) time since the search was already done in the get() call.
-      // We also return entries where the index is greater than the server's globalIndex in order to ensure
-      // commands which trigger events are replicated.
-      if (!segment.isClean(index) || index > globalIndex) {
+      if (!segment.isClean(index)) {
+        return entry;
+      }
+
+      // If the entry is not a tombstone, return the entry if its index is greater than the compactIndex
+      // even if it has been cleaned from the log. This is necessary to ensure commands that trigger events
+      // are stored as necessary to be received by the client.
+      if (!entry.isTombstone() && index > compactIndex) {
+        return entry;
+      }
+
+      // If the entry is a tombstone, return the entry if its index is greater than the globalIndex even
+      // if it has been cleaned from the log. This is necessary to ensure tombstones are properly replicated.
+      if (entry.isTombstone() && index > globalIndex) {
         return entry;
       }
     }
