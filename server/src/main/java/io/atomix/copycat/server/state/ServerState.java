@@ -62,11 +62,6 @@ public class ServerState {
   private Duration heartbeatInterval = Duration.ofMillis(150);
   private Scheduled joinTimer;
   private Scheduled leaveTimer;
-  private int leader;
-  private long term;
-  private int lastVotedFor;
-  private long commitIndex;
-  private long globalIndex;
 
   @SuppressWarnings("unchecked")
   ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
@@ -81,7 +76,7 @@ public class ServerState {
 
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log, stateContext);
 
     cluster.configure(0, activeMembers, Collections.EMPTY_LIST);
   }
@@ -194,37 +189,6 @@ public class ServerState {
   }
 
   /**
-   * Sets the state leader.
-   *
-   * @param leader The state leader.
-   * @return The Raft context.
-   */
-  ServerState setLeader(int leader) {
-    if (this.leader == 0) {
-      if (leader != 0) {
-        Address address = getMember(leader);
-        Assert.state(address != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.address, address);
-        electionListeners.forEach(l -> l.accept(address));
-      }
-    } else if (leader != 0) {
-      if (this.leader != leader) {
-        Address address = getMember(leader);
-        Assert.state(address != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.address, address);
-        electionListeners.forEach(l -> l.accept(address));
-      }
-    } else {
-      this.leader = 0;
-    }
-    return this;
-  }
-
-  /**
    * Returns the cluster state.
    *
    * @return The cluster state.
@@ -248,115 +212,14 @@ public class ServerState {
    * @return The state leader.
    */
   public Address getLeader() {
-    if (leader == 0) {
+    if (log.getLeader() == 0) {
       return null;
-    } else if (leader == address.hashCode()) {
+    } else if (log.getLeader() == address.hashCode()) {
       return address;
     }
 
-    MemberState member = cluster.getMember(leader);
+    MemberState member = cluster.getMember(log.getLeader());
     return member != null ? member.getAddress() : null;
-  }
-
-  /**
-   * Sets the state term.
-   *
-   * @param term The state term.
-   * @return The Raft context.
-   */
-  ServerState setTerm(long term) {
-    if (term > this.term) {
-      this.term = term;
-      this.leader = 0;
-      this.lastVotedFor = 0;
-      LOGGER.debug("{} - Set term {}", address, term);
-    }
-    return this;
-  }
-
-  /**
-   * Returns the state term.
-   *
-   * @return The state term.
-   */
-  public long getTerm() {
-    return term;
-  }
-
-  /**
-   * Sets the state last voted for candidate.
-   *
-   * @param candidate The candidate that was voted for.
-   * @return The Raft context.
-   */
-  ServerState setLastVotedFor(int candidate) {
-    // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
-    Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
-    Assert.stateNot (leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
-    Address address = getMember(candidate);
-    Assert.state(address != null, "unknown candidate: %d", candidate);
-    this.lastVotedFor = candidate;
-
-    if (candidate != 0) {
-      LOGGER.debug("{} - Voted for {}", this.address, address);
-    } else {
-      LOGGER.debug("{} - Reset last voted for", this.address);
-    }
-    return this;
-  }
-
-  /**
-   * Returns the state last voted for candidate.
-   *
-   * @return The state last voted for candidate.
-   */
-  public int getLastVotedFor() {
-    return lastVotedFor;
-  }
-
-  /**
-   * Sets the commit index.
-   *
-   * @param commitIndex The commit index.
-   * @return The Raft context.
-   */
-  ServerState setCommitIndex(long commitIndex) {
-    Assert.argNot(commitIndex < 0, "commit index must be positive");
-    Assert.argNot(commitIndex < this.commitIndex, "cannot decrease commit index");
-    this.commitIndex = commitIndex;
-    log.commit(commitIndex);
-    return this;
-  }
-
-  /**
-   * Returns the commit index.
-   *
-   * @return The commit index.
-   */
-  public long getCommitIndex() {
-    return commitIndex;
-  }
-
-  /**
-   * Sets the global index.
-   *
-   * @param globalIndex The global index.
-   * @return The Raft context.
-   */
-  ServerState setGlobalIndex(long globalIndex) {
-    Assert.argNot(globalIndex < 0, "global index must be positive");
-    this.globalIndex = Math.max(this.globalIndex, globalIndex);
-    log.compactor().majorIndex(globalIndex);
-    return this;
-  }
-
-  /**
-   * Returns the global index.
-   *
-   * @return The global index.
-   */
-  public long getGlobalIndex() {
-    return globalIndex;
   }
 
   /**
@@ -366,24 +229,6 @@ public class ServerState {
    */
   ServerStateMachine getStateMachine() {
     return stateMachine;
-  }
-
-  /**
-   * Returns the last index applied to the state machine.
-   *
-   * @return The last index applied to the state machine.
-   */
-  public long getLastApplied() {
-    return stateMachine.getLastApplied();
-  }
-
-  /**
-   * Returns the last index completed for all sessions.
-   *
-   * @return The last index completed for all sessions.
-   */
-  public long getLastCompleted() {
-    return stateMachine.getLastCompleted();
   }
 
   /**
@@ -483,7 +328,7 @@ public class ServerState {
     List<MemberState> votingMembers = cluster.getActiveMembers();
     if (votingMembers.isEmpty()) {
       LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", address);
-      term++;
+      log.setTerm(log.getTerm() + 1);
       transition(CopycatServer.State.LEADER);
       future.complete(null);
     } else {

@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.catalyst.buffer.FileBuffer;
+import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
@@ -22,6 +24,7 @@ import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.TypedEntryPool;
 
+import java.io.File;
 import java.util.concurrent.Executors;
 
 /**
@@ -33,15 +36,15 @@ import java.util.concurrent.Executors;
  * <p>
  * State changes are written to the log as {@link Entry} objects. Each entry is associated with an {@code index} and
  * {@code term}. The {@code index} is a 1-based entry index from the start of the log. The {@code term} is used for
- * various consistency checks in the Raft algorithm. Raft guarantees that a {@link #commit(long) committed} entry at any
+ * various consistency checks in the Raft algorithm. Raft guarantees that a {@link #setCommitIndex(long) committed} entry at any
  * index {@code i} that has term {@code t} will also be present in the logs on all other servers in the cluster at the
  * same index {@code i} with term {@code t}. However, note that log compaction may break this contract. Considering log
  * compaction, it's more accurate to say that iff committed entry {@code i} is present in another server's log, that
  * entry has term {@code t} and the same value.
  * <p>
- * Entries are written to the log via the {@link #append(Entry)} method. When an entry is appended, it's written to the
- * next sequential index in the log after {@link #lastIndex()}. Entries can be created from a typed entry pool with the
- * {@link #create(Class)} method. <pre>
+ * Entries are written to the log via the {@link #appendEntry(Entry)} method. When an entry is appended, it's written to the
+ * next sequential index in the log after {@link #getLastIndex()}. Entries can be created from a typed entry pool with the
+ * {@link #createEntry(Class)} method. <pre>
  *   {@code
  *   long index;
  *   try (CommandEntry entry = log.create(CommandEntry.class)) {
@@ -66,14 +69,14 @@ import java.util.concurrent.Executors;
  * <p>
  * In order to prevent exhausting disk space, the log manages a set of background threads that periodically rewrite and
  * combine segments to free disk space. This is known as log compaction. As entries are committed to the log and applied
- * to the Raft state machine as {@link io.atomix.copycat.server.Commit} objects, state machines {@link #clean(long)}
+ * to the Raft state machine as {@link io.atomix.copycat.server.Commit} objects, state machines {@link #cleanEntry(long)}
  * entries that no longer apply to the state machine state. Internally, each log {@link Segment} maintains a compact
  * {@link io.atomix.catalyst.buffer.util.BitArray} to track cleaned entries. When an entry is cleaned, the entry's
  * offset is set in the bit array for the associated segment. The bit array represents the state of entries waiting to
  * be compacted from the log.
  * <p>
  * As entries are written to the log, segments reach their capacity and the log rolls over into new segments. Once a
- * segment is full and all of its entries have been {@link #commit(long) committed}, indicating they cannot be removed,
+ * segment is full and all of its entries have been {@link #setCommitIndex(long) committed}, indicating they cannot be removed,
  * the segment becomes eligible for compaction. Log compaction processes come in two forms:
  * {@link io.atomix.copycat.server.storage.compaction.Compaction#MINOR} and
  * {@link io.atomix.copycat.server.storage.compaction.Compaction#MAJOR}, which can be configured in the {@link Storage}
@@ -82,13 +85,13 @@ import java.util.concurrent.Executors;
  * Minor compaction is the more frequent and lightweight process. Periodically, according to the configured
  * {@link Storage#minorCompactionInterval()}, a background thread will evaluate the log for minor compaction. The minor
  * compaction process iterates through segments and selects compactable segments based on the ratio of entries that have
- * been {@link #clean(long) cleaned}. Minor compaction is generational. The
+ * been {@link #cleanEntry(long) cleaned}. Minor compaction is generational. The
  * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} is more likely to select segments that haven't
  * yet been compacted than ones that have. Once a set of segments have been compacted, for each segment a
  * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask} rewrites the segment without cleaned entries.
  * This rewriting results in a segment with missing entries, and Copycat's Raft implementation accounts for that. For
  * instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being cleaned, and any attempt to
- * {@link #get(long) read} entry {@code 2} will result in a {@code null} entry.
+ * {@link #getEntry(long) read} entry {@code 2} will result in a {@code null} entry.
  * <p>
  * However, note that minor compaction only applies to non-tombstone entries. Tombstones are entries that represent the
  * removal of state from the system, and that requires a more careful and costly compaction process to ensure consistency
@@ -108,9 +111,9 @@ import java.util.concurrent.Executors;
  * handle. Major compaction works similarly to minor compaction in that the configured
  * {@link Storage#majorCompactionInterval()} dictates the interval at which the major compaction process runs. During
  * major compaction, the {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} iterates through
- * <em>all</em> {@link #commit(long) committed} segments and rewrites them sequentially with all cleaned entries
+ * <em>all</em> {@link #setCommitIndex(long) committed} segments and rewrites them sequentially with all cleaned entries
  * removed, including tombstones. This ensures that earlier segments are compacted before later segments, and so
- * stateful entries that were {@link #clean(long) cleaned} prior to related tombstones are guaranteed to be removed
+ * stateful entries that were {@link #cleanEntry(long) cleaned} prior to related tombstones are guaranteed to be removed
  * first.
  * <p>
  * As entries are removed from the log during minor and major compaction, log segment files begin to shrink. Copycat
@@ -123,18 +126,30 @@ import java.util.concurrent.Executors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class Log implements AutoCloseable {
+  private final LogDescriptor descriptor;
   final SegmentManager segments;
   private final Compactor compactor;
   private final TypedEntryPool entryPool = new TypedEntryPool();
+  private int leader;
+  private long term;
+  private int vote;
+  private long commitIndex;
+  private long compactIndex;
+  private long globalIndex;
+  private long lastCompleted;
+  private long lastApplied;
   private boolean open = true;
 
   /**
    * @throws NullPointerException if {@code name} or {@code storage} is null
    */
   protected Log(String name, Storage storage) {
+    storage.directory().mkdirs();
+    this.descriptor = new LogDescriptor(name, storage.level() == StorageLevel.MEMORY ? HeapBuffer.allocate(1024) : FileBuffer.allocate(new File(storage.directory(), String.format("%s.log", name)), 1024));
     this.segments = new SegmentManager(name, storage);
-    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(),
-        new CatalystThreadFactory("copycat-compactor-%d")));
+    this.compactor = new Compactor(storage, this, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-compactor-%d")));
+    this.term = descriptor.term();
+    this.vote = descriptor.vote();
   }
 
   /**
@@ -227,7 +242,7 @@ public class Log implements AutoCloseable {
    * @return The index of the first entry in the log or {@code 0} if the log is empty.
    * @throws IllegalStateException If the log is not open.
    */
-  public long firstIndex() {
+  public long getFirstIndex() {
     return !isEmpty() ? segments.firstSegment().descriptor().index() : 0;
   }
 
@@ -239,8 +254,156 @@ public class Log implements AutoCloseable {
    * @return The index of the last entry in the log or {@code 0} if the log is empty.
    * @throws IllegalStateException If the log is not open.
    */
-  public long lastIndex() {
+  public long getLastIndex() {
     return !isEmpty() ? segments.lastSegment().lastIndex() : 0;
+  }
+
+  /**
+   * Returns the current leader.
+   *
+   * @return The current leader.
+   */
+  public int getLeader() {
+    return leader;
+  }
+
+  /**
+   * Sets the current leader.
+   *
+   * @param leader The leader.
+   * @return The log.
+   */
+  public Log setLeader(int leader) {
+    this.leader = leader;
+    this.vote = 0;
+    return this;
+  }
+
+  /**
+   * Returns the log term.
+   *
+   * @return The log term.
+   */
+  public long getTerm() {
+    return descriptor.term();
+  }
+
+  /**
+   * Sets the log term.
+   *
+   * @param term The log term.
+   * @return The log.
+   */
+  public Log setTerm(long term) {
+    if (term > this.term) {
+      this.term = term;
+      descriptor.term(this.term);
+      this.leader = 0;
+      this.vote = 0;
+      descriptor.vote(0);
+    }
+    return this;
+  }
+
+  /**
+   * Returns the last candidate voted for.
+   *
+   * @return The last candidate voted for.
+   */
+  public int getLastVote() {
+    return vote;
+  }
+
+  /**
+   * Sets the last candidate voted for.
+   *
+   * @param candidate The last candidate voted for.
+   * @return The log.
+   */
+  public Log setLastVote(int candidate) {
+    this.vote = candidate;
+    descriptor.vote(candidate);
+    return this;
+  }
+
+  /**
+   * Returns the commit index.
+   *
+   * @return The commit index.
+   */
+  public long getCommitIndex() {
+    return commitIndex;
+  }
+
+  /**
+   * Sets the commit index.
+   *
+   * @param commitIndex The commit index.
+   * @return The log.
+   */
+  public Log setCommitIndex(long commitIndex) {
+    this.commitIndex = Math.max(this.commitIndex, commitIndex);
+    return this;
+  }
+
+  /**
+   * Returns the compact index.
+   *
+   * @return The compact index.
+   */
+  public long getCompactIndex() {
+    return compactIndex > 0 ? compactIndex : lastApplied;
+  }
+
+  /**
+   * Sets the compact index.
+   *
+   * @param compactIndex The compact index.
+   * @return The log.
+   */
+  public Log setCompactIndex(long compactIndex) {
+    this.compactIndex = Math.max(this.compactIndex, compactIndex);
+    return this;
+  }
+
+  /**
+   * Returns the global index.
+   *
+   * @return The global index.
+   */
+  public long getGlobalIndex() {
+    return globalIndex;
+  }
+
+  /**
+   * Sets the global index.
+   *
+   * @param globalIndex The global index.
+   * @return The log.
+   */
+  public Log setGlobalIndex(long globalIndex) {
+    this.globalIndex = Math.max(this.globalIndex, globalIndex);
+    return this;
+  }
+
+  /**
+   * Returns the last applied log index.
+   *
+   * @return The last applied log index.
+   */
+  public long getLastApplied() {
+    return lastApplied;
+  }
+
+  /**
+   * Sets the last applied log index.
+   *
+   * @param lastApplied The last applied log index.
+   * @return The log.
+   */
+  public Log setLastApplied(long lastApplied) {
+    this.lastApplied = Math.max(this.lastApplied, lastApplied);
+    return this;
   }
 
   /**
@@ -264,7 +427,7 @@ public class Log implements AutoCloseable {
    * @throws IllegalStateException If the log is not open
    * @throws NullPointerException If the {@code type} is {@code null}
    */
-  public <T extends Entry<T>> T create(Class<T> type) {
+  public <T extends Entry<T>> T createEntry(Class<T> type) {
     Assert.notNull(type, "type");
     assertIsOpen();
     checkRoll();
@@ -280,7 +443,7 @@ public class Log implements AutoCloseable {
    * @throws NullPointerException If {@code entry} is {@code null}
    * @throws IndexOutOfBoundsException If the entry's index does not match the expected next log index.
    */
-  public long append(Entry entry) {
+  public long appendEntry(Entry entry) {
     Assert.notNull(entry, "entry");
     assertIsOpen();
     checkRoll();
@@ -310,7 +473,7 @@ public class Log implements AutoCloseable {
    * @throws IllegalStateException If the log is not open.
    * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
    */
-  public <T extends Entry> T get(long index) {
+  public <T extends Entry> T getEntry(long index) {
     assertIsOpen();
     assertValidIndex(index);
 
@@ -326,9 +489,20 @@ public class Log implements AutoCloseable {
     if (entry != null) {
       // If the entry has not been cleaned by the state machine, return it. Note that the call to isClean()
       // on the segment will be done in O(1) time since the search was already done in the get() call.
-      // We also return entries where the index is greater than the server's globalIndex (represented by
-      // the compactor's majorIndex) in order to ensure commands which trigger events are replicated.
-      if (!segment.isClean(index) || index > compactor.majorIndex()) {
+      if (!segment.isClean(index)) {
+        return entry;
+      }
+
+      // If the entry is not a tombstone, return the entry if its index is greater than the compactIndex
+      // even if it has been cleaned from the log. This is necessary to ensure commands that trigger events
+      // are stored as necessary to be received by the client.
+      if (!entry.isTombstone() && index > compactIndex) {
+        return entry;
+      }
+
+      // If the entry is a tombstone, return the entry if its index is greater than the globalIndex even
+      // if it has been cleaned from the log. This is necessary to ensure tombstones are properly replicated.
+      if (entry.isTombstone() && index > globalIndex) {
         return entry;
       }
     }
@@ -338,7 +512,7 @@ public class Log implements AutoCloseable {
   /**
    * Returns a boolean value indicating whether the given index is within the bounds of the log.
    * <p>
-   * If the index is less than {@code 1} or greater than {@link Log#lastIndex()} then this method will return
+   * If the index is less than {@code 1} or greater than {@link Log#getLastIndex()} then this method will return
    * {@code false}, otherwise {@code true}.
    *
    * @param index The index to check.
@@ -346,8 +520,8 @@ public class Log implements AutoCloseable {
    * @throws IllegalStateException If the log is not open.
    */
   private boolean validIndex(long index) {
-    long firstIndex = firstIndex();
-    long lastIndex = lastIndex();
+    long firstIndex = getFirstIndex();
+    long lastIndex = getLastIndex();
     return !isEmpty() && firstIndex <= index && index <= lastIndex;
   }
 
@@ -358,7 +532,7 @@ public class Log implements AutoCloseable {
    * @return Indicates whether the log contains a live entry at the given index.
    * @throws IllegalStateException If the log is not open.
    */
-  public boolean contains(long index) {
+  public boolean containsEntry(long index) {
     if (!validIndex(index))
       return false;
 
@@ -374,7 +548,7 @@ public class Log implements AutoCloseable {
    * @throws IllegalStateException If the log is not open.
    * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
    */
-  public Log clean(long index) {
+  public Log cleanEntry(long index) {
     assertIsOpen();
     assertValidIndex(index);
 
@@ -385,22 +559,9 @@ public class Log implements AutoCloseable {
   }
 
   /**
-   * Commits entries up to the given index to the log.
-   *
-   * @param index The index up to which to commit entries.
-   * @return The log.
-   * @throws IllegalStateException If the log is not open.
-   */
-  public Log commit(long index) {
-    assertIsOpen();
-    segments.commitIndex(index);
-    return this;
-  }
-
-  /**
    * Skips the given number of entries.
    * <p>
-   * This method essentially advances the log's {@link Log#lastIndex()} without writing any entries at the interim
+   * This method essentially advances the log's {@link Log#getLastIndex()} without writing any entries at the interim
    * indices. Note that calling {@code Loggable#truncate()} after {@code skip()} will result in the skipped entries
    * being partially or completely reverted.
    *
@@ -430,9 +591,9 @@ public class Log implements AutoCloseable {
     assertIsOpen();
     if (index > 0)
       assertValidIndex(index);
-    Assert.index(index >= segments.commitIndex(), "cannot truncate committed entries");
+    Assert.index(index > commitIndex || commitIndex == 0, "cannot truncate committed entries");
 
-    if (lastIndex() == index)
+    if (getLastIndex() == index)
       return this;
 
     boolean first = true;
@@ -466,6 +627,7 @@ public class Log implements AutoCloseable {
   public void close() {
     assertIsOpen();
     flush();
+    descriptor.close();
     segments.close();
     compactor.close();
     open = false;

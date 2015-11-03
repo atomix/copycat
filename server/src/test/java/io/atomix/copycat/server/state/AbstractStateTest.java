@@ -89,9 +89,9 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    */
   protected void append(int entries, long term) throws Throwable {
     for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
+      try (TestEntry entry = serverState.getLog().createEntry(TestEntry.class)) {
         entry.setTerm(term).setTombstone(false);
-        serverState.getLog().append(entry);
+        serverState.getLog().appendEntry(entry);
       }
     }
   }
@@ -100,7 +100,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    * Gets the entry at the given index.
    */
   protected <T extends Entry> T get(long index) throws Throwable {
-    return serverState.getLog().get(index);
+    return serverState.getLog().getEntry(index);
   }
 
   /**
@@ -124,7 +124,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected List<TestEntry> entries(int entries, long term) {
     List<TestEntry> result = new ArrayList<>();
     for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
+      try (TestEntry entry = serverState.getLog().createEntry(TestEntry.class)) {
         result.add(entry.setTerm(term).setTombstone(false));
       }
     }

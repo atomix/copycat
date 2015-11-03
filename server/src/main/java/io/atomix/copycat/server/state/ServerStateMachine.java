@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
@@ -23,6 +22,7 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,17 +39,15 @@ class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
   private final ServerStateMachineExecutor executor;
-  private final ServerCommitCleaner cleaner;
+  private final Log log;
   private final ServerCommitPool commits;
-  private long lastApplied;
-  private long lastCompleted;
   private long configuration;
 
-  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
+  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, Log log, ThreadContext executor) {
     this.stateMachine = stateMachine;
     this.executor = new ServerStateMachineExecutor(context, executor);
-    this.cleaner = cleaner;
-    this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
+    this.log = log;
+    this.commits = new ServerCommitPool(log, this.executor.context().sessions());
     init();
   }
 
@@ -70,15 +68,6 @@ class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Returns the last applied index.
-   *
-   * @return The last applied index.
-   */
-  long getLastApplied() {
-    return lastApplied;
-  }
-
-  /**
    * Sets the last applied index.
    * <p>
    * The last applied index is updated *after* each time a non-query entry is applied to the state machine.
@@ -87,9 +76,8 @@ class ServerStateMachine implements AutoCloseable {
    */
   private void setLastApplied(long lastApplied) {
     // If the last applied index decreased then that's very concerning.
-    Assert.argNot(lastApplied < this.lastApplied, "lastApplied index must be greater than previous lastApplied index");
-    if (lastApplied > this.lastApplied) {
-      this.lastApplied = lastApplied;
+    if (lastApplied > log.getLastApplied()) {
+      log.setLastApplied(lastApplied);
 
       // Update the index for each session. This will be used to trigger queries that are awaiting the
       // application of specific indexes to the state machine. Setting the session index may cause query
@@ -98,19 +86,6 @@ class ServerStateMachine implements AutoCloseable {
         session.setVersion(lastApplied);
       }
     }
-  }
-
-  /**
-   * Returns the highest index completed for all sessions.
-   * <p>
-   * The lastCompleted index is representative of the highest index for which related events have been
-   * received by *all* clients. In other words, no events lower than the given index should remain in
-   * memory.
-   *
-   * @return The highest index completed for all sessions.
-   */
-  long getLastCompleted() {
-    return lastCompleted > 0 ? lastCompleted : lastApplied;
   }
 
   /**
@@ -171,7 +146,7 @@ class ServerStateMachine implements AutoCloseable {
     // Immediately clean the commit for the previous configuration since configuration entries
     // completely override the previous configuration.
     if (previousConfiguration > 0) {
-      cleaner.clean(previousConfiguration);
+      log.cleanEntry(previousConfiguration);
     }
     return CompletableFuture.completedFuture(null);
   }
@@ -185,7 +160,7 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    cleaner.clean(entry.getIndex());
+    log.cleanEntry(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 
@@ -305,7 +280,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the keep alive entry from the log.
-    cleaner.clean(entry.getIndex());
+    log.cleanEntry(entry.getIndex());
 
     return future;
   }
@@ -402,7 +377,7 @@ class ServerStateMachine implements AutoCloseable {
       }
 
       // Clean the unregister entry from the log immediately after it's applied.
-      cleaner.clean(session.id());
+      log.cleanEntry(session.id());
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
       // index for which logs can be compacted.
@@ -410,7 +385,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the unregister entry from the log.
-    cleaner.clean(entry.getIndex());
+    log.cleanEntry(entry.getIndex());
 
     return future;
   }
@@ -655,7 +630,7 @@ class ServerStateMachine implements AutoCloseable {
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
-    cleaner.clean(entry.getIndex());
+    log.cleanEntry(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
 
@@ -668,9 +643,9 @@ class ServerStateMachine implements AutoCloseable {
       lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
     }
 
-    if (lastCompleted < this.lastCompleted)
+    if (lastCompleted < log.getCompactIndex())
       throw new IllegalStateException("inconsistent session state");
-    this.lastCompleted = lastCompleted;
+    log.setCompactIndex(lastCompleted);
   }
 
   /**

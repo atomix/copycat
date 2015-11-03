@@ -42,7 +42,7 @@ import java.util.function.Predicate;
  * the major compaction task rewrites groups of segments provided by the {@link MajorCompactionManager}. For each group
  * of segments, a single compact segment will be created with the same {@code version} and starting {@code index} as
  * the first segment in the group. All entries from all segments in the group that haven't been
- * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} will then be written to the new compact segment.
+ * {@link io.atomix.copycat.server.storage.Log#cleanEntry(long) cleaned} will then be written to the new compact segment.
  * Once the rewrite is complete, the compact segment will be locked and the set of old segments deleted.
  * <p>
  * <b>Removing tombstones</b>

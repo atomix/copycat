@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
@@ -63,9 +64,9 @@ public final class MinorCompactionManager implements CompactionManager {
   }
 
   @Override
-  public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
+  public List<CompactionTask> buildTasks(Storage storage, Log log, SegmentManager segments) {
     List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
-    for (Segment segment : getCleanableSegments(storage, segments)) {
+    for (Segment segment : getCleanableSegments(storage, log, segments)) {
       tasks.add(new MinorCompactionTask(segments, segment));
     }
     return tasks;
@@ -76,11 +77,11 @@ public final class MinorCompactionManager implements CompactionManager {
    *
    * @return A list of compactable segments.
    */
-  private Iterable<Segment> getCleanableSegments(Storage storage, SegmentManager manager) {
+  private Iterable<Segment> getCleanableSegments(Storage storage, Log log, SegmentManager manager) {
     List<Segment> segments = new ArrayList<>();
     for (Segment segment : manager.segments()) {
       // Only allow compaction of segments that are full.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && manager.currentSegment().firstIndex() <= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < log.getCompactIndex() && manager.currentSegment().firstIndex() <= log.getCommitIndex() && !manager.currentSegment().isEmpty())) {
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
         double cleanPercentage = segment.cleanCount() / (double) segment.count();
 

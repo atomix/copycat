@@ -178,7 +178,7 @@ public class CopycatServer implements RaftServer {
 
   @Override
   public long term() {
-    return state.getTerm();
+    return state.getLog().getTerm();
   }
 
   @Override

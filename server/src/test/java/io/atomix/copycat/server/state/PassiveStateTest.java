@@ -67,7 +67,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       state.applyCommits(3);
 
       // TODO more assertions
-      threadAssertEquals(serverState.getCommitIndex(), 3L);
+      threadAssertEquals(serverState.getLog().getCommitIndex(), 3L);
     });
   }
 
@@ -81,7 +81,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAppendUpdatesLeaderAndTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       AppendRequest request = AppendRequest.builder()
           .withTerm(2)
           .withLeader(members.get(1).hashCode())
@@ -93,9 +93,9 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendResponse response = state.append(request).get();
       
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverState.getLog().getTerm(), 2L);
       threadAssertEquals(serverState.getLeader(), members.get(1));
-      threadAssertEquals(serverState.getLastVotedFor(), 0);
+      threadAssertEquals(serverState.getLog().getLastVote(), 0);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.succeeded());
     });
@@ -104,7 +104,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
   public void testAppendTermAndLeaderUpdated() throws Throwable {
     runOnServer(() -> {
       int leader = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
@@ -116,7 +116,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertTrue(response.succeeded());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(serverState.getLeader().hashCode(), leader);
       assertEquals(response.term(), 2L);
     });
@@ -124,7 +124,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testRejectAppendOnTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
       append(2, 2);
 
       AppendRequest request = AppendRequest.builder()
@@ -147,7 +147,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testRejectAppendOnMissingLogIndex() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
       append(1, 2);
 
       AppendRequest request = AppendRequest.builder()
@@ -170,7 +170,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testRejectAppendOnSkippedLogIndex() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       serverState.getLog().skip(1);
 
       AppendRequest request = AppendRequest.builder()
@@ -194,7 +194,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testRejectAppendOnInconsistentLogTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
       append(2, 1);
 
       AppendRequest request = AppendRequest.builder()
@@ -217,7 +217,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAppendOnEmptyLog() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(1)
@@ -243,7 +243,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAppendOnNonEmptyLog() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       append(1, 1);
 
       AppendRequest request = AppendRequest.builder()
@@ -270,7 +270,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAppendOnPartiallyConflictingEntries() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       append(1, 1);
       append(2, 2);
 
@@ -300,7 +300,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAppendSkippedEntries() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       append(1, 1);
 
       AppendRequest request = AppendRequest.builder()

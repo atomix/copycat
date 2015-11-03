@@ -35,7 +35,7 @@ public enum Compaction {
    * Represents a minor compaction.
    * <p>
    * Minor compaction is the more efficient of the compaction processes which removes
-   * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} non-tombstone entries from individual
+   * {@link io.atomix.copycat.server.storage.Log#cleanEntry(long) cleaned} non-tombstone entries from individual
    * {@link io.atomix.copycat.server.storage.Segment}s. See the {@link MinorCompactionTask} for more information.
    */
   MINOR {
@@ -49,7 +49,7 @@ public enum Compaction {
    * Represents a major compaction.
    * <p>
    * Major compaction is the more heavyweight process of removing all
-   * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} entries that have been
+   * {@link io.atomix.copycat.server.storage.Log#cleanEntry(long) cleaned} entries that have been
    * {@link io.atomix.copycat.server.storage.Log#commit(long) committed} to the log and combining segment
    * files wherever possible. See the {@link MajorCompactionTask} for more information.
    */

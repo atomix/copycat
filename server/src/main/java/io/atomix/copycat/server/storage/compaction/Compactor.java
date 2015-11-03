@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage.compaction;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
@@ -51,60 +52,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Compactor implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(Compactor.class);
   private final Storage storage;
+  private final Log log;
   private final SegmentManager segments;
   private final ScheduledExecutorService executor;
-  private long minorIndex;
-  private long majorIndex;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
   private CompletableFuture<Void> future;
 
-  public Compactor(Storage storage, SegmentManager segments, ScheduledExecutorService executor) {
+  public Compactor(Storage storage, Log log, SegmentManager segments, ScheduledExecutorService executor) {
     this.storage = Assert.notNull(storage, "storage");
+    this.log = Assert.notNull(log, "log");
     this.segments = Assert.notNull(segments, "segments");
     this.executor = Assert.notNull(executor, "executor");
     minor = executor.scheduleAtFixedRate(() -> compact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
     major = executor.scheduleAtFixedRate(() -> compact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
-  }
-
-  /**
-   * Sets the maximum compaction index for minor compaction.
-   *
-   * @param index The maximum compaction index for minor compaction.
-   * @return The log compactor.
-   */
-  public Compactor minorIndex(long index) {
-    this.minorIndex = Math.max(this.minorIndex, index);
-    return this;
-  }
-
-  /**
-   * Returns the maximum compaction index for minor compaction.
-   *
-   * @return The maximum compaction index for minor compaction.
-   */
-  public long minorIndex() {
-    return minorIndex;
-  }
-
-  /**
-   * Sets the maximum compaction index for major compaction.
-   *
-   * @param index The maximum compaction index for major compaction.
-   * @return The log compactor.
-   */
-  public Compactor majorIndex(long index) {
-    this.majorIndex = Math.max(this.majorIndex, index);
-    return this;
-  }
-
-  /**
-   * Returns the maximum compaction index for major compaction.
-   *
-   * @return The maximum compaction index for major compaction.
-   */
-  public long majorIndex() {
-    return majorIndex;
   }
 
   /**
@@ -139,7 +100,7 @@ public final class Compactor implements AutoCloseable {
     CompactionManager manager = compaction.manager(this);
     AtomicInteger counter = new AtomicInteger();
 
-    Collection<CompactionTask> tasks = manager.buildTasks(storage, segments);
+    Collection<CompactionTask> tasks = manager.buildTasks(storage, log, segments);
     if (!tasks.isEmpty()) {
       LOGGER.debug("Executing {} compaction task(s)", tasks.size());
       for (CompactionTask task : tasks) {

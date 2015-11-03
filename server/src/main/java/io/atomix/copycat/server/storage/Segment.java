@@ -56,20 +56,18 @@ public class Segment implements AutoCloseable {
   private final Buffer buffer;
   private final OffsetIndex offsetIndex;
   private final OffsetCleaner cleaner;
-  private final SegmentManager manager;
   private long skip = 0;
   private boolean open = true;
 
   /**
    * @throws NullPointerException if any argument is null
    */
-  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetCleaner cleaner, Serializer serializer, SegmentManager manager) {
+  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetCleaner cleaner, Serializer serializer) {
     this.serializer = Assert.notNull(serializer, "serializer");
     this.buffer = Assert.notNull(buffer, "buffer");
     this.descriptor = Assert.notNull(descriptor, "descriptor");
     this.offsetIndex = Assert.notNull(offsetIndex, "offsetIndex");
     this.cleaner = Assert.notNull(cleaner, "cleaner");
-    this.manager = Assert.notNull(manager, "manager");
 
     // Rebuild the index from the segment data.
     long position = buffer.mark().position();
@@ -425,7 +423,6 @@ public class Segment implements AutoCloseable {
    */
   public Segment truncate(long index) {
     assertSegmentOpen();
-    Assert.index(index >= manager.commitIndex(), "cannot truncate committed index");
 
     long offset = relativeOffset(index);
     long lastOffset = offsetIndex.lastOffset();

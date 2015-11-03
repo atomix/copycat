@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
@@ -49,20 +50,20 @@ public final class MajorCompactionManager implements CompactionManager {
   }
 
   @Override
-  public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
-    List<List<Segment>> groups = getCleanableGroups(storage, segments);
-    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, compactor.majorIndex())) : Collections.emptyList();
+  public List<CompactionTask> buildTasks(Storage storage, Log log, SegmentManager segments) {
+    List<List<Segment>> groups = getCleanableGroups(storage, log, segments);
+    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, log.getGlobalIndex())) : Collections.emptyList();
   }
 
   /**
    * Returns a list of segments lists to clean, where segments are grouped according to how they will be merged during 
    * cleaning.
    */
-  public List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
+  public List<List<Segment>> getCleanableGroups(Storage storage, Log log, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
-    for (Segment segment : getCleanableSegments(manager)) {
+    for (Segment segment : getCleanableSegments(log, manager)) {
       // If this is the first segment in a segments list, add the segment.
       if (segments == null) {
         segments = new ArrayList<>();
@@ -101,11 +102,11 @@ public final class MajorCompactionManager implements CompactionManager {
    * @param manager The segment manager.
    * @return A list of cleanable log segments.
    */
-  private List<Segment> getCleanableSegments(SegmentManager manager) {
+  private List<Segment> getCleanableSegments(Log log, SegmentManager manager) {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
     Segment lastSegment = manager.lastSegment();
     for (Segment segment : manager.segments()) {
-      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < compactor.minorIndex() && lastSegment.firstIndex() <= compactor.minorIndex() && !lastSegment.isEmpty()) {
+      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < log.getCompactIndex() && lastSegment.firstIndex() <= log.getCompactIndex() && !lastSegment.isEmpty()) {
         segments.add(segment);
       } else {
         break;

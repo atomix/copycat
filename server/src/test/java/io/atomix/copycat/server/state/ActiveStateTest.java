@@ -44,7 +44,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
   public void testAppendUpdatesLeaderAndTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       AppendRequest request = AppendRequest.builder()
           .withTerm(2)
           .withLeader(members.get(1).hashCode())
@@ -56,9 +56,9 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       AppendResponse response = state.append(request).get();
 
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(serverState.getLeader(), members.get(1));
-      assertEquals(serverState.getLastVotedFor(), 0);
+      assertEquals(serverState.getLog().getLastVote(), 0);
       assertEquals(response.term(), 2L);
       assertTrue(response.succeeded());
     });
@@ -66,7 +66,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
   public void testAppendTermUpdatedAndTransitionedToFollower() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withCommitIndex(0)
@@ -77,7 +77,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertTrue(response.succeeded());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
       assertEquals(serverState.getState(), State.FOLLOWER);
     });
@@ -85,7 +85,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
   public void testIncrementTermOnPoll() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       PollRequest request = PollRequest.builder()
         .withTerm(2)
@@ -98,14 +98,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertTrue(response.accepted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
 
   public void testRejectPollOnTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
 
       PollRequest request = PollRequest.builder()
         .withTerm(1)
@@ -118,14 +118,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertFalse(response.accepted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
 
   public void testRejectPollOnLogIndex() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       append(3, 1);
 
       PollRequest request = PollRequest.builder()
@@ -139,14 +139,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertFalse(response.accepted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
 
   public void testRejectPollOnLogTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
       append(3, 1);
       append(1, 2);
 
@@ -161,14 +161,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertFalse(response.accepted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
 
   public void testIncrementTermAndTransitionOnVote() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
@@ -181,7 +181,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertTrue(response.voted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
       assertEquals(serverState.getState(), State.FOLLOWER);
     });
@@ -189,7 +189,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
   public void testRejectVoteOnTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(1)
@@ -202,14 +202,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertFalse(response.voted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
 
   public void testRejectVoteOnLogIndex() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverState.getLog().setTerm(1);
       append(3, 1);
 
       VoteRequest request = VoteRequest.builder()
@@ -223,14 +223,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertFalse(response.voted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
 
   public void testRejectVoteOnLogTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverState.getLog().setTerm(2);
       append(3, 1);
       append(1, 2);
 
@@ -245,7 +245,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       assertEquals(response.status(), Status.OK);
       assertFalse(response.voted());
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverState.getLog().getTerm(), 2L);
       assertEquals(response.term(), 2L);
     });
   }
