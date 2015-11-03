@@ -1219,7 +1219,7 @@ final class LeaderState extends ActiveState {
             } else {
               int failures = member.incrementFailureCount();
               if (failures <= 3 || failures % 100 == 0) {
-                LOGGER.warn("{} - {}", context.getAddress(), response.error() != null ? response.error() : "");
+                LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getAddress(), member.getAddress(), response.error() != null ? response.error() : "");
               }
             }
           } else {

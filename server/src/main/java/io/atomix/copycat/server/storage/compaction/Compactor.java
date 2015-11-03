@@ -130,7 +130,7 @@ public final class Compactor implements AutoCloseable {
     if (future != null)
       return future;
 
-    LOGGER.info("Compacting log with compaction: {}", compaction);
+    LOGGER.debug("Compacting log with compaction: {}", compaction);
 
     future = new CompletableFuture<>();
 
