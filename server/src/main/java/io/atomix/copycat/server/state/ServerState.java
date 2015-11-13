@@ -86,7 +86,7 @@ public class ServerState {
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, cluster, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
 
-    cluster.configure(0, activeMembers, Collections.EMPTY_LIST);
+    cluster.configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
   }
 
   /**
@@ -501,7 +501,7 @@ public class ServerState {
       future.complete(null);
     } else {
       joinTimer = threadContext.schedule(electionTimeout, () -> {
-        cluster.setActive(true);
+        cluster.setType(ClusterState.Type.ACTIVE);
         transition(CopycatServer.State.FOLLOWER);
         future.complete(null);
       });
@@ -530,7 +530,7 @@ public class ServerState {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", this.member.serverAddress(), member.getServerAddress());
 
-            cluster.configure(response.version(), response.activeMembers(), response.passiveMembers());
+            cluster.configure(response.version(), response.activeMembers(), response.passiveMembers(), response.reserveMembers());
 
             if (cluster.isActive()) {
               cancelJoinTimer();
@@ -564,7 +564,7 @@ public class ServerState {
       });
     } else {
       LOGGER.info("{} - Failed to join existing cluster", this.member.serverAddress());
-      cluster.setActive(true);
+      cluster.setType(ClusterState.Type.ACTIVE);
       cancelJoinTimer();
       transition(CopycatServer.State.FOLLOWER);
       future.complete(null);
@@ -616,7 +616,7 @@ public class ServerState {
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
-        cluster.configure(response.version(), response.activeMembers(), response.passiveMembers());
+        cluster.configure(response.version(), response.activeMembers(), response.passiveMembers(), response.reserveMembers());
         transition(RaftServer.State.INACTIVE);
         future.complete(null);
       }

@@ -34,6 +34,7 @@ import java.util.Collection;
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   private Collection<Member> active;
   private Collection<Member> passive;
+  private Collection<Member> reserve;
 
   public ConfigurationEntry() {
   }
@@ -84,11 +85,33 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
     return this;
   }
 
+  /**
+   * Returns the reserve members.
+   *
+   * @return The reserve members.
+   */
+  public Collection<Member> getReserve() {
+    return reserve;
+  }
+
+  /**
+   * Sets the reserve members.
+   *
+   * @param members The reserve members.
+   * @return The configuration entry.
+   * @throws NullPointerException if {@code members} is null
+   */
+  public ConfigurationEntry setReserve(Collection<Member> members) {
+    this.reserve = Assert.notNull(members, "members");
+    return this;
+  }
+
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     serializer.writeObject(active, buffer);
     serializer.writeObject(passive, buffer);
+    serializer.writeObject(reserve, buffer);
   }
 
   @Override
@@ -96,11 +119,12 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
     super.readObject(buffer, serializer);
     active = serializer.readObject(buffer);
     passive = serializer.readObject(buffer);
+    reserve = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, active=%s, passive=%s]", getClass().getSimpleName(), getIndex(), getTerm(), active, passive);
+    return String.format("%s[index=%d, term=%d, active=%s, passive=%s, reserve=%s]", getClass().getSimpleName(), getIndex(), getTerm(), active, passive, reserve);
   }
 
 }

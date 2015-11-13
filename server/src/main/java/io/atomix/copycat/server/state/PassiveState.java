@@ -17,6 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -154,15 +155,19 @@ class PassiveState extends ReserveState {
         // If the entry is a configuration entry then immediately configure the cluster.
         if (entry instanceof ConfigurationEntry) {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
-          if (context.getCluster().isPassive()) {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive());
-            if (context.getCluster().isActive()) {
-              transition(CopycatServer.State.FOLLOWER);
-            }
-          } else {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive());
-            if (context.getCluster().isPassive()) {
-              transition(CopycatServer.State.PASSIVE);
+          ClusterState.Type previousType = context.getCluster().getType();
+          context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive(), configurationEntry.getReserve());
+          if (previousType != context.getCluster().getType()) {
+            switch (context.getCluster().getType()) {
+              case ACTIVE:
+                transition(RaftServer.State.FOLLOWER);
+                break;
+              case PASSIVE:
+                transition(RaftServer.State.PASSIVE);
+                break;
+              case RESERVE:
+                transition(RaftServer.State.RESERVE);
+                break;
             }
           }
         } else if (entry instanceof ConnectEntry) {

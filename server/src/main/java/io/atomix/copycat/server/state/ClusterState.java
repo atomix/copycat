@@ -27,20 +27,22 @@ import java.util.*;
 class ClusterState {
   private final ServerState context;
   private final Member member;
-  private Type type = Type.PASSIVE;
+  private Type type = Type.RESERVE;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
   private final Map<Integer, Type> types = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
   private final List<MemberState> activeMembers = new ArrayList<>();
   private final List<MemberState> passiveMembers = new ArrayList<>();
+  private final List<MemberState> reserveMembers = new ArrayList<>();
 
   /**
    * Member state type.
    */
-  private enum Type {
+  enum Type {
     ACTIVE,
-    PASSIVE
+    PASSIVE,
+    RESERVE
   }
 
   ClusterState(ServerState context, Member member) {
@@ -58,43 +60,50 @@ class ClusterState {
   }
 
   /**
-   * Returns a boolean value indicating whether the local member is active.
+   * Returns the local member type.
    *
-   * @return Indicates whether the local member is active.
+   * @return The local member type.
+   */
+  Type getType() {
+    return type;
+  }
+
+  /**
+   * Sets the local member type.
+   *
+   * @param type The local member type.
+   * @return The cluster state.
+   */
+  ClusterState setType(Type type) {
+    this.type = Assert.notNull(type, "type");
+    return this;
+  }
+
+  /**
+   * Returns a boolean indicating whether the local node is active.
+   *
+   * @return Whether the local node is active.
    */
   boolean isActive() {
     return type == Type.ACTIVE;
   }
 
   /**
-   * Sets whether the local member is active.
+   * Returns a boolean indicating whether the local node is passive.
    *
-   * @param active Whether the local member is active.
-   * @return The cluster state.
-   */
-  ClusterState setActive(boolean active) {
-    type = active ? Type.ACTIVE : Type.PASSIVE;
-    return this;
-  }
-
-  /**
-   * Returns a boolean value indicating whether the local member is passive.
-   *
-   * @return Indicates whether the local member is passive.
+   * @return Whether the local node is passive.
    */
   boolean isPassive() {
     return type == Type.PASSIVE;
   }
 
   /**
-   * Sets whether the local member is passive.
+   * Returns a boolean indicating whether the local node is reserve.
    *
-   * @param passive Whether the local member is passive.
-   * @return The cluster state.
+   * @return Whether the local node is reserve.
    */
-  ClusterState setPassive(boolean passive) {
-    type = passive ? Type.PASSIVE : Type.ACTIVE;
-    return this;
+  boolean isReserve() {
+    return type == Type.RESERVE;
   }
 
   /**
@@ -214,14 +223,16 @@ class ClusterState {
    * @param version The cluster state version.
    * @param activeMembers The active members.
    * @param passiveMembers The passive members.
+   * @param reserveMembers The reserve members.
    * @return The cluster state.
    */
-  ClusterState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers) {
+  ClusterState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers, Collection<Member> reserveMembers) {
     if (version <= this.version)
       return this;
 
     List<MemberState> newActiveMembers = buildMembers(activeMembers);
     List<MemberState> newPassiveMembers = buildMembers(passiveMembers);
+    List<MemberState> newReserveMembers = buildMembers(reserveMembers);
 
     clearMembers();
 
@@ -239,10 +250,19 @@ class ClusterState {
       types.put(member.getServerAddress().hashCode(), Type.PASSIVE);
     }
 
+    for (MemberState member : newReserveMembers) {
+      membersMap.put(member.getServerAddress().hashCode(), member);
+      members.add(member);
+      this.reserveMembers.add(member);
+      types.put(member.getServerAddress().hashCode(), Type.RESERVE);
+    }
+
     if (activeMembers.contains(member)) {
       type = Type.ACTIVE;
     } else if (passiveMembers.contains(member)) {
       type = Type.PASSIVE;
+    } else if (reserveMembers.contains(member)) {
+      type = Type.RESERVE;
     } else {
       type = null;
     }
@@ -261,6 +281,9 @@ class ClusterState {
       members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
     for (MemberState member : passiveMembers) {
+      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
+    }
+    for (MemberState member : reserveMembers) {
       members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
 
@@ -295,6 +318,21 @@ class ClusterState {
     }
 
     if (type == Type.PASSIVE) {
+      members.add(member);
+    }
+    return members;
+  }
+
+  /**
+   * Builds a list of reserve members.
+   */
+  Collection<Member> buildReserveMembers() {
+    List<Member> members = new ArrayList<>();
+    for (MemberState member : reserveMembers) {
+      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
+    }
+
+    if (type == Type.RESERVE) {
       members.add(member);
     }
     return members;

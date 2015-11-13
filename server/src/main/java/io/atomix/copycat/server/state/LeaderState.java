@@ -219,6 +219,7 @@ final class LeaderState extends ActiveState {
         .withVersion(context.getCluster().getVersion())
         .withActiveMembers(context.getCluster().buildActiveMembers())
         .withPassiveMembers(context.getCluster().buildPassiveMembers())
+        .withReserveMembers(context.getCluster().buildReserveMembers())
         .build()));
     }
 
@@ -227,19 +228,23 @@ final class LeaderState extends ActiveState {
 
     Collection<Member> activeMembers = context.getCluster().buildActiveMembers();
     Collection<Member> passiveMembers = context.getCluster().buildPassiveMembers();
-    passiveMembers.add(request.member());
+    Collection<Member> reserveMembers = context.getCluster().buildReserveMembers();
+
+    // Add the server to the reserve members list.
+    reserveMembers.add(request.member());
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(term)
         .setActive(activeMembers)
-        .setPassive(passiveMembers);
+        .setPassive(passiveMembers)
+        .setReserve(reserveMembers);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive(), entry.getReserve());
     }
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
@@ -254,6 +259,7 @@ final class LeaderState extends ActiveState {
             .withVersion(index)
             .withActiveMembers(activeMembers)
             .withPassiveMembers(passiveMembers)
+            .withReserveMembers(reserveMembers)
             .build()));
         } else {
           future.complete(logResponse(JoinResponse.builder()
@@ -293,29 +299,37 @@ final class LeaderState extends ActiveState {
         .withStatus(Response.Status.OK)
         .withActiveMembers(context.getCluster().buildActiveMembers())
         .withPassiveMembers(context.getCluster().buildPassiveMembers())
+        .withReserveMembers(context.getCluster().buildReserveMembers())
         .build()));
     }
 
     final long term = context.getTerm();
     final long index;
 
+    // Remove the member from the active members list if necessary.
     Collection<Member> activeMembers = context.getCluster().buildActiveMembers();
     activeMembers.remove(request.member());
 
+    // Remove the member from the passive members list if necessary.
     Collection<Member> passiveMembers = context.getCluster().buildPassiveMembers();
     passiveMembers.remove(request.member());
+
+    // Remove the member from the reserve members list if necessary.
+    Collection<Member> reserveMembers = context.getCluster().buildReserveMembers();
+    reserveMembers.remove(request.member());
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(term)
         .setActive(activeMembers)
-        .setPassive(passiveMembers);
+        .setPassive(passiveMembers)
+        .setReserve(reserveMembers);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive(), entry.getReserve());
     }
 
     CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
@@ -330,6 +344,7 @@ final class LeaderState extends ActiveState {
             .withVersion(index)
             .withActiveMembers(activeMembers)
             .withPassiveMembers(passiveMembers)
+            .withReserveMembers(reserveMembers)
             .build()));
         } else {
           future.complete(logResponse(LeaveResponse.builder()
@@ -1363,16 +1378,23 @@ final class LeaderState extends ActiveState {
 
       Member promoteMember = new Member(member.getServerAddress(), member.getClientAddress());
 
+      // Add the member to the active members list.
       Collection<Member> activeMembers = context.getCluster().buildActiveMembers();
       activeMembers.add(promoteMember);
 
+      // Remove the member from the passive members list.
       Collection<Member> passiveMembers = context.getCluster().buildPassiveMembers();
       passiveMembers.remove(promoteMember);
 
+      // Build the reserve members list.
+      Collection<Member> reserveMembers = context.getCluster().buildReserveMembers();
+
+      // Append the entry and immediately apply the configuration change.
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
         entry.setTerm(context.getTerm())
           .setActive(activeMembers)
-          .setPassive(passiveMembers);
+          .setPassive(passiveMembers)
+          .setReserve(reserveMembers);
         long index = context.getLog().append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
 
@@ -1380,7 +1402,7 @@ final class LeaderState extends ActiveState {
         // Store the index of the configuration in order to block other configurations from taking
         // place at the same time.
         configuring = index;
-        context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+        context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive(), entry.getReserve());
       }
 
       commit(configuring).whenComplete((result, error) -> {

@@ -35,6 +35,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
   protected long version;
   protected Collection<Member> activeMembers;
   protected Collection<Member> passiveMembers;
+  protected Collection<Member> reserveMembers;
 
   /**
    * Returns the response version.
@@ -46,21 +47,30 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
   }
 
   /**
-   * Returns the configuration members list.
+   * Returns the active members list.
    *
-   * @return The configuration members list.
+   * @return The active members list.
    */
   public Collection<Member> activeMembers() {
     return activeMembers;
   }
 
   /**
-   * Returns the configuration members list.
+   * Returns the passive members list.
    *
-   * @return The configuration members list.
+   * @return The passive members list.
    */
   public Collection<Member> passiveMembers() {
     return passiveMembers;
+  }
+
+  /**
+   * Returns the reserve members list.
+   *
+   * @return The reserve members list.
+   */
+  public Collection<Member> reserveMembers() {
+    return reserveMembers;
   }
 
   @Override
@@ -71,6 +81,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       version = buffer.readLong();
       activeMembers = serializer.readObject(buffer);
       passiveMembers = serializer.readObject(buffer);
+      reserveMembers = serializer.readObject(buffer);
     } else {
       int errorCode = buffer.readByte();
       if (errorCode != 0) {
@@ -86,6 +97,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       buffer.writeLong(version);
       serializer.writeObject(activeMembers, buffer);
       serializer.writeObject(passiveMembers, buffer);
+      serializer.writeObject(reserveMembers, buffer);
     } else {
       buffer.writeByte(error != null ? error.id() : 0);
     }
@@ -93,7 +105,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, version, activeMembers, passiveMembers);
+    return Objects.hash(getClass(), status, version, activeMembers, passiveMembers, reserveMembers);
   }
 
   @Override
@@ -103,14 +115,15 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       return response.status == status
         && response.version == version
         && response.activeMembers.equals(activeMembers)
-        && response.passiveMembers.equals(passiveMembers);
+        && response.passiveMembers.equals(passiveMembers)
+        && response.reserveMembers.equals(reserveMembers);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, activeMembers=%s, passiveMembers=%s]", getClass().getSimpleName(), status, version, activeMembers, passiveMembers);
+    return String.format("%s[status=%s, version=%d, activeMembers=%s, passiveMembers=%s, reserveMembers=%s]", getClass().getSimpleName(), status, version, activeMembers, passiveMembers, reserveMembers);
   }
 
   /**
@@ -135,9 +148,9 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     }
 
     /**
-     * Sets the response members.
+     * Sets the active members.
      *
-     * @param members The response members.
+     * @param members The active members.
      * @return The response builder.
      * @throws NullPointerException if {@code members} is null
      */
@@ -148,9 +161,9 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     }
 
     /**
-     * Sets the response members.
+     * Sets the passive members.
      *
-     * @param members The response members.
+     * @param members The passive members.
      * @return The response builder.
      * @throws NullPointerException if {@code members} is null
      */
@@ -161,14 +174,28 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     }
 
     /**
+     * Sets the reserve members.
+     *
+     * @param members The reserve members.
+     * @return The response builder.
+     * @throws NullPointerException if {@code members} is null
+     */
+    @SuppressWarnings("unchecked")
+    public T withReserveMembers(Collection<Member> members) {
+      response.reserveMembers = Assert.notNull(members, "members");
+      return (T) this;
+    }
+
+    /**
      * @throws IllegalStateException if active members or passive members are null
      */
     @Override
     public U build() {
       super.build();
       if (response.status == Status.OK) {
-        Assert.state(response.activeMembers != null, "activeMembers members cannot be null");
-        Assert.state(response.passiveMembers != null, "passiveMembers members cannot be null");
+        Assert.state(response.activeMembers != null, "activeMembers cannot be null");
+        Assert.state(response.passiveMembers != null, "passiveMembers cannot be null");
+        Assert.state(response.reserveMembers != null, "reserveMembers cannot be null");
       }
       return response;
     }
