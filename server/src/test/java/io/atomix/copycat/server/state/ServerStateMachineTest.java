@@ -76,7 +76,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverContext = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), log, stateMachine, new ConnectionManager(transport.client()), serverContext);
+    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), members.size(), 1, log, stateMachine, new ConnectionManager(transport.client()), serverContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

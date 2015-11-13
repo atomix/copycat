@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 public class ServerState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerState.class);
   private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
+  private static final int MAX_JOIN_ATTEMPTS = 3;
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
   private ThreadContext threadContext;
@@ -72,11 +73,11 @@ public class ServerState {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  ServerState(Member member, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  ServerState(Member member, Collection<Address> members, int quorumHint, int backupCount, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.member = Assert.notNull(member, "address");
     Set<Member> activeMembers = members.stream().map(a -> new Member(a, null)).collect(Collectors.toSet());
     activeMembers.add(member);
-    this.cluster = new ClusterState(this, member);
+    this.cluster = new ClusterState(this, member, quorumHint, backupCount);
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
@@ -500,13 +501,7 @@ public class ServerState {
       transition(CopycatServer.State.LEADER);
       future.complete(null);
     } else {
-      joinTimer = threadContext.schedule(electionTimeout, () -> {
-        cluster.setType(ClusterState.Type.ACTIVE);
-        transition(CopycatServer.State.FOLLOWER);
-        future.complete(null);
-      });
-
-      join(cluster.getActiveMembers().iterator(), future);
+      join(cluster.getActiveMembers().iterator(), 1, future);
     }
 
     return future;
@@ -515,7 +510,7 @@ public class ServerState {
   /**
    * Recursively attempts to join the cluster.
    */
-  private void join(Iterator<MemberState> iterator, CompletableFuture<Void> future) {
+  private void join(Iterator<MemberState> iterator, int attempts, CompletableFuture<Void> future) {
     if (iterator.hasNext()) {
       MemberState member = iterator.next();
       LOGGER.debug("{} - Attempting to join via {}", this.member.serverAddress(), member.getServerAddress());
@@ -530,20 +525,33 @@ public class ServerState {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", this.member.serverAddress(), member.getServerAddress());
 
+            // Configure the cluster with the join response.
             cluster.configure(response.version(), response.activeMembers(), response.passiveMembers(), response.reserveMembers());
 
-            if (cluster.isActive()) {
-              cancelJoinTimer();
-              transition(CopycatServer.State.FOLLOWER);
-              startHeartbeatTimer();
-              future.complete(null);
-            } else if (cluster.isPassive()) {
-              cancelJoinTimer();
-              transition(CopycatServer.State.PASSIVE);
-              startHeartbeatTimer();
-              future.complete(null);
-            } else {
+            // Cancel the join timer.
+            cancelJoinTimer();
+
+            // If the local member type is null, that indicates it's not a part of the configuration.
+            ClusterState.Type type = cluster.getType();
+            if (type == null) {
               future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
+            } else {
+              // Transition the state context according to the local member type.
+              switch (type) {
+                case ACTIVE:
+                  transition(RaftServer.State.FOLLOWER);
+                  break;
+                case PASSIVE:
+                  transition(RaftServer.State.PASSIVE);
+                  break;
+                case RESERVE:
+                  transition(RaftServer.State.RESERVE);
+                  break;
+              }
+
+              // Start sending heartbeats to the leader to ensure this server can be considered for promotion.
+              startHeartbeatTimer();
+              future.complete(null);
             }
           } else if (response.error() == null) {
             // If the response error is null, that indicates that no error occurred but the leader was
@@ -551,23 +559,31 @@ public class ServerState {
             // again after an election timeout.
             LOGGER.debug("{} - Failed to join {}", this.member.serverAddress(), member.getServerAddress());
             cancelJoinTimer();
-            joinTimer = threadContext.schedule(electionTimeout, this::join);
+            joinTimer = threadContext.schedule(electionTimeout, () -> {
+              join(cluster.getActiveMembers().iterator(), attempts, future);
+            });
           } else {
             // If the response error was non-null, attempt to join via the next server in the members list.
             LOGGER.debug("{} - Failed to join {}", this.member.serverAddress(), member.getServerAddress());
-            join(iterator, future);
+            join(iterator, attempts, future);
           }
         } else {
           LOGGER.debug("{} - Failed to join {}", this.member.serverAddress(), member.getServerAddress());
-          join(iterator, future);
+          join(iterator, attempts, future);
         }
       });
-    } else {
-      LOGGER.info("{} - Failed to join existing cluster", this.member.serverAddress());
-      cluster.setType(ClusterState.Type.ACTIVE);
+    }
+    // If the maximum number of join attempts has been reached, fail the join.
+    else if (attempts >= MAX_JOIN_ATTEMPTS) {
+      future.completeExceptionally(new IllegalStateException("failed to join the cluster"));
+    }
+    // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
+    // for servers to potentially timeout and elect a leader.
+    else {
       cancelJoinTimer();
-      transition(CopycatServer.State.FOLLOWER);
-      future.complete(null);
+      joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
+        join(cluster.getActiveMembers().iterator(), attempts + 1, future);
+      });
     }
   }
 

@@ -27,6 +27,8 @@ import java.util.*;
 class ClusterState {
   private final ServerState context;
   private final Member member;
+  private final int quorumHint;
+  private final int backupCount;
   private Type type = Type.RESERVE;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
@@ -45,9 +47,11 @@ class ClusterState {
     RESERVE
   }
 
-  ClusterState(ServerState context, Member member) {
+  ClusterState(ServerState context, Member member, int quorumHint, int backupCount) {
     this.context = Assert.notNull(context, "context");
     this.member = Assert.notNull(member, "member");
+    this.quorumHint = Assert.argNot(quorumHint, quorumHint <= 0, "quorumHint must be positive");
+    this.backupCount = Assert.argNot(backupCount, backupCount <= 0, "backupCount must be positive");
   }
 
   /**
@@ -57,6 +61,24 @@ class ClusterState {
    */
   Member getMember() {
     return member;
+  }
+
+  /**
+   * Returns the cluster quorum hint.
+   *
+   * @return The cluster quorum hint.
+   */
+  int getQuorumHint() {
+    return quorumHint;
+  }
+
+  /**
+   * Returns the cluster backup count.
+   *
+   * @return The cluster backup count.
+   */
+  int getBackupCount() {
+    return backupCount;
   }
 
   /**
@@ -146,6 +168,16 @@ class ClusterState {
    */
   MemberState getMember(int id) {
     return membersMap.get(id);
+  }
+
+  /**
+   * Returns a member state.
+   *
+   * @param member The member for which to return the member state.
+   * @return The member state.
+   */
+  MemberState getMember(Member member) {
+    return membersMap.get(member.hashCode());
   }
 
   /**

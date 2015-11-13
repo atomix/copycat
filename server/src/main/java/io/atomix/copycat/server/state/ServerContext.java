@@ -45,6 +45,8 @@ public class ServerContext implements Managed<ServerState> {
   private final Address clientAddress;
   private final Address serverAddress;
   private final Collection<Address> members;
+  private final int quorumHint;
+  private final int backupCount;
   private final StateMachine userStateMachine;
   private final Transport transport;
   private final Storage storage;
@@ -54,10 +56,12 @@ public class ServerContext implements Managed<ServerState> {
   private ServerState state;
   private volatile boolean open;
 
-  public ServerContext(Address clientAddress, Address serverAddress, Collection<Address> members, StateMachine stateMachine, Transport transport, Storage storage, Serializer serializer) {
+  public ServerContext(Address clientAddress, Address serverAddress, Collection<Address> members, int quorumHint, int backupCount, StateMachine stateMachine, Transport transport, Storage storage, Serializer serializer) {
     this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.members = Assert.notNull(members, "members");
+    this.quorumHint = Assert.argNot(quorumHint, quorumHint <= 0, "quorumHint must be positive");
+    this.backupCount = Assert.argNot(backupCount, backupCount <= 0, "backupCount must be positive");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.transport = Assert.notNull(transport, "transport");
     this.storage = Assert.notNull(storage, "storage");
@@ -81,7 +85,7 @@ public class ServerContext implements Managed<ServerState> {
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerState(new Member(serverAddress, clientAddress), members, log, userStateMachine, connections, context);
+          state = new ServerState(new Member(serverAddress, clientAddress), members, quorumHint, backupCount, log, userStateMachine, connections, context);
           clientServer = transport.server();
           clientServer.listen(clientAddress, c -> state.connectClient(c)).whenComplete((clientResult, clientError) -> {
             open = true;

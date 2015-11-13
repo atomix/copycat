@@ -344,6 +344,8 @@ public class CopycatServer implements RaftServer {
     private static final Duration DEFAULT_RAFT_HEARTBEAT_INTERVAL = Duration.ofMillis(150);
     private static final Duration DEFAULT_RAFT_SESSION_TIMEOUT = Duration.ofMillis(5000);
 
+    private int quorumHint;
+    private int backupCount = 1;
     private Transport transport;
     private Storage storage;
     private Serializer serializer;
@@ -359,7 +361,30 @@ public class CopycatServer implements RaftServer {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
       this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
       this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
-      this.cluster.add(serverAddress);
+    }
+
+    /**
+     * Sets the server quorum hint.
+     *
+     * @param quorumHint The server quorum hint.
+     * @return The server builder.
+     * @throws IllegalArgumentException If the quorum hint is not positive.
+     */
+    public Builder withQuorumHint(int quorumHint) {
+      this.quorumHint = Assert.argNot(quorumHint, quorumHint <= 0, "quorum must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the server backup count.
+     *
+     * @param backupCount The server backup count.
+     * @return The server builder.
+     * @throws IllegalArgumentException If the backup count is not positive.
+     */
+    public Builder withBackupCount(int backupCount) {
+      this.backupCount = Assert.argNot(backupCount, backupCount <= 0, "backupCount must be positive");
+      return this;
     }
 
     /**
@@ -463,6 +488,11 @@ public class CopycatServer implements RaftServer {
       if (stateMachine == null)
         throw new ConfigurationException("state machine not configured");
 
+      // If the quorum hint has not been configured, set the quorum size to the configured number of members.
+      if (quorumHint == 0) {
+        quorumHint = cluster.size();
+      }
+
       // If the transport is not configured, attempt to use the default Netty transport.
       if (transport == null) {
         try {
@@ -487,7 +517,7 @@ public class CopycatServer implements RaftServer {
           .build();
       }
 
-      ServerContext context = new ServerContext(clientAddress, serverAddress, cluster, stateMachine, transport, storage, serializer);
+      ServerContext context = new ServerContext(clientAddress, serverAddress, cluster, quorumHint, backupCount, stateMachine, transport, storage, serializer);
       return new CopycatServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
     }
   }

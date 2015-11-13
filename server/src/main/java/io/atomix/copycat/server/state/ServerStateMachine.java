@@ -652,12 +652,15 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  private CompletableFuture<Void> apply(HeartbeatEntry entry) {
+  private CompletableFuture<Boolean> apply(HeartbeatEntry entry) {
     long timestamp = executor.tick(entry.getTimestamp());
+
+    boolean changed = false;
 
     // Set the member status to AVAILABLE and update the member heartbeat time.
     MemberState member = cluster.getMember(entry.getMember());
     if (member != null) {
+      changed = member.getStatus() == MemberState.Status.UNAVAILABLE;
       member.setHeartbeatTime(timestamp).setStatus(MemberState.Status.AVAILABLE);
     }
 
@@ -665,9 +668,10 @@ class ServerStateMachine implements AutoCloseable {
     for (MemberState memberState : cluster.getMembers()) {
       if (timestamp - memberState.getHeartbeatTime() > memberState.getHeartbeatTimeout()) {
         memberState.setStatus(MemberState.Status.UNAVAILABLE);
+        changed = true;
       }
     }
-    return Futures.completedFutureAsync(null, ThreadContext.currentContextOrThrow().executor());
+    return Futures.completedFutureAsync(changed, ThreadContext.currentContextOrThrow().executor());
   }
 
   /**
