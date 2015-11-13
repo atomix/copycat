@@ -380,6 +380,7 @@ final class LeaderState extends ActiveState {
     try (HeartbeatEntry entry = context.getLog().create(HeartbeatEntry.class)) {
       entry.setTerm(context.getTerm())
         .setMember(request.member())
+        .setCommitIndex(request.commitIndex())
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
@@ -456,17 +457,31 @@ final class LeaderState extends ActiveState {
       return;
     }
 
-    Collection<Member> activeMembers = context.getCluster().buildActiveMembers();
-    Collection<Member> passiveMembers = context.getCluster().buildPassiveMembers();
-    Collection<Member> reserveMembers = context.getCluster().buildReserveMembers();
+    // Build lists of active, passive, and reserve members.
+    List<Member> activeMembers = context.getCluster().buildActiveMembers((m1, m2) -> Long.compare(m2.getCommitIndex(), m1.getCommitIndex()));
+    List<Member> passiveMembers = context.getCluster().buildPassiveMembers((m1, m2) -> Long.compare(m2.getCommitIndex(), m1.getCommitIndex()));
+    List<Member> reserveMembers = context.getCluster().buildReserveMembers((m1, m2) -> Long.compare(m2.getCommitIndex(), m1.getCommitIndex()));
 
     int quorumHint = context.getCluster().getQuorumHint();
     int backupCount = context.getCluster().getBackupCount();
 
-    // Change the active, passive, and reserve membership according to member statuses.
+    // Reverse the ACTIVE members list to be ordered with the lowest commitIndex first and then demote
+    // any necessary ACTIVE members that are currently marked UNAVAILABLE.
+    Collections.reverse(activeMembers);
     boolean changed = demoteActiveMembers(activeMembers, reserveMembers, quorumHint);
+
+    // Reverse the PASSIVE members list to be ordered with the lowest commitIndex first and then demote
+    // any necessary PASSIVE members that are currently marked UNAVAILABLE.
+    Collections.reverse(passiveMembers);
     changed = demotePassiveMembers(passiveMembers, reserveMembers) || changed;
+
+    // Reverse the PASSIVE members list to be ordered with the highest commitIndex first and then promote
+    // any necessary PASSIVE members that are AVAILABLE where an ACTIVE slot is not filled.
+    Collections.reverse(passiveMembers);
     changed = promotePassiveMembers(passiveMembers, activeMembers, quorumHint) || changed;
+
+    // Promote any RESERVE members that are AVAILABLE where a PASSIVE slot is not filled. RESERVE members
+    // are already ordered with the highest commitIndex first.
     changed = promoteReserveMembers(reserveMembers, passiveMembers, quorumHint, backupCount) || changed;
 
     // If the overall configuration changed, log and commit a new configuration entry.
@@ -499,7 +514,7 @@ final class LeaderState extends ActiveState {
   /**
    * Demotes active members to reserve.
    */
-  private boolean demoteActiveMembers(Collection<Member> activeMembers, Collection<Member> reserveMembers, int quorumHint) {
+  private boolean demoteActiveMembers(List<Member> activeMembers, Collection<Member> reserveMembers, int quorumHint) {
     boolean changed = false;
     if (activeMembers.size() > quorumHint) {
       int demoteTotal = activeMembers.size() - quorumHint;
@@ -526,7 +541,7 @@ final class LeaderState extends ActiveState {
   /**
    * Demotes passive members to reserve.
    */
-  private boolean demotePassiveMembers(Collection<Member> passiveMembers, Collection<Member> reserveMembers) {
+  private boolean demotePassiveMembers(List<Member> passiveMembers, Collection<Member> reserveMembers) {
     boolean changed = false;
     Iterator<Member> iterator = passiveMembers.iterator();
     while (iterator.hasNext()) {
@@ -545,7 +560,7 @@ final class LeaderState extends ActiveState {
   /**
    * Promotes passive members to active.
    */
-  private boolean promotePassiveMembers(Collection<Member> passiveMembers, Collection<Member> activeMembers, int quorumHint) {
+  private boolean promotePassiveMembers(List<Member> passiveMembers, Collection<Member> activeMembers, int quorumHint) {
     boolean changed = false;
     if (activeMembers.size() < quorumHint) {
       int promoteTotal = quorumHint - activeMembers.size();
@@ -572,7 +587,7 @@ final class LeaderState extends ActiveState {
   /**
    * Promotes reserve members to passive.
    */
-  private boolean promoteReserveMembers(Collection<Member> reserveMembers, Collection<Member> passiveMembers, int quorumHint, int backupCount) {
+  private boolean promoteReserveMembers(List<Member> reserveMembers, Collection<Member> passiveMembers, int quorumHint, int backupCount) {
     boolean changed = false;
     if (passiveMembers.size() < quorumHint * backupCount) {
       int promoteTotal = quorumHint * backupCount - passiveMembers.size();

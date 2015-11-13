@@ -31,6 +31,7 @@ class MemberState {
   private int index;
   private long heartbeatTime;
   private Status status = Status.UNAVAILABLE;
+  private long commitIndex;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
@@ -155,6 +156,26 @@ class MemberState {
    */
   MemberState setStatus(Status status) {
     this.status = Assert.notNull(status, "status");
+    return this;
+  }
+
+  /**
+   * Returns the member commit index.
+   *
+   * @return The member commit index.
+   */
+  long getCommitIndex() {
+    return commitIndex;
+  }
+
+  /**
+   * Sets the member commit index.
+   *
+   * @param commitIndex The member commit index.
+   * @return The member state.
+   */
+  MemberState setCommitIndex(long commitIndex) {
+    this.commitIndex = commitIndex;
     return this;
   }
 

@@ -661,7 +661,9 @@ class ServerStateMachine implements AutoCloseable {
     MemberState member = cluster.getMember(entry.getMember());
     if (member != null) {
       changed = member.getStatus() == MemberState.Status.UNAVAILABLE;
-      member.setHeartbeatTime(timestamp).setStatus(MemberState.Status.AVAILABLE);
+      member.setHeartbeatTime(timestamp)
+        .setStatus(MemberState.Status.AVAILABLE)
+        .setCommitIndex(entry.getCommitIndex());
     }
 
     // Iterate through all members and update statuses based on the heartbeat time.

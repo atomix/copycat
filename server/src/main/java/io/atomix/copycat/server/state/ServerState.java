@@ -663,6 +663,7 @@ public class ServerState {
   private void heartbeat() {
     HeartbeatRequest request = HeartbeatRequest.builder()
       .withMember(member.serverAddress().hashCode())
+      .withCommitIndex(commitIndex)
       .build();
 
     state.heartbeat(request);

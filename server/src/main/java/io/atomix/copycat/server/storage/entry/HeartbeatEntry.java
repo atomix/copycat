@@ -19,6 +19,7 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
@@ -29,6 +30,7 @@ import io.atomix.catalyst.util.ReferenceManager;
 @SerializeWith(id=228)
 public class HeartbeatEntry extends TimestampedEntry<HeartbeatEntry> {
   private int member;
+  private long commitIndex;
 
   public HeartbeatEntry() {
   }
@@ -37,30 +39,63 @@ public class HeartbeatEntry extends TimestampedEntry<HeartbeatEntry> {
     super(referenceManager);
   }
 
+  /**
+   * Sets the heartbeat member.
+   *
+   * @param member The heartbeat member.
+   * @return The heartbeat entry.
+   */
   public HeartbeatEntry setMember(int member) {
     this.member = member;
     return this;
   }
 
+  /**
+   * Returns the heartbeat member.
+   *
+   * @return The heartbeat member.
+   */
   public int getMember() {
     return member;
+  }
+
+  /**
+   * Sets the member commit index.
+   *
+   * @param commitIndex The member commit index.
+   * @return The heartbeat entry.
+   */
+  public HeartbeatEntry setCommitIndex(long commitIndex) {
+    this.commitIndex = Assert.argNot(commitIndex, commitIndex < 0, "commitIndex must be positive");
+    return this;
+  }
+
+  /**
+   * Returns the member commit index.
+   *
+   * @return The member commit index.
+   */
+  public long getCommitIndex() {
+    return commitIndex;
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeInt(member);
+    buffer.writeLong(commitIndex);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     member = buffer.readInt();
+    commitIndex = buffer.readLong();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, member=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getMember(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, member=%d, commitIndex=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getMember(), getCommitIndex(), getTimestamp());
   }
 
 }

@@ -52,6 +52,7 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
   }
 
   protected int member;
+  protected long commitIndex;
 
   /**
    * Returns the heartbeat member.
@@ -62,29 +63,44 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
     return member;
   }
 
+  /**
+   * Returns the member commit index.
+   *
+   * @return The member commit index.
+   */
+  public long commitIndex() {
+    return commitIndex;
+  }
+
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeInt(member);
+    buffer.writeLong(commitIndex);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     member = buffer.readInt();
+    commitIndex = buffer.readLong();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), member);
+    return Objects.hash(getClass(), member, commitIndex);
   }
 
   @Override
   public boolean equals(Object object) {
-    return getClass().isAssignableFrom(object.getClass()) && ((HeartbeatRequest) object).member == member;
+    if (object instanceof HeartbeatRequest) {
+      HeartbeatRequest request = (HeartbeatRequest) object;
+      return request.member == member && request.commitIndex == commitIndex;
+    }
+    return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[member=%d]", getClass().getSimpleName(), member);
+    return String.format("%s[member=%d, commitIndex=%d]", getClass().getSimpleName(), member, commitIndex);
   }
 
   /**
@@ -104,6 +120,17 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
      */
     public Builder withMember(int member) {
       request.member = Assert.notNull(member, "member");
+      return this;
+    }
+
+    /**
+     * Sets the member commit index.
+     *
+     * @param commitIndex The member commit index.
+     * @return The request builder.
+     */
+    public Builder withCommitIndex(long commitIndex) {
+      request.commitIndex = Assert.argNot(commitIndex, commitIndex < 0, "commitIndex must be positive");
       return this;
     }
 

@@ -329,42 +329,59 @@ class ClusterState {
    * Builds a list of active members.
    */
   Collection<Member> buildActiveMembers() {
-    List<Member> members = new ArrayList<>();
-    for (MemberState member : activeMembers) {
-      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
-    }
+    return buildMembers(activeMembers, Type.ACTIVE, null);
+  }
 
-    if (type == Type.ACTIVE) {
-      members.add(member);
-    }
-    return members;
+  /**
+   * Builds a list of active members.
+   */
+  List<Member> buildActiveMembers(Comparator<MemberState> sortComparator) {
+    return buildMembers(activeMembers, Type.ACTIVE, sortComparator);
   }
 
   /**
    * Builds a list of passive members.
    */
   Collection<Member> buildPassiveMembers() {
-    List<Member> members = new ArrayList<>();
-    for (MemberState member : passiveMembers) {
-      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
-    }
+    return buildMembers(passiveMembers, Type.PASSIVE, null);
+  }
 
-    if (type == Type.PASSIVE) {
-      members.add(member);
-    }
-    return members;
+  /**
+   * Builds a list of passive members.
+   */
+  List<Member> buildPassiveMembers(Comparator<MemberState> sortComparator) {
+    return buildMembers(passiveMembers, Type.PASSIVE, sortComparator);
   }
 
   /**
    * Builds a list of reserve members.
    */
   Collection<Member> buildReserveMembers() {
-    List<Member> members = new ArrayList<>();
-    for (MemberState member : reserveMembers) {
+    return buildMembers(reserveMembers, Type.RESERVE, null);
+  }
+
+  /**
+   * Builds a list of reserve members.
+   */
+  List<Member> buildReserveMembers(Comparator<MemberState> sortComparator) {
+    return buildMembers(reserveMembers, Type.RESERVE, sortComparator);
+  }
+
+  /**
+   * Builds a full list of members for configurations.
+   */
+  private List<Member> buildMembers(List<MemberState> states, Type type, Comparator<MemberState> sortComparator) {
+    List<Member> members = new ArrayList<>(states.size() + 1);
+
+    if (sortComparator != null) {
+      Collections.sort(states, sortComparator);
+    }
+
+    for (MemberState member : states) {
       members.add(new Member(member.getServerAddress(), member.getClientAddress()));
     }
 
-    if (type == Type.RESERVE) {
+    if (this.type == type) {
       members.add(member);
     }
     return members;
