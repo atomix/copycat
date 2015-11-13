@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
  */
 public class ServerState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerState.class);
+  private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
   private ThreadContext threadContext;
@@ -63,6 +64,7 @@ public class ServerState {
   private Duration heartbeatInterval = Duration.ofMillis(150);
   private Scheduled joinTimer;
   private Scheduled leaveTimer;
+  private Scheduled heartbeatTimer;
   private int leader;
   private long term;
   private int lastVotedFor;
@@ -533,10 +535,12 @@ public class ServerState {
             if (cluster.isActive()) {
               cancelJoinTimer();
               transition(CopycatServer.State.FOLLOWER);
+              startHeartbeatTimer();
               future.complete(null);
             } else if (cluster.isPassive()) {
               cancelJoinTimer();
               transition(CopycatServer.State.PASSIVE);
+              startHeartbeatTimer();
               future.complete(null);
             } else {
               future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
@@ -627,6 +631,35 @@ public class ServerState {
       LOGGER.debug("{} - Cancelling leave timeout", member.serverAddress());
       leaveTimer.cancel();
       leaveTimer = null;
+    }
+  }
+
+  /**
+   * Starts the heartbeat timer.
+   */
+  private void startHeartbeatTimer() {
+    heartbeatTimer = threadContext.schedule(HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL, this::heartbeat);
+  }
+
+  /**
+   * Sends a heartbeat to the leader.
+   */
+  private void heartbeat() {
+    HeartbeatRequest request = HeartbeatRequest.builder()
+      .withMember(member.serverAddress().hashCode())
+      .build();
+
+    state.heartbeat(request);
+  }
+
+  /**
+   * Cancels the heartbeat timer.
+   */
+  private void cancelHeartbeatTimer() {
+    if (heartbeatTimer != null) {
+      LOGGER.debug("{} - Cancelling heartbeat timer", member.serverAddress());
+      heartbeatTimer.cancel();
+      heartbeatTimer = null;
     }
   }
 

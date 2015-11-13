@@ -31,6 +31,26 @@ import java.util.Objects;
  */
 @SerializeWith(id=217)
 public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
+
+  /**
+   * Returns a new heartbeat request builder.
+   *
+   * @return A new heartbeat request builder.
+   */
+  public static Builder builder() {
+    return new Builder(new HeartbeatRequest());
+  }
+
+  /**
+   * Returns an heartbeat request builder for an existing request.
+   *
+   * @param request The request to build.
+   * @return The heartbeat request builder.
+   */
+  public static Builder builder(HeartbeatRequest request) {
+    return new Builder(request);
+  }
+
   protected int member;
 
   /**
