@@ -87,14 +87,25 @@ final class LeaderState extends ActiveState {
   private CompletableFuture<Void> commitEntries() {
     final long term = context.getTerm();
     final long index;
+
+    // Append a no-op entry to reset session timeouts and commit entries from prior terms.
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(leaderTime);
-      index = context.getLog().append(entry);
+
+      // Store the index of the leader's no-op entry. This will be used to ensure entries from previous
+      // terms are not committed until an entry from this leader's term has been committed.
+      leaderIndex = context.getLog().append(entry);
     }
 
-    // Store the index at which the leader took command.
-    leaderIndex = index;
+    // Append a configuration entry to propagate the leader's cluster configuration.
+    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+      entry.setTerm(term)
+        .setActive(context.getCluster().buildActiveMembers())
+        .setPassive(context.getCluster().buildPassiveMembers())
+        .setReserve(context.getCluster().buildReserveMembers());
+      index = context.getLog().append(entry);
+    }
 
     CompletableFuture<Void> future = new CompletableFuture<>();
     replicator.commit(index).whenComplete((resultIndex, error) -> {
