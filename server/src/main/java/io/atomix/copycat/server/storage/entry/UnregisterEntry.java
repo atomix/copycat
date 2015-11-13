@@ -15,7 +15,10 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
@@ -25,6 +28,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  */
 @SerializeWith(id=227)
 public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
+  private boolean expired;
 
   public UnregisterEntry() {
   }
@@ -38,9 +42,41 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
     return true;
   }
 
+  /**
+   * Sets whether the session was expired by a leader.
+   *
+   * @param expired Whether the session was expired by a leader.
+   * @return The unregister entry.
+   */
+  public UnregisterEntry setExpired(boolean expired) {
+    this.expired = expired;
+    return this;
+  }
+
+  /**
+   * Returns whether the session was expired by a leader.
+   *
+   * @return Whether the session was expired by a leader.
+   */
+  public boolean isExpired() {
+    return expired;
+  }
+
+  @Override
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    super.writeObject(buffer, serializer);
+    buffer.writeBoolean(expired);
+  }
+
+  @Override
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    super.readObject(buffer, serializer);
+    expired = buffer.readBoolean();
+  }
+
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, session=%d, expired=%b, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), isExpired(), getTimestamp());
   }
 
 }

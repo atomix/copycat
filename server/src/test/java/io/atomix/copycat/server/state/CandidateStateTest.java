@@ -49,6 +49,8 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();

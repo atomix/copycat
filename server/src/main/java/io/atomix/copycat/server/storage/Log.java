@@ -316,8 +316,23 @@ public class Log implements AutoCloseable {
 
     Segment segment = segments.segment(index);
     Assert.index(segment != null, "invalid index: " + index);
+
+    // Get the entry from the segment. If the entry hasn't already been compacted from the segment,
+    // it will be non-null.
     T entry = segment.get(index);
-    return entry != null ? entry : null;
+
+    // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
+    // based on the type of entry and whether it has been cleaned.
+    if (entry != null) {
+      // If the entry has not been cleaned by the state machine, return it. Note that the call to isClean()
+      // on the segment will be done in O(1) time since the search was already done in the get() call.
+      // We also return entries where the index is greater than the server's globalIndex (represented by
+      // the compactor's majorIndex) in order to ensure commands which trigger events are replicated.
+      if (!segment.isClean(index) || index > compactor.majorIndex()) {
+        return entry;
+      }
+    }
+    return null;
   }
 
   /**

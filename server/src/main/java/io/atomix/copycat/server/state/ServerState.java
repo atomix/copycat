@@ -67,6 +67,7 @@ public class ServerState {
   private long term;
   private int lastVotedFor;
   private long commitIndex;
+  private long globalIndex;
 
   @SuppressWarnings("unchecked")
   ServerState(Member member, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
@@ -324,6 +325,7 @@ public class ServerState {
     Assert.argNot(commitIndex < 0, "commit index must be positive");
     Assert.argNot(commitIndex < this.commitIndex, "cannot decrease commit index");
     this.commitIndex = commitIndex;
+    log.commit(commitIndex);
     return this;
   }
 
@@ -334,6 +336,28 @@ public class ServerState {
    */
   public long getCommitIndex() {
     return commitIndex;
+  }
+
+  /**
+   * Sets the global index.
+   *
+   * @param globalIndex The global index.
+   * @return The Raft context.
+   */
+  ServerState setGlobalIndex(long globalIndex) {
+    Assert.argNot(globalIndex < 0, "global index must be positive");
+    this.globalIndex = Math.max(this.globalIndex, globalIndex);
+    log.compactor().majorIndex(globalIndex);
+    return this;
+  }
+
+  /**
+   * Returns the global index.
+   *
+   * @return The global index.
+   */
+  public long getGlobalIndex() {
+    return globalIndex;
   }
 
   /**
