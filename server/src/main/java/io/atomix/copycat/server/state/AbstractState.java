@@ -124,6 +124,11 @@ abstract class AbstractState implements Managed<AbstractState> {
   protected abstract CompletableFuture<LeaveResponse> leave(LeaveRequest request);
 
   /**
+   * Handles a heartbeat request.
+   */
+  protected abstract CompletableFuture<HeartbeatResponse> heartbeat(HeartbeatRequest request);
+
+  /**
    * Handles an append request.
    */
   protected abstract CompletableFuture<AppendResponse> append(AppendRequest request);

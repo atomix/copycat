@@ -66,6 +66,11 @@ public interface RaftServer extends Managed<RaftServer> {
     INACTIVE,
 
     /**
+     * Represents the state of a server that does not store state.
+     */
+    RESERVE,
+
+    /**
      * Represents the state of a server in the process of catching up its log.
      * <p>
      * Upon successfully joining an existing cluster, the server will transition to the passive state and remain there
