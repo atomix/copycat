@@ -343,6 +343,68 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
+  protected CompletableFuture<HeartbeatResponse> heartbeat(HeartbeatRequest request) {
+    final long timestamp = System.currentTimeMillis();
+    final long index;
+
+    context.checkThread();
+    logRequest(request);
+
+    try (HeartbeatEntry entry = context.getLog().create(HeartbeatEntry.class)) {
+      entry.setTerm(context.getTerm())
+        .setMember(request.member())
+        .setTimestamp(timestamp);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
+    }
+
+    CompletableFuture<HeartbeatResponse> future = new CompletableFuture<>();
+    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (commitError == null) {
+          KeepAliveEntry entry = context.getLog().get(index);
+          applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
+            if (isOpen()) {
+              if (sessionError == null) {
+                future.complete(logResponse(HeartbeatResponse.builder()
+                  .withStatus(Response.Status.OK)
+                  .withTerm(context.getTerm())
+                  .withLeader(context.getMember().serverAddress().hashCode())
+                  .build()));
+              } else if (sessionError instanceof RaftException) {
+                future.complete(logResponse(HeartbeatResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withTerm(context.getTerm())
+                  .withLeader(context.getMember().serverAddress().hashCode())
+                  .withError(((RaftException) sessionError).getType())
+                  .build()));
+              } else {
+                future.complete(logResponse(HeartbeatResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withTerm(context.getTerm())
+                  .withLeader(context.getMember().serverAddress().hashCode())
+                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .build()));
+              }
+              checkSessions();
+            }
+            entry.release();
+          }, context.getThreadContext().executor());
+        } else {
+          future.complete(logResponse(HeartbeatResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withTerm(context.getTerm())
+            .withLeader(context.getMember().serverAddress().hashCode())
+            .withError(RaftError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+    return future;
+  }
+
+  @Override
   public CompletableFuture<PollResponse> poll(final PollRequest request) {
     return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(Response.Status.OK)
@@ -621,7 +683,7 @@ final class LeaderState extends ActiveState {
                   .withStatus(Response.Status.OK)
                   .withSession((Long) sessionId)
                   .withTimeout(timeout)
-                  .withLeader(context.getMember().serverAddress())
+                  .withLeader(context.getMember().clientAddress())
                   .withMembers(context.getCluster().buildActiveMembers().stream()
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
@@ -754,7 +816,7 @@ final class LeaderState extends ActiveState {
               if (sessionError == null) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.OK)
-                  .withLeader(context.getMember().serverAddress())
+                  .withLeader(context.getMember().clientAddress())
                   .withMembers(context.getCluster().buildActiveMembers().stream()
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
@@ -762,13 +824,13 @@ final class LeaderState extends ActiveState {
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withLeader(context.getMember().serverAddress())
+                  .withLeader(context.getMember().clientAddress())
                   .withError(((RaftException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withLeader(context.getMember().serverAddress())
+                  .withLeader(context.getMember().clientAddress())
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -779,7 +841,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withLeader(context.getMember().serverAddress())
+            .withLeader(context.getMember().clientAddress())
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
