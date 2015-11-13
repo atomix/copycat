@@ -16,9 +16,10 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
@@ -26,16 +27,20 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import static org.testng.Assert.*;
 
@@ -46,22 +51,32 @@ import static org.testng.Assert.*;
  */
 @Test
 public class ServerStateMachineTest extends ConcurrentTestCase {
-  private ThreadContext callerContext;
-  private ThreadContext stateContext;
-  private Transport transport;
-  private ServerStateMachine stateMachine;
+  protected Serializer serializer;
+  protected Storage storage;
+  protected Log log;
+  protected TestStateMachine stateMachine;
+  protected ThreadContext serverContext;
+  protected LocalTransport transport;
+  protected ServerState serverState;
+  protected List<Member> members;
   private long timestamp;
   private AtomicLong sequence;
-  private Set<Long> cleaned;
 
   @BeforeMethod
   public void createStateMachine() {
-    callerContext = new SingleThreadContext("caller", new Serializer());
-    stateContext = new SingleThreadContext("state", new Serializer());
-    LocalServerRegistry registry = new LocalServerRegistry();
-    transport = new LocalTransport(registry);
-    cleaned = new HashSet<>();
-    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaned::add, stateContext);
+    serializer = new Serializer();
+    serializer.resolve(new ServiceLoaderTypeResolver());
+
+    storage = new Storage(StorageLevel.MEMORY);
+    storage.serializer().resolve(new ServiceLoaderTypeResolver());
+
+    log = storage.open("test");
+    stateMachine = new TestStateMachine();
+    members = createMembers(3);
+    transport = new LocalTransport(new LocalServerRegistry());
+
+    serverContext = new SingleThreadContext("test-server", serializer);
+    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), log, stateMachine, new ConnectionManager(transport.client()), serverContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }
@@ -70,7 +85,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Tests registering a session.
    */
   public void testSessionRegisterKeepAlive() throws Throwable {
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       RegisterEntry entry = new RegisterEntry()
         .setIndex(1)
@@ -79,7 +94,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimeout(500)
         .setClient(UUID.randomUUID());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -87,12 +103,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = stateMachine.executor().context().sessions().getSession(1);
+    ServerSession session = serverState.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       KeepAliveEntry entry = new KeepAliveEntry()
         .setIndex(2)
@@ -102,7 +118,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setCommandSequence(0)
         .setEventVersion(0);
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -117,7 +134,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Tests resetting session timeouts when a new leader is elected.
    */
   public void testSessionLeaderReset() throws Throwable {
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       RegisterEntry entry = new RegisterEntry()
         .setIndex(1)
@@ -126,7 +143,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimeout(500)
         .setClient(UUID.randomUUID());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -134,19 +152,20 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = stateMachine.executor().context().sessions().getSession(1);
+    ServerSession session = serverState.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       NoOpEntry entry = new NoOpEntry()
         .setIndex(2)
         .setTerm(1)
         .setTimestamp(timestamp + 100);
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -161,7 +180,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Tests expiring a session.
    */
   public void testSessionSuspect() throws Throwable {
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       RegisterEntry entry = new RegisterEntry()
         .setIndex(1)
@@ -170,7 +189,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimeout(500)
         .setClient(UUID.randomUUID());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -178,22 +198,23 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = stateMachine.executor().context().sessions().getSession(1);
+    ServerSession session = serverState.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       KeepAliveEntry entry = new KeepAliveEntry()
-        .setIndex(3)
+        .setIndex(2)
         .setTerm(1)
         .setSession(2)
         .setTimestamp(timestamp + 1000)
         .setCommandSequence(0)
         .setEventVersion(0);
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNotNull(error);
         resume();
       });
@@ -208,7 +229,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Tests command sequencing.
    */
   public void testCommandSequence() throws Throwable {
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       RegisterEntry entry = new RegisterEntry()
         .setIndex(1)
@@ -217,7 +238,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimeout(500)
         .setClient(UUID.randomUUID());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -225,13 +247,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = stateMachine.executor().context().sessions().getSession(1);
+    ServerSession session = serverState.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
     assertEquals(session.getSequence(), 0);
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       CommandEntry entry = new CommandEntry()
         .setIndex(2)
@@ -241,7 +263,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp + 100)
         .setCommand(new TestCommand());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertEquals(result, 1L);
         resume();
       });
@@ -253,7 +276,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     assertEquals(session.getSequence(), 1);
     assertEquals(session.getTimestamp(), timestamp + 100);
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       CommandEntry entry = new CommandEntry()
         .setIndex(3)
@@ -263,14 +286,15 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp + 200)
         .setCommand(new TestCommand());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertEquals(result, 2L);
         resume();
       });
 
     });
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       CommandEntry entry = new CommandEntry()
         .setIndex(4)
@@ -280,7 +304,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp + 300)
         .setCommand(new TestCommand());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertEquals(result, 3L);
         resume();
       });
@@ -297,7 +322,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Tests serializing queries.
    */
   public void testQuerySerialize() throws Throwable {
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       RegisterEntry entry = new RegisterEntry()
         .setIndex(1)
@@ -306,26 +331,27 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimeout(500)
         .setClient(UUID.randomUUID());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
 
-      threadAssertEquals(stateMachine.getLastApplied(), 1l);
+      threadAssertEquals(serverState.getStateMachine().getLastApplied(), 1l);
     });
 
     await();
 
-    ServerSession session = stateMachine.executor().context().sessions().getSession(1);
+    ServerSession session = serverState.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
     assertEquals(session.getSequence(), 0);
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       QueryEntry entry = new QueryEntry()
-        .setIndex(stateMachine.getLastApplied())
+        .setIndex(serverState.getStateMachine().getLastApplied())
         .setTerm(1)
         .setSession(1)
         .setTimestamp(timestamp + 200)
@@ -333,14 +359,14 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setVersion(0)
         .setQuery(new TestQuery());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertEquals(result, 1L);
         resume();
       });
 
     });
 
-    callerContext.execute(() -> {
+    serverContext.execute(() -> {
 
       CommandEntry entry = new CommandEntry()
         .setIndex(2)
@@ -350,12 +376,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         .setTimestamp(timestamp + 100)
         .setCommand(new TestCommand());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      log.append(entry);
+      serverState.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertEquals(result, 2L);
         resume();
       });
 
-      threadAssertEquals(stateMachine.getLastApplied(), 2l);
+      threadAssertEquals(serverState.getStateMachine().getLastApplied(), 2l);
     });
 
     await(1000, 2);
@@ -367,8 +394,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   @AfterMethod
   public void closeStateMachine() {
     stateMachine.close();
-    stateContext.close();
-    callerContext.close();
+    serverContext.close();
   }
 
   /**
@@ -411,6 +437,17 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Test query.
    */
   private static class TestQuery implements Query<Long> {
+  }
+
+  /**
+   * Creates a collection of member addresses.
+   */
+  private List<Member> createMembers(int nodes) {
+    List<Member> members = new ArrayList<>();
+    for (int i = 0; i < nodes; i++) {
+      members.add(new Member(new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
+    }
+    return members;
   }
 
 }

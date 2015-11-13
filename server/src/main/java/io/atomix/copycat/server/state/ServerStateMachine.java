@@ -38,6 +38,7 @@ import java.util.concurrent.CompletableFuture;
 class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
+  private final ClusterState cluster;
   private final ServerStateMachineExecutor executor;
   private final ServerCommitCleaner cleaner;
   private final ServerCommitPool commits;
@@ -45,8 +46,9 @@ class ServerStateMachine implements AutoCloseable {
   private long lastCompleted;
   private long configuration;
 
-  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
+  ServerStateMachine(StateMachine stateMachine, ClusterState cluster, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
     this.stateMachine = stateMachine;
+    this.cluster = cluster;
     this.executor = new ServerStateMachineExecutor(context, executor);
     this.cleaner = cleaner;
     this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
@@ -143,6 +145,8 @@ class ServerStateMachine implements AutoCloseable {
         return apply((KeepAliveEntry) entry);
       } else if (entry instanceof UnregisterEntry) {
         return apply((UnregisterEntry) entry, expectResult);
+      } else if (entry instanceof HeartbeatEntry) {
+        return apply((HeartbeatEntry) entry);
       } else if (entry instanceof NoOpEntry) {
         return apply((NoOpEntry) entry);
       } else if (entry instanceof ConnectEntry) {
@@ -640,6 +644,30 @@ class ServerStateMachine implements AutoCloseable {
       }
     });
     return future;
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   *
+   * @param entry The entry to apply.
+   * @return The result.
+   */
+  private CompletableFuture<Void> apply(HeartbeatEntry entry) {
+    long timestamp = executor.tick(entry.getTimestamp());
+
+    // Set the member status to AVAILABLE and update the member heartbeat time.
+    MemberState member = cluster.getMember(entry.getMember());
+    if (member != null) {
+      member.setHeartbeatTime(timestamp).setStatus(MemberState.Status.AVAILABLE);
+    }
+
+    // Iterate through all members and update statuses based on the heartbeat time.
+    for (MemberState memberState : cluster.getMembers()) {
+      if (timestamp - memberState.getHeartbeatTime() > memberState.getHeartbeatTimeout()) {
+        memberState.setStatus(MemberState.Status.UNAVAILABLE);
+      }
+    }
+    return Futures.completedFutureAsync(null, ThreadContext.currentContextOrThrow().executor());
   }
 
   /**

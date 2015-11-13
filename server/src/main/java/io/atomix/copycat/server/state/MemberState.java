@@ -25,9 +25,12 @@ import io.atomix.copycat.server.storage.Log;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class MemberState {
+  private static final long HEARTBEAT_TIMEOUT = 60000;
   private final Address serverAddress;
   private Address clientAddress;
   private int index;
+  private long heartbeatTime;
+  private Status status = Status.UNAVAILABLE;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
@@ -36,6 +39,14 @@ class MemberState {
 
   public MemberState(Address serverAddress) {
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
+  }
+
+  /**
+   * Member status.
+   */
+  enum Status {
+    UNAVAILABLE,
+    AVAILABLE
   }
 
   /**
@@ -95,6 +106,55 @@ class MemberState {
    */
   MemberState setIndex(int index) {
     this.index = index;
+    return this;
+  }
+
+  /**
+   * Returns the heartbeat time.
+   *
+   * @return The heartbeat time.
+   */
+  public long getHeartbeatTime() {
+    return heartbeatTime;
+  }
+
+  /**
+   * Sets the heartbeat time.
+   *
+   * @param heartbeatTime The heartbeat time.
+   * @return The member state.
+   */
+  MemberState setHeartbeatTime(long heartbeatTime) {
+    this.heartbeatTime = Math.max(this.heartbeatTime, heartbeatTime);
+    return this;
+  }
+
+  /**
+   * Returns the member heartbeat timeout.
+   *
+   * @return The member heartbeat timeout.
+   */
+  public long getHeartbeatTimeout() {
+    return HEARTBEAT_TIMEOUT;
+  }
+
+  /**
+   * Returns the member availability status.
+   *
+   * @return The member availability status.
+   */
+  Status getStatus() {
+    return status;
+  }
+
+  /**
+   * Sets the member availability status.
+   *
+   * @param status The member availability status.
+   * @return The member state.
+   */
+  MemberState setStatus(Status status) {
+    this.status = Assert.notNull(status, "status");
     return this;
   }
 

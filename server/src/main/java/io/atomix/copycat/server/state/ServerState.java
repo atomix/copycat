@@ -82,7 +82,7 @@ public class ServerState {
 
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+    this.stateMachine = new ServerStateMachine(userStateMachine, cluster, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
 
     cluster.configure(0, activeMembers, Collections.EMPTY_LIST);
   }
