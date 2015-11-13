@@ -686,9 +686,21 @@ class ServerStateMachine implements AutoCloseable {
     // Iterate through all the server sessions and reset timestamps. This ensures that sessions do not
     // timeout during leadership changes or shortly thereafter.
     long timestamp = executor.tick(entry.getTimestamp());
+
+    // Reset the timestamp for AVAILABLE member states in order to ensure members aren't marked UNAVAILABLE
+    // due to lengthy leadership changes.
+    for (MemberState memberState : cluster.getMembers()) {
+      if (memberState.getStatus() == MemberState.Status.AVAILABLE) {
+        memberState.setHeartbeatTime(timestamp);
+      }
+    }
+
+    // Reset the timestamp for all sessions in order to ensure sessions aren't marked suspicious or
+    // expired due to lengthy leadership changes.
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
+
     cleaner.clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
