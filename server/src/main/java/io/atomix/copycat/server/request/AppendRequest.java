@@ -317,22 +317,6 @@ public class AppendRequest extends AbstractRequest<AppendRequest> {
       Assert.stateNot(request.globalIndex < 0, "global index must not be negative");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }

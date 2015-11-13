@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
 package io.atomix.copycat.server.response;
 
@@ -22,76 +22,64 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
-import io.atomix.copycat.client.response.Response;
 
 import java.util.Objects;
 
 /**
- * Protocol append response.
+ * Protocol heartbeat response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=208)
-public class AppendResponse extends AbstractResponse<AppendResponse> {
+@SerializeWith(id=218)
+public class HeartbeatResponse extends AbstractResponse<HeartbeatResponse> {
 
   /**
-   * Returns a new append response builder.
+   * Returns a new heartbeat response builder.
    *
-   * @return A new append response builder.
+   * @return A new heartbeat response builder.
    */
   public static Builder builder() {
-    return new Builder(new AppendResponse());
+    return new Builder(new HeartbeatResponse());
   }
 
   /**
-   * Returns an append response builder for an existing response.
+   * Returns a heartbeat response builder for an existing response.
    *
    * @param response The response to build.
-   * @return The append response builder.
+   * @return The heartbeat response builder.
    */
-  public static Builder builder(AppendResponse response) {
+  public static Builder builder(HeartbeatResponse response) {
     return new Builder(response);
   }
 
   private long term;
-  private boolean succeeded;
-  private long logIndex;
+  private int leader;
 
   /**
-   * Returns the requesting node's current term.
+   * Returns the responding node's current term.
    *
-   * @return The requesting node's current term.
+   * @return The responding node's current term.
    */
   public long term() {
     return term;
   }
 
   /**
-   * Returns a boolean indicating whether the append was successful.
+   * Returns the responding node's current leader.
    *
-   * @return Indicates whether the append was successful.
+   * @return The responding node's current leader.
    */
-  public boolean succeeded() {
-    return succeeded;
-  }
-
-  /**
-   * Returns the last index of the replica's log.
-   *
-   * @return The last index of the responding replica's log.
-   */
-  public long logIndex() {
-    return logIndex;
+  public int leader() {
+    return leader;
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
-    if (status == Response.Status.OK) {
+    if (status == Status.OK) {
       error = null;
       term = buffer.readLong();
-      succeeded = buffer.readBoolean();
-      logIndex = buffer.readLong();
+      leader = buffer.readInt();
     } else {
       error = RaftError.forId(buffer.readByte());
     }
@@ -100,10 +88,9 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     buffer.writeByte(status.id());
-    if (status == Response.Status.OK) {
+    if (status == Status.OK) {
       buffer.writeLong(term)
-        .writeBoolean(succeeded)
-        .writeLong(logIndex);
+        .writeInt(leader);
     } else {
       buffer.writeByte(error.id());
     }
@@ -111,31 +98,30 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, term, succeeded, logIndex);
+    return Objects.hash(getClass(), status, term, leader);
   }
 
   @Override
   public boolean equals(Object object) {
-    if (object instanceof AppendResponse) {
-      AppendResponse response = (AppendResponse) object;
+    if (object instanceof HeartbeatResponse) {
+      HeartbeatResponse response = (HeartbeatResponse) object;
       return response.status == status
         && response.term == term
-        && response.succeeded == succeeded
-        && response.logIndex == logIndex;
+        && response.leader == leader;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, term=%d, succeeded=%b, logIndex=%d]", getClass().getSimpleName(), status, term, succeeded, logIndex);
+    return String.format("%s[status=%s, term=%d, leader=%d]", getClass().getSimpleName(), status, term, leader);
   }
 
   /**
-   * Append response builder.
+   * Heartbeat response builder.
    */
-  public static class Builder extends AbstractResponse.Builder<Builder, AppendResponse> {
-    protected Builder(AppendResponse response) {
+  public static class Builder extends AbstractResponse.Builder<Builder, HeartbeatResponse> {
+    protected Builder(HeartbeatResponse response) {
       super(response);
     }
 
@@ -152,25 +138,13 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
     }
 
     /**
-     * Sets whether the request succeeded.
+     * Sets the response leader.
      *
-     * @param succeeded Whether the append request succeeded.
+     * @param leader The response leader.
      * @return The append response builder.
      */
-    public Builder withSucceeded(boolean succeeded) {
-      response.succeeded = succeeded;
-      return this;
-    }
-
-    /**
-     * Sets the last index of the replica's log.
-     *
-     * @param index The last index of the replica's log.
-     * @return The append response builder.
-     * @throws IllegalArgumentException if {@code index} is negative
-     */
-    public Builder withLogIndex(long index) {
-      response.logIndex = Assert.argNot(index, index < 0, "term must not be negative");
+    public Builder withLeader(int leader) {
+      response.leader = leader;
       return this;
     }
 
@@ -178,11 +152,10 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
      * @throws IllegalStateException if status is ok and term is not positive or log index is negative
      */
     @Override
-    public AppendResponse build() {
+    public HeartbeatResponse build() {
       super.build();
-      if (response.status == Response.Status.OK) {
-        Assert.stateNot(response.term <= 0, "term must be positive");
-        Assert.stateNot(response.logIndex < 0, "log index must be positive");
+      if (response.status == Status.OK) {
+        Assert.stateNot(response.term < 0, "term must be positive");
       }
       return response;
     }

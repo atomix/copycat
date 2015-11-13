@@ -17,38 +17,39 @@ package io.atomix.copycat.server.request;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
-import io.atomix.copycat.server.state.Member;
 
 import java.util.Objects;
 
 /**
- * Protocol configuration request.
+ * Protocol heartbeat request.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends AbstractRequest<T> {
-  protected Member member;
+@SerializeWith(id=217)
+public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
+  protected int member;
 
   /**
-   * Returns the joining member.
+   * Returns the heartbeat member.
    *
-   * @return The joining member.
+   * @return The heartbeat member.
    */
-  public Member member() {
+  public int member() {
     return member;
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    serializer.writeObject(member, buffer);
+    buffer.writeInt(member);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    member = serializer.readObject(buffer);
+    member = buffer.readInt();
   }
 
   @Override
@@ -58,19 +59,19 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
 
   @Override
   public boolean equals(Object object) {
-    return getClass().isAssignableFrom(object.getClass()) && ((ConfigurationRequest) object).member.equals(member);
+    return getClass().isAssignableFrom(object.getClass()) && ((HeartbeatRequest) object).member == member;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[member=%s]", getClass().getSimpleName(), member);
+    return String.format("%s[member=%d]", getClass().getSimpleName(), member);
   }
 
   /**
-   * Join request builder.
+   * Heartbeat request builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationRequest<U>> extends AbstractRequest.Builder<T, U> {
-    protected Builder(U request) {
+  public static class Builder extends AbstractRequest.Builder<Builder, HeartbeatRequest> {
+    protected Builder(HeartbeatRequest request) {
       super(request);
     }
 
@@ -81,19 +82,18 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
      * @return The request builder.
      * @throws NullPointerException if {@code member} is null
      */
-    @SuppressWarnings("unchecked")
-    public T withMember(Member member) {
+    public Builder withMember(int member) {
       request.member = Assert.notNull(member, "member");
-      return (T) this;
+      return this;
     }
 
     /**
      * @throws IllegalStateException if member is null
      */
     @Override
-    public U build() {
+    public HeartbeatRequest build() {
       super.build();
-      Assert.state(request.member != null, "member cannot be null");
+      Assert.state(request.member != 0, "member cannot be 0");
       return request;
     }
   }

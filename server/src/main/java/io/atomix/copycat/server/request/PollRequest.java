@@ -197,22 +197,6 @@ public class PollRequest extends AbstractRequest<PollRequest> {
       Assert.stateNot(request.logTerm < 0, "log term must not be negative");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }

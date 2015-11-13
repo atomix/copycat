@@ -160,16 +160,6 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       return (T) this;
     }
 
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return getClass().isAssignableFrom(object.getClass()) && ((Builder) object).response.equals(response);
-    }
-
     /**
      * @throws IllegalStateException if active members or passive members are null
      */
@@ -182,12 +172,6 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       }
       return response;
     }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }
