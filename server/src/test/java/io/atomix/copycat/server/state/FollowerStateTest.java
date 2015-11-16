@@ -15,9 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import io.atomix.copycat.client.response.Response.Status;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
@@ -25,6 +22,8 @@ import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Follower state test.
@@ -46,7 +45,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(2);
       PollRequest request1 = PollRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -60,7 +59,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       PollRequest request2 = PollRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(2).hashCode())
+          .withCandidate(members.get(2).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -83,7 +82,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       append(10, 1);
       PollRequest request = PollRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(5)
           .withLogTerm(1)
           .build();
@@ -105,7 +104,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(1).setLeader(0);
       PollRequest request = PollRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -127,7 +126,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(2).setLeader(0);
       PollRequest request = PollRequest.builder()
           .withTerm(1)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -150,7 +149,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       append(10, 1);
       PollRequest request = PollRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(11)
           .withLogTerm(2)
           .build();
@@ -172,7 +171,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(1);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -193,7 +192,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(2);
       VoteRequest request = VoteRequest.builder()
           .withTerm(1)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -214,7 +213,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(2).setLeader(0);
       VoteRequest request1 = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -222,13 +221,13 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       VoteResponse response = state.vote(request1).get();
 
       threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).id());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
 
       VoteRequest request2 = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(2).hashCode())
+          .withCandidate(members.get(2).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -236,7 +235,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       response = state.vote(request2).get();
 
       threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).id());
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.voted());
     });
@@ -250,7 +249,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(2).setLeader(0);
       VoteRequest request1 = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -258,13 +257,13 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       VoteResponse response1 = state.vote(request1).get();
 
       threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).id());
       threadAssertEquals(response1.term(), 2L);
       threadAssertTrue(response1.voted());
 
       VoteRequest request2 = VoteRequest.builder()
           .withTerm(3)
-          .withCandidate(members.get(2).hashCode())
+          .withCandidate(members.get(2).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -272,7 +271,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       VoteResponse response2 = state.vote(request2).get();
 
       threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(2).hashCode());
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(2).id());
       threadAssertEquals(response2.term(), 3L);
       threadAssertTrue(response2.voted());
     });
@@ -288,7 +287,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       append(10, 1);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(5)
           .withLogTerm(1)
           .build();
@@ -310,7 +309,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       append(10, 1);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(11)
           .withLogTerm(2)
           .build();
@@ -331,7 +330,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       serverState.setTerm(2).setLeader(0);
       VoteRequest request1 = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .build();
@@ -339,17 +338,16 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       VoteResponse response1 = state.vote(request1).get();
 
       threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).id());
       threadAssertEquals(response1.term(), 2L);
       threadAssertTrue(response1.voted());
 
       AppendRequest request2 = AppendRequest.builder()
           .withTerm(3)
-          .withLeader(members.get(2).hashCode())
+          .withLeader(members.get(2).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
-          .withGlobalIndex(0)
           .build();
 
       AppendResponse response2 = state.append(request2).get();

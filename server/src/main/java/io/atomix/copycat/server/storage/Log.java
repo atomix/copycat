@@ -244,6 +244,15 @@ public class Log implements AutoCloseable {
   }
 
   /**
+   * Returns the next index in the log.
+   *
+   * @return The next index in the log.
+   */
+  public long nextIndex() {
+    return lastIndex() + 1;
+  }
+
+  /**
    * Checks whether we need to roll over to a new segment.
    */
   private void checkRoll() {

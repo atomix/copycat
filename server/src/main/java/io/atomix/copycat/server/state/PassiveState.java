@@ -155,10 +155,19 @@ class PassiveState extends ReserveState {
         // If the entry is a configuration entry then immediately configure the cluster.
         if (entry instanceof ConfigurationEntry) {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
-          ClusterState.Type previousType = context.getCluster().getType();
-          context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive(), configurationEntry.getReserve());
-          if (previousType != context.getCluster().getType()) {
-            switch (context.getCluster().getType()) {
+
+          // Store the previous member type for comparison to determine whether this node should transition.
+          MemberState.Type previousType = context.getMemberState().getType();
+
+          // Configure the cluster membership.
+          context.configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive(), configurationEntry.getReserve());
+
+          // If the local member type changed, transition the state as appropriate.
+          // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
+          // PASSIVE servers are transitioned to the PASSIVE state.
+          // RESERVE servers are transitioned to the RESERVE state.
+          if (previousType != context.getMemberState().getType()) {
+            switch (context.getMemberState().getType()) {
               case ACTIVE:
                 transition(RaftServer.State.FOLLOWER);
                 break;
@@ -170,7 +179,12 @@ class PassiveState extends ReserveState {
                 break;
             }
           }
-        } else if (entry instanceof ConnectEntry) {
+        }
+        // If the entry is a ConnectEntry then immediately register the connection. This is necessary to ensure
+        // that connection information is updated even before the commitment of an earlier entry for cases where
+        // the connection information is needed to complete the application of the entry to the state machine,
+        // such as in cases where a command triggers linearizable events that must be completed synchronously.
+        else if (entry instanceof ConnectEntry) {
           ConnectEntry connectEntry = (ConnectEntry) entry;
           context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getSession(), connectEntry.getAddress());
         }

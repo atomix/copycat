@@ -82,7 +82,7 @@ final class CandidateState extends ActiveState {
 
     // When the election timer is reset, increment the current term and
     // restart the election.
-    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getMember().serverAddress().hashCode());
+    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getMember().id());
 
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
     currentTimer = context.getThreadContext().schedule(delay, () -> {
@@ -98,7 +98,7 @@ final class CandidateState extends ActiveState {
     });
 
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<MemberState> votingMembers = new HashSet<>(context.getCluster().getActiveMembers());
+    final Set<MemberState> votingMembers = new HashSet<>(context.getActiveMemberStates());
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
@@ -111,7 +111,7 @@ final class CandidateState extends ActiveState {
     // to this node will be automatically successful.
     // First check if the quorum is null. If the quorum isn't null then that
     // indicates that another vote is already going on.
-    final Quorum quorum = new Quorum(context.getCluster().getQuorum(), (elected) -> {
+    final Quorum quorum = new Quorum(context.getQuorum(), (elected) -> {
       complete.set(true);
       if (elected) {
         transition(CopycatServer.State.LEADER);
@@ -141,12 +141,12 @@ final class CandidateState extends ActiveState {
       LOGGER.debug("{} - Requesting vote from {} for term {}", context.getMember().serverAddress(), member, context.getTerm());
       VoteRequest request = VoteRequest.builder()
         .withTerm(context.getTerm())
-        .withCandidate(context.getMember().serverAddress().hashCode())
+        .withCandidate(context.getMember().id())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
 
-      context.getConnections().getConnection(member.getServerAddress()).thenAccept(connection -> {
+      context.getConnections().getConnection(member.getMember().serverAddress()).thenAccept(connection -> {
         connection.<VoteRequest, VoteResponse>send(request).whenCompleteAsync((response, error) -> {
           context.checkThread();
           if (isOpen() && !complete.get()) {
@@ -202,7 +202,7 @@ final class CandidateState extends ActiveState {
     }
 
     // If the vote request is not for this candidate then reject the vote.
-    if (request.candidate() == context.getMember().serverAddress().hashCode()) {
+    if (request.candidate() == context.getMember().id()) {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())

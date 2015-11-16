@@ -28,6 +28,7 @@ import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
@@ -53,6 +54,7 @@ import static org.testng.Assert.*;
 public class ServerStateMachineTest extends ConcurrentTestCase {
   protected Serializer serializer;
   protected Storage storage;
+  protected MetaStore meta;
   protected Log log;
   protected TestStateMachine stateMachine;
   protected ThreadContext serverContext;
@@ -70,13 +72,14 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     storage = new Storage(StorageLevel.MEMORY);
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
 
-    log = storage.open("test");
+    meta = storage.openMetaStore("test");
+    log = storage.openLog("test");
     stateMachine = new TestStateMachine();
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverContext = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), members.size(), 1, log, stateMachine, new ConnectionManager(transport.client()), serverContext);
+    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), members.size(), 1, meta, log, stateMachine, new ConnectionManager(transport.client()), serverContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

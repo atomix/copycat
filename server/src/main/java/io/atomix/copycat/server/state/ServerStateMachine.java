@@ -38,20 +38,18 @@ import java.util.concurrent.CompletableFuture;
 class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
-  private final ClusterState cluster;
+  private final ServerState state;
   private final ServerStateMachineExecutor executor;
-  private final ServerCommitCleaner cleaner;
   private final ServerCommitPool commits;
   private long lastApplied;
   private long lastCompleted;
   private long configuration;
 
-  ServerStateMachine(StateMachine stateMachine, ClusterState cluster, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
+  ServerStateMachine(StateMachine stateMachine, ServerState state, ServerStateMachineContext context, ThreadContext executor) {
     this.stateMachine = stateMachine;
-    this.cluster = cluster;
+    this.state = state;
     this.executor = new ServerStateMachineExecutor(context, executor);
-    this.cleaner = cleaner;
-    this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
+    this.commits = new ServerCommitPool(state.getLog(), this.executor.context().sessions());
     init();
   }
 
@@ -175,7 +173,7 @@ class ServerStateMachine implements AutoCloseable {
     // Immediately clean the commit for the previous configuration since configuration entries
     // completely override the previous configuration.
     if (previousConfiguration > 0) {
-      cleaner.clean(previousConfiguration);
+      state.getLog().clean(previousConfiguration);
     }
     return CompletableFuture.completedFuture(null);
   }
@@ -189,7 +187,7 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 
@@ -309,7 +307,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the keep alive entry from the log.
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
 
     return future;
   }
@@ -406,7 +404,7 @@ class ServerStateMachine implements AutoCloseable {
       }
 
       // Clean the unregister entry from the log immediately after it's applied.
-      cleaner.clean(session.id());
+      state.getLog().clean(session.id());
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
       // index for which logs can be compacted.
@@ -414,7 +412,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the unregister entry from the log.
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
 
     return future;
   }
@@ -658,21 +656,42 @@ class ServerStateMachine implements AutoCloseable {
     boolean changed = false;
 
     // Set the member status to AVAILABLE and update the member heartbeat time.
-    MemberState member = cluster.getMember(entry.getMember());
+    MemberState member = state.getMemberState(entry.getMember());
     if (member != null) {
+      // Store the previous heartbeat index. This can be used to clean the previous heartbeat entry.
+      long previousIndex = member.getHeartbeatIndex();
+
+      // Update the member state.
       changed = member.getStatus() == MemberState.Status.UNAVAILABLE;
       member.setHeartbeatTime(timestamp)
+        .setHeartbeatIndex(entry.getIndex())
         .setStatus(MemberState.Status.AVAILABLE)
         .setCommitIndex(entry.getCommitIndex());
+
+      // If the previous heartbeat index is non-zero then clean the entry. This ensures that the last
+      // heartbeat from each member is always retained in the log so that commitIndex is always consistent
+      // across servers.
+      if (previousIndex > 0) {
+        state.getLog().clean(previousIndex);
+      }
     }
 
     // Iterate through all members and update statuses based on the heartbeat time.
-    for (MemberState memberState : cluster.getMembers()) {
+    for (MemberState memberState : state.getMemberStates()) {
       if (timestamp - memberState.getHeartbeatTime() > memberState.getHeartbeatTimeout()) {
         memberState.setStatus(MemberState.Status.UNAVAILABLE);
         changed = true;
       }
     }
+
+    // The global index is calculated by the minimum commitIndex for *all* stateful members in the cluster, including
+    // passive members. This is critical since passive members still have state machines and thus it's still
+    // important to ensure that tombstones are applied to their state machines.
+    // If the members list is empty, use the local server's last log index as the global index.
+    long activeIndex = state.getActiveMemberStates().stream().mapToLong(MemberState::getCommitIndex).min().orElse(state.getLog().lastIndex());
+    long passiveIndex = state.getPassiveMemberStates().stream().mapToLong(MemberState::getCommitIndex).min().orElse(state.getLog().lastIndex());
+    state.setGlobalIndex(Math.min(activeIndex, passiveIndex));
+
     return Futures.completedFutureAsync(changed, ThreadContext.currentContextOrThrow().executor());
   }
 
@@ -689,7 +708,7 @@ class ServerStateMachine implements AutoCloseable {
 
     // Reset the timestamp for AVAILABLE member states in order to ensure members aren't marked UNAVAILABLE
     // due to lengthy leadership changes.
-    for (MemberState memberState : cluster.getMembers()) {
+    for (MemberState memberState : state.getMemberStates()) {
       if (memberState.getStatus() == MemberState.Status.AVAILABLE) {
         memberState.setHeartbeatTime(timestamp);
       }
@@ -701,7 +720,7 @@ class ServerStateMachine implements AutoCloseable {
       session.setTimestamp(timestamp);
     }
 
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
 

@@ -44,13 +44,12 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode();
+      int leader = serverState.getActiveMemberStates().iterator().next().getMember().id();
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
         .withCommitIndex(0)
-        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -58,7 +57,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.succeeded());
       assertEquals(serverState.getTerm(), 2L);
-      assertEquals(serverState.getLeader().hashCode(), leader);
+      assertEquals(serverState.getLeader().id(), leader);
       assertEquals(response.term(), 2L);
       assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
     });
@@ -66,7 +65,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateIncrementsTermVotesForSelfOnElection() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getMember().serverAddress().hashCode();
+      int self = serverState.getMember().id();
       serverState.setTerm(2);
 
       state.startElection();
@@ -78,7 +77,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesForSelfOnRequest() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getMember().serverAddress().hashCode();
+      int self = serverState.getMember().id();
       serverState.setTerm(2);
 
       state.startElection();
@@ -104,7 +103,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode();
+      int candidate = serverState.getActiveMemberStates().iterator().next().getMember().id();
       serverState.setTerm(1);
 
       state.startElection();
@@ -131,7 +130,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode();
+      int candidate = serverState.getActiveMemberStates().iterator().next().getMember().id();
       serverState.setTerm(1);
 
       append(2, 1);
@@ -165,9 +164,9 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     });
 
     runOnServer(() -> {
-      for (MemberState member : serverState.getCluster().getActiveMembers()) {
+      for (MemberState member : serverState.getActiveMemberStates()) {
         Server server = transport.server();
-        server.listen(member.getServerAddress(), c -> {
+        server.listen(member.getMember().serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(true)
@@ -176,10 +175,10 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       }
     });
 
-    await(1000, serverState.getCluster().getActiveMembers().size());
+    await(1000, serverState.getActiveMemberStates().size());
 
     runOnServer(() -> {
-      int self = serverState.getMember().serverAddress().hashCode();
+      int self = serverState.getMember().id();
       serverState.setTerm(1);
 
       state.startElection();
@@ -197,9 +196,9 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     });
 
     runOnServer(() -> {
-      for (MemberState member : serverState.getCluster().getActiveMembers()) {
+      for (MemberState member : serverState.getActiveMemberStates()) {
         Server server = transport.server();
-        server.listen(member.getServerAddress(), c -> {
+        server.listen(member.getMember().serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(false)
@@ -208,10 +207,10 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       }
     });
 
-    await(1000, serverState.getCluster().getActiveMembers().size());
+    await(1000, serverState.getActiveMemberStates().size());
 
     runOnServer(() -> {
-      int self = serverState.getMember().serverAddress().hashCode();
+      int self = serverState.getMember().id();
       serverState.setTerm(1);
 
       state.startElection();

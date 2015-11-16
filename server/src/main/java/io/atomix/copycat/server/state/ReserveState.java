@@ -47,7 +47,7 @@ public class ReserveState extends AbstractState {
    */
   protected <T extends Request<T>, U extends Response<U>> CompletableFuture<U> forward(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
-    context.getConnections().getConnection(context.getLeader()).whenComplete((connection, connectError) -> {
+    context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
         connection.<T, U>send(request).whenComplete((response, responseError) -> {
           if (responseError == null) {
@@ -163,7 +163,7 @@ public class ReserveState extends AbstractState {
 
     return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withLeader(context.getLeader())
+      .withLeader(context.getLeader() != null ? context.getLeader().serverAddress() : null)
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }

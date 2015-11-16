@@ -26,6 +26,7 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.state.ServerState;
 import io.atomix.copycat.server.storage.Log;
@@ -41,6 +42,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Provides a standalone implementation of the <a href="http://raft.github.io/">Raft consensus algorithm</a>.
@@ -185,7 +187,7 @@ public class CopycatServer implements RaftServer {
 
   @Override
   public Address leader() {
-    return state.getLeader();
+    return state.getLeader().serverAddress();
   }
 
   /**
@@ -207,7 +209,7 @@ public class CopycatServer implements RaftServer {
 
   @Override
   public Collection<Address> members() {
-    return state.getMembers();
+    return state.getMembers().stream().map(Member::serverAddress).collect(Collectors.toList());
   }
 
   @Override

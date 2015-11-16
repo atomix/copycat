@@ -48,7 +48,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
       serverState.setTerm(1).setLeader(0);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
-          .withCandidate(members.get(1).hashCode())
+          .withCandidate(members.get(1).id())
           .withLogIndex(11)
           .withLogTerm(2)
           .build();
@@ -56,7 +56,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
       VoteResponse response = state.vote(request).get();
       
       threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).id());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
       threadAssertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
@@ -69,7 +69,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
   public void testLeaderSequencesCommands() throws Throwable {
     runOnServer(() -> {
       serverState.setTerm(1)
-          .setLeader(members.get(0).hashCode())
+          .setLeader(members.get(0).id())
           .getStateMachine()
           .executor()
           .context()

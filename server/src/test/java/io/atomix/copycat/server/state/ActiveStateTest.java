@@ -47,11 +47,10 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
           .withTerm(2)
-          .withLeader(members.get(1).hashCode())
+          .withLeader(members.get(1).id())
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
-          .withGlobalIndex(0)
           .build();
 
       AppendResponse response = state.append(request).get();
@@ -70,7 +69,6 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withCommitIndex(0)
-        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -89,7 +87,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       PollRequest request = PollRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getMember().serverAddress().hashCode())
+        .withCandidate(serverState.getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -109,7 +107,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       PollRequest request = PollRequest.builder()
         .withTerm(1)
-        .withCandidate(serverState.getMember().serverAddress().hashCode())
+        .withCandidate(serverState.getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -130,7 +128,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       PollRequest request = PollRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getMember().serverAddress().hashCode())
+        .withCandidate(serverState.getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -152,7 +150,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       PollRequest request = PollRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getMember().serverAddress().hashCode())
+        .withCandidate(serverState.getMember().id())
         .withLogIndex(4)
         .withLogTerm(1)
         .build();
@@ -172,7 +170,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode())
+        .withCandidate(serverState.getActiveMemberStates().iterator().next().getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -193,7 +191,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(1)
-        .withCandidate(serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode())
+        .withCandidate(serverState.getActiveMemberStates().iterator().next().getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -214,7 +212,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode())
+        .withCandidate(serverState.getActiveMemberStates().iterator().next().getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -236,7 +234,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getCluster().getActiveMembers().iterator().next().getServerAddress().hashCode())
+        .withCandidate(serverState.getActiveMemberStates().iterator().next().getMember().id())
         .withLogIndex(4)
         .withLogTerm(1)
         .build();

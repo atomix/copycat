@@ -25,21 +25,14 @@ import io.atomix.copycat.server.storage.Log;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class MemberState {
-  private static final long HEARTBEAT_TIMEOUT = 60000;
-  private final Address serverAddress;
-  private Address clientAddress;
-  private int index;
-  private long heartbeatTime;
-  private Status status = Status.UNAVAILABLE;
-  private long commitIndex;
-  private long matchIndex;
-  private long nextIndex;
-  private long commitTime;
-  private long commitStartTime;
-  private int failures;
 
-  public MemberState(Address serverAddress) {
-    this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
+  /**
+   * Member type.
+   */
+  enum Type {
+    ACTIVE,
+    PASSIVE,
+    RESERVE
   }
 
   /**
@@ -48,6 +41,23 @@ class MemberState {
   enum Status {
     UNAVAILABLE,
     AVAILABLE
+  }
+
+  private static final long HEARTBEAT_TIMEOUT = 60000;
+  private Member member;
+  private Type type = Type.RESERVE;
+  private Status status = Status.UNAVAILABLE;
+  private long heartbeatIndex;
+  private long heartbeatTime;
+  private long commitIndex;
+  private long matchIndex;
+  private long nextIndex;
+  private long commitTime;
+  private long commitStartTime;
+  private int failures;
+
+  public MemberState(Address serverAddress) {
+    this.member = new Member(Assert.notNull(serverAddress, "serverAddress"), null);
   }
 
   /**
@@ -62,21 +72,59 @@ class MemberState {
   }
 
   /**
-   * Returns the server address.
+   * Returns the member object.
    *
-   * @return The server address.
+   * @return The member object.
    */
-  public Address getServerAddress() {
-    return serverAddress;
+  public Member getMember() {
+    return member;
   }
 
   /**
-   * Returns the client address.
+   * Returns the member type.
    *
-   * @return The client address.
+   * @return The member type.
    */
-  public Address getClientAddress() {
-    return clientAddress;
+  public Type getType() {
+    return type;
+  }
+
+  /**
+   * Sets the member type.
+   *
+   * @param type The member type.
+   * @return The member state.
+   */
+  public MemberState setType(Type type) {
+    this.type = type;
+    return this;
+  }
+
+  /**
+   * Returns a boolean indicating whether the member is active.
+   *
+   * @return Whether the member is active.
+   */
+  boolean isActive() {
+    return type == MemberState.Type.ACTIVE;
+  }
+
+  /**
+   * Returns a boolean indicating whether the member is passive.
+   *
+   * @return Whether the member is passive.
+   */
+  boolean isPassive() {
+    return type == MemberState.Type.PASSIVE;
+  }
+
+  /**
+   * Returns a boolean indicating whether the member is reserve.
+   *
+   * @return Whether the member is reserve.
+   */
+  boolean isReserve() {
+    return type == MemberState.Type.RESERVE;
   }
 
   /**
@@ -86,27 +134,27 @@ class MemberState {
    * @return The member state.
    */
   public MemberState setClientAddress(Address address) {
-    this.clientAddress = clientAddress;
+    this.member = new Member(member.serverAddress(), address);
     return this;
   }
 
   /**
-   * Returns the member index.
+   * Returns the heartbeat index.
    *
-   * @return The member index.
+   * @return The heartbeat index.
    */
-  public int getIndex() {
-    return index;
+  long getHeartbeatIndex() {
+    return heartbeatIndex;
   }
 
   /**
-   * Sets the member index.
+   * Sets the heartbeat index.
    *
-   * @param index The member index.
+   * @param heartbeatIndex The heartbeat index.
    * @return The member state.
    */
-  MemberState setIndex(int index) {
-    this.index = index;
+  MemberState setHeartbeatIndex(long heartbeatIndex) {
+    this.heartbeatIndex = Assert.argNot(heartbeatIndex, heartbeatIndex < 0, "heartbeatIndex must be positive");
     return this;
   }
 
@@ -115,7 +163,7 @@ class MemberState {
    *
    * @return The heartbeat time.
    */
-  public long getHeartbeatTime() {
+  long getHeartbeatTime() {
     return heartbeatTime;
   }
 
@@ -289,7 +337,7 @@ class MemberState {
 
   @Override
   public String toString() {
-    return serverAddress.toString();
+    return member.serverAddress().toString();
   }
 
 }

@@ -39,6 +39,15 @@ public class Member implements CatalystSerializable {
   }
 
   /**
+   * Returns the member ID.
+   *
+   * @return The member ID.
+   */
+  public int id() {
+    return hashCode();
+  }
+
+  /**
    * Returns the server address.
    *
    * @return The server address.
