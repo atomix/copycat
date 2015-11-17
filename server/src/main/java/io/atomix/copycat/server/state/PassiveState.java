@@ -47,6 +47,18 @@ class PassiveState extends ReserveState {
   }
 
   @Override
+  public CompletableFuture<AbstractState> open() {
+    return super.open().thenRun(this::truncateLog).thenApply(v -> this);
+  }
+
+  /**
+   * Truncates the server log.
+   */
+  private void truncateLog() {
+    context.getLog().truncate();
+  }
+
+  @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
 

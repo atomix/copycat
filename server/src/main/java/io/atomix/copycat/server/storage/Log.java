@@ -428,10 +428,19 @@ public class Log implements AutoCloseable {
   }
 
   /**
+   * Truncates the log to {@code 0}.
+   *
+   * @return The truncated log.
+   */
+  public Log truncate() {
+    return truncate(0);
+  }
+
+  /**
    * Truncates the log up to the given index.
    *
    * @param index The index at which to truncate the log.
-   * @return The updated log.
+   * @return The truncated log.
    * @throws IllegalStateException If the log is not open.
    * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
    */
