@@ -507,7 +507,7 @@ public class ServerState {
     if (member.isActive() && member.getMember().id() != leader) {
       // Calculate this server's index within the collection of active members, excluding the leader.
       // This is done in a deterministic way by sorting the list of active members by ID.
-      int index = 0;
+      int index = 1;
       for (MemberState member : getActiveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id())) {
         if (member.getMember().id() != leader) {
           if (this.member.getMember().id() < member.getMember().id()) {
@@ -537,9 +537,8 @@ public class ServerState {
   private List<MemberState> assignMembers(int index, List<MemberState> sortedMembers) {
     List<MemberState> members = new ArrayList<>(sortedMembers.size());
     for (int i = 0; i < sortedMembers.size(); i++) {
-      MemberState member = sortedMembers.get(i);
-      if (index % sortedMembers.size() == i) {
-        members.add(member);
+      if ((i + 1) % index == 0) {
+        members.add(sortedMembers.get(i));
       }
     }
     return members;
