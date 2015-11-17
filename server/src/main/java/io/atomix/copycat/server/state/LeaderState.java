@@ -101,9 +101,9 @@ final class LeaderState extends ActiveState {
     // Append a configuration entry to propagate the leader's cluster configuration.
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(term)
-        .setActive(context.buildActiveMembers())
-        .setPassive(context.buildPassiveMembers())
-        .setReserve(context.buildReserveMembers());
+        .setActiveMembers(context.buildActiveMembers())
+        .setPassiveMembers(context.buildPassiveMembers())
+        .setReserveMembers(context.buildReserveMembers());
     }
   }
 
@@ -250,16 +250,16 @@ final class LeaderState extends ActiveState {
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(term)
-        .setActive(activeMembers)
-        .setPassive(passiveMembers)
-        .setReserve(reserveMembers);
+        .setActiveMembers(activeMembers)
+        .setPassiveMembers(passiveMembers)
+        .setReserveMembers(reserveMembers);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.configure(entry.getIndex(), entry.getActive(), entry.getPassive(), entry.getReserve());
+      context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
     }
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
@@ -335,16 +335,16 @@ final class LeaderState extends ActiveState {
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(term)
-        .setActive(activeMembers)
-        .setPassive(passiveMembers)
-        .setReserve(reserveMembers);
+        .setActiveMembers(activeMembers)
+        .setPassiveMembers(passiveMembers)
+        .setReserveMembers(reserveMembers);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.configure(entry.getIndex(), entry.getActive(), entry.getPassive(), entry.getReserve());
+      context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
     }
 
     CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
@@ -494,16 +494,16 @@ final class LeaderState extends ActiveState {
       final long index;
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
         entry.setTerm(context.getTerm())
-          .setActive(activeMembers)
-          .setPassive(passiveMembers)
-          .setReserve(reserveMembers);
+          .setActiveMembers(activeMembers)
+          .setPassiveMembers(passiveMembers)
+          .setReserveMembers(reserveMembers);
         index = context.getLog().append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
 
         // Store the index of the configuration entry in order to prevent other configurations from
         // being logged and committed concurrently. This is an important safety property of Raft.
         configuring = index;
-        context.configure(entry.getIndex(), entry.getActive(), entry.getPassive(), entry.getReserve());
+        context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
       }
 
       // Commit the configuration and then reset the configuration index to allow new configurations to proceed.

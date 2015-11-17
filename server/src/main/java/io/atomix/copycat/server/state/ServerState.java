@@ -101,6 +101,10 @@ public class ServerState {
     this.stateMachine = new ServerStateMachine(userStateMachine, this, new ServerStateMachineContext(connections, new ServerSessionManager()), stateContext);
 
     configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
+
+    // Load the current term and last vote from disk.
+    this.term = meta.loadTerm();
+    this.lastVotedFor = meta.loadVote();
   }
 
   /**

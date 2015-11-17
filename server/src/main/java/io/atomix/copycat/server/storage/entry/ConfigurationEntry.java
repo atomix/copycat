@@ -48,7 +48,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    *
    * @return The active members.
    */
-  public Collection<Member> getActive() {
+  public Collection<Member> getActiveMembers() {
     return active;
   }
 
@@ -59,7 +59,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setActive(Collection<Member> members) {
+  public ConfigurationEntry setActiveMembers(Collection<Member> members) {
     this.active = Assert.notNull(members, "members");
     return this;
   }
@@ -69,7 +69,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    *
    * @return The passive members.
    */
-  public Collection<Member> getPassive() {
+  public Collection<Member> getPassiveMembers() {
     return passive;
   }
 
@@ -80,7 +80,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setPassive(Collection<Member> members) {
+  public ConfigurationEntry setPassiveMembers(Collection<Member> members) {
     this.passive = Assert.notNull(members, "members");
     return this;
   }
@@ -90,7 +90,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    *
    * @return The reserve members.
    */
-  public Collection<Member> getReserve() {
+  public Collection<Member> getReserveMembers() {
     return reserve;
   }
 
@@ -101,7 +101,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setReserve(Collection<Member> members) {
+  public ConfigurationEntry setReserveMembers(Collection<Member> members) {
     this.reserve = Assert.notNull(members, "members");
     return this;
   }
