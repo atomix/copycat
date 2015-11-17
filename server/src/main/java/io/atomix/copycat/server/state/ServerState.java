@@ -259,28 +259,15 @@ public class ServerState {
    * @return The Raft context.
    */
   ServerState setLeader(int leader) {
-    if (this.leader == 0) {
-      if (leader != 0) {
-        Member member = getMember(leader);
-        Assert.state(member != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.serverAddress());
-        electionListeners.forEach(l -> l.accept(member.serverAddress()));
-        reassign();
-      }
-    } else if (leader != 0) {
-      if (this.leader != leader) {
-        Member member = getMember(leader);
-        Assert.state(member != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.serverAddress());
-        electionListeners.forEach(l -> l.accept(member.serverAddress()));
-        reassign();
-      }
-    } else {
-      this.leader = 0;
+    if (this.leader != leader) {
+      MemberState member = leader == getMember().id() ? getMemberState() : getMemberState(leader);
+      Assert.state(member != null, "unknown leader: ", leader);
+      Assert.state(member.isActive(), "invalid leader: ", member.getMember().serverAddress());
+      this.leader = member.getMember().id();
+      this.lastVotedFor = 0;
+      meta.storeVote(0);
+      LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
+      electionListeners.forEach(l -> l.accept(member.getMember().serverAddress()));
       reassign();
     }
     return this;
@@ -339,13 +326,14 @@ public class ServerState {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
     Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
     Assert.stateNot(leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
-    Member member = getMember(candidate);
+    MemberState member = candidate == getMember().id() ? getMemberState() : getMemberState(candidate);
     Assert.state(member != null, "unknown candidate: %d", candidate);
+    Assert.state(member.isActive(), "invalid candidate: ", member.getMember().serverAddress());
     this.lastVotedFor = candidate;
     meta.storeVote(this.lastVotedFor);
 
     if (candidate != 0) {
-      LOGGER.debug("{} - Voted for {}", this.member.getMember().serverAddress(), member.serverAddress());
+      LOGGER.debug("{} - Voted for {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
     } else {
       LOGGER.debug("{} - Reset last voted for", this.member.getMember().serverAddress());
     }
@@ -852,12 +840,14 @@ public class ServerState {
   public CompletableFuture<CopycatServer.State> transition(CopycatServer.State state) {
     checkThread();
 
+    // If the state has not changed, simply complete the transition.
     if (this.state != null && state == this.state.type()) {
       return CompletableFuture.completedFuture(this.state.type());
     }
 
     LOGGER.info("{} - Transitioning to {}", member.getMember().serverAddress(), state);
 
+    // If a valid state exists, close the current state synchronously.
     if (this.state != null) {
       try {
         this.state.close().get();

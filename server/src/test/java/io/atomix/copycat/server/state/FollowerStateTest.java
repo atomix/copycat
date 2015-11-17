@@ -353,7 +353,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       AppendResponse response2 = state.append(request2).get();
 
       threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(serverState.getLeader(), members.get(2).serverAddress());
+      threadAssertEquals(serverState.getLeader(), members.get(2));
       threadAssertEquals(serverState.getLastVotedFor(), 0);
       threadAssertEquals(response2.term(), 3L);
       threadAssertTrue(response2.succeeded());

@@ -55,7 +55,10 @@ class PassiveState extends ReserveState {
    * Truncates the server log.
    */
   private void truncateLog() {
-    context.getLog().truncate();
+    // Only truncate the log for PASSIVE servers. This is sort of ugly but it works!
+    if (type() == RaftServer.State.PASSIVE) {
+      context.getLog().truncate();
+    }
   }
 
   @Override
