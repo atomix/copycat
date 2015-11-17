@@ -260,14 +260,22 @@ public class ServerState {
    */
   ServerState setLeader(int leader) {
     if (this.leader != leader) {
-      MemberState member = leader == getMember().id() ? getMemberState() : getMemberState(leader);
-      Assert.state(member != null, "unknown leader: ", leader);
-      Assert.state(member.isActive(), "invalid leader: ", member.getMember().serverAddress());
-      this.leader = member.getMember().id();
+      // 0 indicates no leader.
+      if (leader == 0) {
+        this.leader = 0;
+      } else {
+        // If a valid leader ID was specified, it must be a member that's currently a member of the
+        // ACTIVE members configuration.
+        MemberState member = leader == getMember().id() ? getMemberState() : getMemberState(leader);
+        Assert.state(member != null, "unknown leader: ", leader);
+        Assert.state(member.isActive(), "invalid leader: ", member.getMember().serverAddress());
+        this.leader = member.getMember().id();
+        LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
+        electionListeners.forEach(l -> l.accept(member.getMember().serverAddress()));
+      }
+
       this.lastVotedFor = 0;
       meta.storeVote(0);
-      LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
-      electionListeners.forEach(l -> l.accept(member.getMember().serverAddress()));
       reassign();
     }
     return this;
