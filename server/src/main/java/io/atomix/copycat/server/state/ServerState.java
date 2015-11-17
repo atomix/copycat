@@ -539,7 +539,7 @@ public class ServerState {
     for (int i = 0; i < sortedMembers.size(); i++) {
       MemberState member = sortedMembers.get(i);
       if (index % sortedMembers.size() == i) {
-        assignedPassiveMembers.add(member);
+        members.add(member);
       }
     }
     return members;
