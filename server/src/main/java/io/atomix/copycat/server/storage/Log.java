@@ -435,12 +435,11 @@ public class Log implements AutoCloseable {
     if (lastIndex() == index)
       return this;
 
-    boolean first = true;
-    for (Segment segment : segments.segments()) {
-      if (first && index == 0 || segment.validIndex(index)) {
+    for (Segment segment : segments.reverseSegments()) {
+      if (segment.validIndex(index)) {
         segment.truncate(index);
-        first = false;
-      } else if (segment.descriptor().index() > index) {
+        break;
+      } else if (segment.index() > index) {
         segments.removeSegment(segment);
       }
     }
