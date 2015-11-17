@@ -582,6 +582,7 @@ public class ServerState {
 
     for (MemberState member : newActiveMembers) {
       member.setType(MemberState.Type.ACTIVE);
+      member.resetState(log);
       membersMap.put(member.getMember().id(), member);
       members.add(member);
       this.activeMembers.add(member);
@@ -589,6 +590,7 @@ public class ServerState {
 
     for (MemberState member : newPassiveMembers) {
       member.setType(MemberState.Type.PASSIVE);
+      member.resetState(log);
       membersMap.put(member.getMember().id(), member);
       members.add(member);
       this.passiveMembers.add(member);
@@ -596,6 +598,7 @@ public class ServerState {
 
     for (MemberState member : newReserveMembers) {
       member.setType(MemberState.Type.RESERVE);
+      member.resetState(log);
       membersMap.put(member.getMember().id(), member);
       members.add(member);
       this.reserveMembers.add(member);
@@ -881,6 +884,8 @@ public class ServerState {
     switch (state) {
       case INACTIVE:
         return new InactiveState(this);
+      case RESERVE:
+        return new ReserveState(this);
       case PASSIVE:
         return new PassiveState(this);
       case FOLLOWER:
@@ -943,7 +948,7 @@ public class ServerState {
             cancelJoinTimer();
 
             // If the local member type is null, that indicates it's not a part of the configuration.
-            MemberState.Type type = member.getType();
+            MemberState.Type type = this.member.getType();
             if (type == null) {
               future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
             } else {

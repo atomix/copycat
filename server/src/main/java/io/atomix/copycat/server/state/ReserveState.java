@@ -23,6 +23,8 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
+import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -31,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ReserveState extends AbstractState {
+class ReserveState extends AbstractState {
 
   public ReserveState(ServerState context) {
     super(context);
@@ -66,12 +68,46 @@ public class ReserveState extends AbstractState {
   @Override
   protected CompletableFuture<AppendResponse> append(AppendRequest request) {
     context.checkThread();
-    logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+    }
+
+    return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
+  }
+
+  /**
+   * Handles an append request.
+   */
+  private AppendResponse handleAppend(AppendRequest request) {
+    // If the previous log index is greater than the current configuration version, fail the append.
+    if (request.logIndex() > context.getVersion()) {
+      return AppendResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withSucceeded(false)
+        .withLogIndex(context.getVersion())
+        .build();
+    }
+
+    // Iterate through configuration entries. For each configuration entry, update the local configuration.
+    for (Entry entry : request.entries()) {
+      if (entry instanceof ConfigurationEntry) {
+        ConfigurationEntry configuration = (ConfigurationEntry) entry;
+        context.configure(configuration.getIndex(), configuration.getActiveMembers(), configuration.getPassiveMembers(), configuration.getReserveMembers());
+      }
+    }
+
+    // Response successfully with the latest configuration index.
+    return AppendResponse.builder()
+      .withStatus(Response.Status.OK)
+      .withTerm(context.getTerm())
+      .withSucceeded(true)
+      .withLogIndex(context.getVersion())
+      .build();
   }
 
   @Override

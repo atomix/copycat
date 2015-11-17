@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class FollowerState extends ActiveState {
-  private static final int MAX_BATCH_SIZE = 1024 * 28;
   private final Random random = new Random();
   private final FollowerAppender appender;
   private Scheduled heartbeatTimeout;
@@ -69,7 +68,7 @@ final class FollowerState extends ActiveState {
    * Starts the heartbeat timer.
    */
   private void startHeartbeatTimeout() {
-    LOGGER.debug("{} - Starting heartbeat timer", context.getMember().serverAddress());
+    LOGGER.debug("{} - Starting heartbeat timeout", context.getMember().serverAddress());
     resetHeartbeatTimeout();
   }
 
@@ -277,17 +276,15 @@ final class FollowerState extends ActiveState {
 
   @Override
   public CompletableFuture<AppendResponse> append(AppendRequest request) {
+    // Reset the heartbeat timeout.
     resetHeartbeatTimeout();
-    CompletableFuture<AppendResponse> response = super.append(request);
-    resetHeartbeatTimeout();
-    return response;
-  }
 
-  @Override
-  protected CompletableFuture<Void> applyCommits(long commitIndex) {
-    // Apply commits to the local state machine and increment the commitIndex. This will be done asynchronously.
-    // Once commits have been applied to the state machine, send any remaining entries to passive/reserve servers.
-    return super.applyCommits(commitIndex).thenRun(appender::appendEntries);
+    // Handle and AppendEntries request.
+    CompletableFuture<AppendResponse> response = super.append(request);
+
+    // Send AppendEntries requests to passive/reserve members if necessary.
+    appender.appendEntries();
+    return response;
   }
 
   @Override
@@ -305,7 +302,7 @@ final class FollowerState extends ActiveState {
    */
   private void cancelHeartbeatTimeout() {
     if (heartbeatTimeout != null) {
-      LOGGER.debug("{} - Cancelling heartbeat timer", context.getMember().serverAddress());
+      LOGGER.debug("{} - Cancelling heartbeat timeout", context.getMember().serverAddress());
       heartbeatTimeout.cancel();
     }
   }
