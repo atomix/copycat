@@ -849,7 +849,7 @@ public class ServerState {
     checkThread();
 
     // If the state has not changed, simply complete the transition.
-    if (this.state != null && state == this.state.type()) {
+    if (state == this.state.type()) {
       return CompletableFuture.completedFuture(this.state.type());
     }
 
