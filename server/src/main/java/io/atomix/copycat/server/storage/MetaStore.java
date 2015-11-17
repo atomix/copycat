@@ -38,6 +38,7 @@ public class MetaStore implements AutoCloseable {
     if (storage.level() == StorageLevel.MEMORY) {
       buffer = HeapBuffer.allocate(12);
     } else {
+      storage.directory().mkdirs();
       File file = new File(storage.directory(), String.format("%s.meta", name));
       buffer = FileBuffer.allocate(file, 12);
     }

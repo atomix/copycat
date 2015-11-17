@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
+import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 
@@ -26,6 +27,7 @@ import io.atomix.catalyst.transport.Address;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
+@SerializeWith(id=229)
 public class Member implements CatalystSerializable {
   private Address serverAddress;
   private Address clientAddress;
