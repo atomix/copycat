@@ -315,6 +315,7 @@ final class LeaderAppender extends AbstractAppender {
 
   @Override
   protected void endRequest(MemberState member, AppendRequest request, Throwable error) {
+    super.endRequest(member, request, error);
     commitTime(member, error);
   }
 
