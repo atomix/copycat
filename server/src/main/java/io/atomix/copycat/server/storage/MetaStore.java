@@ -120,6 +120,15 @@ public class MetaStore implements AutoCloseable {
     buffer.close();
   }
 
+  /**
+   * Deletes the metastore.
+   */
+  public void delete() {
+    if (buffer instanceof FileBuffer) {
+      ((FileBuffer) buffer).delete();
+    }
+  }
+
   @Override
   public String toString() {
     if (buffer instanceof FileBuffer) {
