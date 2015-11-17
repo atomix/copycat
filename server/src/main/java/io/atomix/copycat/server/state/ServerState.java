@@ -900,11 +900,16 @@ public class ServerState {
   public CompletableFuture<Void> join() {
     CompletableFuture<Void> future = new CompletableFuture<>();
 
-    List<MemberState> votingMembers = getActiveMemberStates();
-    if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", member.getMember().serverAddress());
-      term++;
-      transition(CopycatServer.State.LEADER);
+    // If the server type is defined, that indicates it's a member of the current configuration and
+    // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
+    if (member.getType() != null) {
+      if (member.isActive()) {
+        transition(RaftServer.State.FOLLOWER);
+      } else if (member.isPassive()) {
+        transition(RaftServer.State.PASSIVE);
+      } else if (member.isReserve()) {
+        transition(RaftServer.State.RESERVE);
+      }
       future.complete(null);
     } else {
       join(getActiveMemberStates().iterator(), 1, future);
