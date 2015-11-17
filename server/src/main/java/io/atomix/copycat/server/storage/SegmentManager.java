@@ -215,6 +215,15 @@ public class SegmentManager implements AutoCloseable {
   }
 
   /**
+   * Returns the collection of segments in reverse order.
+   *
+   * @return A reverse ordered collection of segments.
+   */
+  public Collection<Segment> reverseSegments() {
+    return segments.descendingMap().values();
+  }
+
+  /**
    * Returns the segment for the given index.
    *
    * @param index The index for which to return the segment.
