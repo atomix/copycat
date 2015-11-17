@@ -57,7 +57,7 @@ public class ServerState {
   private final StateMachine userStateMachine;
   private final int quorumHint;
   private final int backupCount;
-  private long version;
+  private long version = -1;
   private final MemberState member;
   private Map<Integer, MemberState> membersMap = new HashMap<>();
   private List<MemberState> members = new ArrayList<>();

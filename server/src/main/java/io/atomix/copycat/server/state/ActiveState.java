@@ -34,7 +34,6 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Abstract active state.
@@ -135,6 +134,8 @@ abstract class ActiveState extends PassiveState {
    * Handles a vote request.
    */
   protected VoteResponse handleVote(VoteRequest request) {
+    MemberState member = context.getMemberState(request.candidate());
+
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
@@ -148,8 +149,17 @@ abstract class ActiveState extends PassiveState {
     }
     // If the requesting candidate is not a known member of the cluster (to this
     // node) then don't vote for it. Only vote for candidates that we know about.
-    else if (!context.getActiveMemberStates().stream().<Integer>map(m -> m.getMember().id()).collect(Collectors.toSet()).contains(request.candidate())) {
+    else if (member == null) {
       LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getMember().serverAddress(), request);
+      return VoteResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withVoted(false)
+        .build();
+    }
+    // If the requesting candidate is not a known ACTIVE member reject the vote request.
+    else if (!member.isActive()) {
+      LOGGER.debug("{} - Rejected {}: candidate is not a known active member", context.getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
