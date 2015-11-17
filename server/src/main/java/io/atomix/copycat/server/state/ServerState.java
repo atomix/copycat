@@ -106,15 +106,13 @@ public class ServerState {
     MetaStore.Configuration configuration = meta.loadConfiguration();
     if (configuration != null) {
       configure(configuration.version(), configuration.activeMembers(), configuration.passiveMembers(), configuration.reserveMembers());
+    } else if (members.contains(member.serverAddress())) {
+      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(m, null)).collect(Collectors.toSet());
+      activeMembers.add(member);
+      configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
     } else {
-      if (members.contains(member.serverAddress())) {
-        Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(m, null)).collect(Collectors.toSet());
-        activeMembers.add(member);
-        configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
-      } else {
-        Set<Member> activeMembers = members.stream().map(m -> new Member(m, null)).collect(Collectors.toSet());
-        configure(0, activeMembers, Collections.EMPTY_LIST, Collections.singletonList(member));
-      }
+      Set<Member> activeMembers = members.stream().map(m -> new Member(m, null)).collect(Collectors.toSet());
+      configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
     }
   }
 
