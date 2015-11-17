@@ -85,8 +85,6 @@ public class ServerState {
 
   @SuppressWarnings("unchecked")
   ServerState(Member member, Collection<Address> members, int quorumHint, int backupCount, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
-    Set<Member> activeMembers = members.stream().map(a -> new Member(a, null)).collect(Collectors.toSet());
-    activeMembers.add(member);
     this.quorumHint = quorumHint;
     this.backupCount = backupCount;
     this.member = new MemberState(member.serverAddress()).setClientAddress(member.clientAddress());
@@ -100,11 +98,24 @@ public class ServerState {
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, this, new ServerStateMachineContext(connections, new ServerSessionManager()), stateContext);
 
-    configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
-
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
+
+    // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
+    MetaStore.Configuration configuration = meta.loadConfiguration();
+    if (configuration != null) {
+      configure(configuration.version(), configuration.activeMembers(), configuration.passiveMembers(), configuration.reserveMembers());
+    } else {
+      if (members.contains(member.serverAddress())) {
+        Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(m, null)).collect(Collectors.toSet());
+        activeMembers.add(member);
+        configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
+      } else {
+        Set<Member> activeMembers = members.stream().map(m -> new Member(m, null)).collect(Collectors.toSet());
+        configure(0, activeMembers, Collections.EMPTY_LIST, Collections.singletonList(member));
+      }
+    }
   }
 
   /**
@@ -564,6 +575,8 @@ public class ServerState {
    * @return The cluster state.
    */
   ServerState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers, Collection<Member> reserveMembers) {
+    // If the configuration version is less than the currently configured version, ignore it.
+    // Configurations can be persisted and applying old configurations can revert newer configurations.
     if (version <= this.version)
       return this;
 
@@ -605,6 +618,9 @@ public class ServerState {
     }
 
     this.version = version;
+
+    // Store the configuration to ensure it can be easily loaded on server restart.
+    meta.storeConfiguration(new MetaStore.Configuration(version, activeMembers, passiveMembers, reserveMembers));
 
     reassign();
 
