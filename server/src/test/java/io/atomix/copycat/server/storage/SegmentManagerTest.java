@@ -1,7 +1,5 @@
 package io.atomix.copycat.server.storage;
 
-import static org.testng.Assert.assertEquals;
-
 import org.testng.annotations.Test;
 
 /**

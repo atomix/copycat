@@ -18,7 +18,6 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -116,7 +115,7 @@ final class CandidateState extends ActiveState {
       if (elected) {
         transition(CopycatServer.State.LEADER);
       } else {
-        transition(RaftServer.State.FOLLOWER);
+        transition(CopycatServer.State.FOLLOWER);
       }
     });
 

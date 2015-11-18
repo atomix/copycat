@@ -32,9 +32,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.UUID;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.*;
 
 /**
  * Metastore test.

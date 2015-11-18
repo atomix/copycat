@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
 package io.atomix.copycat.client;
 
@@ -21,32 +21,26 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
-import io.atomix.catalyst.util.concurrent.Futures;
+import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.client.session.Session;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
- * Provides a feature complex {@link RaftClient}.
+ * Provides an interface for submitting {@link Command commands} and {@link Query} queries to the Raft cluster.
  * <p>
- * Copycat clients can be constructed using the {@link CopycatClient.Builder}. To create a new client builder, use the
- * static {@link #builder(Address...)} method, passing one or more server {@link Address}:
- * <pre>
- *   {@code
- *     CopycatClient client = CopycatClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000).build();
- *   }
- * </pre>
- * By default, the client will attempt to use the {@code NettyTransport} to communicate with the cluster. See the {@link CopycatClient.Builder}
- * documentation for client configuration options.
- * <p>
- * Copycat clients interact with one or more nodes in a cluster through a session. When the client is {@link #open() opened},
- * the client will attempt to one of the known member {@link Address} provided to the builder. As long as the client can
- * communicate with at least one correct member of the cluster, it can open a session. Once the client is able to register a
- * {@link Session}, it will receive an updated list of members for the entire cluster and thereafter be allowed to communicate
- * with all servers.
+ * Raft clients are responsible for connecting to the cluster and submitting {@link Command commands} and {@link Query queries}
+ * that operate on the cluster's replicated state machine. Raft clients interact with one or more nodes in a Raft cluster
+ * through a session. When the client is {@link #open() opened}, the client will attempt to one of the known member
+ * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
+ * cluster, it can open a session. Once the client is able to register a {@link Session}, it will receive an updated list
+ * of members for the entire cluster and thereafter be allowed to communicate with all servers.
  * <p>
  * Sessions are created by registering the client through the cluster leader. Clients always connect to a single node in the
  * cluster, and in the event of a node failure or partition, the client will detect the failure and reconnect to a correct server.
@@ -79,9 +73,9 @@ import java.util.concurrent.CompletableFuture;
  * consistency queries, they may be executed on follower nodes according to the consistency level constraints. See the
  * {@link Query.ConsistencyLevel} documentation for more info.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class CopycatClient implements RaftClient {
+public interface CopycatClient extends Managed<CopycatClient> {
 
   /**
    * Returns a new Raft client builder.
@@ -93,7 +87,7 @@ public class CopycatClient implements RaftClient {
    * @param members The cluster members to which to connect.
    * @return The client builder.
    */
-  public static Builder builder(Address... members) {
+  static Builder builder(Address... members) {
     return builder(Arrays.asList(Assert.notNull(members, "members")));
   }
 
@@ -107,153 +101,184 @@ public class CopycatClient implements RaftClient {
    * @param members The cluster members to which to connect.
    * @return The client builder.
    */
-  public static Builder builder(Collection<Address> members) {
+  static Builder builder(Collection<Address> members) {
     return new Builder(members);
   }
 
-  private final UUID id = UUID.randomUUID();
-  private final Transport transport;
-  private final Collection<Address> members;
-  private final Serializer serializer;
-  private final ConnectionStrategy connectionStrategy;
-  private final RecoveryStrategy recoveryStrategy;
-  private ClientSession session;
-  private CompletableFuture<RaftClient> openFuture;
-  private CompletableFuture<Void> closeFuture;
+  /**
+   * Returns the client execution context.
+   * <p>
+   * The thread context is the event loop that this client uses to communicate Raft servers.
+   * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
+   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
+   * <p>
+   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft client's internal
+   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}.
+   *
+   * @return The client thread context.
+   */
+  ThreadContext context();
 
-  protected CopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
-    serializer.resolve(new ServiceLoaderTypeResolver());
-    this.transport = Assert.notNull(transport, "transport");
-    this.members = Assert.notNull(members, "members");
-    this.serializer = Assert.notNull(serializer, "serializer");
-    this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
-  }
+  /**
+   * Returns the client transport.
+   * <p>
+   * The transport is the mechanism through which the client communicates with the cluster. The transport cannot
+   * be used to access client internals, but it serves only as a mechanism for providing users with the same
+   * transport/protocol used by the client.
+   *
+   * @return The client transport.
+   */
+  Transport transport();
 
-  @Override
-  public ThreadContext context() {
-    return session != null ? session.context() : null;
-  }
+  /**
+   * Returns the client serializer.
+   * <p>
+   * The serializer can be used to manually register serializable types for submitted {@link Command commands} and
+   * {@link Query queries}.
+   * <pre>
+   *   {@code
+   *     client.serializer().register(MyObject.class, 1);
+   *     client.serializer().register(MyOtherObject.class, new MyOtherObjectSerializer(), 2);
+   *   }
+   * </pre>
+   *
+   * @return The client operation serializer.
+   */
+  Serializer serializer();
 
-  @Override
-  public Transport transport() {
-    return transport;
-  }
+  /**
+   * Returns the client session.
+   * <p>
+   * The {@link Session} object can be used to receive session events from replicated state machines. Session events are
+   * named messages. To register a session event handler, use the {@link Session#onEvent(String, Consumer)} method:
+   * <pre>
+   *   {@code
+   *   client.session().onEvent("lock", v -> System.out.println("acquired lock!"));
+   *   }
+   * </pre>
+   * When a server-side state machine {@link Session#publish(String, Object) publishes} an event message to this session, the
+   * event message is guaranteed to be received in the order in which it was sent by the state machine. Note that the point
+   * in time at which events are received by the client is determined by the {@link Command#consistency()} of the command being
+   * executed when the state machine published the event. Events are not necessarily guaranteed to be received by the client
+   * during command execution. See the {@link Command.ConsistencyLevel} documentation for more info.
+   * <p>
+   * The returned {@link Session} instance will remain constant as long as the client maintains its session with the cluster.
+   * Maintaining the client's session requires that the client be able to communicate with one server that can communicate
+   * with the leader at any given time. During periods where the cluster is electing a new leader, the client's session will
+   * not timeout but will resume once a new leader is elected.
+   * <p>
+   * Once the client connects to the cluster and opens its session, session listeners registered via {@link Session#onOpen(Consumer)}
+   * will be called. In the event of a session expiration wherein the client fails to communicate with the cluster for at least
+   * a session timeout, the session will be expired and listeners registered via {@link Session#onClose(Consumer)} will be called.
+   *
+   * @return The client session or {@code null} if no session is open.
+   */
+  Session session();
 
-  @Override
-  public Serializer serializer() {
-    return serializer;
-  }
-
-  @Override
-  public Session session() {
-    return session;
-  }
-
-  @Override
-  public <T> CompletableFuture<T> submit(Command<T> command) {
-    Assert.notNull(command, "command");
-    if (session == null)
-      return Futures.exceptionalFuture(new IllegalStateException("client not open"));
-    return session.submit(command);
-  }
-
-  @Override
-  public <T> CompletableFuture<T> submit(Query<T> query) {
-    Assert.notNull(query, "query");
-    if (session == null)
-      return Futures.exceptionalFuture(new IllegalStateException("client not open"));
-    return session.submit(query);
-  }
-
-  @Override
-  public CompletableFuture<RaftClient> open() {
-    if (session != null && session.isOpen())
-      return CompletableFuture.completedFuture(this);
-
-    if (openFuture == null) {
-      synchronized (this) {
-        if (openFuture == null) {
-          ClientSession session = new ClientSession(id, transport, members, serializer, connectionStrategy);
-          if (closeFuture == null) {
-            openFuture = session.open().thenApply(s -> {
-              synchronized (this) {
-                openFuture = null;
-                this.session = session;
-                registerStrategies(session);
-                return this;
-              }
-            });
-          } else {
-            openFuture = closeFuture.thenCompose(v -> session.open().thenApply(s -> {
-              synchronized (this) {
-                openFuture = null;
-                this.session = session;
-                registerStrategies(session);
-                return this;
-              }
-            }));
-          }
-        }
-      }
+  /**
+   * Submits an operation to the Raft cluster.
+   * <p>
+   * This method is provided for convenience. The submitted {@link Operation} must be an instance
+   * of {@link Command} or {@link Query}.
+   *
+   * @param operation The operation to submit.
+   * @param <T> The operation result type.
+   * @return A completable future to be completed with the operation result.
+   * @throws IllegalArgumentException If the {@link Operation} is not an instance of {@link Command} or {@link Query}.
+   * @throws NullPointerException if {@code operation} is null
+   */
+  default <T> CompletableFuture<T> submit(Operation<T> operation) {
+    Assert.notNull(operation, "operation");
+    if (operation instanceof Command) {
+      return submit((Command<T>) operation);
+    } else if (operation instanceof Query) {
+      return submit((Query<T>) operation);
+    } else {
+      throw new IllegalArgumentException("unknown operation type");
     }
-    return openFuture;
-  }
-
-  @Override
-  public boolean isOpen() {
-    return session != null && session.isOpen();
   }
 
   /**
-   * Registers strategies on the client's session.
+   * Submits a command to the Raft cluster.
+   * <p>
+   * Commands are used to alter state machine state. All commands will be forwarded to the current Raft leader.
+   * Once a leader receives the command, it will write the command to its internal {@code Log} and replicate it to a majority
+   * of the cluster. Once the command has been replicated to a majority of the cluster, it will apply the command to its
+   * {@code StateMachine} and respond with the result.
+   * <p>
+   * Once the command has been applied to a server state machine, the returned {@link java.util.concurrent.CompletableFuture}
+   * will be completed with the state machine output.
+   * <p>
+   * Note that all client submissions are guaranteed to be completed in the same order in which they were sent (program order)
+   * and on the same thread. This does not, however, mean that they'll be applied to the server-side replicated state machine
+   * in that order. State machine order is dependent on the configured {@link Command.ConsistencyLevel}.
+   *
+   * @param command The command to submit.
+   * @param <T> The command result type.
+   * @return A completable future to be completed with the command result. The future is guaranteed to be completed after all
+   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
+   * {@link #context()} thread.
+   * @throws NullPointerException if {@code command} is null
+   * @throws IllegalStateException if the {@link #session()} is not open
    */
-  private void registerStrategies(Session session) {
-    session.onClose(s -> {
-      this.session = null;
-      if (s.isExpired()) {
-        recoveryStrategy.recover(this);
-      }
-    });
-  }
+  <T> CompletableFuture<T> submit(Command<T> command);
+
+  /**
+   * Submits a query to the Raft cluster.
+   * <p>
+   * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
+   * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
+   * and {@link Query.ConsistencyLevel#BOUNDED_LINEARIZABLE} consistency levels, queries will be forwarded
+   * to the Raft leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
+   * by applying queries to an internal server state machine.
+   * <p>
+   * Once the query has been applied to a server state machine, the returned {@link java.util.concurrent.CompletableFuture}
+   * will be completed with the state machine output.
+   *
+   * @param query The query to submit.
+   * @param <T> The query result type.
+   * @return A completable future to be completed with the query result. The future is guaranteed to be completed after all
+   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
+   * {@link #context()} thread.
+   * @throws NullPointerException if {@code query} is null
+   * @throws IllegalStateException if the {@link #session()} is not open
+   */
+  <T> CompletableFuture<T> submit(Query<T> query);
+
+  /**
+   * Connects the client to the Raft cluster.
+   * <p>
+   * When the client is opened, it will attempt to connect to and open a session with each unique configured server
+   * {@link Address}. Once the session is open, the returned {@link CompletableFuture} will be completed.
+   *
+   * @return A completable future to be completed once the client's {@link #session()} is open.
+   */
+  @Override
+  CompletableFuture<CopycatClient> open();
+
+  /**
+   * Returns a boolean value indicating whether the client is open.
+   * <p>
+   * Whether the client is open depends on whether the client has an open session to the cluster.
+   *
+   * @return Indicates whether the client is open.
+   */
+  @Override
+  boolean isOpen();
 
   @Override
-  public CompletableFuture<Void> close() {
-    if (session == null || !session.isOpen())
-      return CompletableFuture.completedFuture(null);
+  CompletableFuture<Void> close();
 
-    if (closeFuture == null) {
-      synchronized (this) {
-        if (session == null) {
-          return CompletableFuture.completedFuture(null);
-        }
-
-        if (closeFuture == null) {
-          if (openFuture == null) {
-            closeFuture = session.close().whenComplete((result, error) -> {
-              synchronized (this) {
-                session = null;
-                closeFuture = null;
-              }
-            });
-          } else {
-            closeFuture = openFuture.thenCompose(v -> session.close().whenComplete((result, error) -> {
-              synchronized (this) {
-                session = null;
-                closeFuture = null;
-              }
-            }));
-          }
-        }
-      }
-    }
-    return closeFuture;
-  }
-
+  /**
+   * Returns a boolean value indicating whether the client is closed.
+   * <p>
+   * Whether the client is closed depends on whether the client has not connected to the cluster or its session has been
+   * closed or expired.
+   *
+   * @return Indicates whether the client is closed.
+   */
   @Override
-  public boolean isClosed() {
-    return session == null || session.isClosed();
-  }
+  boolean isClosed();
 
   /**
    * Builds a new Copycat client.
@@ -267,7 +292,7 @@ public class CopycatClient implements RaftClient {
    *   }
    * </pre>
    */
-  public static class Builder extends io.atomix.catalyst.util.Builder<CopycatClient> {
+  class Builder extends io.atomix.catalyst.util.Builder<CopycatClient> {
     private Transport transport;
     private Serializer serializer;
     private Set<Address> members;
@@ -348,7 +373,7 @@ public class CopycatClient implements RaftClient {
       if (serializer == null) {
         serializer = new Serializer();
       }
-      return new CopycatClient(transport, members, serializer, connectionStrategy, recoveryStrategy);
+      return new CopycatRaftClient(transport, members, serializer, connectionStrategy, recoveryStrategy);
     }
   }
 

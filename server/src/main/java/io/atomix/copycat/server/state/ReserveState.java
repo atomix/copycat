@@ -20,7 +20,6 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -41,7 +40,7 @@ class ReserveState extends AbstractState {
 
   @Override
   public CopycatServer.State type() {
-    return RaftServer.State.RESERVE;
+    return CopycatServer.State.RESERVE;
   }
 
   /**

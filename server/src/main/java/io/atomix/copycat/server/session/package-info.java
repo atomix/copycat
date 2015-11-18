@@ -16,7 +16,7 @@
 
 /**
  * Interfaces for managing client {@link io.atomix.copycat.client.session.Session sessions} on a Raft
- * {@link io.atomix.copycat.server.RaftServer server}.
+ * {@link io.atomix.copycat.server.CopycatServer server}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

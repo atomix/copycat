@@ -15,10 +15,10 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.server.storage.StorageException;
 import io.atomix.catalyst.serializer.SerializationException;
 import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.catalyst.util.ReferencePool;
+import io.atomix.copycat.server.storage.StorageException;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;

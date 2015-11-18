@@ -17,7 +17,6 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -56,7 +55,7 @@ class PassiveState extends ReserveState {
    */
   private void truncateLog() {
     // Only truncate the log for PASSIVE servers. This is sort of ugly but it works!
-    if (type() == RaftServer.State.PASSIVE) {
+    if (type() == CopycatServer.State.PASSIVE) {
       context.getLog().truncate();
     }
   }
@@ -184,13 +183,13 @@ class PassiveState extends ReserveState {
           if (previousType != context.getMemberState().getType()) {
             switch (context.getMemberState().getType()) {
               case ACTIVE:
-                transition(RaftServer.State.FOLLOWER);
+                transition(CopycatServer.State.FOLLOWER);
                 break;
               case PASSIVE:
-                transition(RaftServer.State.PASSIVE);
+                transition(CopycatServer.State.PASSIVE);
                 break;
               case RESERVE:
-                transition(RaftServer.State.RESERVE);
+                transition(CopycatServer.State.RESERVE);
                 break;
             }
           }

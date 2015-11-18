@@ -26,7 +26,6 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
@@ -908,11 +907,11 @@ public class ServerState {
     // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
     if (member.getType() != null) {
       if (member.isActive()) {
-        transition(RaftServer.State.FOLLOWER);
+        transition(CopycatServer.State.FOLLOWER);
       } else if (member.isPassive()) {
-        transition(RaftServer.State.PASSIVE);
+        transition(CopycatServer.State.PASSIVE);
       } else if (member.isReserve()) {
-        transition(RaftServer.State.RESERVE);
+        transition(CopycatServer.State.RESERVE);
       }
       future.complete(null);
     } else {
@@ -954,13 +953,13 @@ public class ServerState {
               // Transition the state context according to the local member type.
               switch (type) {
                 case ACTIVE:
-                  transition(RaftServer.State.FOLLOWER);
+                  transition(CopycatServer.State.FOLLOWER);
                   break;
                 case PASSIVE:
-                  transition(RaftServer.State.PASSIVE);
+                  transition(CopycatServer.State.PASSIVE);
                   break;
                 case RESERVE:
-                  transition(RaftServer.State.RESERVE);
+                  transition(CopycatServer.State.RESERVE);
                   break;
               }
 
@@ -1022,7 +1021,7 @@ public class ServerState {
       cancelHeartbeatTimer();
       if (getActiveMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member.getMember().serverAddress());
-        transition(RaftServer.State.INACTIVE);
+        transition(CopycatServer.State.INACTIVE);
         future.complete(null);
       } else {
         leave(future);
@@ -1049,7 +1048,7 @@ public class ServerState {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
         configure(response.version(), response.activeMembers(), response.passiveMembers(), response.reserveMembers());
-        transition(RaftServer.State.INACTIVE);
+        transition(CopycatServer.State.INACTIVE);
         future.complete(null);
       }
     });
