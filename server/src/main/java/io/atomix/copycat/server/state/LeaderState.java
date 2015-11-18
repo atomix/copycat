@@ -1005,7 +1005,17 @@ final class LeaderState extends ActiveState {
       // passive members. This is critical since passive members still have state machines and thus it's still
       // important to ensure that tombstones are applied to their state machines.
       // If the members list is empty, use the local server's last log index as the global index.
-      context.setGlobalIndex(context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex()));
+      long globalMatchIndex = context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex());
+
+      // The globalIndex should always be one less than the highest index that is replicated to all members.
+      // This is to ensure prevEntry checks can always be performed for AppendRequests.
+      // Consider the following scenario:
+      // - Entry at index i is a NoOpEntry and it is fully replicated to all members. (NoOpEntries can be garbage collected
+      // as soon as they are replicated to all cluster members.)
+      // - A leadership change occurs and the new leader sends an AppendRequest with logIndex == i.
+      // Any follower should be able to validate that they have this entry in their log with a term that matches
+      // what the new leader is advertising.
+      context.setGlobalIndex(Math.min(globalMatchIndex - 1, 0));
 
       // Sort the list of replicas, order by the last index that was replicated to the replica. This will allow
       // us to determine the median index for all known replicated entries across all cluster members.
