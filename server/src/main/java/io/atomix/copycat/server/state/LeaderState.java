@@ -1015,7 +1015,7 @@ final class LeaderState extends ActiveState {
       // - A leadership change occurs and the new leader sends an AppendRequest with logIndex == i.
       // Any follower should be able to validate that they have this entry in their log with a term that matches
       // what the new leader is advertising.
-      context.setGlobalIndex(Math.min(globalMatchIndex - 1, 0));
+      context.setGlobalIndex(Math.max(globalMatchIndex - 1, 0));
 
       // Sort the list of replicas, order by the last index that was replicated to the replica. This will allow
       // us to determine the median index for all known replicated entries across all cluster members.
