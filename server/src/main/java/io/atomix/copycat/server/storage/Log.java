@@ -326,10 +326,27 @@ public class Log implements AutoCloseable {
     if (entry != null) {
       // If the entry has not been cleaned by the state machine, return it. Note that the call to isClean()
       // on the segment will be done in O(1) time since the search was already done in the get() call.
-      // We also return entries where the index is greater than the server's globalIndex (represented by
-      // the compactor's majorIndex) in order to ensure commands which trigger events are replicated.
-      if (!segment.isClean(index) || index > compactor.majorIndex()) {
+      if (!segment.isClean(index)) {
         return entry;
+      }
+      // If the entry index is equal to or greater than the commitIndex, return it. This ensures that the last committed entry
+      // is always exposed so that consistency checks can be done.
+      else if (index >= segments.commitIndex()) {
+        return entry;
+      }
+      // For tombstone entries, if the entry index is greater than the majorIndex, return the entry. This ensures that entries
+      // are replicated until persisted on all available servers.
+      else if (entry.isTombstone()) {
+        if (index > compactor.majorIndex()) {
+          return entry;
+        }
+      }
+      // If the entry is not a tombstone, return the entry if the index is greater than minorIndex. If the entry is less than minorIndex,
+      // that indicates that it has been committed and events have been received for the entry, so we can safely stop replicating it.
+      else {
+        if (index > compactor.minorIndex()) {
+          return entry;
+        }
       }
     }
     return null;

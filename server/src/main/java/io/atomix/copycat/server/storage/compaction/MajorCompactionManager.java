@@ -22,6 +22,7 @@ import io.atomix.copycat.server.storage.Storage;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -50,19 +51,19 @@ public final class MajorCompactionManager implements CompactionManager {
 
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
-    List<List<Segment>> groups = getCleanableGroups(storage, segments);
+    List<List<Segment>> groups = getCompactableGroups(storage, segments);
     return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, compactor.majorIndex())) : Collections.emptyList();
   }
 
   /**
-   * Returns a list of segments lists to clean, where segments are grouped according to how they will be merged during 
-   * cleaning.
+   * Returns a list of segments lists to compact, where segments are grouped according to how they will be merged during
+   * compaction.
    */
-  public List<List<Segment>> getCleanableGroups(Storage storage, SegmentManager manager) {
+  public List<List<Segment>> getCompactableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> clean = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
-    for (Segment segment : getCleanableSegments(manager)) {
+    for (Segment segment : getCompactableSegments(manager)) {
       // If this is the first segment in a segments list, add the segment.
       if (segments == null) {
         segments = new ArrayList<>();
@@ -96,20 +97,28 @@ public final class MajorCompactionManager implements CompactionManager {
   }
 
   /**
-   * Returns a list of cleanable log segments.
+   * Returns a list of compactable log segments.
    *
    * @param manager The segment manager.
-   * @return A list of cleanable log segments.
+   * @return A list of compactable log segments.
    */
-  private List<Segment> getCleanableSegments(SegmentManager manager) {
+  private List<Segment> getCompactableSegments(SegmentManager manager) {
     List<Segment> segments = new ArrayList<>(manager.segments().size());
-    Segment lastSegment = manager.lastSegment();
-    for (Segment segment : manager.segments()) {
-      if ((segment.isFull() || segment.isCompacted()) && segment.lastIndex() < compactor.minorIndex() && lastSegment.firstIndex() <= compactor.minorIndex() && !lastSegment.isEmpty()) {
+    Iterator<Segment> iterator = manager.segments().iterator();
+    Segment segment = iterator.next();
+    while (iterator.hasNext()) {
+      Segment nextSegment = iterator.next();
+
+      // Segments that have already been compacted are eligible for compaction. For uncompacted segments, the segment must be full, consist
+      // of entries less than the minorIndex, and a later segment with at least one committed entry must exist in the log. This ensures that
+      // a non-empty entry always remains at the end of the log.
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.firstIndex() <= manager.commitIndex() && !nextSegment.isEmpty())) {
         segments.add(segment);
       } else {
         break;
       }
+
+      segment = nextSegment;
     }
     return segments;
   }
