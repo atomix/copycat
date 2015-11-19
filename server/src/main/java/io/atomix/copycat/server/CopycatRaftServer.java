@@ -134,43 +134,43 @@ public class CopycatRaftServer implements CopycatServer {
 
   @Override
   public long term() {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.getTerm();
   }
 
   @Override
   public Address leader() {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.getLeader().serverAddress();
   }
 
   @Override
   public Listener<Address> onLeaderElection(Consumer<Address> listener) {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.onLeaderElection(listener);
   }
 
   @Override
   public Collection<Address> members() {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.getMembers().stream().map(Member::serverAddress).collect(Collectors.toList());
   }
 
   @Override
   public State state() {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.getState();
   }
 
   @Override
   public Listener<State> onStateChange(Consumer<State> listener) {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.onStateChange(listener);
   }
 
   @Override
   public ThreadContext context() {
-    Assert.state(open, "server not open");
+    Assert.state(isOpen(), "server not open");
     return state.getThreadContext();
   }
 

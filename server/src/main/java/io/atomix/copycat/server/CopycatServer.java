@@ -224,6 +224,48 @@ public interface CopycatServer extends Managed<CopycatServer> {
   State state();
 
   /**
+   * Returns a boolean value indicating whether this server is currently a reserve member of the cluster.
+   * <p>
+   * Reserve members do not receive state changes but maintain the current configuration of the cluster.
+   * In the event that a {@link State#PASSIVE} member is promoted to an active Raft voting member, the passive
+   * member will be replaced by a {@link State#RESERVE} server.
+   *
+   * @return Indicates whether this server is a reserve member of the cluster.
+   */
+  default boolean isReserve() {
+    return isOpen() && state() == State.RESERVE;
+  }
+
+  /**
+   * Returns a boolean value indicating whether this server is currently a passive member of the cluster.
+   * <p>
+   * Passive members do not participate in the Raft consensus algorithm, but they do receive state changes.
+   * Followers in the Raft cluster will always attempt to keep passive servers as up to date as possible.
+   * In the event that a Raft voting member fails or otherwise becomes unavailable, a passive server will
+   * be promoted to take its place.
+   *
+   * @return Indicates whether this server is a passive member of the cluster.
+   */
+  default boolean isPassive() {
+    return isOpen() && state() == State.PASSIVE;
+  }
+
+  /**
+   * Returns a boolean value indicating whether this server is currently an active member of the cluster.
+   * <p>
+   * Active members participate fully in the Raft consensus algorithm and are always in one of the Raft
+   * states, i.e. {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
+   *
+   * @return Indicates whether this server is an active member of the cluster.
+   */
+  default boolean isActive() {
+    if (!isOpen())
+      return false;
+    State state = state();
+    return state == State.FOLLOWER || state == State.CANDIDATE || state == State.LEADER;
+  }
+
+  /**
    * Registers a state change listener.
    * <p>
    * Throughout the lifetime of the cluster, the server will periodically transition between various {@link CopycatServer.State states}.
