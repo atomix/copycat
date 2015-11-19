@@ -811,6 +811,7 @@ public class ServerState {
     connection.handler(PublishRequest.class, request -> state.publish(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
+    connection.handler(HeartbeatRequest.class, request -> state.heartbeat(request));
     connection.handler(AppendRequest.class, request -> state.append(request));
     connection.handler(PollRequest.class, request -> state.poll(request));
     connection.handler(VoteRequest.class, request -> state.vote(request));
