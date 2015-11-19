@@ -46,21 +46,6 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<AbstractState> open() {
-    return super.open().thenRun(this::truncateLog).thenApply(v -> this);
-  }
-
-  /**
-   * Truncates the server log.
-   */
-  private void truncateLog() {
-    // Only truncate the log for PASSIVE servers. This is sort of ugly but it works!
-    if (type() == CopycatServer.State.PASSIVE) {
-      context.getLog().truncate();
-    }
-  }
-
-  @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
 

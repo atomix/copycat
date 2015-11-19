@@ -832,12 +832,15 @@ public class ServerState {
     LOGGER.info("{} - Transitioning to {}", member.getMember().serverAddress(), state);
 
     // If a valid state exists, close the current state synchronously.
-    if (this.state != null) {
-      try {
-        this.state.close().get();
-      } catch (InterruptedException | ExecutionException e) {
-        throw new IllegalStateException("failed to close Raft state", e);
-      }
+    try {
+      this.state.close().get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IllegalStateException("failed to close Raft state", e);
+    }
+
+    // If we're transitioning out of the RESERVE state, truncate the log.
+    if (this.state.type() == CopycatServer.State.RESERVE) {
+      log.truncate();
     }
 
     // Force state transitions to occur synchronously in order to prevent race conditions.
