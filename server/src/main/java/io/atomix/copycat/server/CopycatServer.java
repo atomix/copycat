@@ -169,6 +169,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * not yet exist for the term.
    *
    * @return The current Raft term.
+   * @throws IllegalStateException If the server is not open
    */
   long term();
 
@@ -178,6 +179,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * If no leader has been elected, the leader address will be {@code null}.
    *
    * @return The current Raft leader or {@code null} if this server does not know of any leader.
+   * @throws IllegalStateException If the server is not open
    */
   Address leader();
 
@@ -193,6 +195,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * @return The listener context. This can be used to unregister the election listener via
    * {@link Listener#close()}.
    * @throws NullPointerException If {@code listener} is {@code null}
+   * @throws IllegalStateException If the server is not open
    */
   Listener<Address> onLeaderElection(Consumer<Address> listener);
 
@@ -204,6 +207,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * set of members on another server at any given point in time.
    *
    * @return A collection of current Raft cluster members.
+   * @throws IllegalStateException If the server is not open
    */
   Collection<Address> members();
 
@@ -215,6 +219,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
    *
    * @return The Raft server state.
+   * @throws IllegalStateException If the server is not open
    */
   State state();
 
@@ -238,6 +243,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * @return The listener context. This can be used to unregister the election listener via
    * {@link Listener#close()}.
    * @throws NullPointerException If {@code listener} is {@code null}
+   * @throws IllegalStateException If the server is not open
    */
   Listener<State> onStateChange(Consumer<State> listener);
 
@@ -259,6 +265,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * </pre>
    *
    * @return The server thread context.
+   * @throws IllegalStateException If the server is not open
    */
   ThreadContext context();
 
