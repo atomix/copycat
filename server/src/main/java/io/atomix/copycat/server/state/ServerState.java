@@ -625,54 +625,29 @@ public class ServerState {
   /**
    * Builds a list of active members.
    */
-  Collection<Member> buildActiveMembers() {
-    return buildMembers(activeMembers, MemberState.Type.ACTIVE, null);
-  }
-
-  /**
-   * Builds a list of active members.
-   */
-  List<Member> buildActiveMembers(Comparator<MemberState> sortComparator) {
-    return buildMembers(activeMembers, MemberState.Type.ACTIVE, sortComparator);
+  List<Member> buildActiveMembers() {
+    return buildMembers(activeMembers, MemberState.Type.ACTIVE);
   }
 
   /**
    * Builds a list of passive members.
    */
-  Collection<Member> buildPassiveMembers() {
-    return buildMembers(passiveMembers, MemberState.Type.PASSIVE, null);
-  }
-
-  /**
-   * Builds a list of passive members.
-   */
-  List<Member> buildPassiveMembers(Comparator<MemberState> sortComparator) {
-    return buildMembers(passiveMembers, MemberState.Type.PASSIVE, sortComparator);
+  List<Member> buildPassiveMembers() {
+    return buildMembers(passiveMembers, MemberState.Type.PASSIVE);
   }
 
   /**
    * Builds a list of reserve members.
    */
-  Collection<Member> buildReserveMembers() {
-    return buildMembers(reserveMembers, MemberState.Type.RESERVE, null);
-  }
-
-  /**
-   * Builds a list of reserve members.
-   */
-  List<Member> buildReserveMembers(Comparator<MemberState> sortComparator) {
-    return buildMembers(reserveMembers, MemberState.Type.RESERVE, sortComparator);
+  List<Member> buildReserveMembers() {
+    return buildMembers(reserveMembers, MemberState.Type.RESERVE);
   }
 
   /**
    * Builds a full list of members for configurations.
    */
-  private List<Member> buildMembers(List<MemberState> states, MemberState.Type type, Comparator<MemberState> sortComparator) {
+  private List<Member> buildMembers(List<MemberState> states, MemberState.Type type) {
     List<Member> members = new ArrayList<>(states.size() + 1);
-
-    if (sortComparator != null) {
-      Collections.sort(states, sortComparator);
-    }
 
     for (MemberState member : states) {
       members.add(member.getMember());

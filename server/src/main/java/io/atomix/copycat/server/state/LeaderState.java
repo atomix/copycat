@@ -31,8 +31,6 @@ import io.atomix.copycat.server.storage.entry.*;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -44,13 +42,16 @@ import java.util.stream.Collectors;
  */
 final class LeaderState extends ActiveState {
   private final LeaderAppender appender;
+  private final MembershipRebalancer rebalancer;
   private Scheduled appendTimer;
   private long configuring;
   private boolean changed;
+  private CompletableFuture<Void> rebalanceFuture;
 
   public LeaderState(ServerState context) {
     super(context);
     this.appender = new LeaderAppender(context);
+    this.rebalancer = new MembershipRebalancer(context);
   }
 
   @Override
@@ -259,6 +260,7 @@ final class LeaderState extends ActiveState {
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
+      changed = true;
       context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
     }
 
@@ -267,21 +269,22 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
-        reconfigure();
-        if (commitError == null) {
-          future.complete(logResponse(JoinResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withVersion(index)
-            .withActiveMembers(activeMembers)
-            .withPassiveMembers(passiveMembers)
-            .withReserveMembers(reserveMembers)
-            .build()));
-        } else {
-          future.complete(logResponse(JoinResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
-            .build()));
-        }
+        reconfigure().whenComplete((reconfigureResult, reconfigureError) -> {
+          if (commitError == null) {
+            future.complete(logResponse(JoinResponse.builder()
+              .withStatus(Response.Status.OK)
+              .withVersion(index)
+              .withActiveMembers(context.buildActiveMembers())
+              .withPassiveMembers(context.buildPassiveMembers())
+              .withReserveMembers(context.buildReserveMembers())
+              .build()));
+          } else {
+            future.complete(logResponse(JoinResponse.builder()
+              .withStatus(Response.Status.ERROR)
+              .withError(RaftError.Type.INTERNAL_ERROR)
+              .build()));
+          }
+        });
       }
     });
     return future;
@@ -344,6 +347,7 @@ final class LeaderState extends ActiveState {
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
+      changed = true;
       context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
     }
 
@@ -352,21 +356,22 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
-        reconfigure();
-        if (commitError == null) {
-          future.complete(logResponse(LeaveResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withVersion(index)
-            .withActiveMembers(activeMembers)
-            .withPassiveMembers(passiveMembers)
-            .withReserveMembers(reserveMembers)
-            .build()));
-        } else {
-          future.complete(logResponse(LeaveResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
-            .build()));
-        }
+        reconfigure().whenComplete((reconfigureResult, reconfigureError) -> {
+          if (commitError == null) {
+            future.complete(logResponse(LeaveResponse.builder()
+              .withStatus(Response.Status.OK)
+              .withVersion(index)
+              .withActiveMembers(context.buildActiveMembers())
+              .withPassiveMembers(context.buildPassiveMembers())
+              .withReserveMembers(context.buildReserveMembers())
+              .build()));
+          } else {
+            future.complete(logResponse(LeaveResponse.builder()
+              .withStatus(Response.Status.ERROR)
+              .withError(RaftError.Type.INTERNAL_ERROR)
+              .build()));
+          }
+        });
       }
     });
     return future;
@@ -443,54 +448,38 @@ final class LeaderState extends ActiveState {
   /**
    * Resets the configuration index and rebalances the configuration if necessary.
    */
-  private void reconfigure() {
+  private CompletableFuture<Void> reconfigure() {
     configuring = 0;
     if (changed) {
-      rebalance();
       changed = false;
+      return rebalance();
     }
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
    * Rebalances the cluster configuration according to member statuses.
    */
-  private void rebalance() {
+  private CompletableFuture<Void> rebalance() {
+    if (rebalanceFuture == null)
+      rebalanceFuture = new CompletableFuture<>();
+
     // If a configuration is already under way, just set a flag indicating that another configuration needs
     // to be appended once the configuration is complete.
     if (configuring != 0) {
       changed = true;
-      return;
+      return rebalanceFuture;
     }
 
+    LOGGER.debug("{} - Rebalancing cluster", context.getMember().serverAddress());
+
     // Build lists of active, passive, and reserve members.
-    List<Member> activeMembers = context.buildActiveMembers((m1, m2) -> Long.compare(m2.getCommitIndex(), m1.getCommitIndex()));
-    List<Member> passiveMembers = context.buildPassiveMembers((m1, m2) -> Long.compare(m2.getCommitIndex(), m1.getCommitIndex()));
-    List<Member> reserveMembers = context.buildReserveMembers((m1, m2) -> Long.compare(m2.getCommitIndex(), m1.getCommitIndex()));
-
-    int quorumHint = context.getQuorumHint();
-    int backupCount = context.getBackupCount();
-
-    // Reverse the ACTIVE members list to be ordered with the lowest commitIndex first and then demote
-    // any necessary ACTIVE members that are currently marked UNAVAILABLE.
-    Collections.reverse(activeMembers);
-    boolean changed = demoteActiveMembers(activeMembers, reserveMembers, quorumHint);
-
-    // Reverse the PASSIVE members list to be ordered with the lowest commitIndex first and then demote
-    // any necessary PASSIVE members that are currently marked UNAVAILABLE.
-    Collections.reverse(passiveMembers);
-    changed = demotePassiveMembers(passiveMembers, reserveMembers) || changed;
-
-    // Reverse the PASSIVE members list to be ordered with the highest commitIndex first and then promote
-    // any necessary PASSIVE members that are AVAILABLE where an ACTIVE slot is not filled.
-    Collections.reverse(passiveMembers);
-    changed = promotePassiveMembers(passiveMembers, activeMembers, quorumHint) || changed;
-
-    // Promote any RESERVE members that are AVAILABLE where a PASSIVE slot is not filled. RESERVE members
-    // are already ordered with the highest commitIndex first.
-    changed = promoteReserveMembers(reserveMembers, passiveMembers, quorumHint, backupCount) || changed;
+    List<Member> activeMembers = context.buildActiveMembers();
+    List<Member> passiveMembers = context.buildPassiveMembers();
+    List<Member> reserveMembers = context.buildReserveMembers();
 
     // If the overall configuration changed, log and commit a new configuration entry.
-    if (changed) {
+    if (rebalancer.rebalance(activeMembers, passiveMembers, reserveMembers)) {
       final long index;
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
         entry.setTerm(context.getTerm())
@@ -510,110 +499,15 @@ final class LeaderState extends ActiveState {
       appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
         context.checkThread();
         if (isOpen()) {
+          rebalanceFuture.complete(null);
+          rebalanceFuture = null;
           reconfigure();
         }
       });
+    } else {
+      rebalanceFuture.complete(null);
     }
-  }
-
-  /**
-   * Demotes active members to reserve.
-   */
-  private boolean demoteActiveMembers(List<Member> activeMembers, Collection<Member> reserveMembers, int quorumHint) {
-    boolean changed = false;
-    if (activeMembers.size() > quorumHint) {
-      int demoteTotal = activeMembers.size() - quorumHint;
-      int demoteCount = 0;
-
-      Iterator<Member> iterator = activeMembers.iterator();
-      while (iterator.hasNext()) {
-        Member member = iterator.next();
-        MemberState state = context.getMemberState(member);
-        if (state.getStatus() == MemberState.Status.UNAVAILABLE) {
-          iterator.remove();
-          reserveMembers.add(member);
-          LOGGER.debug("{} - Demoted active member {} to reserve", context.getMember().serverAddress(), member.serverAddress());
-          changed = true;
-          if (++demoteCount == demoteTotal) {
-            break;
-          }
-        }
-      }
-    }
-    return changed;
-  }
-
-  /**
-   * Demotes passive members to reserve.
-   */
-  private boolean demotePassiveMembers(List<Member> passiveMembers, Collection<Member> reserveMembers) {
-    boolean changed = false;
-    Iterator<Member> iterator = passiveMembers.iterator();
-    while (iterator.hasNext()) {
-      Member member = iterator.next();
-      MemberState state = context.getMemberState(member);
-      if (state.getStatus() == MemberState.Status.UNAVAILABLE) {
-        iterator.remove();
-        reserveMembers.add(member);
-        LOGGER.debug("{} - Demoted passive member {} to reserve", context.getMember().serverAddress(), member.serverAddress());
-        changed = true;
-      }
-    }
-    return changed;
-  }
-
-  /**
-   * Promotes passive members to active.
-   */
-  private boolean promotePassiveMembers(List<Member> passiveMembers, Collection<Member> activeMembers, int quorumHint) {
-    boolean changed = false;
-    if (activeMembers.size() < quorumHint) {
-      int promoteTotal = quorumHint - activeMembers.size();
-      int promoteCount = 0;
-
-      Iterator<Member> iterator = passiveMembers.iterator();
-      while (iterator.hasNext()) {
-        Member member = iterator.next();
-        MemberState state = context.getMemberState(member);
-        if (state.getStatus() == MemberState.Status.AVAILABLE && state.getMatchIndex() >= context.getCommitIndex()) {
-          iterator.remove();
-          activeMembers.add(member);
-          LOGGER.debug("{} - Promoted passive member {} to active", context.getMember().serverAddress(), member.serverAddress());
-          changed = true;
-          if (++promoteCount == promoteTotal) {
-            break;
-          }
-        }
-      }
-    }
-    return changed;
-  }
-
-  /**
-   * Promotes reserve members to passive.
-   */
-  private boolean promoteReserveMembers(List<Member> reserveMembers, Collection<Member> passiveMembers, int quorumHint, int backupCount) {
-    boolean changed = false;
-    if (passiveMembers.size() < quorumHint * backupCount) {
-      int promoteTotal = quorumHint * backupCount - passiveMembers.size();
-      int promoteCount = 0;
-
-      Iterator<Member> iterator = reserveMembers.iterator();
-      while (iterator.hasNext()) {
-        Member member = iterator.next();
-        MemberState state = context.getMemberState(member);
-        if (state.getStatus() == MemberState.Status.AVAILABLE) {
-          iterator.remove();
-          passiveMembers.add(member);
-          LOGGER.debug("{} - Promoted reserve member {} to passive", context.getMember().serverAddress(), member.serverAddress());
-          changed = true;
-          if (++promoteCount == promoteTotal) {
-            break;
-          }
-        }
-      }
-    }
-    return changed;
+    return rebalanceFuture;
   }
 
   @Override

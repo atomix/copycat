@@ -1048,17 +1048,7 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     }
 
-    servers.stream().filter(CopycatServer::isReserve).forEach(s -> {
-      s.close().join();
-      s.delete().join();
-    });
-
-    servers.stream().filter(CopycatServer::isPassive).forEach(s -> {
-      s.close().join();
-      s.delete().join();
-    });
-
-    servers.stream().filter(CopycatServer::isActive).forEach(s -> {
+    servers.forEach(s -> {
       s.close().join();
       s.delete().join();
     });
