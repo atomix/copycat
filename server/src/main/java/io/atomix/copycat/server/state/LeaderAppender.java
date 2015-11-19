@@ -120,7 +120,6 @@ final class LeaderAppender extends AbstractAppender {
       return appendEntries();
 
     // If there are no other ACTIVE members in the cluster, immediately commit the index.
-    // Note that the globalIndex is calculated when heartbeat entries are applied to the state machine.
     if (context.getActiveMemberStates().isEmpty()) {
       context.setCommitIndex(index);
       return CompletableFuture.completedFuture(index);
@@ -141,7 +140,7 @@ final class LeaderAppender extends AbstractAppender {
   private long commitTime() {
     int quorumIndex = quorumIndex();
     if (quorumIndex >= 0) {
-      return context.getActiveMemberStates((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
+      return context.getActiveMemberStates((m1, m2) -> Long.compare(m2.getCommitTime() > 0 ? m2.getCommitTime() : System.currentTimeMillis(), m1.getCommitTime() > 0 ? m1.getCommitTime() : System.currentTimeMillis())).get(quorumIndex).getCommitTime();
     }
     return System.currentTimeMillis();
   }

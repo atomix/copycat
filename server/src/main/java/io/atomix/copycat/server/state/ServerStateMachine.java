@@ -690,7 +690,7 @@ class ServerStateMachine implements AutoCloseable {
     // If the members list is empty, use the local server's last log index as the global index.
     long activeIndex = state.getActiveMemberStates().stream().mapToLong(MemberState::getCommitIndex).min().orElse(state.getLog().lastIndex());
     long passiveIndex = state.getPassiveMemberStates().stream().mapToLong(MemberState::getCommitIndex).min().orElse(state.getLog().lastIndex());
-    state.setGlobalIndex(Math.min(activeIndex, passiveIndex));
+    state.setGlobalIndex(Math.max(Math.min(activeIndex, passiveIndex), 0));
 
     return Futures.completedFutureAsync(changed, ThreadContext.currentContextOrThrow().executor());
   }

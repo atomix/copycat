@@ -66,24 +66,6 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests joining a server after many entries have been committed.
-   */
-  public void testServerJoinLate() throws Throwable {
-    createServers(3);
-    CopycatClient client = createClient();
-    submit(client, 0, 10000);
-    await(30000);
-    CopycatServer joiner = createServer(members, nextMember());
-    joiner.open().thenRun(this::resume);
-    await(30000);
-    joiner.onStateChange(state -> {
-      if (state == CopycatServer.State.FOLLOWER)
-        resume();
-    });
-    await(30000);
-  }
-
-  /**
    * Submits a bunch of commands recursively.
    */
   private void submit(CopycatClient client, int count, int total) {

@@ -54,6 +54,19 @@ public class OffsetIndexTest {
   }
 
   /**
+   * Tests that the position cache works properly.
+   */
+  public void testPositionCache() {
+    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    index.index(2, 0);
+    index.index(3, 40);
+    index.index(4, 80);
+    index.index(5, 120);
+    index.position(5);
+    assertEquals(index.position(0), -1);
+  }
+
+  /**
    * Tests reading the position and length of an offset.
    */
   public void testIndexPositionAndLength() {

@@ -414,7 +414,7 @@ public class ClientSession implements Session, Managed<Session> {
     // otherwise setup the connection and send the request.
     if (connectFuture == null) {
       // If there's no existing connect future, create a new one.
-      LOGGER.info("Connecting: {}", member.socketAddress());
+      LOGGER.debug("Connecting: {}", member);
       connectFuture = client.connect(member).thenCompose(this::setupConnection).whenComplete((connection, error) -> {
         connectFuture = null;
         if (!checkOpen || isOpen()) {
@@ -431,17 +431,25 @@ public class ClientSession implements Session, Managed<Session> {
     } else {
       // We don't want concurrent requests to attempt to connect to the same server at the same time, so
       // if the connection is already being attempted, piggyback on the existing connect future.
-      connectFuture.whenComplete((connection, error) -> {
-        if (!checkOpen || isOpen()) {
-          if (error == null) {
-            request(request, connection, future, checkOpen, recordFailures);
+      // Create a backup reference and check again to ensure connectFuture is still not null
+      CompletableFuture<Connection> currentConnectFuture = connectFuture;
+      if (currentConnectFuture != null) {
+        currentConnectFuture.whenComplete((connection, error) -> {
+          if (!checkOpen || isOpen()) {
+            if (error == null) {
+              request(request, connection, future, checkOpen, recordFailures);
+            } else {
+              request(request, future, checkOpen, recordFailures);
+            }
           } else {
-            request(request, future, checkOpen, recordFailures);
+            future.completeExceptionally(new IllegalStateException("session not open"));
           }
-        } else {
-          future.completeExceptionally(new IllegalStateException("session not open"));
-        }
-      });
+        });
+      } else if (connection != null) {
+        request(request, connection, future, checkOpen, recordFailures);
+      } else {
+        request(request, future, checkOpen, recordFailures);
+      }
     }
     return future;
   }

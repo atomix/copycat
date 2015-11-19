@@ -578,30 +578,43 @@ public class ServerState {
     List<MemberState> newPassiveMembers = buildMembers(passiveMembers);
     List<MemberState> newReserveMembers = buildMembers(reserveMembers);
 
-    clearMembers();
-
     for (MemberState member : newActiveMembers) {
-      member.setType(MemberState.Type.ACTIVE);
-      member.resetState(log);
-      membersMap.put(member.getMember().id(), member);
-      members.add(member);
-      this.activeMembers.add(member);
+      if (!this.activeMembers.contains(member)) {
+        this.reserveMembers.remove(member);
+        this.passiveMembers.remove(member);
+        if (!members.contains(member))
+          members.add(member);
+        this.activeMembers.add(member);
+        member.setType(MemberState.Type.ACTIVE);
+        member.resetState(log);
+        membersMap.put(member.getMember().id(), member);
+      }
     }
 
     for (MemberState member : newPassiveMembers) {
-      member.setType(MemberState.Type.PASSIVE);
-      member.resetState(log);
-      membersMap.put(member.getMember().id(), member);
-      members.add(member);
-      this.passiveMembers.add(member);
+      if (!this.passiveMembers.contains(member)) {
+        this.activeMembers.remove(member);
+        this.reserveMembers.remove(member);
+        if (!members.contains(member))
+          members.add(member);
+        this.passiveMembers.add(member);
+        member.setType(MemberState.Type.PASSIVE);
+        member.resetState(log);
+        membersMap.put(member.getMember().id(), member);
+      }
     }
 
     for (MemberState member : newReserveMembers) {
-      member.setType(MemberState.Type.RESERVE);
-      member.resetState(log);
-      membersMap.put(member.getMember().id(), member);
-      members.add(member);
-      this.reserveMembers.add(member);
+      if (!this.reserveMembers.contains(member)) {
+        this.activeMembers.remove(member);
+        this.passiveMembers.remove(member);
+        if (!members.contains(member))
+          members.add(member);
+        this.reserveMembers.add(member);
+        member.setType(MemberState.Type.RESERVE);
+        member.resetState(log);
+        membersMap.put(member.getMember().id(), member);
+      }
     }
 
     if (activeMembers.contains(member.getMember())) {

@@ -34,6 +34,11 @@ public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
   }
 
   @Override
+  public boolean isTombstone() {
+    return true;
+  }
+
+  @Override
   public String toString() {
     return String.format("%s[index=%d, term=%d, timestamp=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getTimestamp());
   }
