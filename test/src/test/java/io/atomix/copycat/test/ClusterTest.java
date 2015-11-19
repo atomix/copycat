@@ -1066,6 +1066,7 @@ public class ClusterTest extends ConcurrentTestCase {
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
+    count = 0;
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }
