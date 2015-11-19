@@ -55,6 +55,7 @@ abstract class ActiveState extends PassiveState {
     if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
       context.setTerm(request.term());
       context.setLeader(request.leader());
+      context.heartbeat();
       transition = true;
     }
 

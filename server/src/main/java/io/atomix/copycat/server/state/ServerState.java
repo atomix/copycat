@@ -1056,7 +1056,7 @@ public class ServerState {
   /**
    * Sends a heartbeat to the leader.
    */
-  private void heartbeat() {
+  void heartbeat() {
     HeartbeatRequest request = HeartbeatRequest.builder()
       .withMember(member.getMember())
       .withCommitIndex(commitIndex)

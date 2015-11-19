@@ -54,6 +54,7 @@ class PassiveState extends ReserveState {
     if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
       context.setTerm(request.term());
       context.setLeader(request.leader());
+      context.heartbeat();
     }
 
     return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
