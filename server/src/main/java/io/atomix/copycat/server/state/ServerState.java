@@ -1044,7 +1044,7 @@ public class ServerState {
    * Starts the heartbeat timer.
    */
   private void startHeartbeatTimer() {
-    heartbeatTimer = threadContext.schedule(HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL, this::heartbeat);
+    heartbeatTimer = threadContext.schedule(Duration.ZERO, HEARTBEAT_INTERVAL, this::heartbeat);
   }
 
   /**
@@ -1052,7 +1052,7 @@ public class ServerState {
    */
   private void heartbeat() {
     HeartbeatRequest request = HeartbeatRequest.builder()
-      .withMember(member.getMember().id())
+      .withMember(member.getMember())
       .withCommitIndex(commitIndex)
       .build();
 

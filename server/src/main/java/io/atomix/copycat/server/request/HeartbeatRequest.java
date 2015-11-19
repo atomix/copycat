@@ -21,6 +21,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Objects;
 
@@ -51,7 +52,7 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
     return new Builder(request);
   }
 
-  protected int member;
+  protected Member member;
   protected long commitIndex;
 
   /**
@@ -59,7 +60,7 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
    *
    * @return The heartbeat member.
    */
-  public int member() {
+  public Member member() {
     return member;
   }
 
@@ -74,13 +75,13 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeInt(member);
+    serializer.writeObject(member, buffer);
     buffer.writeLong(commitIndex);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    member = buffer.readInt();
+    member = serializer.readObject(buffer);
     commitIndex = buffer.readLong();
   }
 
@@ -100,7 +101,7 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[member=%d, commitIndex=%d]", getClass().getSimpleName(), member, commitIndex);
+    return String.format("%s[member=%s, commitIndex=%d]", getClass().getSimpleName(), member, commitIndex);
   }
 
   /**
@@ -118,7 +119,7 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
      * @return The request builder.
      * @throws NullPointerException if {@code member} is null
      */
-    public Builder withMember(int member) {
+    public Builder withMember(Member member) {
       request.member = Assert.notNull(member, "member");
       return this;
     }
@@ -140,7 +141,7 @@ public class HeartbeatRequest extends AbstractRequest<HeartbeatRequest> {
     @Override
     public HeartbeatRequest build() {
       super.build();
-      Assert.state(request.member != 0, "member cannot be 0");
+      Assert.notNull(request.member, "member");
       return request;
     }
   }

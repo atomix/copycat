@@ -191,7 +191,7 @@ final class LeaderState extends ActiveState {
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
+          LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
         }
 
         appender.appendEntries(index).whenComplete((result, error) -> {
@@ -229,7 +229,7 @@ final class LeaderState extends ActiveState {
 
     // If the member is already a known member of the cluster, complete the join successfully.
     MemberState existingMember = context.getMemberState(request.member().id());
-    if (existingMember != null && existingMember.getMember().clientAddress() != null && existingMember.getMember().clientAddress().equals(request.member().clientAddress())) {
+    if (existingMember != null) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
         .withVersion(context.getVersion())
@@ -255,7 +255,7 @@ final class LeaderState extends ActiveState {
         .setPassiveMembers(passiveMembers)
         .setReserveMembers(reserveMembers);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
@@ -342,7 +342,7 @@ final class LeaderState extends ActiveState {
         .setPassiveMembers(passiveMembers)
         .setReserveMembers(reserveMembers);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
@@ -385,9 +385,34 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    MemberState member = context.getMemberState(request.member());
+    if (member == null) {
+      return CompletableFuture.completedFuture(logResponse(HeartbeatResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
+    // If the member client address has changed, append a new configuration.
+    if (member.getMember().clientAddress() == null || !member.getMember().clientAddress().equals(request.member().clientAddress())) {
+      member.setClientAddress(request.member().clientAddress());
+
+      // Append a new configuration entry. Note that we don't need to ensure this configuration is not
+      // committed concurrently with other configurations since it's not modifying the structure of the cluster.
+      // This configuration update simply modifies the existing configuration, and new configurations will be
+      // rejected if the current configuration is still being committed.
+      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+        entry.setTerm(context.getTerm())
+          .setActiveMembers(context.buildActiveMembers())
+          .setPassiveMembers(context.buildPassiveMembers())
+          .setReserveMembers(context.buildReserveMembers());
+        context.getLog().append(entry);
+        LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
+      }
+    }
+
     try (HeartbeatEntry entry = context.getLog().create(HeartbeatEntry.class)) {
       entry.setTerm(context.getTerm())
-        .setMember(request.member())
+        .setMember(request.member().id())
         .setCommitIndex(request.commitIndex())
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
@@ -487,7 +512,7 @@ final class LeaderState extends ActiveState {
           .setPassiveMembers(passiveMembers)
           .setReserveMembers(reserveMembers);
         index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
+        LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
         // Store the index of the configuration entry in order to prevent other configurations from
         // being logged and committed concurrently. This is an important safety property of Raft.
@@ -594,7 +619,7 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
