@@ -309,7 +309,7 @@ final class LeaderState extends ActiveState {
     }
 
     // If the leaving member is not a known member of the cluster, complete the leave successfully.
-    if (context.getMember(request.member().id()) == null) {
+    if (!request.member().equals(context.getMember()) && context.getMember(request.member().id()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
         .withActiveMembers(context.buildActiveMembers())
