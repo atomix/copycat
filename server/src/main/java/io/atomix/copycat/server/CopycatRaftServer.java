@@ -248,7 +248,8 @@ public class CopycatRaftServer implements CopycatServer {
         }
       }
     }
-    return closeFuture;
+
+    return closeFuture.whenComplete((result, error) -> open = false);
   }
 
   @Override
