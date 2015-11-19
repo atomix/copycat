@@ -262,13 +262,15 @@ public class ServerState {
         this.leader = 0;
       } else {
         // If a valid leader ID was specified, it must be a member that's currently a member of the
-        // ACTIVE members configuration.
+        // ACTIVE members configuration. Note that we don't throw exceptions for unknown members. It's
+        // possible that a failure following a configuration change could result in an unknown leader
+        // sending AppendRequest to this server. Simply configure the leader if it's known.
         MemberState member = leader == getMember().id() ? getMemberState() : getMemberState(leader);
-        Assert.state(member != null, "unknown leader: ", leader);
-        Assert.state(member.isActive(), "invalid leader: ", member.getMember().serverAddress());
-        this.leader = member.getMember().id();
-        LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
-        electionListeners.forEach(l -> l.accept(member.getMember().serverAddress()));
+        if (member != null) {
+          this.leader = member.getMember().id();
+          LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
+          electionListeners.forEach(l -> l.accept(member.getMember().serverAddress()));
+        }
       }
 
       this.lastVotedFor = 0;
