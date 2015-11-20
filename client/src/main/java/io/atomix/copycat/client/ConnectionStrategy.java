@@ -31,10 +31,9 @@ public interface ConnectionStrategy {
   /**
    * Returns a list of servers to which the client can connect.
    *
-   * @param leader The current cluster leader.
-   * @param servers The current list of servers.
+   * @param server The server to which to connect.
    * @return A collection of servers to which the client can connect.
    */
-  List<Address> getConnections(Address leader, List<Address> servers);
+  boolean connect(Address server, Address leader);
 
 }
