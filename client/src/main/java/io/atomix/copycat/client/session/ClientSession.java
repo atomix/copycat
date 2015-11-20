@@ -114,7 +114,7 @@ public class ClientSession implements Session, Managed<Session> {
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+    this.connectMembers = new ArrayList<>(members);
   }
 
   @Override
@@ -153,7 +153,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members));
+    this.connectMembers = new ArrayList<>(this.members);
   }
 
   /**
@@ -407,8 +407,8 @@ public class ClientSession implements Session, Managed<Session> {
       return future;
     }
 
-    // Remove the next random member from the members list.
-    Address member = connectMembers.remove(random.nextInt(connectMembers.size()));
+    // Select the next member to which to connect.
+    Address member = selectMember();
 
     // Connect to the server. If the connection fails, recursively attempt to connect to the next server,
     // otherwise setup the connection and send the request.
@@ -421,7 +421,7 @@ public class ClientSession implements Session, Managed<Session> {
           if (error == null) {
             request(request, connection, future, checkOpen, recordFailures);
           } else {
-            LOGGER.info("Failed to connect: {}", member.socketAddress());
+            LOGGER.info("Failed to connect: {}", member);
             resetConnection().request(request, future, checkOpen, recordFailures);
           }
         } else {
@@ -580,9 +580,27 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private ClientSession resetMembers() {
     if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+      connectMembers = new ArrayList<>(members);
     }
     return this;
+  }
+
+  /**
+   * Selects the next member to which to send a request.
+   */
+  private Address selectMember() {
+    // Remove the next member that meets the strategy from the members list.
+    Iterator<Address> iterator = connectMembers.iterator();
+    while (iterator.hasNext()) {
+      Address member = iterator.next();
+      if (connectionStrategy.connect(member, leader)) {
+        iterator.remove();
+        return member;
+      }
+    }
+
+    // If no member in the members list matches the strategy, choose a random member that doesn't match the strategy.
+    return connectMembers.remove(random.nextInt(connectMembers.size()));
   }
 
   /**
