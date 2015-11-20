@@ -118,7 +118,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000);
+      await(30000);
     }
 
     s1.close().join();

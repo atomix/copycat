@@ -150,7 +150,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void updateMatchIndex(MemberState member, AppendResponse response) {
     // If the replica returned a valid match index then update the existing match index.
-    member.setMatchIndex(Math.max(member.getMatchIndex(), response.logIndex()));
+    member.setMatchIndex(response.logIndex());
   }
 
   /**

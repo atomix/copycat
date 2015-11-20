@@ -45,7 +45,7 @@ class MemberState {
 
   private static final long HEARTBEAT_TIMEOUT = 60000;
   private Member member;
-  private Type type = Type.RESERVE;
+  private Type type;
   private Status status = Status.AVAILABLE;
   private long heartbeatIndex;
   private long heartbeatTime;

@@ -82,7 +82,7 @@ class ReserveState extends AbstractState {
   /**
    * Handles an append request.
    */
-  private AppendResponse handleAppend(AppendRequest request) {
+  protected AppendResponse handleAppend(AppendRequest request) {
     // If the previous log index is greater than the current configuration version, fail the append.
     if (request.logIndex() > context.getVersion()) {
       return AppendResponse.builder()

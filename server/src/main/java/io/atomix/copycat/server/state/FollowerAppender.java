@@ -157,7 +157,7 @@ final class FollowerAppender extends AbstractAppender {
       updateNextIndex(member);
 
       // If there are more entries to send then attempt to send another commit.
-      if (hasMoreEntries(member)) {
+      if (!request.entries().isEmpty() && hasMoreEntries(member)) {
         appendEntries(member);
       }
     } else {
@@ -171,7 +171,7 @@ final class FollowerAppender extends AbstractAppender {
       resetNextIndex(member);
 
       // If there are more entries to send then attempt to send another commit.
-      if (hasMoreEntries(member)) {
+      if (!request.entries().isEmpty() && hasMoreEntries(member)) {
         appendEntries(member);
       }
     }
