@@ -546,20 +546,6 @@ public class ServerState {
   }
 
   /**
-   * Clears all members from the server state.
-   *
-   * @return The server state.
-   */
-  private ServerState clearMembers() {
-    members.clear();
-    activeMembers.clear();
-    passiveMembers.clear();
-    reserveMembers.clear();
-    membersMap.clear();
-    return this;
-  }
-
-  /**
    * Configures the cluster state.
    *
    * @param version The cluster state version.
@@ -568,55 +554,26 @@ public class ServerState {
    * @param reserveMembers The reserve members.
    * @return The cluster state.
    */
+  @SuppressWarnings("unchecked")
   ServerState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers, Collection<Member> reserveMembers) {
     // If the configuration version is less than the currently configured version, ignore it.
     // Configurations can be persisted and applying old configurations can revert newer configurations.
     if (version <= this.version)
       return this;
 
-    List<MemberState> newActiveMembers = buildMembers(activeMembers);
-    List<MemberState> newPassiveMembers = buildMembers(passiveMembers);
-    List<MemberState> newReserveMembers = buildMembers(reserveMembers);
+    // Move active members. We do this without recreating any member states since replication may depend on current states.
+    addMembers(MemberState.Type.ACTIVE, activeMembers, this.activeMembers::add, this.passiveMembers::remove, this.reserveMembers::remove);
+    removeMembers(this.activeMembers, activeMembers);
 
-    for (MemberState member : newActiveMembers) {
-      if (!this.activeMembers.contains(member)) {
-        this.reserveMembers.remove(member);
-        this.passiveMembers.remove(member);
-        if (!members.contains(member))
-          members.add(member);
-        this.activeMembers.add(member);
-        member.setType(MemberState.Type.ACTIVE);
-        member.resetState(log);
-        membersMap.put(member.getMember().id(), member);
-      }
-    }
+    // Move passive members. We do this without recreating any member states since replication may depend on current states.
+    addMembers(MemberState.Type.PASSIVE, passiveMembers, this.passiveMembers::add, this.activeMembers::remove, this.reserveMembers::remove);
+    removeMembers(this.passiveMembers, passiveMembers);
 
-    for (MemberState member : newPassiveMembers) {
-      if (!this.passiveMembers.contains(member)) {
-        this.activeMembers.remove(member);
-        this.reserveMembers.remove(member);
-        if (!members.contains(member))
-          members.add(member);
-        this.passiveMembers.add(member);
-        member.setType(MemberState.Type.PASSIVE);
-        member.resetState(log);
-        membersMap.put(member.getMember().id(), member);
-      }
-    }
+    // Move reserve members. We do this without recreating any member states since replication may depend on current states.
+    addMembers(MemberState.Type.RESERVE, reserveMembers, this.reserveMembers::add, this.activeMembers::remove, this.passiveMembers::remove);
+    removeMembers(this.reserveMembers, reserveMembers);
 
-    for (MemberState member : newReserveMembers) {
-      if (!this.reserveMembers.contains(member)) {
-        this.activeMembers.remove(member);
-        this.passiveMembers.remove(member);
-        if (!members.contains(member))
-          members.add(member);
-        this.reserveMembers.add(member);
-        member.setType(MemberState.Type.RESERVE);
-        member.resetState(log);
-        membersMap.put(member.getMember().id(), member);
-      }
-    }
-
+    // Set the local member type based on the provided member lists.
     if (activeMembers.contains(member.getMember())) {
       this.member.setType(MemberState.Type.ACTIVE);
     } else if (passiveMembers.contains(member.getMember())) {
@@ -635,6 +592,45 @@ public class ServerState {
     reassign();
 
     return this;
+  }
+
+  /**
+   * Adds new members to the collection of members.
+   */
+  @SuppressWarnings("unchecked")
+  private void addMembers(MemberState.Type type, Collection<Member> newMembers, Consumer<MemberState> adder, Consumer<MemberState>... removers) {
+    for (MemberState member : buildMembers(newMembers)) {
+      // If the member type is not the expected type, update the type and add the member to the appropriate list.
+      if (member.getType() != type) {
+        // Remove the member from type-specific membership lists.
+        for (Consumer<MemberState> remover : removers) {
+          remover.accept(member);
+        }
+
+        // If the member isn't currently listed in the members list, add it.
+        if (!members.contains(member))
+          members.add(member);
+
+        // Add the member to the new type-specific membership list.
+        adder.accept(member);
+
+        // Set the member type and update its state.
+        member.setType(type).resetState(log);
+        membersMap.put(member.getMember().id(), member);
+      }
+    }
+  }
+
+  /**
+   * Removes old members no longer present in the members list.
+   */
+  private void removeMembers(Collection<MemberState> oldMembers, Collection<Member> newMembers) {
+    Iterator<MemberState> iterator = oldMembers.iterator();
+    while (iterator.hasNext()) {
+      if (!newMembers.contains(iterator.next().getMember())) {
+        iterator.remove();
+      }
+    }
   }
 
   /**
