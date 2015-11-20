@@ -102,7 +102,7 @@ final class FollowerAppender extends AbstractAppender {
 
     AppendRequest.Builder builder = AppendRequest.builder()
       .withTerm(context.getTerm())
-      .withLeader(context.getMember().id())
+      .withLeader(context.getLeader().id())
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withCommitIndex(context.getCommitIndex());
