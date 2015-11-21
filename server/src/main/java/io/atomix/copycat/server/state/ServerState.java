@@ -779,6 +779,7 @@ public class ServerState {
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
+    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
     connection.handler(AcceptRequest.class, request -> state.accept(request));
     connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
