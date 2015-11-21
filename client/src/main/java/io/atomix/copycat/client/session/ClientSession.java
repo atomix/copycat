@@ -38,6 +38,7 @@ import io.atomix.copycat.client.response.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.ConnectException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -534,18 +535,26 @@ public class ClientSession implements Session, Managed<Session> {
     });
     connection.handler(PublishRequest.class, this::handlePublish);
 
+    // When we first connect to a new server, first send a ConnectRequest to the server if the
+    // session has already been registered. Once the connection has been established, send a KeepAlive
+    // request to the new server. This will allow the new server to immediately provide membership info
+    // to the client.
     if (id != 0) {
       ConnectRequest request = ConnectRequest.builder()
         .withSession(id)
         .build();
 
       CompletableFuture<Connection> future = new CompletableFuture<>();
-      connection.send(request).whenComplete((response, error) -> {
+      connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((connectResponse, connectError) -> {
         if (isOpen()) {
-          if (error == null) {
-            future.complete(connection);
+          if (connectError == null && connectResponse.status() == Response.Status.OK) {
+            keepAlive().whenComplete((keepAliveResult, keepAliveError) -> {
+              future.complete(connection);
+            });
+          } else if (connectError == null) {
+            future.completeExceptionally(new ConnectException("failed to connect"));
           } else {
-            future.completeExceptionally(error);
+            future.completeExceptionally(connectError);
           }
         }
       });
@@ -653,9 +662,10 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   /**
-   * Sends and reschedules keep alive request.
+   * Sends a keep alive request.
    */
-  private void keepAlive(Duration interval) {
+  private CompletableFuture<Void> keepAlive() {
+    CompletableFuture<Void> future = new CompletableFuture<>();
     KeepAliveRequest request = KeepAliveRequest.builder()
       .withSession(id)
       .withCommandSequence(commandResponse)
@@ -668,33 +678,31 @@ public class ClientSession implements Session, Managed<Session> {
           setLeader(response.leader());
           setMembers(response.members());
           resetMembers();
-
-          keepAliveFuture = context.schedule(interval, () -> {
-            if (isOpen()) {
-              context.checkThread();
-              keepAlive(interval);
-            }
-          });
+          future.complete(null);
         } else if (isOpen()) {
           if (setLeader(response.leader())) {
             resetMembers();
           }
-
-          keepAliveFuture = context.schedule(interval, () -> {
-            if (isOpen()) {
-              context.checkThread();
-              keepAlive(interval);
-            }
-          });
+          future.complete(null);
         }
       } else if (isOpen()) {
-        keepAliveFuture = context.schedule(interval, () -> {
-          if (isOpen()) {
-            context.checkThread();
-            keepAlive(interval);
-          }
-        });
+        future.completeExceptionally(error);
       }
+    });
+    return future;
+  }
+
+  /**
+   * Sends and reschedules keep alive request.
+   */
+  private void keepAlive(Duration interval) {
+    keepAlive().whenComplete((result, error) -> {
+      keepAliveFuture = context.schedule(interval, () -> {
+        if (isOpen()) {
+          context.checkThread();
+          keepAlive(interval);
+        }
+      });
     });
   }
 
