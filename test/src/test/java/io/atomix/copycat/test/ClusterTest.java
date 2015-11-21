@@ -1024,7 +1024,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public void clearTests() throws Exception {
     clients.forEach(c -> c.close().join());
     if (servers.size() < count) {
-      for (int i = servers.size(); i < count; i++) {
+      for (int i = servers.size() + 1; i <= count; i++) {
         Member member = new Member(new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
         createServer(members, member).open().join();
       }
