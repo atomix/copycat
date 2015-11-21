@@ -309,7 +309,7 @@ final class FollowerState extends ActiveState {
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return super.close().thenRun(this::cancelHeartbeatTimeout);
+    return super.close().thenRun(appender::close).thenRun(this::cancelHeartbeatTimeout);
   }
 
 }
