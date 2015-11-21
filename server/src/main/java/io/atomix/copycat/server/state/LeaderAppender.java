@@ -233,7 +233,7 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected AppendRequest buildRequest(MemberState member) {
+  protected AppendRequest buildAppendRequest(MemberState member) {
     // If the log is empty then send an empty commit.
     // If the next index hasn't yet been set then we send an empty commit first.
     // If the next index is greater than the last index then send an empty commit.
@@ -242,7 +242,7 @@ final class LeaderAppender extends AbstractAppender {
     if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
       return buildEmptyRequest(member);
     } else {
-      return buildAppendRequest(member);
+      return buildEntryRequest(member);
     }
   }
 
@@ -265,7 +265,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Builds a populated AppendEntries request.
    */
-  private AppendRequest buildAppendRequest(MemberState member) {
+  private AppendRequest buildEntryRequest(MemberState member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
@@ -307,30 +307,30 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected void startRequest(MemberState member, AppendRequest request) {
-    super.startRequest(member, request);
+  protected void startAppendRequest(MemberState member, AppendRequest request) {
+    super.startAppendRequest(member, request);
     member.setCommitStartTime(commitTime);
   }
 
   @Override
-  protected void endRequest(MemberState member, AppendRequest request, Throwable error) {
-    super.endRequest(member, request, error);
+  protected void endAppendRequest(MemberState member, AppendRequest request, Throwable error) {
+    super.endAppendRequest(member, request, error);
     commitTime(member, error);
   }
 
   @Override
-  protected void handleResponse(MemberState member, AppendRequest request, AppendResponse response) {
+  protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
     if (response.status() == Response.Status.OK) {
-      handleResponseOk(member, request, response);
+      handleAppendResponseOk(member, request, response);
     } else {
-      handleResponseError(member, request, response);
+      handleAppendResponseError(member, request, response);
     }
   }
 
   /**
    * Handles a {@link Response.Status#OK} response.
    */
-  private void handleResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
+  private void handleAppendResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
     // Reset the member failure count.
     member.resetFailureCount();
 
@@ -368,7 +368,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Handles a {@link Response.Status#ERROR} response.
    */
-  private void handleResponseError(MemberState member, AppendRequest request, AppendResponse response) {
+  private void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     if (response.term() > context.getTerm()) {
       LOGGER.debug("{} - Received higher term from {}", context.getMember().serverAddress(), member.getMember().serverAddress());
       context.setTerm(response.term()).setLeader(0);
@@ -382,7 +382,7 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected void handleError(MemberState member, AppendRequest request, Throwable error) {
+  protected void handleAppendError(MemberState member, AppendRequest request, Throwable error) {
     failAttempt(member, error);
   }
 

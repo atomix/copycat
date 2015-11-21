@@ -56,7 +56,7 @@ final class FollowerAppender extends AbstractAppender {
   }
 
   @Override
-  protected AppendRequest buildRequest(MemberState member) {
+  protected AppendRequest buildAppendRequest(MemberState member) {
     // Send append entries RPCs to the member according to its type. PASSIVE members receive all entries,
     // and RESERVE members receive only configuration changes.
     if (member.getMember().isPassive()) {
@@ -137,18 +137,18 @@ final class FollowerAppender extends AbstractAppender {
   }
 
   @Override
-  protected void handleResponse(MemberState member, AppendRequest request, AppendResponse response) {
+  protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
     if (response.status() == Response.Status.OK) {
-      handleResponseOk(member, request, response);
+      handleAppendResponseOk(member, request, response);
     } else {
-      handleResponseError(member, request, response);
+      handleAppendResponseError(member, request, response);
     }
   }
 
   /**
    * Handles a {@link Response.Status#OK} response.
    */
-  private void handleResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
+  private void handleAppendResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
     // Reset the member failure count.
     member.resetFailureCount();
 
@@ -181,7 +181,7 @@ final class FollowerAppender extends AbstractAppender {
   /**
    * Handles a {@link Response.Status#ERROR} response.
    */
-  private void handleResponseError(MemberState member, AppendRequest request, AppendResponse response) {
+  private void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     // If the response term is greater than the local term, increment it.
     if (response.term() > context.getTerm()) {
       context.setTerm(response.term());
@@ -194,7 +194,7 @@ final class FollowerAppender extends AbstractAppender {
   }
 
   @Override
-  protected void handleError(MemberState member, AppendRequest request, Throwable error) {
+  protected void handleAppendError(MemberState member, AppendRequest request, Throwable error) {
     // Ignore errors.
   }
 

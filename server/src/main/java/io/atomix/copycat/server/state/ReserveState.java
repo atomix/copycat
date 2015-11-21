@@ -22,8 +22,6 @@ import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
-import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
-import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -83,30 +81,11 @@ class ReserveState extends AbstractState {
    * Handles an append request.
    */
   protected AppendResponse handleAppend(AppendRequest request) {
-    // If the previous log index is greater than the current configuration version, fail the append.
-    if (request.logIndex() > context.getVersion()) {
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getVersion())
-        .build();
-    }
-
-    // Iterate through configuration entries. For each configuration entry, update the local configuration.
-    for (Entry entry : request.entries()) {
-      if (entry instanceof ConfigurationEntry) {
-        ConfigurationEntry configuration = (ConfigurationEntry) entry;
-        context.configure(configuration.getIndex(), configuration.getMembers());
-      }
-    }
-
-    // Response successfully with the latest configuration index.
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(context.getVersion())
+      .withLogIndex(0)
       .build();
   }
 
@@ -269,6 +248,16 @@ class ReserveState extends AbstractState {
     } else {
       return this.<HeartbeatRequest, HeartbeatResponse>forward(request).thenApply(this::logResponse);
     }
+  }
+
+  @Override
+  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+    context.checkThread();
+    logRequest(request);
+    context.configure(request.version(), request.members());
+    return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
+      .withStatus(Response.Status.OK)
+      .build()));
   }
 
 }

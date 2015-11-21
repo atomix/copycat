@@ -27,7 +27,7 @@ import io.atomix.catalyst.transport.Address;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-@SerializeWith(id=229)
+@SerializeWith(id=230)
 public class Member implements CatalystSerializable {
 
   /**

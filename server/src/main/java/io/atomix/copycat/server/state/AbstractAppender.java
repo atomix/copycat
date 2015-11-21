@@ -17,7 +17,9 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.server.request.AppendRequest;
+import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.response.AppendResponse;
+import io.atomix.copycat.server.response.ConfigureResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +36,8 @@ abstract class AbstractAppender implements AutoCloseable {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerState context;
   private final Set<MemberState> appending = new HashSet<>();
+  private final Set<MemberState> configured = new HashSet<>();
+  private final Set<MemberState> configuring = new HashSet<>();
   private boolean open = true;
 
   AbstractAppender(ServerState context) {
@@ -41,21 +45,89 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
-   * Sends append entries requests to the given member.
+   * Sends a configuration to the given member.
    */
-  protected void appendEntries(MemberState member) {
-    if (!appending.contains(member) && open) {
-      AppendRequest request = buildRequest(member);
+  protected void configure(MemberState member) {
+    if (!configuring.contains(member)) {
+      ConfigureRequest request = buildConfigureRequest(member);
       if (request != null) {
-        sendRequest(member, request);
+        sendConfigureRequest(member, request);
       }
     }
   }
 
   /**
+   * Connects to the member and sends a configure request.
+   */
+  protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
+    configuring.add(member);
+
+    LOGGER.debug("{} - Sent {} to {}", context.getMember().serverAddress(), request, member.getMember().serverAddress());
+    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      context.checkThread();
+
+      if (open) {
+        if (error == null) {
+          sendConfigureRequest(connection, member, request);
+        } else {
+          LOGGER.warn("{} - Failed to configure {}", context.getMember().serverAddress(), member.getMember().serverAddress());
+          configuring.remove(member);
+        }
+      }
+    });
+  }
+
+  /**
+   * Sends a commit message.
+   */
+  protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
+    connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
+      context.checkThread();
+      configuring.remove(member);
+
+      if (open) {
+        if (error == null) {
+          LOGGER.debug("{} - Received {} from {}", context.getMember().serverAddress(), response, member.getMember().serverAddress());
+          configured.add(member);
+          appendEntries(member);
+        } else {
+          LOGGER.warn("{} - Failed to configure {}", context.getMember().serverAddress(), member.getMember().serverAddress());
+        }
+      }
+    });
+  }
+
+  /**
+   * Sends append entries requests to the given member.
+   */
+  protected void appendEntries(MemberState member) {
+    if (!configured.contains(member) && open) {
+      configure(member);
+    } else if (!appending.contains(member) && open) {
+      AppendRequest request = buildAppendRequest(member);
+      if (request != null) {
+        sendAppendRequest(member, request);
+      }
+    }
+  }
+
+  /**
+   * Builds a configure request for the given member.
+   */
+  protected ConfigureRequest buildConfigureRequest(MemberState member) {
+    Member leader = context.getLeader();
+    return ConfigureRequest.builder()
+      .withTerm(context.getTerm())
+      .withLeader(leader != null ? leader.id() : 0)
+      .withVersion(context.getVersion())
+      .withMembers(context.buildMembers())
+      .build();
+  }
+
+  /**
    * Builds an append request for the given member.
    */
-  protected abstract AppendRequest buildRequest(MemberState member);
+  protected abstract AppendRequest buildAppendRequest(MemberState member);
 
   /**
    * Gets the previous index.
@@ -77,22 +149,22 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Starts sending a request.
    */
-  protected void startRequest(MemberState member, AppendRequest request) {
+  protected void startAppendRequest(MemberState member, AppendRequest request) {
     appending.add(member);
   }
 
   /**
    * Ends sending a request.
    */
-  protected void endRequest(MemberState member, AppendRequest request, Throwable error) {
+  protected void endAppendRequest(MemberState member, AppendRequest request, Throwable error) {
     appending.remove(member);
   }
 
   /**
    * Connects to the member and sends a commit message.
    */
-  protected void sendRequest(MemberState member, AppendRequest request) {
-    startRequest(member, request);
+  protected void sendAppendRequest(MemberState member, AppendRequest request) {
+    startAppendRequest(member, request);
 
     LOGGER.debug("{} - Sent {} to {}", context.getMember().serverAddress(), request, member.getMember().serverAddress());
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
@@ -100,10 +172,10 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          sendRequest(connection, member, request);
+          sendAppendRequest(connection, member, request);
         } else {
-          endRequest(member, request, error);
-          handleError(member, request, error);
+          endAppendRequest(member, request, error);
+          handleAppendError(member, request, error);
         }
       }
     });
@@ -112,17 +184,17 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a commit message.
    */
-  protected void sendRequest(Connection connection, MemberState member, AppendRequest request) {
+  protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
-      endRequest(member, request, error);
+      endAppendRequest(member, request, error);
       context.checkThread();
 
       if (open) {
         if (error == null) {
           LOGGER.debug("{} - Received {} from {}", context.getMember().serverAddress(), response, member.getMember().serverAddress());
-          handleResponse(member, request, response);
+          handleAppendResponse(member, request, response);
         } else {
-          handleError(member, request, error);
+          handleAppendError(member, request, error);
         }
       }
     });
@@ -131,12 +203,12 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Handles an append response.
    */
-  protected abstract void handleResponse(MemberState member, AppendRequest request, AppendResponse response);
+  protected abstract void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response);
 
   /**
    * Handles an append error.
    */
-  protected abstract void handleError(MemberState member, AppendRequest request, Throwable error);
+  protected abstract void handleAppendError(MemberState member, AppendRequest request, Throwable error);
 
   /**
    * Returns a boolean value indicating whether there are more entries to send.

@@ -27,7 +27,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-@SerializeWith(id=228)
+@SerializeWith(id=229)
 public class HeartbeatEntry extends TimestampedEntry<HeartbeatEntry> {
   private int member;
   private long commitIndex;
