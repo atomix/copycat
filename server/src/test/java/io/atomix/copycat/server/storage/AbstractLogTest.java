@@ -84,7 +84,8 @@ public abstract class AbstractLogTest {
   @AfterMethod
   protected void deleteLog() {
     try {
-      log.close();
+      if (log.isOpen())
+        log.close();
     } catch (Exception ignore) {
     } finally {
       assertFalse(log.isOpen());

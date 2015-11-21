@@ -115,10 +115,11 @@ public abstract class LogTest extends AbstractLogTest {
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
       log.clean(i);
+      assertTrue(log.segments.segment(i).isClean(i));
       assertNotNull(log.get(i));
     }
-    log.compactor().majorIndex(entriesPerSegment * 2);
-    for (int i = entriesPerSegment; i <= entriesPerSegment * 2; i++) {
+    log.commit(entriesPerSegment * 2).compactor().minorIndex(entriesPerSegment * 2);
+    for (int i = entriesPerSegment; i < entriesPerSegment * 2; i++) {
       assertNull(log.get(i));
     }
   }
@@ -131,10 +132,11 @@ public abstract class LogTest extends AbstractLogTest {
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
       log.clean(i);
+      assertTrue(log.segments.segment(i).isClean(i));
       assertNotNull(log.get(i));
     }
-    log.compactor().majorIndex(entriesPerSegment * 2);
-    for (int i = entriesPerSegment; i <= entriesPerSegment * 2; i++) {
+    log.commit(entriesPerSegment * 2).compactor().majorIndex(entriesPerSegment * 2);
+    for (int i = entriesPerSegment; i < entriesPerSegment * 2; i++) {
       assertNull(log.get(i));
     }
   }

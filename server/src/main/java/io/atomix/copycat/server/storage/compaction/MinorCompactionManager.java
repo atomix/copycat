@@ -22,6 +22,7 @@ import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -65,7 +66,7 @@ public final class MinorCompactionManager implements CompactionManager {
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
-    for (Segment segment : getCleanableSegments(storage, segments)) {
+    for (Segment segment : getCompactableSegments(storage, segments)) {
       tasks.add(new MinorCompactionTask(segments, segment));
     }
     return tasks;
@@ -76,11 +77,17 @@ public final class MinorCompactionManager implements CompactionManager {
    *
    * @return A list of compactable segments.
    */
-  private Iterable<Segment> getCleanableSegments(Storage storage, SegmentManager manager) {
-    List<Segment> segments = new ArrayList<>();
-    for (Segment segment : manager.segments()) {
-      // Only allow compaction of segments that are full.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && manager.currentSegment().firstIndex() <= manager.commitIndex() && !manager.currentSegment().isEmpty())) {
+  private Iterable<Segment> getCompactableSegments(Storage storage, SegmentManager manager) {
+    List<Segment> segments = new ArrayList<>(manager.segments().size());
+    Iterator<Segment> iterator = manager.segments().iterator();
+    Segment segment = iterator.next();
+    while (iterator.hasNext()) {
+      Segment nextSegment = iterator.next();
+
+      // Segments that have already been compacted are eligible for compaction. For uncompacted segments, the segment must be full, consist
+      // of entries less than the minorIndex, and a later segment with at least one committed entry must exist in the log. This ensures that
+      // a non-empty entry always remains at the end of the log.
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.firstIndex() <= manager.commitIndex() && !nextSegment.isEmpty())) {
         // Calculate the percentage of entries that have been marked for cleaning in the segment.
         double cleanPercentage = segment.cleanCount() / (double) segment.count();
 
@@ -90,6 +97,8 @@ public final class MinorCompactionManager implements CompactionManager {
           segments.add(segment);
         }
       }
+
+      segment = nextSegment;
     }
     return segments;
   }
