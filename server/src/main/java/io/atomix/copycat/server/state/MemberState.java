@@ -36,6 +36,8 @@ class MemberState {
 
   private static final long HEARTBEAT_TIMEOUT = 60000;
   private Member member;
+  private long term;
+  private long version;
   private Status status = Status.AVAILABLE;
   private long heartbeatIndex;
   private long heartbeatTime;
@@ -98,6 +100,46 @@ class MemberState {
    */
   MemberState setClientAddress(Address address) {
     this.member = new Member(member.type(), member.serverAddress(), address);
+    return this;
+  }
+
+  /**
+   * Returns the member term.
+   *
+   * @return The member term.
+   */
+  long getTerm() {
+    return term;
+  }
+
+  /**
+   * Sets the member term.
+   *
+   * @param term The member term.
+   * @return The member state.
+   */
+  MemberState setTerm(long term) {
+    this.term = term;
+    return this;
+  }
+
+  /**
+   * Returns the member configuration version.
+   *
+   * @return The member configuration version.
+   */
+  long getVersion() {
+    return version;
+  }
+
+  /**
+   * Sets the member version.
+   *
+   * @param version The member version.
+   * @return The member state.
+   */
+  MemberState setVersion(long version) {
+    this.version = version;
     return this;
   }
 

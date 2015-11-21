@@ -18,11 +18,9 @@ package io.atomix.copycat.server.state;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * Sends AppendEntries RPCs for a follower.
@@ -31,8 +29,6 @@ import java.util.function.Predicate;
  */
 final class FollowerAppender extends AbstractAppender {
   private static final int MAX_BATCH_SIZE = 1024 * 32;
-  private static final Predicate<Entry> PASSIVE_ENTRY_PREDICATE = e -> true;
-  private static final Predicate<Entry> RESERVE_ENTRY_PREDICATE = e -> e instanceof ConfigurationEntry;
 
   public FollowerAppender(ServerState context) {
     super(context);
@@ -57,83 +53,52 @@ final class FollowerAppender extends AbstractAppender {
 
   @Override
   protected AppendRequest buildAppendRequest(MemberState member) {
-    // Send append entries RPCs to the member according to its type. PASSIVE members receive all entries,
-    // and RESERVE members receive only configuration changes.
-    if (member.getMember().isPassive()) {
-      return buildPassiveRequest(member);
-    } else {
-      return buildReserveRequest(member);
-    }
-  }
+    // Only send AppendRequest to PASSIVE members. RESERVE members receive updates solely through configurations.
+    if (member.getMember().isPassive() && !context.getLog().isEmpty() && member.getMatchIndex() < context.getCommitIndex()) {
+      // Send as many entries as possible to the member. We use the basic mechanism of AppendEntries RPCs
+      // as described in the Raft literature.
+      // Note that we don't need to account for members that are unavailable with empty append requests since the
+      // heartbeat mechanism handles availability for us. Thus, we can always safely attempt to send as many entries
+      // as possible without incurring too much additional overhead.
+      long prevIndex = getPrevIndex(member);
+      Entry prevEntry = getPrevEntry(member, prevIndex);
 
-  /**
-   * Builds a passive member append request.
-   */
-  private AppendRequest buildPassiveRequest(MemberState member) {
-    // If a RESERVE member's matchIndex is less than the current commit index, send entries to the member.
-    if (!context.getLog().isEmpty() && member.getMatchIndex() < context.getCommitIndex()) {
-      return buildRequest(member, PASSIVE_ENTRY_PREDICATE);
-    }
-    return null;
-  }
+      Member leader = context.getLeader();
+      AppendRequest.Builder builder = AppendRequest.builder()
+        .withTerm(context.getTerm())
+        .withLeader(leader != null ? leader.id() : 0)
+        .withLogIndex(prevIndex)
+        .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
+        .withCommitIndex(context.getCommitIndex());
 
-  /**
-   * Builds a reserve member append request.
-   */
-  private AppendRequest buildReserveRequest(MemberState member) {
-    // If a RESERVE member's matchIndex is less than the current configuration version, send entries to the member.
-    if (!context.getLog().isEmpty() && member.getMatchIndex() < context.getVersion()) {
-      return buildRequest(member, RESERVE_ENTRY_PREDICATE);
-    }
-    return null;
-  }
+      // Build a list of entries to send to the member.
+      long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
 
-  /**
-   * Builds an append request, filtering log entries by the given predicate.
-   */
-  private AppendRequest buildRequest(MemberState member, Predicate<Entry> filter) {
-    // Send as many entries as possible to the member. We use the basic mechanism of AppendEntries RPCs
-    // as described in the Raft literature.
-    // Note that we don't need to account for members that are unavailable with empty append requests since the
-    // heartbeat mechanism handles availability for us. Thus, we can always safely attempt to send as many entries
-    // as possible without incurring too much additional overhead.
-    long prevIndex = getPrevIndex(member);
-    Entry prevEntry = getPrevEntry(member, prevIndex);
-
-    Member leader = context.getLeader();
-    AppendRequest.Builder builder = AppendRequest.builder()
-      .withTerm(context.getTerm())
-      .withLeader(leader != null ? leader.id() : 0)
-      .withLogIndex(prevIndex)
-      .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-      .withCommitIndex(context.getCommitIndex());
-
-    // Build a list of entries to send to the member.
-    long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
-
-    // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
-    // be null if they've been compacted and the member to which we're sending entries is just
-    // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
-    // counted towards the size of the batch.
-    int size = 0;
-    while (index <= context.getCommitIndex()) {
-      Entry entry = context.getLog().get(index);
-      if (entry != null && filter.test(entry)) {
-        if (size + entry.size() > MAX_BATCH_SIZE) {
-          break;
+      // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
+      // be null if they've been compacted and the member to which we're sending entries is just
+      // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
+      // counted towards the size of the batch.
+      int size = 0;
+      while (index <= context.getCommitIndex()) {
+        Entry entry = context.getLog().get(index);
+        if (entry != null) {
+          if (size + entry.size() > MAX_BATCH_SIZE) {
+            break;
+          }
+          size += entry.size();
+          builder.addEntry(entry);
         }
-        size += entry.size();
-        builder.addEntry(entry);
+        index++;
       }
-      index++;
-    }
 
-    // Release the previous entry back to the entry pool.
-    if (prevEntry != null) {
-      prevEntry.release();
-    }
+      // Release the previous entry back to the entry pool.
+      if (prevEntry != null) {
+        prevEntry.release();
+      }
 
-    return builder.build();
+      return builder.build();
+    }
+    return null;
   }
 
   @Override

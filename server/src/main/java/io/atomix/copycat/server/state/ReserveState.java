@@ -65,28 +65,12 @@ class ReserveState extends AbstractState {
   @Override
   protected CompletableFuture<AppendResponse> append(AppendRequest request) {
     context.checkThread();
+    logRequest(request);
 
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
-      context.heartbeat();
-    }
-
-    return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
-  }
-
-  /**
-   * Handles an append request.
-   */
-  protected AppendResponse handleAppend(AppendRequest request) {
-    return AppendResponse.builder()
-      .withStatus(Response.Status.OK)
-      .withTerm(context.getTerm())
-      .withSucceeded(true)
-      .withLogIndex(0)
-      .build();
+    return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
+      .withStatus(Response.Status.ERROR)
+      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
   }
 
   @Override
@@ -254,7 +238,44 @@ class ReserveState extends AbstractState {
   protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
     context.checkThread();
     logRequest(request);
+
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+      context.heartbeat();
+    }
+
+    // Store the previous member type for comparison to determine whether this node should transition.
+    Member.Type previousType = context.getMemberState().getMemberType();
+
+    // Configure the cluster membership.
     context.configure(request.version(), request.members());
+
+    // If the local member type changed, transition the state as appropriate.
+    // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
+    // PASSIVE servers are transitioned to the PASSIVE state.
+    // RESERVE servers are transitioned to the RESERVE state.
+    if (previousType != context.getMemberState().getMemberType()) {
+      Member.Type type = context.getMemberState().getMemberType();
+      if (type != null) {
+        switch (context.getMemberState().getMemberType()) {
+          case ACTIVE:
+            transition(CopycatServer.State.FOLLOWER);
+            break;
+          case PASSIVE:
+            transition(CopycatServer.State.PASSIVE);
+            break;
+          case RESERVE:
+            transition(CopycatServer.State.RESERVE);
+            break;
+        }
+      } else {
+        transition(CopycatServer.State.INACTIVE);
+      }
+    }
+
     return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
       .withStatus(Response.Status.OK)
       .build()));

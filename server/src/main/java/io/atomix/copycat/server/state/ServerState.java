@@ -640,11 +640,17 @@ public class ServerState {
    * Builds a list of active members.
    */
   List<Member> buildMembers() {
+    // Add all members to a list. The "members" field is only remote members, so we must separately
+    // add the local member to the list if necessary.
     List<Member> members = new ArrayList<>(this.members.size() + 1);
     for (MemberState member : this.members) {
       members.add(member.getMember());
     }
-    members.add(member.getMember());
+
+    // If the local member type is null, that indicates it's not a member of the current configuration.
+    if (member.getMemberType() != null) {
+      members.add(member.getMember());
+    }
     return members;
   }
 

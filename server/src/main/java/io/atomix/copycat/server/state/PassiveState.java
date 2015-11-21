@@ -46,6 +46,23 @@ class PassiveState extends ReserveState {
   }
 
   @Override
+  protected CompletableFuture<AppendResponse> append(AppendRequest request) {
+    context.checkThread();
+
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+      context.heartbeat();
+    }
+
+    return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
+  }
+
+  /**
+   * Handles an AppendRequest.
+   */
   protected AppendResponse handleAppend(AppendRequest request) {
     // If the request term is less than the current term then immediately
     // reply false and return our current term. The leader will receive

@@ -36,7 +36,6 @@ abstract class AbstractAppender implements AutoCloseable {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerState context;
   private final Set<MemberState> appending = new HashSet<>();
-  private final Set<MemberState> configured = new HashSet<>();
   private final Set<MemberState> configuring = new HashSet<>();
   private boolean open = true;
 
@@ -88,7 +87,7 @@ abstract class AbstractAppender implements AutoCloseable {
       if (open) {
         if (error == null) {
           LOGGER.debug("{} - Received {} from {}", context.getMember().serverAddress(), response, member.getMember().serverAddress());
-          configured.add(member);
+          member.setTerm(request.term()).setVersion(request.version());
           appendEntries(member);
         } else {
           LOGGER.warn("{} - Failed to configure {}", context.getMember().serverAddress(), member.getMember().serverAddress());
@@ -101,9 +100,20 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends append entries requests to the given member.
    */
   protected void appendEntries(MemberState member) {
-    if (!configured.contains(member) && open) {
+    // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
+    if (!open)
+      return;
+
+    // If the member term is less than the current term or the member's configuration version is less
+    // than the local configuration version, send a configuration update to the member.
+    // Ensure that only one configuration attempt per member is attempted at any given time by storing the
+    // member state in a set of configuring members.
+    // Once the configuration is complete sendAppendRequest will be called recursively.
+    if (member.getTerm() < context.getTerm() || member.getVersion() < context.getVersion() && !configuring.contains(member)) {
       configure(member);
-    } else if (!appending.contains(member) && open) {
+    }
+    // If no AppendRequest is already being sent, send an AppendRequest.
+    else if (!appending.contains(member)) {
       AppendRequest request = buildAppendRequest(member);
       if (request != null) {
         sendAppendRequest(member, request);
