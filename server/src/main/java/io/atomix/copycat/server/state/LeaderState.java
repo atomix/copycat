@@ -101,10 +101,7 @@ final class LeaderState extends ActiveState {
 
     // Append a configuration entry to propagate the leader's cluster configuration.
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(term)
-        .setActiveMembers(context.buildActiveMembers())
-        .setPassiveMembers(context.buildPassiveMembers())
-        .setReserveMembers(context.buildReserveMembers());
+      entry.setTerm(term).setMembers(context.buildMembers());
     }
   }
 
@@ -233,27 +230,20 @@ final class LeaderState extends ActiveState {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
         .withVersion(context.getVersion())
-        .withActiveMembers(context.buildActiveMembers())
-        .withPassiveMembers(context.buildPassiveMembers())
-        .withReserveMembers(context.buildReserveMembers())
+        .withMembers(context.buildMembers())
         .build()));
     }
 
     final long term = context.getTerm();
     final long index;
 
-    Collection<Member> activeMembers = context.buildActiveMembers();
-    Collection<Member> passiveMembers = context.buildPassiveMembers();
-    Collection<Member> reserveMembers = context.buildReserveMembers();
+    Collection<Member> members = context.buildMembers();
 
-    // Add the server to the reserve members list.
-    reserveMembers.add(request.member());
+    // Add the server to the members list as a reserve member.
+    members.add(new Member(Member.Type.RESERVE, request.member().serverAddress(), request.member().clientAddress()));
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(term)
-        .setActiveMembers(activeMembers)
-        .setPassiveMembers(passiveMembers)
-        .setReserveMembers(reserveMembers);
+      entry.setTerm(term).setMembers(members);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
@@ -261,7 +251,7 @@ final class LeaderState extends ActiveState {
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
       changed = true;
-      context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
+      context.configure(entry.getIndex(), entry.getMembers());
     }
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
@@ -274,9 +264,7 @@ final class LeaderState extends ActiveState {
             future.complete(logResponse(JoinResponse.builder()
               .withStatus(Response.Status.OK)
               .withVersion(index)
-              .withActiveMembers(context.buildActiveMembers())
-              .withPassiveMembers(context.buildPassiveMembers())
-              .withReserveMembers(context.buildReserveMembers())
+              .withMembers(context.buildMembers())
               .build()));
           } else {
             future.complete(logResponse(JoinResponse.builder()
@@ -315,32 +303,19 @@ final class LeaderState extends ActiveState {
     if (!request.member().equals(context.getMember()) && context.getMember(request.member().id()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
-        .withActiveMembers(context.buildActiveMembers())
-        .withPassiveMembers(context.buildPassiveMembers())
-        .withReserveMembers(context.buildReserveMembers())
+        .withMembers(context.buildMembers())
         .build()));
     }
 
     final long term = context.getTerm();
     final long index;
 
-    // Remove the member from the active members list if necessary.
-    Collection<Member> activeMembers = context.buildActiveMembers();
-    activeMembers.remove(request.member());
-
-    // Remove the member from the passive members list if necessary.
-    Collection<Member> passiveMembers = context.buildPassiveMembers();
-    passiveMembers.remove(request.member());
-
-    // Remove the member from the reserve members list if necessary.
-    Collection<Member> reserveMembers = context.buildReserveMembers();
-    reserveMembers.remove(request.member());
+    // Build the members list and remove the member from the configuration.
+    Collection<Member> members = context.buildMembers();
+    members.remove(request.member());
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(term)
-        .setActiveMembers(activeMembers)
-        .setPassiveMembers(passiveMembers)
-        .setReserveMembers(reserveMembers);
+      entry.setTerm(term).setMembers(members);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
@@ -348,7 +323,7 @@ final class LeaderState extends ActiveState {
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
       changed = true;
-      context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
+      context.configure(entry.getIndex(), entry.getMembers());
     }
 
     CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
@@ -361,9 +336,7 @@ final class LeaderState extends ActiveState {
             future.complete(logResponse(LeaveResponse.builder()
               .withStatus(Response.Status.OK)
               .withVersion(index)
-              .withActiveMembers(context.buildActiveMembers())
-              .withPassiveMembers(context.buildPassiveMembers())
-              .withReserveMembers(context.buildReserveMembers())
+              .withMembers(context.buildMembers())
               .build()));
           } else {
             future.complete(logResponse(LeaveResponse.builder()
@@ -401,10 +374,7 @@ final class LeaderState extends ActiveState {
       // This configuration update simply modifies the existing configuration, and new configurations will be
       // rejected if the current configuration is still being committed.
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setActiveMembers(context.buildActiveMembers())
-          .setPassiveMembers(context.buildPassiveMembers())
-          .setReserveMembers(context.buildReserveMembers());
+        entry.setTerm(context.getTerm()).setMembers(context.buildMembers());
         context.getLog().append(entry);
         LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
       }
@@ -498,26 +468,21 @@ final class LeaderState extends ActiveState {
 
     LOGGER.debug("{} - Rebalancing cluster", context.getMember().serverAddress());
 
-    // Build lists of active, passive, and reserve members.
-    List<Member> activeMembers = context.buildActiveMembers();
-    List<Member> passiveMembers = context.buildPassiveMembers();
-    List<Member> reserveMembers = context.buildReserveMembers();
+    // Build a list of all current members in the configuration.
+    List<Member> members = context.buildMembers();
 
     // If the overall configuration changed, log and commit a new configuration entry.
-    if (rebalancer.rebalance(activeMembers, passiveMembers, reserveMembers)) {
+    if (rebalancer.rebalance(members)) {
       final long index;
       try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setActiveMembers(activeMembers)
-          .setPassiveMembers(passiveMembers)
-          .setReserveMembers(reserveMembers);
+        entry.setTerm(context.getTerm()).setMembers(members);
         index = context.getLog().append(entry);
         LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
         // Store the index of the configuration entry in order to prevent other configurations from
         // being logged and committed concurrently. This is an important safety property of Raft.
         configuring = index;
-        context.configure(entry.getIndex(), entry.getActiveMembers(), entry.getPassiveMembers(), entry.getReserveMembers());
+        context.configure(entry.getIndex(), entry.getMembers());
       }
 
       // Commit the configuration and then reset the configuration index to allow new configurations to proceed.
@@ -815,7 +780,8 @@ final class LeaderState extends ActiveState {
                   .withSession((Long) sessionId)
                   .withTimeout(timeout)
                   .withLeader(context.getMember().clientAddress())
-                  .withMembers(context.buildActiveMembers().stream()
+                  .withMembers(context.buildMembers().stream()
+                    .filter(Member::isActive)
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
@@ -948,7 +914,8 @@ final class LeaderState extends ActiveState {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.OK)
                   .withLeader(context.getMember().clientAddress())
-                  .withMembers(context.buildActiveMembers().stream()
+                  .withMembers(context.buildMembers().stream()
+                    .filter(Member::isActive)
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));

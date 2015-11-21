@@ -69,28 +69,16 @@ public class MetaStoreTest {
     assertNull(meta.loadConfiguration());
     meta.storeConfiguration(new MetaStore.Configuration(
       3,
-      Collections.singletonList(new Member(new Address("localhost", 5000), null)),
-      Arrays.asList(new Member(new Address("localhost", 5001), null), new Member(new Address("localhost", 5002), new Address("localhost", 5003))),
-      Collections.EMPTY_LIST
+      Collections.singletonList(new Member(new Address("localhost", 5000), null))
     ));
 
     MetaStore.Configuration configuration = meta.loadConfiguration();
     Member member;
     assertEquals(configuration.version(), 3);
 
-    member = configuration.activeMembers().iterator().next();
+    member = configuration.members().iterator().next();
     assertEquals(member.serverAddress(), new Address("localhost", 5000));
     assertNull(member.clientAddress());
-
-    Iterator<Member> iterator = configuration.passiveMembers().iterator();
-    member = iterator.next();
-    assertEquals(member.serverAddress(), new Address("localhost", 5001));
-    assertNull(member.clientAddress());
-    member = iterator.next();
-    assertEquals(member.serverAddress(), new Address("localhost", 5002));
-    assertEquals(member.clientAddress(), new Address("localhost", 5003));
-
-    assertTrue(configuration.reserveMembers().isEmpty());
   }
 
   /**

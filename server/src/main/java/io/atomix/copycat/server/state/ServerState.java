@@ -104,14 +104,14 @@ public class ServerState {
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
     MetaStore.Configuration configuration = meta.loadConfiguration();
     if (configuration != null) {
-      configure(configuration.version(), configuration.activeMembers(), configuration.passiveMembers(), configuration.reserveMembers());
+      configure(configuration.version(), configuration.members());
     } else if (members.contains(member.serverAddress())) {
-      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(m, null)).collect(Collectors.toSet());
-      activeMembers.add(member);
-      configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
+      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(Member.Type.ACTIVE, m, null)).collect(Collectors.toSet());
+      activeMembers.add(new Member(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
+      configure(0, activeMembers);
     } else {
-      Set<Member> activeMembers = members.stream().map(m -> new Member(m, null)).collect(Collectors.toSet());
-      configure(0, activeMembers, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
+      Set<Member> activeMembers = members.stream().map(m -> new Member(Member.Type.ACTIVE, m, null)).collect(Collectors.toSet());
+      configure(0, activeMembers);
     }
   }
 
@@ -335,7 +335,7 @@ public class ServerState {
     Assert.stateNot(leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
     MemberState member = candidate == getMember().id() ? getMemberState() : getMemberState(candidate);
     Assert.state(member != null, "unknown candidate: %d", candidate);
-    Assert.state(member.isActive(), "invalid candidate: ", member.getMember().serverAddress());
+    Assert.state(member.getMember().isActive(), "invalid candidate: ", member.getMember().serverAddress());
     this.lastVotedFor = candidate;
     meta.storeVote(this.lastVotedFor);
 
@@ -505,7 +505,7 @@ public class ServerState {
    * Rebuilds assigned member states.
    */
   private void reassign() {
-    if (member.isActive() && member.getMember().id() != leader) {
+    if (member.getMember().isActive() && member.getMember().id() != leader) {
       // Calculate this server's index within the collection of active members, excluding the leader.
       // This is done in a deterministic way by sorting the list of active members by ID.
       int index = 1;
@@ -549,45 +549,87 @@ public class ServerState {
    * Configures the cluster state.
    *
    * @param version The cluster state version.
-   * @param activeMembers The active members.
-   * @param passiveMembers The passive members.
-   * @param reserveMembers The reserve members.
+   * @param members The configured members.
    * @return The cluster state.
    */
   @SuppressWarnings("unchecked")
-  ServerState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers, Collection<Member> reserveMembers) {
+  ServerState configure(long version, Collection<Member> members) {
     // If the configuration version is less than the currently configured version, ignore it.
     // Configurations can be persisted and applying old configurations can revert newer configurations.
     if (version <= this.version)
       return this;
 
-    // Move active members. We do this without recreating any member states since replication may depend on current states.
-    addMembers(MemberState.Type.ACTIVE, activeMembers, this.activeMembers::add, this.passiveMembers::remove, this.reserveMembers::remove);
-    removeMembers(this.activeMembers, activeMembers);
+    // Iterate through members in the new configuration, add any missing members, and update existing members.
+    for (Member member : members) {
+      if (member.equals(this.member.getMember())) {
+        this.member.setMemberType(member.type());
+      } else {
+        // If the member state doesn't already exist, create it.
+        MemberState state = membersMap.get(member.id());
+        if (state == null) {
+          state = new MemberState(member.serverAddress());
+          state.resetState(log);
+          this.members.add(state);
+          membersMap.put(member.id(), state);
+        }
 
-    // Move passive members. We do this without recreating any member states since replication may depend on current states.
-    addMembers(MemberState.Type.PASSIVE, passiveMembers, this.passiveMembers::add, this.activeMembers::remove, this.reserveMembers::remove);
-    removeMembers(this.passiveMembers, passiveMembers);
+        // If the member type has changed, update the member type and reset its state.
+        if (state.getMemberType() != member.type()) {
+          state.setMemberType(member.type()).resetState(log);
+        }
 
-    // Move reserve members. We do this without recreating any member states since replication may depend on current states.
-    addMembers(MemberState.Type.RESERVE, reserveMembers, this.reserveMembers::add, this.activeMembers::remove, this.passiveMembers::remove);
-    removeMembers(this.reserveMembers, reserveMembers);
+        // Update the optimized member collections according to the member type.
+        if (member.type() == null) {
+          activeMembers.remove(state);
+          passiveMembers.remove(state);
+          reserveMembers.remove(state);
+        } else {
+          switch (member.type()) {
+            case ACTIVE:
+              if (!activeMembers.contains(state))
+                activeMembers.add(state);
+              passiveMembers.remove(state);
+              reserveMembers.remove(state);
+              break;
+            case PASSIVE:
+              activeMembers.remove(state);
+              if (!passiveMembers.contains(state))
+                passiveMembers.add(state);
+              reserveMembers.remove(state);
+              break;
+            case RESERVE:
+              activeMembers.remove(state);
+              passiveMembers.remove(state);
+              if (!reserveMembers.contains(state))
+                reserveMembers.add(state);
+              break;
+          }
+        }
+      }
+    }
 
-    // Set the local member type based on the provided member lists.
-    if (activeMembers.contains(member.getMember())) {
-      this.member.setType(MemberState.Type.ACTIVE);
-    } else if (passiveMembers.contains(member.getMember())) {
-      this.member.setType(MemberState.Type.PASSIVE);
-    } else if (reserveMembers.contains(member.getMember())) {
-      this.member.setType(MemberState.Type.RESERVE);
-    } else {
-      this.member.setType(null);
+    // If the local member is not part of the configuration, set its type to null.
+    if (!members.contains(this.member.getMember())) {
+      this.member.setMemberType(null);
+    }
+
+    // Iterate through configured members and remove any that no longer exist in the configuration.
+    Iterator<MemberState> iterator = this.members.iterator();
+    while (iterator.hasNext()) {
+      MemberState member = iterator.next();
+      if (!members.contains(member.getMember())) {
+        iterator.remove();
+        activeMembers.remove(member);
+        passiveMembers.remove(member);
+        reserveMembers.remove(member);
+        membersMap.remove(member.getMember().id());
+      }
     }
 
     this.version = version;
 
     // Store the configuration to ensure it can be easily loaded on server restart.
-    meta.storeConfiguration(new MetaStore.Configuration(version, activeMembers, passiveMembers, reserveMembers));
+    meta.storeConfiguration(new MetaStore.Configuration(version, members));
 
     reassign();
 
@@ -595,98 +637,15 @@ public class ServerState {
   }
 
   /**
-   * Adds new members to the collection of members.
-   */
-  @SuppressWarnings("unchecked")
-  private void addMembers(MemberState.Type type, Collection<Member> newMembers, Consumer<MemberState> adder, Consumer<MemberState>... removers) {
-    for (MemberState member : buildMembers(newMembers)) {
-      // If the member type is not the expected type, update the type and add the member to the appropriate list.
-      if (member.getType() != type) {
-        // Remove the member from type-specific membership lists.
-        for (Consumer<MemberState> remover : removers) {
-          remover.accept(member);
-        }
-
-        // If the member isn't currently listed in the members list, add it.
-        if (!members.contains(member))
-          members.add(member);
-
-        // Add the member to the new type-specific membership list.
-        adder.accept(member);
-
-        // Set the member type and update its state.
-        member.setType(type).resetState(log);
-        membersMap.put(member.getMember().id(), member);
-      }
-    }
-  }
-
-  /**
-   * Removes old members no longer present in the members list.
-   */
-  private void removeMembers(Collection<MemberState> oldMembers, Collection<Member> newMembers) {
-    Iterator<MemberState> iterator = oldMembers.iterator();
-    while (iterator.hasNext()) {
-      if (!newMembers.contains(iterator.next().getMember())) {
-        iterator.remove();
-      }
-    }
-  }
-
-  /**
    * Builds a list of active members.
    */
-  List<Member> buildActiveMembers() {
-    return buildMembers(activeMembers, MemberState.Type.ACTIVE);
-  }
-
-  /**
-   * Builds a list of passive members.
-   */
-  List<Member> buildPassiveMembers() {
-    return buildMembers(passiveMembers, MemberState.Type.PASSIVE);
-  }
-
-  /**
-   * Builds a list of reserve members.
-   */
-  List<Member> buildReserveMembers() {
-    return buildMembers(reserveMembers, MemberState.Type.RESERVE);
-  }
-
-  /**
-   * Builds a full list of members for configurations.
-   */
-  private List<Member> buildMembers(List<MemberState> states, MemberState.Type type) {
-    List<Member> members = new ArrayList<>(states.size() + 1);
-
-    for (MemberState member : states) {
+  List<Member> buildMembers() {
+    List<Member> members = new ArrayList<>(this.members.size() + 1);
+    for (MemberState member : this.members) {
       members.add(member.getMember());
     }
-
-    if (member.getType() == type) {
-      members.add(member.getMember());
-    }
+    members.add(member.getMember());
     return members;
-  }
-
-  /**
-   * Builds a members list.
-   */
-  private List<MemberState> buildMembers(Collection<Member> members) {
-    List<MemberState> states = new ArrayList<>(members.size());
-    for (Member member : members) {
-      if (!member.equals(this.member.getMember())) {
-        // If the member doesn't already exist, create a new MemberState and initialize the state.
-        MemberState state = membersMap.get(member.id());
-        if (state == null) {
-          state = new MemberState(member.serverAddress());
-          state.resetState(log);
-        }
-        states.add(state.setClientAddress(member.clientAddress()));
-      }
-    }
-    return states;
   }
 
   /**
@@ -895,12 +854,12 @@ public class ServerState {
 
     // If the server type is defined, that indicates it's a member of the current configuration and
     // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
-    if (member.getType() != null) {
-      if (member.isActive()) {
+    if (member.getMember().type() != null) {
+      if (member.getMember().isActive()) {
         transition(CopycatServer.State.FOLLOWER);
-      } else if (member.isPassive()) {
+      } else if (member.getMember().isPassive()) {
         transition(CopycatServer.State.PASSIVE);
-      } else if (member.isReserve()) {
+      } else if (member.getMember().isReserve()) {
         transition(CopycatServer.State.RESERVE);
       }
       future.complete(null);
@@ -930,13 +889,13 @@ public class ServerState {
             LOGGER.info("{} - Successfully joined via {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
 
             // Configure the cluster with the join response.
-            configure(response.version(), response.activeMembers(), response.passiveMembers(), response.reserveMembers());
+            configure(response.version(), response.members());
 
             // Cancel the join timer.
             cancelJoinTimer();
 
             // If the local member type is null, that indicates it's not a part of the configuration.
-            MemberState.Type type = this.member.getType();
+            Member.Type type = this.member.getMemberType();
             if (type == null) {
               future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
             } else {
@@ -1037,7 +996,7 @@ public class ServerState {
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
-        configure(response.version(), response.activeMembers(), response.passiveMembers(), response.reserveMembers());
+        configure(response.version(), response.members());
         transition(CopycatServer.State.INACTIVE);
         future.complete(null);
       }

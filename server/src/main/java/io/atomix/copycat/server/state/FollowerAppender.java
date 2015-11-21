@@ -59,7 +59,7 @@ final class FollowerAppender extends AbstractAppender {
   protected AppendRequest buildRequest(MemberState member) {
     // Send append entries RPCs to the member according to its type. PASSIVE members receive all entries,
     // and RESERVE members receive only configuration changes.
-    if (member.isPassive()) {
+    if (member.getMember().isPassive()) {
       return buildPassiveRequest(member);
     } else {
       return buildReserveRequest(member);
@@ -100,9 +100,10 @@ final class FollowerAppender extends AbstractAppender {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
+    Member leader = context.getLeader();
     AppendRequest.Builder builder = AppendRequest.builder()
       .withTerm(context.getTerm())
-      .withLeader(context.getLeader().id())
+      .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withCommitIndex(context.getCommitIndex());

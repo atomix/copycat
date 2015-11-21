@@ -24,6 +24,7 @@ import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.state.Member;
 
 import java.util.Collection;
+import java.util.stream.Collectors;
 
 /**
  * Configuration entry.
@@ -32,9 +33,7 @@ import java.util.Collection;
  */
 @SerializeWith(id=221)
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
-  private Collection<Member> active;
-  private Collection<Member> passive;
-  private Collection<Member> reserve;
+  private Collection<Member> members;
 
   public ConfigurationEntry() {
   }
@@ -44,87 +43,41 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   }
 
   /**
-   * Returns the active members.
+   * Returns the members.
    *
-   * @return The active members.
+   * @return The members.
    */
-  public Collection<Member> getActiveMembers() {
-    return active;
+  public Collection<Member> getMembers() {
+    return members;
   }
 
   /**
-   * Sets the active members.
+   * Sets the cluster members.
    *
-   * @param members The active members.
+   * @param members The cluster members.
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setActiveMembers(Collection<Member> members) {
-    this.active = Assert.notNull(members, "members");
-    return this;
-  }
-
-  /**
-   * Returns the passive members.
-   *
-   * @return The passive members.
-   */
-  public Collection<Member> getPassiveMembers() {
-    return passive;
-  }
-
-  /**
-   * Sets the passive members.
-   *
-   * @param members The passive members.
-   * @return The configuration entry.
-   * @throws NullPointerException if {@code members} is null
-   */
-  public ConfigurationEntry setPassiveMembers(Collection<Member> members) {
-    this.passive = Assert.notNull(members, "members");
-    return this;
-  }
-
-  /**
-   * Returns the reserve members.
-   *
-   * @return The reserve members.
-   */
-  public Collection<Member> getReserveMembers() {
-    return reserve;
-  }
-
-  /**
-   * Sets the reserve members.
-   *
-   * @param members The reserve members.
-   * @return The configuration entry.
-   * @throws NullPointerException if {@code members} is null
-   */
-  public ConfigurationEntry setReserveMembers(Collection<Member> members) {
-    this.reserve = Assert.notNull(members, "members");
+  public ConfigurationEntry setMembers(Collection<Member> members) {
+    this.members = Assert.notNull(members, "members");
     return this;
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    serializer.writeObject(active, buffer);
-    serializer.writeObject(passive, buffer);
-    serializer.writeObject(reserve, buffer);
+    serializer.writeObject(members, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    active = serializer.readObject(buffer);
-    passive = serializer.readObject(buffer);
-    reserve = serializer.readObject(buffer);
+    members = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, active=%s, passive=%s, reserve=%s]", getClass().getSimpleName(), getIndex(), getTerm(), active, passive, reserve);
+    return String.format("%s[index=%d, term=%d, members=[\n  %s\n]]", getClass().getSimpleName(), getIndex(), getTerm(), members.stream().map(Member::toString).collect(Collectors.joining("\n  ")));
   }
 
 }

@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Handles rebalancing members.
@@ -39,27 +40,28 @@ public class MembershipRebalancer {
   /**
    * Rebalances the cluster configuration.
    */
-  public boolean rebalance(List<Member> activeMembers, List<Member> passiveMembers, List<Member> reserveMembers) {
+  public boolean rebalance(List<Member> members) {
     // The following operations are performed in a specific order such that members are properly replaced.
     // First demote any surplus active members. Active members will be demoted to reserve since demoted members
     // are not available. Then demote any surplus or unavailable passive members to reserve as well. Finally,
     // promote passive members to active to replace failed active members, and promote reserve members to
     // passive to replace promoted or unavailable passive members.
-    boolean changed = demoteActiveMembers(activeMembers, passiveMembers, reserveMembers);
-    changed = demotePassiveMembers(activeMembers, passiveMembers, reserveMembers) || changed;
-    changed = promotePassiveMembers(activeMembers, passiveMembers, reserveMembers) || changed;
-    changed = promoteReserveMembers(activeMembers, passiveMembers, reserveMembers) || changed;
-    changed = promotePassiveMembers(activeMembers, passiveMembers, reserveMembers) || changed;
+    boolean changed = demoteActiveMembers(members);
+    changed = demotePassiveMembers(members) || changed;
+    changed = promotePassiveMembers(members) || changed;
+    changed = promoteReserveMembers(members) || changed;
+    changed = promotePassiveMembers(members) || changed;
     return changed;
   }
 
   /**
    * Demotes active members to reserve.
    */
-  private boolean demoteActiveMembers(List<Member> activeMembers, List<Member> passiveMembers, List<Member> reserveMembers) {
+  private boolean demoteActiveMembers(List<Member> members) {
     boolean changed = false;
 
     // If the number of active members is greater than the quorum hint, demote the member with the lowest matchIndex.
+    List<Member> activeMembers = members.stream().filter(Member::isActive).collect(Collectors.toList());
     if (activeMembers.size() > context.getQuorumHint()) {
       // Sort active members with the member with the lowest matchIndex first.
       Collections.sort(activeMembers, (m1, m2) -> Long.compare(context.getMemberState(m1).getMatchIndex(), context.getMemberState(m2).getMatchIndex()));
@@ -67,13 +69,11 @@ public class MembershipRebalancer {
       int demoteTotal = activeMembers.size() - context.getQuorumHint();
       int demoteCount = 0;
 
-      Iterator<Member> iterator = activeMembers.iterator();
-      while (iterator.hasNext()) {
-        Member member = iterator.next();
+      for (Member member : activeMembers) {
         MemberState state = context.getMemberState(member);
         if (state.getStatus() == MemberState.Status.UNAVAILABLE) {
-          iterator.remove();
-          reserveMembers.add(member);
+          members.remove(member);
+          members.add(new Member(Member.Type.RESERVE, member.serverAddress(), member.clientAddress()));
           LOGGER.debug("{} - Demoted active member {} to reserve", context.getMember().serverAddress(), member.serverAddress());
           changed = true;
           if (++demoteCount == demoteTotal) {
@@ -88,12 +88,15 @@ public class MembershipRebalancer {
   /**
    * Demotes passive members to reserve.
    */
-  private boolean demotePassiveMembers(List<Member> activeMembers, List<Member> passiveMembers, List<Member> reserveMembers) {
+  private boolean demotePassiveMembers(List<Member> members) {
     boolean changed = false;
+
+    List<Member> reserveMembers = members.stream().filter(Member::isReserve).collect(Collectors.toList());
 
     long availableReserves = reserveMembers.stream().filter(m -> context.getMemberState(m).getStatus() == MemberState.Status.AVAILABLE).count();
 
     // Sort the passive members list with the members with the lowest matchIndex first.
+    List<Member> passiveMembers = members.stream().filter(Member::isPassive).collect(Collectors.toList());
     Collections.sort(passiveMembers, (m1, m2) -> Long.compare(context.getMemberState(m1).getMatchIndex(), context.getMemberState(m2).getMatchIndex()));
 
     // Iterate through passive members. For any member that is UNAVAILABLE, demote the member so long
@@ -105,8 +108,8 @@ public class MembershipRebalancer {
       Member member = iterator.next();
       MemberState state = context.getMemberState(member);
       if (state.getStatus() == MemberState.Status.UNAVAILABLE) {
-        iterator.remove();
-        reserveMembers.add(member);
+        members.remove(member);
+        members.add(new Member(Member.Type.RESERVE, member.serverAddress(), member.clientAddress()));
         passiveCount--;
         LOGGER.debug("{} - Demoted passive member {} to reserve", context.getMember().serverAddress(), member.serverAddress());
         changed = true;
@@ -118,31 +121,34 @@ public class MembershipRebalancer {
   /**
    * Promotes passive members to active.
    */
-  private boolean promotePassiveMembers(List<Member> activeMembers, List<Member> passiveMembers, List<Member> reserveMembers) {
+  private boolean promotePassiveMembers(List<Member> members) {
     // Promote PASSIVE members and then RESERVE members to ACTIVE. This ensures that reserve members can
     // be immediately promoted to ACTIVE if necessary.
-    return promoteToActive(passiveMembers, activeMembers) || promoteToActive(reserveMembers, activeMembers);
+    return promoteToActive(Member.Type.PASSIVE, members) || promoteToActive(Member.Type.RESERVE, members);
   }
 
   /**
    * Promotes members to active.
    */
-  private boolean promoteToActive(List<Member> members, List<Member> activeMembers) {
+  private boolean promoteToActive(Member.Type type, List<Member> members) {
     boolean changed = false;
 
     // Sort the members with the member with the highest matchIndex first.
-    Collections.sort(members, (m1, m2) -> Long.compare(context.getMemberState(m1).getMatchIndex(), context.getMemberState(m2).getMatchIndex()));
+    List<Member> filteredMembers = members.stream().filter(m -> m.type() == type).collect(Collectors.toList());
+    Collections.sort(filteredMembers, (m1, m2) -> Long.compare(context.getMemberState(m1).getCommitIndex(), context.getMemberState(m2).getCommitIndex()));
 
     // Iterate through members in the promotable members list and add AVAILABLE members to the ACTIVE members
     // list until the quorum hint is reached.
-    Iterator<Member> iterator = members.iterator();
-    while (activeMembers.size() < context.getQuorumHint() && iterator.hasNext()) {
+    Iterator<Member> iterator = filteredMembers.iterator();
+    long activeMembers = members.stream().filter(Member::isActive).count();
+    while (activeMembers < context.getQuorumHint() && iterator.hasNext()) {
       Member member = iterator.next();
       MemberState state = context.getMemberState(member);
       if (state.getStatus() == MemberState.Status.AVAILABLE) {
-        iterator.remove();
-        activeMembers.add(member);
-        LOGGER.debug("{} - Promoted {} member {} to active", context.getMember().serverAddress(), state.getType().toString().toLowerCase(), member.serverAddress());
+        members.remove(member);
+        members.add(new Member(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
+        activeMembers++;
+        LOGGER.debug("{} - Promoted {} member {} to active", context.getMember().serverAddress(), type.toString().toLowerCase(), member.serverAddress());
         changed = true;
       }
     }
@@ -152,18 +158,20 @@ public class MembershipRebalancer {
   /**
    * Promotes reserve members to passive.
    */
-  private boolean promoteReserveMembers(List<Member> activeMembers, List<Member> passiveMembers, List<Member> reserveMembers) {
+  private boolean promoteReserveMembers(List<Member> members) {
     boolean changed = false;
 
     // Iterate through members in the reserve members list and add AVAILABLE members to the PASSIVE members
     // list until the number of passive members is equal to the product of the quorum hint and the backup count.
-    Iterator<Member> iterator = reserveMembers.iterator();
-    while (passiveMembers.size() < context.getQuorumHint() * context.getBackupCount() && iterator.hasNext()) {
+    long passiveMembers = members.stream().filter(Member::isActive).count();
+    Iterator<Member> iterator = members.stream().filter(Member::isReserve).collect(Collectors.toList()).iterator();
+    while (passiveMembers < context.getQuorumHint() * context.getBackupCount() && iterator.hasNext()) {
       Member member = iterator.next();
       MemberState state = context.getMemberState(member);
       if (state.getStatus() == MemberState.Status.AVAILABLE) {
-        iterator.remove();
-        passiveMembers.add(member);
+        members.remove(member);
+        members.add(new Member(Member.Type.PASSIVE, member.serverAddress(), member.clientAddress()));
+        passiveMembers++;
         LOGGER.debug("{} - Promoted reserve member {} to passive", context.getMember().serverAddress(), member.serverAddress());
         changed = true;
       }

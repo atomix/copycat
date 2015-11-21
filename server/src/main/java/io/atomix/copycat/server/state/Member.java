@@ -29,13 +29,37 @@ import io.atomix.catalyst.transport.Address;
  */
 @SerializeWith(id=229)
 public class Member implements CatalystSerializable {
+
+  /**
+   * Member type.
+   */
+  enum Type {
+    ACTIVE,
+    PASSIVE,
+    RESERVE
+  }
+
+  private Type type;
   private Address serverAddress;
   private Address clientAddress;
 
   Member() {
   }
 
+  public Member(Type type, Address serverAddress) {
+    this(type, serverAddress, null);
+  }
+
+  public Member(Address serverAddress) {
+    this(null, serverAddress, null);
+  }
+
   public Member(Address serverAddress, Address clientAddress) {
+    this(null, serverAddress, clientAddress);
+  }
+
+  public Member(Type type, Address serverAddress, Address clientAddress) {
+    this.type = type;
     this.serverAddress = serverAddress;
     this.clientAddress = clientAddress;
   }
@@ -47,6 +71,42 @@ public class Member implements CatalystSerializable {
    */
   public int id() {
     return hashCode();
+  }
+
+  /**
+   * Returns the member type.
+   *
+   * @return The member type.
+   */
+  public Type type() {
+    return type;
+  }
+
+  /**
+   * Returns a boolean indicating whether the member is active.
+   *
+   * @return Whether the member is active.
+   */
+  boolean isActive() {
+    return type == Type.ACTIVE;
+  }
+
+  /**
+   * Returns a boolean indicating whether the member is passive.
+   *
+   * @return Whether the member is passive.
+   */
+  boolean isPassive() {
+    return type == Type.PASSIVE;
+  }
+
+  /**
+   * Returns a boolean indicating whether the member is reserve.
+   *
+   * @return Whether the member is reserve.
+   */
+  boolean isReserve() {
+    return type == Type.RESERVE;
   }
 
   /**
@@ -69,12 +129,14 @@ public class Member implements CatalystSerializable {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    serializer.writeObject(type, buffer);
     serializer.writeObject(serverAddress, buffer);
     serializer.writeObject(clientAddress, buffer);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    type = serializer.readObject(buffer);
     serverAddress = serializer.readObject(buffer);
     clientAddress = serializer.readObject(buffer);
   }
@@ -91,7 +153,7 @@ public class Member implements CatalystSerializable {
 
   @Override
   public String toString() {
-    return String.format("%s[serverAddress=%s, clientAddress=%s]", getClass().getSimpleName(), serverAddress, clientAddress);
+    return String.format("%s[type=%s, server=%s, client=%s]", getClass().getSimpleName(), type, serverAddress, clientAddress);
   }
 
 }

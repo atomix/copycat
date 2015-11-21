@@ -92,9 +92,7 @@ public class MetaStore implements AutoCloseable {
    */
   public MetaStore storeConfiguration(Configuration configuration) {
     buffer.position(12).writeLong(configuration.version);
-    storage.serializer().writeObject(configuration.activeMembers, buffer);
-    storage.serializer().writeObject(configuration.passiveMembers, buffer);
-    storage.serializer().writeObject(configuration.reserveMembers, buffer);
+    storage.serializer().writeObject(configuration.members, buffer);
     return this;
   }
 
@@ -108,8 +106,6 @@ public class MetaStore implements AutoCloseable {
     if (version > 0) {
       return new Configuration(
         version,
-        storage.serializer().readObject(buffer),
-        storage.serializer().readObject(buffer),
         storage.serializer().readObject(buffer)
       );
     }
@@ -144,15 +140,11 @@ public class MetaStore implements AutoCloseable {
    */
   public static class Configuration {
     private final long version;
-    private final Collection<Member> activeMembers;
-    private final Collection<Member> passiveMembers;
-    private final Collection<Member> reserveMembers;
+    private final Collection<Member> members;
 
-    public Configuration(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers, Collection<Member> reserveMembers) {
+    public Configuration(long version, Collection<Member> members) {
       this.version = version;
-      this.activeMembers = Assert.notNull(activeMembers, "activeMembers");
-      this.passiveMembers = Assert.notNull(passiveMembers, "passiveMembers");
-      this.reserveMembers = Assert.notNull(reserveMembers, "reserveMembers");
+      this.members = Assert.notNull(members, "members");
     }
 
     /**
@@ -169,31 +161,13 @@ public class MetaStore implements AutoCloseable {
      *
      * @return The collection of active members.
      */
-    public Collection<Member> activeMembers() {
-      return activeMembers;
-    }
-
-    /**
-     * Returns the collection of passive members.
-     *
-     * @return The collection of passive members.
-     */
-    public Collection<Member> passiveMembers() {
-      return passiveMembers;
-    }
-
-    /**
-     * Returns the collection of reserve members.
-     *
-     * @return The collection of reserve members.
-     */
-    public Collection<Member> reserveMembers() {
-      return reserveMembers;
+    public Collection<Member> members() {
+      return members;
     }
 
     @Override
     public String toString() {
-      return String.format("%s[active=%s, passive=%s, reserve=%s]", getClass().getSimpleName(), activeMembers, passiveMembers, reserveMembers);
+      return String.format("%s[members=%s]", getClass().getSimpleName(), members);
     }
   }
 

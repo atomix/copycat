@@ -155,7 +155,7 @@ final class LeaderAppender extends AbstractAppender {
 
     boolean completed = false;
     if (error != null && member.getCommitStartTime() == this.commitTime) {
-      int activeMemberSize = context.getActiveMemberStates().size() + (context.getMemberState().isActive() ? 1 : 0);
+      int activeMemberSize = context.getActiveMemberStates().size() + (context.getMemberState().getMember().isActive() ? 1 : 0);
       int quorumSize = context.getQuorum();
       // If a quorum of successful responses cannot be achieved, fail this commit.
       if (activeMemberSize - quorumSize + 1 <= ++commitFailures) {

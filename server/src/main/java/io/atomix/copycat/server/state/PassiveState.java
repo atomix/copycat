@@ -140,19 +140,19 @@ class PassiveState extends ReserveState {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
 
           // Store the previous member type for comparison to determine whether this node should transition.
-          MemberState.Type previousType = context.getMemberState().getType();
+          Member.Type previousType = context.getMemberState().getMemberType();
 
           // Configure the cluster membership.
-          context.configure(entry.getIndex(), configurationEntry.getActiveMembers(), configurationEntry.getPassiveMembers(), configurationEntry.getReserveMembers());
+          context.configure(entry.getIndex(), configurationEntry.getMembers());
 
           // If the local member type changed, transition the state as appropriate.
           // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
           // PASSIVE servers are transitioned to the PASSIVE state.
           // RESERVE servers are transitioned to the RESERVE state.
-          if (previousType != context.getMemberState().getType()) {
-            MemberState.Type type = context.getMemberState().getType();
+          if (previousType != context.getMemberState().getMemberType()) {
+            Member.Type type = context.getMemberState().getMemberType();
             if (type != null) {
-              switch (context.getMemberState().getType()) {
+              switch (context.getMemberState().getMemberType()) {
                 case ACTIVE:
                   transition(CopycatServer.State.FOLLOWER);
                   break;

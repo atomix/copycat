@@ -158,7 +158,7 @@ abstract class ActiveState extends PassiveState {
         .build();
     }
     // If the requesting candidate is not a known ACTIVE member reject the vote request.
-    else if (!member.isActive()) {
+    else if (!member.getMember().isActive()) {
       LOGGER.debug("{} - Rejected {}: candidate is not a known active member", context.getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)

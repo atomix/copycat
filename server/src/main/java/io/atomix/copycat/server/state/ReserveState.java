@@ -97,7 +97,7 @@ class ReserveState extends AbstractState {
     for (Entry entry : request.entries()) {
       if (entry instanceof ConfigurationEntry) {
         ConfigurationEntry configuration = (ConfigurationEntry) entry;
-        context.configure(configuration.getIndex(), configuration.getActiveMembers(), configuration.getPassiveMembers(), configuration.getReserveMembers());
+        context.configure(configuration.getIndex(), configuration.getMembers());
       }
     }
 

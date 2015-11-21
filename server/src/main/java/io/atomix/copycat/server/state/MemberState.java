@@ -27,15 +27,6 @@ import io.atomix.copycat.server.storage.Log;
 class MemberState {
 
   /**
-   * Member type.
-   */
-  enum Type {
-    ACTIVE,
-    PASSIVE,
-    RESERVE
-  }
-
-  /**
    * Member status.
    */
   enum Status {
@@ -45,7 +36,6 @@ class MemberState {
 
   private static final long HEARTBEAT_TIMEOUT = 60000;
   private Member member;
-  private Type type;
   private Status status = Status.AVAILABLE;
   private long heartbeatIndex;
   private long heartbeatTime;
@@ -57,7 +47,7 @@ class MemberState {
   private int failures;
 
   public MemberState(Address serverAddress) {
-    this.member = new Member(Assert.notNull(serverAddress, "serverAddress"), null);
+    this.member = new Member(null, Assert.notNull(serverAddress, "serverAddress"), null);
   }
 
   /**
@@ -81,50 +71,23 @@ class MemberState {
   }
 
   /**
-   * Returns the member type.
-   *
-   * @return The member type.
-   */
-  public Type getType() {
-    return type;
-  }
-
-  /**
    * Sets the member type.
    *
    * @param type The member type.
    * @return The member state.
    */
-  public MemberState setType(Type type) {
-    this.type = type;
+  MemberState setMemberType(Member.Type type) {
+    this.member = new Member(type, member.serverAddress(), member.clientAddress());
     return this;
   }
 
   /**
-   * Returns a boolean indicating whether the member is active.
+   * Returns the member type.
    *
-   * @return Whether the member is active.
+   * @return The member type.
    */
-  boolean isActive() {
-    return type == MemberState.Type.ACTIVE;
-  }
-
-  /**
-   * Returns a boolean indicating whether the member is passive.
-   *
-   * @return Whether the member is passive.
-   */
-  boolean isPassive() {
-    return type == MemberState.Type.PASSIVE;
-  }
-
-  /**
-   * Returns a boolean indicating whether the member is reserve.
-   *
-   * @return Whether the member is reserve.
-   */
-  boolean isReserve() {
-    return type == MemberState.Type.RESERVE;
+  public Member.Type getMemberType() {
+    return member.type();
   }
 
   /**
@@ -133,8 +96,8 @@ class MemberState {
    * @param address The client address.
    * @return The member state.
    */
-  public MemberState setClientAddress(Address address) {
-    this.member = new Member(member.serverAddress(), address);
+  MemberState setClientAddress(Address address) {
+    this.member = new Member(member.type(), member.serverAddress(), address);
     return this;
   }
 
