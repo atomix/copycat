@@ -49,7 +49,8 @@ public class ServerContext implements Managed<ServerState> {
   private final int quorumHint;
   private final int backupCount;
   private final StateMachine userStateMachine;
-  private final Transport transport;
+  private final Transport clientTransport;
+  private final Transport serverTransport;
   private final Storage storage;
   private final ThreadContext context;
   private Server clientServer;
@@ -57,14 +58,15 @@ public class ServerContext implements Managed<ServerState> {
   private ServerState state;
   private volatile boolean open;
 
-  public ServerContext(Address clientAddress, Address serverAddress, Collection<Address> members, int quorumHint, int backupCount, StateMachine stateMachine, Transport transport, Storage storage, Serializer serializer) {
+  public ServerContext(Address clientAddress, Transport clientTransport, Address serverAddress, Transport serverTransport, Collection<Address> members, int quorumHint, int backupCount, StateMachine stateMachine, Storage storage, Serializer serializer) {
     this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.members = Assert.notNull(members, "members");
     this.quorumHint = Assert.argNot(quorumHint, quorumHint <= 0, "quorumHint must be positive");
     this.backupCount = Assert.argNot(backupCount, backupCount <= 0, "backupCount must be positive");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
-    this.transport = Assert.notNull(transport, "transport");
+    this.clientTransport = Assert.notNull(clientTransport, "clientTransport");
+    this.serverTransport = Assert.notNull(serverTransport, "serverTransport");
     this.storage = Assert.notNull(storage, "storage");
     this.context = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
 
@@ -84,8 +86,8 @@ public class ServerContext implements Managed<ServerState> {
       Log log = storage.openLog("copycat");
 
       // Setup the server and connection manager.
-      internalServer = transport.server();
-      ConnectionManager connections = new ConnectionManager(transport.client());
+      internalServer = serverTransport.server();
+      ConnectionManager connections = new ConnectionManager(serverTransport.client());
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
@@ -93,7 +95,7 @@ public class ServerContext implements Managed<ServerState> {
 
           // If the client address is different than the server address, start a separate client server.
           if (!clientAddress.equals(serverAddress)) {
-            clientServer = transport.server();
+            clientServer = clientTransport.server();
             clientServer.listen(clientAddress, c -> state.connectClient(c)).whenComplete((clientResult, clientError) -> {
               open = true;
               future.complete(state);

@@ -393,7 +393,8 @@ public interface CopycatServer extends Managed<CopycatServer> {
 
     private int quorumHint;
     private int backupCount = 1;
-    private Transport transport;
+    private Transport clientTransport;
+    private Transport serverTransport;
     private Storage storage;
     private Serializer serializer;
     private StateMachine stateMachine;
@@ -435,14 +436,40 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the server transport.
+     * Sets the client and server transport.
      *
      * @param transport The server transport.
      * @return The server builder.
      * @throws NullPointerException if {@code transport} is null
      */
     public Builder withTransport(Transport transport) {
-      this.transport = Assert.notNull(transport, "transport");
+      Assert.notNull(transport, "transport");
+      this.clientTransport = transport;
+      this.serverTransport = transport;
+      return this;
+    }
+
+    /**
+     * Sets the client transport.
+     *
+     * @param transport The client transport.
+     * @return The server builder.
+     * @throws NullPointerException if {@code transport} is null
+     */
+    public Builder withClientTransport(Transport transport) {
+      this.clientTransport = Assert.notNull(transport, "transport");
+      return this;
+    }
+
+    /**
+     * Sets the server transport.
+     *
+     * @param transport The server transport.
+     * @return The server builder.
+     * @throws NullPointerException if {@code transport} is null
+     */
+    public Builder withServerTransport(Transport transport) {
+      this.serverTransport = Assert.notNull(transport, "transport");
       return this;
     }
 
@@ -541,12 +568,17 @@ public interface CopycatServer extends Managed<CopycatServer> {
       }
 
       // If the transport is not configured, attempt to use the default Netty transport.
-      if (transport == null) {
+      if (serverTransport == null) {
         try {
-          transport = (Transport) Class.forName("io.atomix.catalyst.transport.NettyTransport").newInstance();
+          serverTransport = (Transport) Class.forName("io.atomix.catalyst.transport.NettyTransport").newInstance();
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
           throw new ConfigurationException("transport not configured");
         }
+      }
+
+      // If the client transport is not configured, default it to the server transport.
+      if (clientTransport == null) {
+        clientTransport = serverTransport;
       }
 
       // If no serializer instance was provided, create one.
@@ -564,7 +596,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
           .build();
       }
 
-      ServerContext context = new ServerContext(clientAddress, serverAddress, cluster, quorumHint, backupCount, stateMachine, transport, storage, serializer);
+      ServerContext context = new ServerContext(clientAddress, clientTransport, serverAddress, serverTransport, cluster, quorumHint, backupCount, stateMachine, storage, serializer);
       return new CopycatRaftServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
     }
   }
