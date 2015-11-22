@@ -39,7 +39,7 @@ import java.util.function.Consumer;
 /**
  * Provides an interface for managing the lifecycle and state of a Raft server.
  * <p>
- * The lifecycle of the Raft server is managed via the {@link Managed} API methods. To start a server,
+ * The lifecycle of the Copycat server is managed via the {@link Managed} API methods. To start a server,
  * call {@link Managed#open()} on the server. Once the server has connected to the cluster and found
  * a leader, the returned {@link CompletableFuture} will be completed and the server will be operating.
  * <p>
@@ -53,20 +53,24 @@ import java.util.function.Consumer;
  * provided. As the cluster progresses, {@link #term()} will progress monotonically, and for each term,
  * only a single {@link #leader()} will ever be elected.
  * <p>
- * Raft servers are members of a cluster of servers identified by their {@link Address}. Each server
+ * Copycat servers are members of a cluster of servers identified by their {@link Address}. Each server
  * must be able to locate other members of the cluster. Throughout the lifetime of a cluster, the membership
  * may change. The {@link #members()} method provides a current view of the cluster from the perspective
  * of a single server. Note that the members list may not be consistent on all nodes at any given time.
+ *
+ * @see StateMachine
+ * @see Transport
+ * @see Storage
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public interface CopycatServer extends Managed<CopycatServer> {
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -83,10 +87,10 @@ public interface CopycatServer extends Managed<CopycatServer> {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -103,10 +107,10 @@ public interface CopycatServer extends Managed<CopycatServer> {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -124,10 +128,10 @@ public interface CopycatServer extends Managed<CopycatServer> {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -145,7 +149,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
   }
 
   /**
-   * Raft server state types.
+   * Copycat server state types.
    * <p>
    * States represent the context of the server's internal state machine. Throughout the lifetime of a server,
    * the server will periodically transition between states based on requests, responses, and timeouts.
@@ -246,19 +250,19 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * the membership set can change over time, the set of members on one server may not exactly reflect the
    * set of members on another server at any given point in time.
    *
-   * @return A collection of current Raft cluster members.
+   * @return A collection of current Copycat cluster members.
    * @throws IllegalStateException If the server is not open
    */
   Collection<Address> members();
 
   /**
-   * Returns the Raft server state.
+   * Returns the Copycat server state.
    * <p>
-   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
-   * until it is explicitly shutdown, the server will be in one of the active states - {@link State#PASSIVE},
-   * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
+   * The initial state of a Copycat server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
+   * until it is explicitly shutdown, the server will be in one of the active states - {@link State#RESERVE},
+   * {@link State#PASSIVE}, {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
    *
-   * @return The Raft server state.
+   * @return The Copycat server state.
    * @throws IllegalStateException If the server is not open
    */
   State state();
@@ -332,11 +336,11 @@ public interface CopycatServer extends Managed<CopycatServer> {
   /**
    * Returns the server execution context.
    * <p>
-   * The thread context is the event loop that this server uses to communicate other Raft servers.
+   * The thread context is the event loop that this server uses to communicate other Copycat servers.
    * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
    * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
    * <p>
-   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
+   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Copycat server's internal
    * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
    * are not thread safe, so to use the context serializer, users should clone it:
    * <pre>
@@ -352,13 +356,12 @@ public interface CopycatServer extends Managed<CopycatServer> {
   ThreadContext context();
 
   /**
-   * Starts the Raft server asynchronously.
+   * Starts the Copycat server asynchronously.
    * <p>
-   * When the server is started, the server will attempt to search for an existing cluster by contacting all of
-   * the members in the provided members list. If no existing cluster is found, the server will immediately transition
-   * to the {@link State#FOLLOWER} state and continue normal Raft protocol operations. If a cluster is found, the server
-   * will attempt to join the cluster. Once the server has joined or started a cluster and a leader has been found,
-   * the returned {@link CompletableFuture} will be completed.
+   * When the server is started, if the server is a member of the current configuration, it will start in the
+   * appropriate state. If the server is being started for the first time and is not listed in the members list,
+   * the server will attempt to join the cluster. Once the server has joined the cluster, the returned
+   * {@link CompletableFuture} will be completed.
    *
    * @return A completable future to be completed once the server has joined the cluster and a leader has been found.
    */
@@ -384,7 +387,7 @@ public interface CopycatServer extends Managed<CopycatServer> {
   CompletableFuture<Void> delete();
 
   /**
-   * Raft server builder.
+   * Copycat server builder.
    */
   class Builder extends io.atomix.catalyst.util.Builder<CopycatServer> {
     private static final Duration DEFAULT_RAFT_ELECTION_TIMEOUT = Duration.ofMillis(1000);
@@ -412,9 +415,18 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the server quorum hint.
+     * Sets the server quorum hint, returning the server builder for method chaining.
+     * <p>
+     * The quorum hint is the number of servers that should participate in the Raft consensus algorithm
+     * as full voting members. If the number of servers in the cluster is less than the quorum hint, all
+     * servers will be voting members, otherwise the system will attempt to promote and demote servers as
+     * necessary to maintain the configured quorum size.
+     * <p>
+     * The quorum hint should always be an odd number for the greatest fault tolerance. Increasing the quorum
+     * hint will result in higher latency for operations committed to the cluster. Decreasing the quorum hint
+     * will result in lower tolerance for failures but also lower latency for writes.
      *
-     * @param quorumHint The server quorum hint.
+     * @param quorumHint The number of servers to participate in the Raft consensus algorithm.
      * @return The server builder.
      * @throws IllegalArgumentException If the quorum hint is not positive.
      */
@@ -424,9 +436,17 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the server backup count.
+     * Sets the server backup count, returning the server builder for method chaining.
+     * <p>
+     * The backup count is the <em>maximum</em> number of backup servers per active voting member of the
+     * Copycat cluster. Backup servers are kept up to date by Raft followers and will be promoted to active
+     * Raft voting members in the event of a failure of a voting member. Increasing the number of backup
+     * servers will increase the load on the cluster, but note that it should not increase the latency of
+     * updates since backups do not participate in commitment of operations to the cluster. Decreasing
+     * the number of backup servers may increase the amount of time necessary to replace a failed server
+     * and regain increased availability.
      *
-     * @param backupCount The server backup count.
+     * @param backupCount The number of backup servers per active server.
      * @return The server builder.
      * @throws IllegalArgumentException If the backup count is not positive.
      */
@@ -436,7 +456,12 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the client and server transport.
+     * Sets the client and server transport, returning the server builder for method chaining.
+     * <p>
+     * The configured transport should be the same transport as all other nodes in the cluster.
+     * Additionally, if no client transport is explicitly provided, the configured transport will
+     * be used for client communication. If no transport is explicitly provided, the server will
+     * default to the {@code NettyTransport} if available on the classpath.
      *
      * @param transport The server transport.
      * @return The server builder.
@@ -450,7 +475,11 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the client transport.
+     * Sets the client transport, returning the server builder for method chaining.
+     * <p>
+     * The configured transport should be used by all clients when connecting to the cluster. If no
+     * client transport is explicitly configured, the server transport will be used or the transport will
+     * default to the {@code NettyTransport} if available on the classpath.
      *
      * @param transport The client transport.
      * @return The server builder.
@@ -462,7 +491,12 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the server transport.
+     * Sets the server transport, returning the server builder for method chaining.
+     * <p>
+     * The configured transport should be the same transport as all other nodes in the cluster.
+     * Additionally, if no client transport is explicitly provided, the configured transport will
+     * be used for client communication. If no transport is explicitly provided, the server will
+     * default to the {@code NettyTransport} if available on the classpath.
      *
      * @param transport The server transport.
      * @return The server builder.
@@ -474,10 +508,14 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the Raft serializer.
+     * Sets the Copycat serializer, returning the server builder for method chaining.
+     * <p>
+     * The serializer will be used to serialize and deserialize operations that are sent over the wire.
+     * Internal server classes will automatically be registered with the configured serializer. Additional
+     * classes can be either registered on the serializer or via the {@link java.util.ServiceLoader} pattern.
      *
-     * @param serializer The Raft serializer.
-     * @return The Raft builder.
+     * @param serializer The Copycat serializer.
+     * @return The Copycat server builder.
      * @throws NullPointerException if {@code serializer} is null
      */
     public Builder withSerializer(Serializer serializer) {
@@ -486,10 +524,32 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the storage module.
+     * Sets the storage module, returning the server builder for method chaining.
+     * <p>
+     * The storage module is the interface the server will use to store the persistent replicated log.
+     * For simple configurations, users can simply construct a {@link Storage} object:
+     * <pre>
+     *   {@code
+     *   CopycatServer server = CopycatServer.builder(address, members)
+     *     .withStorage(new Storage("logs"))
+     *     .build();
+     *   }
+     * </pre>
+     * For more complex storage configurations, use the {@link io.atomix.copycat.server.storage.Storage.Builder}:
+     * <pre>
+     *   {@code
+     *   CopycatServer server = CopycatServer.builder(address, members)
+     *     .withStorage(Storage.builder()
+     *       .withDirectory("logs")
+     *       .withStorageLevel(StorageLevel.MAPPED)
+     *       .withCompactionThreads(2)
+     *       .build())
+     *     .build();
+     *   }
+     * </pre>
      *
      * @param storage The storage module.
-     * @return The Raft server builder.
+     * @return The Copycat server builder.
      * @throws NullPointerException if {@code storage} is null
      */
     public Builder withStorage(Storage storage) {
@@ -498,10 +558,16 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the Raft state machine.
+     * Sets the Copycat state machine, returning the server builder for method chaining.
+     * <p>
+     * The state machine is the component that manages state within the server. When clients submit
+     * {@link io.atomix.copycat.client.Command commands} and {@link io.atomix.copycat.client.Query queries}
+     * to the cluster, those operations are logged and replicated and ultimately applied to the state machine
+     * on each server. All servers in the cluster must be configured with the same state machine, and all
+     * state machines must behave deterministically to uphold Copycat's consistency guarantees.
      *
-     * @param stateMachine The Raft state machine.
-     * @return The Raft builder.
+     * @param stateMachine The Copycat state machine.
+     * @return The Copycat server builder.
      * @throws NullPointerException if {@code stateMachine} is null
      */
     public Builder withStateMachine(StateMachine stateMachine) {
@@ -510,10 +576,14 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the Raft election timeout, returning the Raft configuration for method chaining.
+     * Sets the Raft election timeout, returning the server builder for method chaining.
+     * <p>
+     * The election timeout is the duration since last contact with the cluster leader after which
+     * the server should start a new election. The election timeout should always be significantly
+     * larger than {@link #withHeartbeatInterval(Duration)} in order to prevent unnecessary elections.
      *
      * @param electionTimeout The Raft election timeout duration.
-     * @return The Raft configuration.
+     * @return The Copycat server builder.
      * @throws IllegalArgumentException If the election timeout is not positive
      * @throws NullPointerException if {@code electionTimeout} is null
      */
@@ -525,10 +595,14 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the Raft heartbeat interval, returning the Raft configuration for method chaining.
+     * Sets the Raft heartbeat interval, returning the server builder for method chaining.
+     * <p>
+     * The heartbeat interval is the interval at which the server, if elected leader, should contact
+     * other servers within the cluster to maintain its leadership. The heartbeat interval should
+     * always be some fraction of {@link #withElectionTimeout(Duration)}.
      *
      * @param heartbeatInterval The Raft heartbeat interval duration.
-     * @return The Raft configuration.
+     * @return The Copycat server builder.
      * @throws IllegalArgumentException If the heartbeat interval is not positive
      * @throws NullPointerException if {@code heartbeatInterval} is null
      */
@@ -540,10 +614,19 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * Sets the Raft session timeout, returning the Raft configuration for method chaining.
+     * Sets the Raft session timeout, returning the server builder for method chaining.
+     * <p>
+     * The session timeout is assigned by the server to a client which opens a new session. The session timeout
+     * dictates the interval at which the client must send keep-alive requests to the cluster to maintain its
+     * session. If a client fails to communicate with the cluster for larger than the configured session
+     * timeout, its session may be expired.
+     * <p>
+     * Note that if multiple servers in the cluster use different session timeouts, the session timeout for
+     * each client's session may differ based on the server through which they registered their session. It's
+     * recommended that servers configure the same session timeout for consistency and predictability.
      *
      * @param sessionTimeout The Raft session timeout duration.
-     * @return The Raft configuration.
+     * @return The Copycat server builder.
      * @throws IllegalArgumentException If the session timeout is not positive
      * @throws NullPointerException if {@code sessionTimeout} is null
      */
@@ -555,7 +638,16 @@ public interface CopycatServer extends Managed<CopycatServer> {
     }
 
     /**
-     * @throws ConfigurationException if a state machine, members or transport are not configured
+     * Builds the Copycat server.
+     * <p>
+     * If no {@link Transport} was configured for the server, the builder will attempt to create a
+     * {@code NettyTransport} instance. If {@code io.atomix.catalyst.transport.NettyTransport} is not available
+     * on the classpath, a {@link ConfigurationException} will be thrown.
+     * <p>
+     * Once the server is built, it is not yet connected to the cluster. To connect the server to the cluster,
+     * call the asynchronous {@link #open()} method.
+     *
+     * @throws ConfigurationException if a state machine is not configured
      */
     @Override
     public CopycatServer build() {

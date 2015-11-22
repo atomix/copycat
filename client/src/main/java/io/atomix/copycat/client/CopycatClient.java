@@ -33,10 +33,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Provides an interface for submitting {@link Command commands} and {@link Query} queries to the Raft cluster.
+ * Provides an interface for submitting {@link Command commands} and {@link Query} queries to the Copycat cluster.
  * <p>
- * Raft clients are responsible for connecting to the cluster and submitting {@link Command commands} and {@link Query queries}
- * that operate on the cluster's replicated state machine. Raft clients interact with one or more nodes in a Raft cluster
+ * Copycat clients are responsible for connecting to the cluster and submitting {@link Command commands} and {@link Query queries}
+ * that operate on the cluster's replicated state machine. Copycat clients interact with one or more nodes in a Copycat cluster
  * through a session. When the client is {@link #open() opened}, the client will attempt to one of the known member
  * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
  * cluster, it can open a session. Once the client is able to register a {@link Session}, it will receive an updated list
@@ -78,9 +78,9 @@ import java.util.function.Consumer;
 public interface CopycatClient extends Managed<CopycatClient> {
 
   /**
-   * Returns a new Raft client builder.
+   * Returns a new Copycat client builder.
    * <p>
-   * The provided set of members will be used to connect to the Raft cluster. The members list does not have to represent
+   * The provided set of members will be used to connect to the Copycat cluster. The members list does not have to represent
    * the complete list of servers in the cluster, but it must have at least one reachable member that can communicate with
    * the cluster's leader.
    *
@@ -92,9 +92,9 @@ public interface CopycatClient extends Managed<CopycatClient> {
   }
 
   /**
-   * Returns a new Raft client builder.
+   * Returns a new Copycat client builder.
    * <p>
-   * The provided set of members will be used to connect to the Raft cluster. The members list does not have to represent
+   * The provided set of members will be used to connect to the Copycat cluster. The members list does not have to represent
    * the complete list of servers in the cluster, but it must have at least one reachable member that can communicate with
    * the cluster's leader.
    *
@@ -108,11 +108,11 @@ public interface CopycatClient extends Managed<CopycatClient> {
   /**
    * Returns the client execution context.
    * <p>
-   * The thread context is the event loop that this client uses to communicate Raft servers.
+   * The thread context is the event loop that this client uses to communicate Copycat servers.
    * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
    * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
    * <p>
-   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft client's internal
+   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Copycat client's internal
    * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}.
    *
    * @return The client thread context.
@@ -176,7 +176,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
   Session session();
 
   /**
-   * Submits an operation to the Raft cluster.
+   * Submits an operation to the Copycat cluster.
    * <p>
    * This method is provided for convenience. The submitted {@link Operation} must be an instance
    * of {@link Command} or {@link Query}.
@@ -199,9 +199,9 @@ public interface CopycatClient extends Managed<CopycatClient> {
   }
 
   /**
-   * Submits a command to the Raft cluster.
+   * Submits a command to the Copycat cluster.
    * <p>
-   * Commands are used to alter state machine state. All commands will be forwarded to the current Raft leader.
+   * Commands are used to alter state machine state. All commands will be forwarded to the current leader.
    * Once a leader receives the command, it will write the command to its internal {@code Log} and replicate it to a majority
    * of the cluster. Once the command has been replicated to a majority of the cluster, it will apply the command to its
    * {@code StateMachine} and respond with the result.
@@ -224,12 +224,12 @@ public interface CopycatClient extends Managed<CopycatClient> {
   <T> CompletableFuture<T> submit(Command<T> command);
 
   /**
-   * Submits a query to the Raft cluster.
+   * Submits a query to the Copycat cluster.
    * <p>
    * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
    * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
    * and {@link Query.ConsistencyLevel#BOUNDED_LINEARIZABLE} consistency levels, queries will be forwarded
-   * to the Raft leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
+   * to the leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
    * by applying queries to an internal server state machine.
    * <p>
    * Once the query has been applied to a server state machine, the returned {@link java.util.concurrent.CompletableFuture}
@@ -246,7 +246,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
   <T> CompletableFuture<T> submit(Query<T> query);
 
   /**
-   * Connects the client to the Raft cluster.
+   * Connects the client to the Copycat cluster.
    * <p>
    * When the client is opened, it will attempt to connect to and open a session with each unique configured server
    * {@link Address}. Once the session is open, the returned {@link CompletableFuture} will be completed.
@@ -304,10 +304,11 @@ public interface CopycatClient extends Managed<CopycatClient> {
     }
 
     /**
-     * Sets the client transport.
+     * Sets the client transport, returning the client builder for method chaining.
      * <p>
-     * By default, the client will use the {@code NettyTransport} with an event loop pool equal to
-     * {@link Runtime#availableProcessors()}.
+     * The configured transport should be the same transport as all servers in the cluster.
+     * If no transport is explicitly provided, the client will default to the {@code NettyTransport}
+     * if available on the classpath.
      *
      * @param transport The client transport.
      * @return The client builder.
@@ -319,9 +320,11 @@ public interface CopycatClient extends Managed<CopycatClient> {
     }
 
     /**
-     * Sets the client serializer.
+     * Sets the client serializer, returning the client builder for method chaining.
      * <p>
-     * By default, the client will use a {@link Serializer} configured with the {@link ServiceLoaderTypeResolver}.
+     * The serializer will be used to serialize and deserialize operations that are sent over the wire.
+     * Internal client classes will automatically be registered with the configured serializer. Additional
+     * classes can be either registered on the serializer or via the {@link java.util.ServiceLoader} pattern.
      *
      * @param serializer The client serializer.
      * @return The client builder.
@@ -333,7 +336,15 @@ public interface CopycatClient extends Managed<CopycatClient> {
     }
 
     /**
-     * Sets the client connection strategy.
+     * Sets the client connection strategy, returning the client builder for method chaining.
+     * <p>
+     * The connection strategy is used to determine how the client communicates with servers in the Copycat
+     * cluster. Copycat allows clients to connect to and submit operations through any server in the cluster,
+     * but applications may want to control this behavior based on consistency and performance constraints.
+     * By default, clients only connect to followers using the {@link ConnectionStrategies#FOLLOWERS} strategy
+     * in order to benefit from performance in reading from followers, but this behavior can be overridden for
+     * greater consistency in reads and greater performance in writes by, e.g., connecting to the leader with
+     * {@link ConnectionStrategies#LEADER}.
      *
      * @param connectionStrategy The client connection strategy.
      * @return The client builder.
@@ -344,9 +355,16 @@ public interface CopycatClient extends Managed<CopycatClient> {
     }
 
     /**
-     * Sets the client recovery strategy.
+     * Sets the client recovery strategy, returning the client builder for method chaining.
+     * <p>
+     * Recovery strategies dictate how to handle failures of the client's session. If a client becomes partitioned
+     * from the cluster and can't keep its session alive for some time, its session will expire. The expiration
+     * of a client's session implies a loss of linearizability for certain operations, so it's the responsibility
+     * of the user to define how the loss of a session should be handled. By default, when a client's session is
+     * lost, the client will be closed and must be {@link CopycatClient#open() reopened}, but users can force the
+     * session to automatically be recovered with the {@link RecoveryStrategies#RECOVER} strategy.
      *
-     * @param recoveryStrategy The client recovery strategy.
+     * @param recoveryStrategy The client's session recovery strategy.
      * @return The client builder.
      */
     public Builder withRecoveryStrategy(RecoveryStrategy recoveryStrategy) {
@@ -355,6 +373,10 @@ public interface CopycatClient extends Managed<CopycatClient> {
     }
 
     /**
+     * Builds the Copycat client.
+     * <p>
+     * If no transport was configured, the default {@code NettyTransport} will be loaded from the classpath.
+     *
      * @throws ConfigurationException if transport is not configured and {@code io.atomix.catalyst.transport.NettyTransport}
      * is not found on the classpath
      */
