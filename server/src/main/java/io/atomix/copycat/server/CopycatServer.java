@@ -25,8 +25,11 @@ import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.client.Command;
 import io.atomix.copycat.server.state.ServerContext;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -43,20 +46,86 @@ import java.util.function.Consumer;
  * call {@link Managed#open()} on the server. Once the server has connected to the cluster and found
  * a leader, the returned {@link CompletableFuture} will be completed and the server will be operating.
  * <p>
- * Throughout the lifetime of a server, the server transitions between a variety of
- * {@link CopycatServer.State states}. Call {@link #state()} to get the current state
- * of the server at any given point in time.
+ * Servers are created via the {@link CopycatServer#builder(Address, Address...)} API. To create a new server,
+ * create a builder, passing the local server {@link Address} and a set of remote server addresses with which
+ * to communicate.
+ * <pre>
+ *   {@code
+ *   Address address = new Address("123.456.789.0", 5000);
+ *   Collection<Address> members = Arrays.asList(new Address("123.456.789.1", 5000), new Address("123.456.789.2", 5000));
+ *
+ *   CopycatServer server = CopycatServer.builder(address, members)
+ *     .withStateMachine(new MyStateMachine())
+ *     .build();
+ *   }
+ * </pre>
  * <p>
- * The {@link #term()} and {@link #leader()} are critical aspects of the Raft consensus algorithm. Initially,
- * when the server is started, the {@link #term()} will be initialized to {@code 0} and {@link #leader()} will
- * be {@code null}. By the time the server is fully started, both {@code term} and {@code leader} will be
- * provided. As the cluster progresses, {@link #term()} will progress monotonically, and for each term,
- * only a single {@link #leader()} will ever be elected.
+ * Servers are started by calling {@link #open()} on the {@link CopycatServer} instance.
+ * <pre>
+ *   {@code
+ *   server.open().thenRun(() -> System.out.println("Server started successfully!"));
+ *   }
+ * </pre>
+ * The first time a server is started, it will either start a new cluster or join an existing cluster based on the
+ * {@link Address} and membership configuration provided to the server builder. If the server is a member of the
+ * provided members list, it will start a new cluster and begin communicating with other members in the members list.
+ * If the server is not listed in the members list, it will attempt to join an existing cluster by submitting a configuration
+ * change to the provided members. Once the server has been started for the first time, the cluster configuration will
+ * be persisted locally via the server's configured {@link Storage} module, and next time the server is started it will
+ * join the cluster using the persisted configuration.
  * <p>
- * Copycat servers are members of a cluster of servers identified by their {@link Address}. Each server
- * must be able to locate other members of the cluster. Throughout the lifetime of a cluster, the membership
- * may change. The {@link #members()} method provides a current view of the cluster from the perspective
- * of a single server. Note that the members list may not be consistent on all nodes at any given time.
+ * Once the server is started, it will communicate with the rest of the nodes in the cluster, periodically
+ * transitioning between states. A server can transition between a number of states that dictate how it interacts with
+ * other nodes in the cluster. Typically, when a server is first started it will either start in the {@link State#FOLLOWER}
+ * state (if it's a full voting member) or the {@link State#RESERVE} state (if it's not a voting member). The cluster
+ * always attempts to maintain the configured number of active Raft voting members, known as the quorum size. The quorum
+ * hint can be configured in the server builder via {@link CopycatServer.Builder#withQuorumHint(int)}. If the number of servers
+ * in the cluster is greater than the configured quorum hint, the number of Raft voting members (i.e. {@link State#FOLLOWER}
+ * {@link State#CANDIDATE} or {@link State#LEADER}) will always tend towards the quorum hint. Additionally, for each active
+ * quorum member, a configurable number of backup servers will be maintained in the {@link State#PASSIVE} state. Passive members
+ * are kept up to date with the active voting members, and in the event that an active member becomes unavailable, it will
+ * be replaced by a passive member. This backup count can be configured in the builder via {@link CopycatServer.Builder#withBackupCount(int)}.
+ * Finally, any servers remaining after the {@code quorumHint} and {@code backupCount} requirements have been met will remain
+ * in the {@link State#RESERVE} state. Reserve servers do not persist state changes. In the event that an active or passive
+ * server becomes unavailable, a reserve server will be promoted to take its place.
+ * }
+ * <p>
+ * Users can listen for state transitions via {@link #onStateChange(Consumer)}:
+ * <pre>
+ * {@code
+ * server.onStateChange(state -> {
+ *   if (state == CopycatServer.State.LEADER) {
+ *     System.out.println("Server elected leader!");
+ *   }
+ * });
+ * }
+ * <p>
+ * <b>State machines</b>
+ * <p>
+ * Server state machines are responsible for registering {@link Command}s which can be submitted
+ * to the cluster. Raft relies upon determinism to ensure consistency throughout the cluster, so <em>it is imperative
+ * that each server in a cluster have the same state machine with the same commands.</em>
+ * <p>
+ * By default, the server will use the {@code NettyTransport} for communication. You can configure the transport via
+ * {@link CopycatServer.Builder#withTransport(Transport)}.
+ * <p>
+ * As {@link Command}s are received by the server, they're written to the Raft {@link Log}
+ * and replicated to other members of the cluster. By default, the log is stored on disk, but users can override the default
+ * {@link Storage} configuration via {@link CopycatServer.Builder#withStorage(Storage)}. Most notably,
+ * to configure the storage module to store entries in memory instead of disk, configure the
+ * {@link StorageLevel}.
+ * <pre>
+ * {@code
+ * CopycatServer server = CopycatServer.builder(address, members)
+ *   .withStateMachine(new MyStateMachine())
+ *   .withStorage(new Storage(StorageLevel.MEMORY))
+ *   .build();
+ * }
+ * </pre>
+ * All serialization is performed with a Catalyst {@link Serializer}. By default, the serializer loads registered
+ * {@link io.atomix.catalyst.serializer.CatalystSerializable} types with {@link ServiceLoaderTypeResolver}, but users
+ * can provide a custom serializer via {@link CopycatServer.Builder#withSerializer(Serializer)}.
+ * The server will still ensure that internal serializable types are properly registered on user-provided serializers.
  *
  * @see StateMachine
  * @see Transport
@@ -71,7 +140,9 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * not have to be present in the address list. If the address is not listed in the provided {@code members} list,
+   * the server will attempt to join the provided members when the server is started. Once the server has been started
+   * and successfully joined the cluster, thereafter it will use the most recently known configuration at startup.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
    * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
@@ -79,11 +150,11 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param address The address through which all communication takes place.
-   * @param cluster The cluster members to which to connect.
+   * @param members The cluster members to which to connect.
    * @return The server builder.
    */
-  static Builder builder(Address address, Address... cluster) {
-    return builder(address, address, Arrays.asList(cluster));
+  static Builder builder(Address address, Address... members) {
+    return builder(address, address, Arrays.asList(members));
   }
 
   /**
@@ -91,7 +162,9 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * not have to be present in the address list. If the address is not listed in the provided {@code members} list,
+   * the server will attempt to join the provided members when the server is started. Once the server has been started
+   * and successfully joined the cluster, thereafter it will use the most recently known configuration at startup.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
    * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
@@ -99,11 +172,11 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param address The address through which all communication takes place.
-   * @param cluster The cluster members to which to connect.
+   * @param members The cluster members to which to connect.
    * @return The server builder.
    */
-  static Builder builder(Address address, Collection<Address> cluster) {
-    return new Builder(address, address, cluster);
+  static Builder builder(Address address, Collection<Address> members) {
+    return new Builder(address, address, members);
   }
 
   /**
@@ -111,7 +184,14 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * not have to be present in the address list. If the address is not listed in the provided {@code members} list,
+   * the server will attempt to join the provided members when the server is started. Once the server has been started
+   * and successfully joined the cluster, thereafter it will use the most recently known configuration at startup.
+   * <p>
+   * Clients will communicate with the server via the provided {@code clientAddress}, and servers will communicate via
+   * the {@code serverAddress}. When listing member addresses for other servers in the cluster, the {@code members} list
+   * should contain <em>server</em> addresses. Alternatively, when listing server addresses to which to connect on a client,
+   * the client should list <em>client</em> addresses.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
    * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
@@ -120,11 +200,11 @@ public interface CopycatServer extends Managed<CopycatServer> {
    *
    * @param clientAddress The address through which clients connect to the server.
    * @param serverAddress The local server member address.
-   * @param cluster The cluster members to which to connect.
+   * @param members The cluster members to which to connect.
    * @return The server builder.
    */
-  static Builder builder(Address clientAddress, Address serverAddress, Address... cluster) {
-    return builder(clientAddress, serverAddress, Arrays.asList(cluster));
+  static Builder builder(Address clientAddress, Address serverAddress, Address... members) {
+    return builder(clientAddress, serverAddress, Arrays.asList(members));
   }
 
   /**
@@ -132,7 +212,14 @@ public interface CopycatServer extends Managed<CopycatServer> {
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * not have to be present in the address list. If the address is not listed in the provided {@code members} list,
+   * the server will attempt to join the provided members when the server is started. Once the server has been started
+   * and successfully joined the cluster, thereafter it will use the most recently known configuration at startup.
+   * <p>
+   * Clients will communicate with the server via the provided {@code clientAddress}, and servers will communicate via
+   * the {@code serverAddress}. When listing member addresses for other servers in the cluster, the {@code members} list
+   * should contain <em>server</em> addresses. Alternatively, when listing server addresses to which to connect on a client,
+   * the client should list <em>client</em> addresses.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
    * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
@@ -141,11 +228,11 @@ public interface CopycatServer extends Managed<CopycatServer> {
    *
    * @param clientAddress The address through which clients connect to the server.
    * @param serverAddress The local server member address.
-   * @param cluster The cluster members to which to connect.
+   * @param members The cluster members to which to connect.
    * @return The server builder.
    */
-  static Builder builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
-    return new Builder(clientAddress, serverAddress, cluster);
+  static Builder builder(Address clientAddress, Address serverAddress, Collection<Address> members) {
+    return new Builder(clientAddress, serverAddress, members);
   }
 
   /**
