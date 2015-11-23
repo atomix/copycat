@@ -24,7 +24,7 @@ import io.atomix.copycat.client.error.RaftError;
 import java.util.Objects;
 
 /**
- * Protocol connect client response.
+ * Connect client response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

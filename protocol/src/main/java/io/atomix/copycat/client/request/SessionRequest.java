@@ -21,7 +21,10 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 /**
- * Session request.
+ * Base session request.
+ * <p>
+ * This is the base request for session-related requests. Many client requests are handled within the
+ * context of a {@link #session()} identifier.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

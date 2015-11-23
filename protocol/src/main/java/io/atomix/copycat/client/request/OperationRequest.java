@@ -22,7 +22,13 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.Operation;
 
 /**
- * Operation request.
+ * Client operation request.
+ * <p>
+ * Operation requests are sent by clients to servers to execute operations on the replicated state
+ * machine. Each operation request must be sequenced with a {@link #sequence()} number. All operations
+ * will be applied to replicated state machines in the sequence in which they were sent by the client.
+ * Sequence numbers must always be sequential, and in the event that an operation request fails, it must
+ * be resent by the client.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

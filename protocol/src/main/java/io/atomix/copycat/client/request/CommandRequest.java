@@ -26,7 +26,18 @@ import io.atomix.copycat.client.Operation;
 import java.util.Objects;
 
 /**
- * Protocol command request.
+ * Client command request.
+ * <p>
+ * Command requests are submitted by clients to the Copycat cluster to commit {@link Command}s to
+ * the replicated state machine. Each command request must be associated with a registered
+ * {@link #session()} and have a unique {@link #sequence()} number within that session. Commands will
+ * be applied in the cluster in the order defined by the provided sequence number. Thus, sequence numbers
+ * should never be skipped. In the event of a failure of a command request, the request should be resent
+ * with the same sequence number. Commands are guaranteed to be applied in sequence order.
+ * <p>
+ * Command requests should always be submitted to the server to which the client is connected and will
+ * be forwarded to the current cluster leader. In the event that no leader is available, the request
+ * will fail and should be resubmitted by the client.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

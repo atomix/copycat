@@ -24,7 +24,12 @@ import io.atomix.copycat.client.error.RaftError;
 import java.util.Objects;
 
 /**
- * Protocol unregister response.
+ * Session unregister response.
+ * <p>
+ * Session unregister responses are sent in response to a {@link io.atomix.copycat.client.request.UnregisterRequest}.
+ * If the response is successful, that indicates the session was successfully unregistered. For unsuccessful
+ * unregister requests, sessions can still be expired by simply haulting {@link io.atomix.copycat.client.request.KeepAliveRequest}s
+ * to the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

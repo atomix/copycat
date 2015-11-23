@@ -26,7 +26,21 @@ import io.atomix.copycat.client.Query;
 import java.util.Objects;
 
 /**
- * Protocol query request.
+ * Client query request.
+ * <p>
+ * Query requests are submitted by clients to the Copycat cluster to commit {@link Query}s to
+ * the replicated state machine. Each query request must be associated with a registered
+ * {@link #session()} and have a unique {@link #sequence()} number within that session. Queries will
+ * be applied in the cluster in the order defined by the provided sequence number. Thus, sequence numbers
+ * should never be skipped. In the event of a failure of a query request, the request should be resent
+ * with the same sequence number. Queries are guaranteed to be applied in sequence order.
+ * <p>
+ * Query requests should always be submitted to the server to which the client is connected. The provided
+ * query's {@link Query#consistency() consistency level} will be used to determine how the query should be
+ * handled. If the query is received by a follower, it may be evaluated on that node if the consistency level
+ * if {@link io.atomix.copycat.client.Query.ConsistencyLevel#CAUSAL} or {@link io.atomix.copycat.client.Query.ConsistencyLevel#SEQUENTIAL},
+ * otherwise it will be forwarded to the cluster leader. Queries are always guaranteed to see state progress
+ * monotonically within a single {@link #session()} even when switching servers.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

@@ -16,7 +16,7 @@
 package io.atomix.copycat.client.response;
 
 /**
- * Session response.
+ * Base session response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
