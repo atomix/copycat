@@ -25,7 +25,13 @@ import java.io.File;
 import java.util.Collection;
 
 /**
- * Server metadata store.
+ * Persists server state via the {@link Storage} module.
+ * <p>
+ * The server metastore is responsible for persisting server state according to the configured
+ * {@link Storage#level() storage level}. Each server persists their current {@link #loadTerm() term}
+ * and last {@link #loadVote() vote} as is dictated by the Raft consensus algorithm. Additionally,
+ * servers persist their last known {@link io.atomix.copycat.server.storage.MetaStore.Configuration}
+ * for quick access at startup.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

@@ -22,7 +22,15 @@ import java.util.List;
 /**
  * Strategy for managing client connections.
  * <p>
- * Connection strategies are responsible for defining the servers to which a client can connect.
+ * Connection strategies are responsible for defining the servers to which a client can connect. Copycat clients
+ * are allowed to connect to any server in the cluster. Connection strategies allow clients to optimized based
+ * on their patterns of operations. For clients that frequently submit writes which must be proxied to the leader,
+ * connecting directly to the leader may result in decreased latency. For clients that frequently perform sequential
+ * reads, connecting only to followers may result in decreased latency.
+ * <p>
+ * Note that connection strategies may not prevent clients from connecting to certain servers, in particular the leader.
+ * In the event that the servers allowed by a connection strategy fail, clients will always attempt to connect
+ * to remaining servers. Connection strategies simply define the servers to which the client will prioritize connecting.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

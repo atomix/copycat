@@ -36,7 +36,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Leader state.
+ * The leader is responsible for sending {@link AppendRequest} to followers and handling all
+ * communication that results in entries being committed to the log. This includes all communication
+ * related to registering and maintaining clients sessions and submitting commands.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -109,6 +111,10 @@ final class LeaderState extends ActiveState {
    * Commits a no-op entry to the log, ensuring any entries from a previous term are committed.
    */
   private CompletableFuture<Void> commitInitialEntries() {
+    // The Raft protocol dictates that leaders cannot commit entries from previous terms until
+    // at least one entry from their current term has been stored on a majority of servers. Thus,
+    // we force entries to be appended up to the leader's no-op entry. The LeaderAppender will ensure
+    // that the commitIndex is not increased until the no-op entry (appender.index()) is committed.
     CompletableFuture<Void> future = new CompletableFuture<>();
     appender.appendEntries(appender.index()).whenComplete((resultIndex, error) -> {
       context.checkThread();
@@ -173,14 +179,27 @@ final class LeaderState extends ActiveState {
   }
 
   /**
-   * Checks for expired sessions.
+   * Checks to determine whether any sessions have expired.
+   * <p>
+   * Copycat allows only leaders to explicitly unregister sessions due to expiration. This ensures
+   * that sessions cannot be expired by lengthy election periods or other disruptions to time.
+   * To do so, the leader periodically iterates through registered sessions and checks for sessions
+   * that have been marked suspicious. The internal state machine marks sessions as suspicious when
+   * keep alive entries are not committed for longer than the session timeout. Once the leader marks
+   * a session as suspicious, it will log and replicate an {@link UnregisterEntry} to unregister the session.
    */
   private void checkSessions() {
     long term = context.getTerm();
+
+    // Iterate through all currently registered sessions.
     for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
+      // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
+      // been committed for the session in some time, log and commit a new UnregisterEntry.
       if (!session.isUnregistering() && session.isSuspect()) {
         LOGGER.debug("{} - Detected expired session: {}", context.getMember().serverAddress(), session.id());
 
+        // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
+        // This will result in state machine expire() methods being called when the entry is applied.
         final long index;
         try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
           entry.setTerm(term)
@@ -191,6 +210,7 @@ final class LeaderState extends ActiveState {
           LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
         }
 
+        // Commit the unregister entry and apply it to the state machine.
         appender.appendEntries(index).whenComplete((result, error) -> {
           if (isOpen()) {
             UnregisterEntry entry = context.getLog().get(index);
@@ -198,6 +218,9 @@ final class LeaderState extends ActiveState {
             context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
           }
         });
+
+        // Mark the session as being unregistered in order to ensure this leader doesn't attempt
+        // to unregister it again.
         session.unregister();
       }
     }
@@ -209,6 +232,9 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
+    // Allowing multiple uncommitted configuration changes can result in split majorities.
+    // This may not be true for configuration changes that simply promote or demote reserve
+    // and passive servers, but we nevertheless follow the rule for simplicity.
     if (configuring > 0) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -284,6 +310,9 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
+    // Allowing multiple uncommitted configuration changes can result in split majorities.
+    // This may not be true for configuration changes that simply promote or demote reserve
+    // and passive servers, but we nevertheless follow the rule for simplicity.
     if (configuring > 0) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -380,6 +409,8 @@ final class LeaderState extends ActiveState {
       }
     }
 
+    // Log and commit a heartbeat entry for the member with the member's indicated commitIndex. The commitIndex
+    // provides a consistent way to determine when tombstone entries can be safely removed from the log.
     try (HeartbeatEntry entry = context.getLog().create(HeartbeatEntry.class)) {
       entry.setTerm(context.getTerm())
         .setMember(request.member().id())
@@ -594,6 +625,11 @@ final class LeaderState extends ActiveState {
           CommandEntry entry = context.getLog().get(index);
 
           LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
+
+          // Apply the command to the state machine, indicating that the command expects an output.
+          // This will cause linearizable events to be synchronously proxied through appropriate servers
+          // to the client in order to make event messages linearizable (be received between the command
+          // request and response).
           context.getStateMachine().apply(entry, true).whenComplete((result, error) -> {
             if (isOpen()) {
               if (error == null) {
@@ -615,7 +651,6 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
-              checkSessions();
             }
             entry.release();
           });
@@ -636,7 +671,6 @@ final class LeaderState extends ActiveState {
 
   @Override
   protected CompletableFuture<QueryResponse> query(final QueryRequest request) {
-
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
@@ -654,16 +688,25 @@ final class LeaderState extends ActiveState {
       .setVersion(request.version())
       .setQuery(query);
 
+    // Get the query consistency level. The consistency level dictates how the query should be executed.
     Query.ConsistencyLevel consistency = query.consistency();
+
+    // If no consistency level was specified, use the full linearizable consistency level.
     if (consistency == null)
       return submitQueryLinearizable(entry);
 
+    // Evaluate the query according to the query's consistency level.
     switch (consistency) {
+      // Causal and sequential queries are immediately applied to the state machine.
       case CAUSAL:
       case SEQUENTIAL:
         return submitQueryLocal(entry);
+      // Bounded linearizable queries are applied to the state machine if the leader has contacted
+      // a majority of the cluster within an election timeout.
       case BOUNDED_LINEARIZABLE:
         return submitQueryBoundedLinearizable(entry);
+      // Linearizable queries require sending heartbeats to a majority of the cluster to ensure the
+      // leader is indeed still the leader.
       case LINEARIZABLE:
         return submitQueryLinearizable(entry);
       default:
@@ -682,8 +725,9 @@ final class LeaderState extends ActiveState {
    * Submits a query with lease bounded linearizable consistency.
    */
   private CompletableFuture<QueryResponse> submitQueryBoundedLinearizable(QueryEntry entry) {
-    long commitTime = appender.time();
-    if (System.currentTimeMillis() - commitTime < context.getElectionTimeout().toMillis()) {
+    // If less than an election timeout has elapsed since the last time the leader contacted a majority
+    // of the cluster, immediately apply the query to the state machine.
+    if (System.currentTimeMillis() - appender.time() < context.getElectionTimeout().toMillis()) {
       return submitQueryLocal(entry);
     } else {
       return submitQueryLinearizable(entry);
@@ -694,6 +738,10 @@ final class LeaderState extends ActiveState {
    * Submits a query with strict linearizable consistency.
    */
   private CompletableFuture<QueryResponse> submitQueryLinearizable(QueryEntry entry) {
+    // Send a heartbeat AppendRequest to a majority of the cluster before applying the query to the
+    // state machine. Note that a single heartbeat will actually be sent for multiple calls to
+    // appendEntries rather than sending a separate heartbeat for each query, so this process should
+    // be pretty efficient.
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
@@ -719,7 +767,7 @@ final class LeaderState extends ActiveState {
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // versions will be the last applied index.
-    final long version = context.getStateMachine().getLastApplied();
+    final long version = context.getLastApplied();
     applyEntry(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
@@ -739,7 +787,6 @@ final class LeaderState extends ActiveState {
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
-        checkSessions();
       }
       entry.release();
     });
@@ -755,6 +802,11 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log and commit a register entry to register the new session. The index of the logged
+    // register entry will become the session ID. The session's timeout is based on the local
+    // server's configured session timeout. Logging the session timeout in the RegisterEntry
+    // ensures that session timeouts for this session are consistent on all servers even though
+    // configured session timeouts on each server may differ.
     try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setTimestamp(timestamp)
@@ -771,10 +823,20 @@ final class LeaderState extends ActiveState {
         if (commitError == null) {
           RegisterEntry entry = context.getLog().get(index);
 
+          // Apply the entry to the state machine, indicating that the entry expects an output.
+          // This will cause events triggered during the call to register() on the state machine to be
+          // proxied through the appropriate servers to the client in order to make event messages
+          // linearizable (be received between the client's request and response).
           LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
+                // Once the session has been registered, respond to the register request with the
+                // registered session ID and session timeout. The session timeout is based on the
+                // local server's timeout and is sent back to the client to allow it to determine
+                // the rate at which to send keep alive requests to the cluster. Additionally, we
+                // send the current leader and active members configuration back to the client to
+                // ensure it has an up-to-date view of the cluster.
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.OK)
                   .withSession((Long) sessionId)
@@ -796,6 +858,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -816,8 +880,12 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Immediately register the relationship between the client and server. We don't wait for
+    // the AcceptRequest to be committed since the commitment and events of prior entries may rely on
+    // the connection/relationship to be completed.
     context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
 
+    // Proxy an AcceptRequest to log and replicate the connection.
     AcceptRequest acceptRequest = AcceptRequest.builder()
       .withSession(request.session())
       .withAddress(context.getMember().serverAddress())
@@ -835,6 +903,7 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log the relationship between the client and server.
     try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
@@ -844,6 +913,9 @@ final class LeaderState extends ActiveState {
       LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
+    // Immediately register the address of the server to which the client is connected. We don't wait for
+    // the ConnectEntry to be committed since the commitment and events of prior entries may rely on
+    // the connection/relationship to be completed.
     context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
@@ -869,6 +941,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -892,6 +966,8 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log the keep alive entry. The logged commandSequence and eventVersion aid in clearing
+    // commands and events from state machine memory once the entry is committed.
     try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
@@ -911,6 +987,8 @@ final class LeaderState extends ActiveState {
           applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
+                // We send the current leader and active members configuration back to the client to
+                // ensure it has an up-to-date view of the cluster.
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.OK)
                   .withLeader(context.getMember().clientAddress())
@@ -932,6 +1010,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -956,6 +1036,10 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log and commit an UnregisterEntry. Note that the entry is logged with expired = false
+    // to indicate that the session was *not* expired by the leader but was unregistered by
+    // the client. Internal state machines will use this information to call close() by not
+    // expire() event handlers on the session.
     try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
@@ -972,6 +1056,10 @@ final class LeaderState extends ActiveState {
         if (commitError == null) {
           UnregisterEntry entry = context.getLog().get(index);
 
+          // Apply the entry to the state machine, indicating that the entry expects an output.
+          // This will cause events triggered during the call to close() on the state machine to be
+          // proxied through the appropriate servers to the client in order to make event messages
+          // linearizable (be received between the client's request and response).
           LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
@@ -990,6 +1078,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();

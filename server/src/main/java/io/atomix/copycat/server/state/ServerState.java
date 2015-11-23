@@ -79,6 +79,8 @@ public class ServerState {
   private int leader;
   private long term;
   private int lastVotedFor;
+  private long lastApplied;
+  private long lastCompleted;
   private long commitIndex;
   private long globalIndex;
 
@@ -655,6 +657,60 @@ public class ServerState {
   }
 
   /**
+   * Returns the last applied index.
+   *
+   * @return The last applied index.
+   */
+  long getLastApplied() {
+    return lastApplied;
+  }
+
+  /**
+   * Sets the last applied index.
+   * <p>
+   * The last applied index is updated *after* each time a non-query entry is applied to the state machine.
+   *
+   * @param lastApplied The last applied index.
+   * @return The server state.
+   */
+  ServerState setLastApplied(long lastApplied) {
+    // If the last applied index decreased then that's very concerning.
+    this.lastApplied = Assert.argNot(lastApplied, lastApplied < this.lastApplied, "lastApplied index must be monotonically increasing");
+    return this;
+  }
+
+  /**
+   * Returns the highest index completed for all sessions.
+   * <p>
+   * The lastCompleted index is representative of the highest index for which related events have been
+   * received by *all* clients. In other words, no events lower than the given index should remain in
+   * memory.
+   *
+   * @return The highest index completed for all sessions.
+   */
+  long getLastCompleted() {
+    return lastCompleted > 0 ? lastCompleted : lastApplied;
+  }
+
+  /**
+   * Sets the last completed index.
+   * <p>
+   * The lastCompleted index is representative of the highest index for which related events have been
+   * received by *all* clients. In other words, no events lower than the given index should remain in
+   * memory.
+   *
+   * @param lastCompleted The last completed index.
+   * @return The server state.
+   */
+  ServerState setLastCompleted(long lastCompleted) {
+    // The last completed index must not have decreased. New sessions will always start their lastCompleted
+    // index at the index of their session registration to ensure the creation of new sessions does not
+    // result in the decrease of the lastCompleted index.
+    this.lastCompleted = Assert.argNot(lastCompleted, lastCompleted < this.lastCompleted, "lastCompleted index must be monotonically increasing");
+    return this;
+  }
+
+  /**
    * Sets the commit index.
    *
    * @param commitIndex The commit index.
@@ -706,24 +762,6 @@ public class ServerState {
    */
   ServerStateMachine getStateMachine() {
     return stateMachine;
-  }
-
-  /**
-   * Returns the last index applied to the state machine.
-   *
-   * @return The last index applied to the state machine.
-   */
-  public long getLastApplied() {
-    return stateMachine.getLastApplied();
-  }
-
-  /**
-   * Returns the last index completed for all sessions.
-   *
-   * @return The last index completed for all sessions.
-   */
-  public long getLastCompleted() {
-    return stateMachine.getLastCompleted();
   }
 
   /**

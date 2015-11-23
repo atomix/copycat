@@ -23,7 +23,10 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import java.util.List;
 
 /**
- * Sends AppendEntries RPCs for a follower.
+ * The follower appender is responsible for sending {@link AppendRequest}s to passive/reserve
+ * servers from a follower. Append requests are sent by followers to specific passive and reserve
+ * servers based on consistent hashing. The appender sends {@link io.atomix.copycat.server.request.ConfigureRequest}s
+ * to reserve servers, and {@link AppendRequest}s to passive servers.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

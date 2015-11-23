@@ -24,7 +24,9 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Connection manager.
+ * The connection manager is responsible for managing connections between servers.
+ * Each server has a connection manager that essentially caches connections once connected. When a server
+ * needs to connect to another server, the manager will either get or create a connection.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

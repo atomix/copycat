@@ -21,11 +21,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 
 /**
- * State machine time.
+ * The server clock provides a {@link Clock} implementation that uses deterministic state machine time.
+ * The clock can be exposed for use in state machines.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ServerClock extends Clock {
+class ServerClock extends Clock {
   private final ZoneId zoneId = ZoneId.of("UTC");
   private Instant instant;
 

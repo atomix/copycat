@@ -20,7 +20,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Log;
 
 /**
- * Cluster member state.
+ * Manages all state with respect to a specific remote member of the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

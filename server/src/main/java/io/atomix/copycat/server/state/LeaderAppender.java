@@ -22,14 +22,14 @@ import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Sends AppendEntries RPCs for leaders.
+ * The leader appender is responsible for sending {@link AppendRequest}s on behalf of a leader to followers.
+ * Append requests are sent by the leader only to other active members of the cluster.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -41,7 +41,7 @@ final class LeaderAppender extends AbstractAppender {
   private int commitFailures;
   private CompletableFuture<Long> commitFuture;
   private CompletableFuture<Long> nextCommitFuture;
-  private final TreeMap<Long, CompletableFuture<Long>> commitFutures = new TreeMap<>();
+  private final Map<Long, CompletableFuture<Long>> commitFutures = new HashMap<>();
 
   LeaderAppender(ServerState context) {
     super(context);
@@ -78,11 +78,18 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   /**
-   * Triggers a commit.
+   * Triggers a heartbeat to a majority of the cluster.
+   * <p>
+   * For followers to which no AppendRequest is currently being sent, a new empty AppendRequest will be
+   * created and sent. For followers to which an AppendRequest is already being sent, the appendEntries()
+   * call will piggyback on the *next* AppendRequest. Thus, multiple calls to this method will only ever
+   * result in a single AppendRequest to each follower at any given time, and the returned future will be
+   * shared by all concurrent calls.
    *
-   * @return A completable future to be completed the next time entries are committed to a majority of the cluster.
+   * @return A completable future to be completed the next time a heartbeat is received by a majority of the cluster.
    */
   public CompletableFuture<Long> appendEntries() {
+    // If there are no other active members in the cluster, simply complete the append operation.
     if (context.getActiveMemberStates().size() == 0)
       return CompletableFuture.completedFuture(null);
 
@@ -119,13 +126,19 @@ final class LeaderAppender extends AbstractAppender {
     if (index == 0)
       return appendEntries();
 
+    // If the index already meets the current commitIndex, return a completed future.
+    if (index <= context.getCommitIndex())
+      return CompletableFuture.completedFuture(index);
+
     // If there are no other ACTIVE members in the cluster, immediately commit the index.
     if (context.getActiveMemberStates().isEmpty()) {
       context.setCommitIndex(index);
       return CompletableFuture.completedFuture(index);
     }
 
-    // Ensure append requests are being sent to all ACTIVE members.
+    // Ensure append requests are being sent to all ACTIVE members. Note that this will be a no-op
+    // for any members to which append requests are currently being sent. Once the commitIndex has
+    // increased to the provided index, the returned CompletableFuture will be completed.
     return commitFutures.computeIfAbsent(index, i -> {
       for (MemberState member : context.getActiveMemberStates()) {
         appendEntries(member);
@@ -136,6 +149,10 @@ final class LeaderAppender extends AbstractAppender {
 
   /**
    * Returns the last time a majority of the cluster was contacted.
+   * <p>
+   * This is calculated by sorting the list of active members and getting the last time the majority of
+   * the cluster was contacted based on the index of a majority of the members. So, in a list of 3 ACTIVE
+   * members, index 1 (the second member) will be used to determine the commit time in a sorted members list.
    */
   private long commitTime() {
     int quorumIndex = quorumIndex();
@@ -149,18 +166,17 @@ final class LeaderAppender extends AbstractAppender {
    * Sets a commit time or fails the commit if a quorum of successful responses cannot be achieved.
    */
   private void commitTime(MemberState member, Throwable error) {
-    if (commitFuture == null) {
+    if (commitFuture == null)
       return;
-    }
 
-    boolean completed = false;
     if (error != null && member.getCommitStartTime() == this.commitTime) {
       int activeMemberSize = context.getActiveMemberStates().size() + (context.getMemberState().getMember().isActive() ? 1 : 0);
       int quorumSize = context.getQuorum();
+
       // If a quorum of successful responses cannot be achieved, fail this commit.
       if (activeMemberSize - quorumSize + 1 <= ++commitFailures) {
         commitFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
-        completed = true;
+        completeCommit();
       }
     } else {
       member.setCommitTime(System.currentTimeMillis());
@@ -170,19 +186,23 @@ final class LeaderAppender extends AbstractAppender {
       // commit future and reset it to the next commit future.
       if (this.commitTime <= commitTime()) {
         commitFuture.complete(null);
-        completed = true;
+        completeCommit();
       }
     }
+  }
 
-    if (completed) {
-      commitFailures = 0;
-      commitFuture = nextCommitFuture;
-      nextCommitFuture = null;
-      if (commitFuture != null) {
-        this.commitTime = System.currentTimeMillis();
-        for (MemberState replica : context.getActiveMemberStates()) {
-          appendEntries(replica);
-        }
+  /**
+   * Completes a heartbeat by replacing the current commitFuture with the nextCommitFuture, updating the
+   * current commitTime, and starting a new {@link AppendRequest} to all active members.
+   */
+  private void completeCommit() {
+    commitFailures = 0;
+    commitFuture = nextCommitFuture;
+    nextCommitFuture = null;
+    if (commitFuture != null) {
+      this.commitTime = System.currentTimeMillis();
+      for (MemberState replica : context.getActiveMemberStates()) {
+        appendEntries(replica);
       }
     }
   }
@@ -217,18 +237,17 @@ final class LeaderAppender extends AbstractAppender {
     // If the commit index has increased then update the commit index. Note that in order to ensure
     // the leader completeness property holds, verify that the commit index is greater than or equal to
     // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
-    if (commitIndex > 0 && commitIndex > context.getCommitIndex() && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
+    long previousCommitIndex = context.getCommitIndex();
+    if (commitIndex > 0 && commitIndex > previousCommitIndex && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
       context.setCommitIndex(commitIndex);
 
-      // TODO: This seems like an annoyingly expensive operation to perform on every response.
-      // Futures could simply be stored in a hash map and we could use a sequential index starting
-      // from the previous commit index to get the appropriate futures. But for now, at least this
-      // ensures that no memory leaks can occur.
-      SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
-      for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
-        entry.getValue().complete(entry.getKey());
+      // Iterate from the previous commitIndex to the updated commitIndex and remove and complete futures.
+      for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
+        CompletableFuture<Long> future = commitFutures.remove(i);
+        if (future != null) {
+          future.complete(i);
+        }
       }
-      futures.clear();
     }
   }
 
@@ -248,6 +267,8 @@ final class LeaderAppender extends AbstractAppender {
 
   /**
    * Builds an empty AppendEntries request.
+   * <p>
+   * Empty append requests are used as heartbeats to followers.
    */
   private AppendRequest buildEmptyRequest(MemberState member) {
     long prevIndex = getPrevIndex(member);
@@ -286,6 +307,9 @@ final class LeaderAppender extends AbstractAppender {
       // counted towards the size of the batch.
       int size = 0;
       while (index <= context.getLog().lastIndex()) {
+        // Get the entry from the log and append it if it's not null. Entries in the log can be null
+        // if they've been cleaned or compacted from the log. Each entry sent in the append request
+        // has a unique index to handle gaps in the log.
         Entry entry = context.getLog().get(index);
         if (entry != null) {
           if (size + entry.size() > MAX_BATCH_SIZE) {
@@ -351,10 +375,15 @@ final class LeaderAppender extends AbstractAppender {
       if (hasMoreEntries(member)) {
         appendEntries(member);
       }
-    } else if (response.term() > context.getTerm()) {
+    }
+    // If we've received a greater term, update the term and transition back to follower.
+    else if (response.term() > context.getTerm()) {
       context.setTerm(response.term()).setLeader(0);
       context.transition(CopycatServer.State.FOLLOWER);
-    } else {
+    }
+    // If the response failed, the follower should have provided the correct last index in their log. This helps
+    // us converge on the matchIndex faster than by simply decrementing nextIndex one index at a time.
+    else {
       resetMatchIndex(member, response);
       resetNextIndex(member);
 
@@ -369,11 +398,15 @@ final class LeaderAppender extends AbstractAppender {
    * Handles a {@link Response.Status#ERROR} response.
    */
   private void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
+    // If we've received a greater term, update the term and transition back to follower.
     if (response.term() > context.getTerm()) {
       LOGGER.debug("{} - Received higher term from {}", context.getMember().serverAddress(), member.getMember().serverAddress());
       context.setTerm(response.term()).setLeader(0);
       context.transition(CopycatServer.State.FOLLOWER);
     } else {
+      // If any other error occurred, increment the failure count for the member. Log the first three failures,
+      // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
+      // when attempting to send entries to down followers.
       int failures = member.incrementFailureCount();
       if (failures <= 3 || failures % 100 == 0) {
         LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getMember().serverAddress(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
@@ -390,6 +423,9 @@ final class LeaderAppender extends AbstractAppender {
    * Fails an attempt to contact a member.
    */
   private void failAttempt(MemberState member, Throwable error) {
+    // If any append error occurred, increment the failure count for the member. Log the first three failures,
+    // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
+    // when attempting to send entries to down followers.
     int failures = member.incrementFailureCount();
     if (failures <= 3 || failures % 100 == 0) {
       LOGGER.warn("{} - {}", context.getMember().serverAddress(), error.getMessage());

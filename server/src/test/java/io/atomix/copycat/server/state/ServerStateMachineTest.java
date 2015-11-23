@@ -340,7 +340,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         resume();
       });
 
-      threadAssertEquals(serverState.getStateMachine().getLastApplied(), 1l);
+      threadAssertEquals(serverState.getLastApplied(), 1l);
     });
 
     await();
@@ -354,7 +354,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     serverContext.execute(() -> {
 
       QueryEntry entry = new QueryEntry()
-        .setIndex(serverState.getStateMachine().getLastApplied())
+        .setIndex(serverState.getLastApplied())
         .setTerm(1)
         .setSession(1)
         .setTimestamp(timestamp + 200)
@@ -385,7 +385,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         resume();
       });
 
-      threadAssertEquals(serverState.getStateMachine().getLastApplied(), 2l);
+      threadAssertEquals(serverState.getLastApplied(), 2l);
     });
 
     await(1000, 2);

@@ -41,8 +41,6 @@ class ServerStateMachine implements AutoCloseable {
   private final ServerState state;
   private final ServerStateMachineExecutor executor;
   private final ServerCommitPool commits;
-  private long lastApplied;
-  private long lastCompleted;
   private long configuration;
 
   ServerStateMachine(StateMachine stateMachine, ServerState state, ServerStateMachineContext context, ThreadContext executor) {
@@ -67,50 +65,6 @@ class ServerStateMachine implements AutoCloseable {
    */
   ServerStateMachineExecutor executor() {
     return executor;
-  }
-
-  /**
-   * Returns the last applied index.
-   *
-   * @return The last applied index.
-   */
-  long getLastApplied() {
-    return lastApplied;
-  }
-
-  /**
-   * Sets the last applied index.
-   * <p>
-   * The last applied index is updated *after* each time a non-query entry is applied to the state machine.
-   *
-   * @param lastApplied The last applied index.
-   */
-  private void setLastApplied(long lastApplied) {
-    // If the last applied index decreased then that's very concerning.
-    Assert.argNot(lastApplied < this.lastApplied, "lastApplied index must be greater than previous lastApplied index");
-    if (lastApplied > this.lastApplied) {
-      this.lastApplied = lastApplied;
-
-      // Update the index for each session. This will be used to trigger queries that are awaiting the
-      // application of specific indexes to the state machine. Setting the session index may cause query
-      // callbacks to be called and queries to be evaluated.
-      for (ServerSession session : executor.context().sessions().sessions.values()) {
-        session.setVersion(lastApplied);
-      }
-    }
-  }
-
-  /**
-   * Returns the highest index completed for all sessions.
-   * <p>
-   * The lastCompleted index is representative of the highest index for which related events have been
-   * received by *all* clients. In other words, no events lower than the given index should remain in
-   * memory.
-   *
-   * @return The highest index completed for all sessions.
-   */
-  long getLastCompleted() {
-    return lastCompleted > 0 ? lastCompleted : lastApplied;
   }
 
   /**
@@ -156,7 +110,14 @@ class ServerStateMachine implements AutoCloseable {
     } finally {
       // After the entry has been applied, update the lastApplied index.
       if (apply) {
-        setLastApplied(entry.getIndex());
+        state.setLastApplied(entry.getIndex());
+
+        // Update the index for each session. This will be used to trigger queries that are awaiting the
+        // application of specific indexes to the state machine. Setting the session index may cause query
+        // callbacks to be called and queries to be evaluated.
+        for (ServerSession session : executor.context().sessions().sessions.values()) {
+          session.setVersion(entry.getIndex());
+        }
       }
     }
   }
@@ -617,6 +578,7 @@ class ServerStateMachine implements AutoCloseable {
 
       ThreadContext context = ThreadContext.currentContextOrThrow();
 
+      // Register the query to be executed once the version number reaches the request version number.
       ServerCommit commit = commits.acquire(entry, executor.timestamp());
       session.registerVersionQuery(entry.getVersion(), () -> {
         context.checkThread();
@@ -632,7 +594,11 @@ class ServerStateMachine implements AutoCloseable {
    * Executes a state machine query.
    */
   private CompletableFuture<Object> executeQuery(ServerCommit commit, CompletableFuture<Object> future, ThreadContext context) {
+    // Execute the query in the state machine thread.
     executor.executor().execute(() -> {
+      // Once in the state machine thread, update the current state machine index and time. The consistency level
+      // is set to null to indicate that session events cannot be published in the current context. Session events
+      // may not be published in response to queries since they may only be applied on a single server.
       executor.context().update(commit.index(), commit.time(), true, null);
       try {
         Object result = executor.executeOperation(commit);
@@ -720,7 +686,11 @@ class ServerStateMachine implements AutoCloseable {
       session.setTimestamp(timestamp);
     }
 
+    // Immediately clean the no-op entry from the log. Note that no-op entries are marked as tombstones
+    // and as such will be retained in the log until applied on all active servers, so there's no risk
+    // of a server failing to reset session timeouts due to a cleaned no-op entry.
     state.getLog().clean(entry.getIndex());
+
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
 
@@ -729,13 +699,14 @@ class ServerStateMachine implements AutoCloseable {
    */
   private void updateLastCompleted(long index) {
     long lastCompleted = index;
+
+    // Iterate through sessions and find the lowest lastCompleted index.
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
     }
 
-    if (lastCompleted < this.lastCompleted)
-      throw new IllegalStateException("inconsistent session state");
-    this.lastCompleted = lastCompleted;
+    // Update the last completed index.
+    state.setLastCompleted(lastCompleted);
   }
 
   /**

@@ -28,7 +28,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Abstract entries appender.
+ * Entries appenders handle sending {@link AppendRequest}s from leaders to followers and from
+ * followers to passive/reserve members.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

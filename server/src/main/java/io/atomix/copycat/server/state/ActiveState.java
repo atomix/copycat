@@ -80,14 +80,14 @@ abstract class ActiveState extends PassiveState {
    */
   protected PollResponse handlePoll(PollRequest request) {
     // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context.
+    // update the local term. This will also result in the leader being reset.
     if (request.term() > context.getTerm()) {
       context.setTerm(request.term());
     }
 
 
     // If the request term is not as great as the current context term then don't
-    // vote for the candidate. We want to vote for candidates that are at least
+    // accept the poll for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
       LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getMember().serverAddress(), request);
@@ -96,13 +96,17 @@ abstract class ActiveState extends PassiveState {
         .withTerm(context.getTerm())
         .withAccepted(false)
         .build();
-    } else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
+    }
+    // If the candidate's log is up to date, accept the poll.
+    else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
         .withAccepted(true)
         .build();
-    } else {
+    }
+    // If the candidate's log is not up to date, reject the poll.
+    else {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -124,6 +128,8 @@ abstract class ActiveState extends PassiveState {
     }
 
     CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
+
+    // If the transition flag is set, that indicates this node needs to transition back to follower.
     if (transition) {
       transition(CopycatServer.State.FOLLOWER);
     }
@@ -168,6 +174,7 @@ abstract class ActiveState extends PassiveState {
     }
     // If we've already voted for someone else then don't vote again.
     else if (context.getLastVotedFor() == 0 || context.getLastVotedFor() == request.candidate()) {
+      // If the candidate's log is at least as up to date as the local node's log, grant the vote.
       if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
         context.setLastVotedFor(request.candidate());
         return VoteResponse.builder()
@@ -175,7 +182,9 @@ abstract class ActiveState extends PassiveState {
           .withTerm(context.getTerm())
           .withVoted(true)
           .build();
-      } else {
+      }
+      // Otherwise, if the candidate's log is not up to date, reject it.
+      else {
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
           .withTerm(context.getTerm())
@@ -212,21 +221,19 @@ abstract class ActiveState extends PassiveState {
         return true;
       }
 
-      try {
-        if (index != 0 && index >= lastIndex) {
-          if (term >= entry.getTerm()) {
-            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getMember().serverAddress(), request);
-            return true;
-          } else {
-            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getMember().serverAddress(), request, term, entry.getTerm());
-            return false;
-          }
+      // If the candidate's last log index and term is >= the local last log index and term, the log
+      // is considered up to date.
+      if (index != 0 && index >= lastIndex) {
+        if (term >= entry.getTerm()) {
+          LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getMember().serverAddress(), request);
+          return true;
         } else {
-          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getMember().serverAddress(), request, index, lastIndex);
+          LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getMember().serverAddress(), request, term, entry.getTerm());
           return false;
         }
-      } finally {
-        entry.close();
+      } else {
+        LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getMember().serverAddress(), request, index, lastIndex);
+        return false;
       }
     }
   }
@@ -288,9 +295,9 @@ abstract class ActiveState extends PassiveState {
     // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
     final long version;
     if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      version = context.getStateMachine().getLastApplied();
+      version = context.getLastApplied();
     } else {
-      version = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+      version = Math.max(request.sequence(), context.getLastApplied());
     }
 
     context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {

@@ -28,7 +28,11 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Abstract state.
+ * Abstract server state.
+ * <p>
+ * Throughout the lifetime of a server, it transitions through a number of states. Each state is responsible
+ * for handling a set of {@link Request}s in a specific manner. Servers transition between states in response
+ * to requests and various timers. Each concrete state is associated with a specific {@link CopycatServer.State}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

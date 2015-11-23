@@ -97,6 +97,8 @@ final class CandidateState extends ActiveState {
     });
 
     final AtomicBoolean complete = new AtomicBoolean();
+
+    // Calculate the set of voting (active) members.
     final Set<MemberState> votingMembers = new HashSet<>(context.getActiveMemberStates());
 
     // If there are no other members in the cluster, immediately transition to leader.
@@ -124,6 +126,7 @@ final class CandidateState extends ActiveState {
     long lastIndex = context.getLog().lastIndex();
     Entry lastEntry = lastIndex != 0 ? context.getLog().get(lastIndex) : null;
 
+    // Get the last entry and term from the log.
     final long lastTerm;
     if (lastEntry != null) {
       lastTerm = lastEntry.getTerm();

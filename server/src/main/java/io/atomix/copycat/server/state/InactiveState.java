@@ -26,7 +26,8 @@ import io.atomix.copycat.server.response.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Inactive state.
+ * The inactive state is the base state for a server that is not currently running. All requests
+ * received by an inactive server will be failed with an {@link IllegalStateException}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

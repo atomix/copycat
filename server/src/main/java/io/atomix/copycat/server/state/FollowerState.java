@@ -40,7 +40,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Follower state.
+ * Followers are active Raft voting members that receive synchronously replicated entries from leaders.
+ * Each follower expects to receive {@link AppendRequest}s from a leader at regular intervals. In the
+ * event that a follower does not receive a heartbeat from a leader for an election timeout, it will
+ * poll members of the cluster to determine whether it should become a candidate and transition to the
+ * {@link CandidateState} if necessary.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -154,12 +158,14 @@ final class FollowerState extends ActiveState {
     // of the cluster and vote each member for a vote.
     for (MemberState member : votingMembers) {
       LOGGER.debug("{} - Polling {} for next term {}", context.getMember().serverAddress(), member, context.getTerm() + 1);
+
       PollRequest request = PollRequest.builder()
         .withTerm(context.getTerm())
         .withCandidate(context.getMember().id())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
+
       context.getConnections().getConnection(member.getMember().serverAddress()).thenAccept(connection -> {
         connection.<PollRequest, PollResponse>send(request).whenCompleteAsync((response, error) -> {
           context.checkThread();
@@ -218,6 +224,9 @@ final class FollowerState extends ActiveState {
       // Immediately register the session connection and send an accept request to the leader.
       context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
 
+      // Notify other servers in the cluster of the connection by submitting an AcceptRequest to the leader.
+      // This is necessary to ensure that state machine events can be forwarded to this server to be proxied
+      // to the connected client.
       AcceptRequest acceptRequest = AcceptRequest.builder()
         .withSession(request.session())
         .withAddress(context.getMember().serverAddress())

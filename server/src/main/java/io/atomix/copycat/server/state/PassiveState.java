@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Passive state.
+ * The passive state receives {@link AppendRequest}s from followers and maintains a state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

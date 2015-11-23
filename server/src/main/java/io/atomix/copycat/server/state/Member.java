@@ -23,7 +23,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 
 /**
- * Cluster member.
+ * Contains metadata and connection information related to a single member of the cluster.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

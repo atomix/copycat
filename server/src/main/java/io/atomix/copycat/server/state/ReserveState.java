@@ -26,7 +26,8 @@ import io.atomix.copycat.server.response.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Reserve state.
+ * The reserve state receives configuration changes from followers and proxies other requests
+ * to active members of the cluster.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

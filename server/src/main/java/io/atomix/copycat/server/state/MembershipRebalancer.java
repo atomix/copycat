@@ -25,11 +25,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Handles rebalancing members.
+ * Handles rebalancing members in response to availability or membership changes.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class MembershipRebalancer {
+class MembershipRebalancer {
   private static final Logger LOGGER = LoggerFactory.getLogger(MembershipRebalancer.class);
   private final ServerState context;
 
