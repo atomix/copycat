@@ -26,7 +26,12 @@ import io.atomix.copycat.server.state.Member;
 import java.util.Objects;
 
 /**
- * Protocol heartbeat request.
+ * Server heartbeat request.
+ * <p>
+ * Heartbeat requests are sent by all servers to the current leader to aid in determining availability
+ * of servers throughout the cluster. Copycat dynamically resizes clusters based on server availability.
+ * To do so, each server is responsible for sending a periodic heartbeat at a fixed interval. If a server
+ * becomes disconnected from the leader, it will eventually be considered unavailable.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

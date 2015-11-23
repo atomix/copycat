@@ -25,7 +25,13 @@ import io.atomix.copycat.client.response.SessionResponse;
 import java.util.Objects;
 
 /**
- * Protocol accept client response.
+ * Server accept client response.
+ * <p>
+ * Accept client responses are sent to between servers once a new
+ * {@link io.atomix.copycat.server.storage.entry.ConnectEntry} has been committed to the Raft log, denoting
+ * the relationship between a client and server. If the acceptance of the connection was successful, the
+ * response status will be {@link io.atomix.copycat.client.response.Response.Status#OK}, otherwise an error
+ * will be provided.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

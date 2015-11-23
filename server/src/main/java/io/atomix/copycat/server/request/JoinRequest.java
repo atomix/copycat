@@ -18,7 +18,11 @@ package io.atomix.copycat.server.request;
 import io.atomix.catalyst.serializer.SerializeWith;
 
 /**
- * Protocol join request.
+ * Server join configuration change request.
+ * <p>
+ * The join request is the mechanism by which new servers join a cluster. When a server wants to
+ * join a cluster, it must submit a join request to the leader. The leader will attempt to commit
+ * the configuration change and, if successful, respond to the join request with the updated configuration.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

@@ -25,7 +25,11 @@ import io.atomix.copycat.client.request.AbstractRequest;
 import java.util.Objects;
 
 /**
- * Protocol poll request.
+ * Server poll request.
+ * <p>
+ * Poll requests aid in the implementation of the so-called "pre-vote" protocol. They are sent by followers
+ * to all other servers prior to transitioning to the candidate state. This helps ensure that servers that
+ * can't win elections do not disrupt existing leaders when e.g. rejoining the cluster after a partition.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

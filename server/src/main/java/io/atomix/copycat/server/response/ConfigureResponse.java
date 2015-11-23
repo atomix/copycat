@@ -25,7 +25,11 @@ import io.atomix.copycat.client.response.AbstractResponse;
 import java.util.Objects;
 
 /**
- * Protocol configure response.
+ * Configuration installation response.
+ * <p>
+ * Configuration installation responses are sent in response to configuration installation requests to
+ * indicate the simple success of the installation of a configuration. If the response {@link #status()}
+ * is {@link Status#OK} then the installation was successful.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

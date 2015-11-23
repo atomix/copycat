@@ -26,7 +26,11 @@ import io.atomix.copycat.client.response.AbstractResponse;
 import java.util.Objects;
 
 /**
- * Protocol heartbeat response.
+ * Server heartbeat response.
+ * <p>
+ * Heartbeat responses are sent by the leader upon the success of a heartbeat. Success indicates that
+ * a {@link io.atomix.copycat.server.storage.entry.HeartbeatEntry} was committed to the Raft log. The
+ * response contains information regarding the current cluster, including the {@link #term()} and {@link #leader()}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

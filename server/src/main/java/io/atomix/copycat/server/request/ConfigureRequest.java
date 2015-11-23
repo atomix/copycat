@@ -27,7 +27,12 @@ import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Protocol configuration request.
+ * Configuration installation request.
+ * <p>
+ * Configuration requests are special requests that aid in installing committed configurations
+ * to passive and reserve members of the cluster. Prior to the start of replication from an active
+ * member to a passive or reserve member, the active member must update the passive/reserve member's
+ * configuration to ensure it is in the expected state.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

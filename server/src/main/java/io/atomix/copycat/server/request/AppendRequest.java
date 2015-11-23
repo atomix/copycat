@@ -29,7 +29,11 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Protocol append request.
+ * Append entries request.
+ * <p>
+ * Append entries requests are at the core of the replication protocol. Leaders send append requests
+ * to followers to replicate and commit log entries, and followers sent append requests to passive members
+ * to replicate committed log entries.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
