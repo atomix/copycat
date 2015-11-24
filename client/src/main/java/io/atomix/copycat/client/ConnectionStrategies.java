@@ -67,7 +67,7 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    * followers ensures that the leader is not overloaded with direct client requests. This strategy should be
    * used when clients frequently submit {@link Query queries} with lower consistency levels that don't need to
    * be forwarded to the cluster leader. For clients that frequently submit commands or queries with linearizable
-   * consistency, the {@link #LEADER} consistency level may be more performant.
+   * consistency, the {@link #LEADER} ConnectionStrategy may be more performant.
    */
   FOLLOWERS {
     @Override
