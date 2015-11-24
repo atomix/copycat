@@ -157,7 +157,7 @@ final class LeaderAppender extends AbstractAppender {
   private long commitTime() {
     int quorumIndex = quorumIndex();
     if (quorumIndex >= 0) {
-      return context.getActiveMemberStates((m1, m2) -> Long.compare(m2.getCommitTime() > 0 ? m2.getCommitTime() : System.currentTimeMillis(), m1.getCommitTime() > 0 ? m1.getCommitTime() : System.currentTimeMillis())).get(quorumIndex).getCommitTime();
+      return context.getActiveMemberStates((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
     }
     return System.currentTimeMillis();
   }
