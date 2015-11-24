@@ -15,21 +15,21 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.Query;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.client.Operation;
+import io.atomix.copycat.client.Query;
 
 /**
  * Query entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=224)
+@SerializeWith(id=225)
 public class QueryEntry extends OperationEntry<QueryEntry> {
   private long version;
   private Query query;

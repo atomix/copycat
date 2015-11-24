@@ -20,7 +20,12 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import java.util.Objects;
 
 /**
- * Protocol connect client request.
+ * Connect client request.
+ * <p>
+ * Connect requests are sent by clients to specific servers when first establishing a connection.
+ * Connections must be associated with a specific client {@link #session()} and must be established
+ * each time the client switches servers. A client may only be connected to a single server at any
+ * given time.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

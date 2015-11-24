@@ -18,7 +18,12 @@ package io.atomix.copycat.server.response;
 import io.atomix.catalyst.serializer.SerializeWith;
 
 /**
- * Protocol join response.
+ * Server join configuration change response.
+ * <p>
+ * Join responses are sent in response to a request to add a server to the cluster configuration. If a
+ * configuration change is failed due to a conflict, the response status will be
+ * {@link io.atomix.copycat.client.response.Response.Status#ERROR} but the response {@link #error()} will
+ * be {@code null}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

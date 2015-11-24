@@ -24,8 +24,8 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import net.jodah.concurrentunit.ConcurrentTestCase;
@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * Copycat cluster test.
@@ -49,7 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ClusterTest extends ConcurrentTestCase {
   protected volatile LocalServerRegistry registry;
   protected volatile int port;
-  protected volatile List<Address> members;
+  protected volatile List<Member> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
   private int count;
@@ -59,27 +60,9 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testServerJoin() throws Throwable {
     createServers(3);
-    CopycatServer joiner = createServer(nextAddress());
+    CopycatServer joiner = createServer(members, nextMember());
     joiner.open().thenRun(this::resume);
     await(10000);
-  }
-
-  /**
-   * Tests joining a server after many entries have been committed.
-   */
-  public void testServerJoinLate() throws Throwable {
-    createServers(3);
-    CopycatClient client = createClient();
-    submit(client, 0, 10000);
-    await(30000);
-    CopycatServer joiner = createServer(nextAddress());
-    joiner.open().thenRun(this::resume);
-    await(30000);
-    joiner.onStateChange(state -> {
-      if (state == CopycatServer.State.FOLLOWER)
-        resume();
-    });
-    await(30000);
   }
 
   /**
@@ -111,7 +94,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testLeaderLeave() throws Throwable {
     List<CopycatServer> servers = createServers(3);
-    CopycatServer server = servers.stream().filter(s -> s.state() == RaftServer.State.LEADER).findFirst().get();
+    CopycatServer server = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
     await(10000);
   }
@@ -119,17 +102,28 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests scaling the cluster from 1 node to 3 nodes and back.
    */
-  public void testScale() throws Throwable {
-    RaftServer s1 = createServer(nextAddress()).open().get();
-    RaftServer s2 = createServer(nextAddress()).open().get();
-    RaftServer s3 = createServer(nextAddress()).open().get();
-    RaftServer s4 = createServer(nextAddress()).open().get();
-    RaftServer s5 = createServer(nextAddress()).open().get();
+  public void testReplace() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+    CopycatClient client = createClient();
+    CopycatServer s1 = createServer(members, nextMember()).open().get();
+    CopycatServer s2 = createServer(members, nextMember()).open().get();
+    CopycatServer s3 = createServer(members, nextMember()).open().get();
+
+    for (int i = 0; i < servers.size(); i++) {
+      servers.get(i).close().join();
+
+      String value = String.format("Hello world %d!", i);
+      client.submit(new TestCommand(value, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, value);
+        resume();
+      });
+
+      await(30000);
+    }
+
     s1.close().join();
     s2.close().join();
     s3.close().join();
-    s4.close().join();
-    s5.close().join();
   }
 
   /**
@@ -947,10 +941,8 @@ public class ClusterTest extends ConcurrentTestCase {
    *
    * @return The next server address.
    */
-  private Address nextAddress() {
-    Address address = new Address("localhost", port++);
-    members.add(address);
-    return address;
+  private Member nextMember() {
+    return new Member(new Address("localhost", ++port), new Address("localhost", port + 1000));
   }
 
   /**
@@ -959,13 +951,12 @@ public class ClusterTest extends ConcurrentTestCase {
   private List<CopycatServer> createServers(int nodes) throws Throwable {
     List<CopycatServer> servers = new ArrayList<>();
 
-    List<Address> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(nextAddress());
+      members.add(nextMember());
     }
 
     for (int i = 0; i < nodes; i++) {
-      CopycatServer server = createServer(members.get(i));
+      CopycatServer server = createServer(members, members.get(i));
       server.open().thenRun(this::resume);
       servers.add(server);
     }
@@ -982,13 +973,12 @@ public class ClusterTest extends ConcurrentTestCase {
   private List<CopycatServer> createServers(int live, int total) throws Throwable {
     List<CopycatServer> servers = new ArrayList<>();
 
-    List<Address> members = new ArrayList<>();
     for (int i = 0; i < total; i++) {
-      members.add(nextAddress());
+      members.add(nextMember());
     }
 
     for (int i = 0; i < live; i++) {
-      CopycatServer server = createServer(members.get(i));
+      CopycatServer server = createServer(members, members.get(i));
       server.open().thenRun(this::resume);
       servers.add(server);
     }
@@ -1002,8 +992,8 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Creates a Copycat server.
    */
-  private CopycatServer createServer(Address address) {
-    CopycatServer server = CopycatServer.builder(address, members)
+  private CopycatServer createServer(List<Member> members, Member member) {
+    CopycatServer server = CopycatServer.builder(member.clientAddress(), member.serverAddress(), members.stream().map(Member::serverAddress).collect(Collectors.toList()))
       .withTransport(new LocalTransport(registry))
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
@@ -1022,7 +1012,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Creates a Copycat client.
    */
   private CopycatClient createClient() throws Throwable {
-    CopycatClient client = CopycatClient.builder(members).withTransport(new LocalTransport(registry)).build();
+    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList())).withTransport(new LocalTransport(registry)).build();
     client.open().thenRun(this::resume);
     await(10000);
     clients.add(client);
@@ -1034,8 +1024,9 @@ public class ClusterTest extends ConcurrentTestCase {
   public void clearTests() throws Exception {
     clients.forEach(c -> c.close().join());
     if (servers.size() < count) {
-      for (int i = servers.size(); i < count; i++) {
-        createServer(new Address("localhost", 5000 + i)).open().join();
+      for (int i = servers.size() + 1; i <= count; i++) {
+        Member member = new Member(new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
+        createServer(members, member).open().join();
       }
     }
 
@@ -1047,6 +1038,7 @@ public class ClusterTest extends ConcurrentTestCase {
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
+    count = 0;
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }

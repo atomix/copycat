@@ -15,19 +15,14 @@
  */
 package io.atomix.copycat.server.storage;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import org.testng.annotations.Test;
 
 import java.io.File;
 import java.util.List;
 
-import org.testng.annotations.Test;
-
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import static org.testng.Assert.*;
 
 /**
  * Log test.
@@ -48,7 +43,7 @@ public abstract class LogTest extends AbstractLogTest {
         .withStorageLevel(storageLevel())
         .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
         .build()
-        .open("copycat");
+        .openLog("copycat");
   }
 
   /**

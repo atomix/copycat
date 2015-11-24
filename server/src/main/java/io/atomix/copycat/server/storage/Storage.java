@@ -174,7 +174,7 @@ public class Storage {
    * <p>
    * The storage directory is the directory to which all {@link Log}s write {@link Segment} files. Segment files
    * for multiple logs may be stored in the storage directory, and files for each log instance will be identified
-   * by the {@code name} provided when the log is {@link #open(String) opened}.
+   * by the {@code name} provided when the log is {@link #openLog(String) opened}.
    *
    * @return The storage directory.
    */
@@ -268,6 +268,16 @@ public class Storage {
   }
 
   /**
+   * Opens a new {@link MetaStore}.
+   *
+   * @param name The metastore name.
+   * @return The metastore.
+   */
+  public MetaStore openMetaStore(String name) {
+    return new MetaStore(name, this);
+  }
+
+  /**
    * Opens a new {@link Log}.
    * <p>
    * When a log is opened, the log will attempt to load {@link Segment}s from the storage {@link #directory()}
@@ -276,7 +286,7 @@ public class Storage {
    *
    * @return The opened log.
    */
-  public Log open(String name) {
+  public Log openLog(String name) {
     return new Log(name, this);
   }
 

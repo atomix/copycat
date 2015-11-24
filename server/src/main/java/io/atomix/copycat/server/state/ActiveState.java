@@ -23,7 +23,6 @@ import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -34,7 +33,6 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Abstract active state.
@@ -57,6 +55,7 @@ abstract class ActiveState extends PassiveState {
     if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
       context.setTerm(request.term());
       context.setLeader(request.leader());
+      context.heartbeat();
       transition = true;
     }
 
@@ -81,29 +80,33 @@ abstract class ActiveState extends PassiveState {
    */
   protected PollResponse handlePoll(PollRequest request) {
     // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context.
+    // update the local term. This will also result in the leader being reset.
     if (request.term() > context.getTerm()) {
       context.setTerm(request.term());
     }
 
 
     // If the request term is not as great as the current context term then don't
-    // vote for the candidate. We want to vote for candidates that are at least
+    // accept the poll for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getMember().serverAddress(), request);
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
         .withAccepted(false)
         .build();
-    } else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
+    }
+    // If the candidate's log is up to date, accept the poll.
+    else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
         .withAccepted(true)
         .build();
-    } else {
+    }
+    // If the candidate's log is not up to date, reject the poll.
+    else {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -125,8 +128,10 @@ abstract class ActiveState extends PassiveState {
     }
 
     CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
+
+    // If the transition flag is set, that indicates this node needs to transition back to follower.
     if (transition) {
-      transition(RaftServer.State.FOLLOWER);
+      transition(CopycatServer.State.FOLLOWER);
     }
     return future;
   }
@@ -135,11 +140,13 @@ abstract class ActiveState extends PassiveState {
    * Handles a vote request.
    */
   protected VoteResponse handleVote(VoteRequest request) {
+    MemberState member = context.getMemberState(request.candidate());
+
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -148,8 +155,17 @@ abstract class ActiveState extends PassiveState {
     }
     // If the requesting candidate is not a known member of the cluster (to this
     // node) then don't vote for it. Only vote for candidates that we know about.
-    else if (!context.getCluster().getActiveMembers().stream().<Integer>map(m -> m.getAddress().hashCode()).collect(Collectors.toSet()).contains(request.candidate())) {
-      LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getAddress(), request);
+    else if (member == null) {
+      LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getMember().serverAddress(), request);
+      return VoteResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withVoted(false)
+        .build();
+    }
+    // If the requesting candidate is not a known ACTIVE member reject the vote request.
+    else if (!member.getMember().isActive()) {
+      LOGGER.debug("{} - Rejected {}: candidate is not a known active member", context.getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -158,6 +174,7 @@ abstract class ActiveState extends PassiveState {
     }
     // If we've already voted for someone else then don't vote again.
     else if (context.getLastVotedFor() == 0 || context.getLastVotedFor() == request.candidate()) {
+      // If the candidate's log is at least as up to date as the local node's log, grant the vote.
       if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
         context.setLastVotedFor(request.candidate());
         return VoteResponse.builder()
@@ -165,7 +182,9 @@ abstract class ActiveState extends PassiveState {
           .withTerm(context.getTerm())
           .withVoted(true)
           .build();
-      } else {
+      }
+      // Otherwise, if the candidate's log is not up to date, reject it.
+      else {
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
           .withTerm(context.getTerm())
@@ -175,7 +194,7 @@ abstract class ActiveState extends PassiveState {
     }
     // In this case, we've already voted for someone else.
     else {
-      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getAddress(), request, context.getLastVotedFor());
+      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getMember().serverAddress(), request, context.getLastVotedFor());
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -190,7 +209,7 @@ abstract class ActiveState extends PassiveState {
   boolean isLogUpToDate(long index, long term, Request request) {
     // If the log is empty then vote for the candidate.
     if (context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
+      LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getMember().serverAddress(), request);
       return true;
     } else {
       // Otherwise, load the last entry in the log. The last entry should be
@@ -198,25 +217,23 @@ abstract class ActiveState extends PassiveState {
       long lastIndex = context.getLog().lastIndex();
       Entry entry = context.getLog().get(lastIndex);
       if (entry == null) {
-        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
+        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getMember().serverAddress(), request);
         return true;
       }
 
-      try {
-        if (index != 0 && index >= lastIndex) {
-          if (term >= entry.getTerm()) {
-            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
-            return true;
-          } else {
-            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getAddress(), request, term, entry.getTerm());
-            return false;
-          }
+      // If the candidate's last log index and term is >= the local last log index and term, the log
+      // is considered up to date.
+      if (index != 0 && index >= lastIndex) {
+        if (term >= entry.getTerm()) {
+          LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getMember().serverAddress(), request);
+          return true;
         } else {
-          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getAddress(), request, index, lastIndex);
+          LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getMember().serverAddress(), request, term, entry.getTerm());
           return false;
         }
-      } finally {
-        entry.close();
+      } else {
+        LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getMember().serverAddress(), request, index, lastIndex);
+        return false;
       }
     }
   }
@@ -254,7 +271,7 @@ abstract class ActiveState extends PassiveState {
         .build()));
     }
 
-    LOGGER.debug("{} - Forwarded {}", context.getAddress(), request);
+    LOGGER.debug("{} - Forwarded {}", context.getMember().serverAddress(), request);
     return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
   }
 
@@ -278,9 +295,9 @@ abstract class ActiveState extends PassiveState {
     // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
     final long version;
     if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      version = context.getStateMachine().getLastApplied();
+      version = context.getLastApplied();
     } else {
-      version = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+      version = Math.max(request.sequence(), context.getLastApplied());
     }
 
     context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {

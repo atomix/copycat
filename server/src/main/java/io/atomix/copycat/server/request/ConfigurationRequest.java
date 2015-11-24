@@ -18,26 +18,30 @@ package io.atomix.copycat.server.request;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Objects;
 
 /**
- * Protocol configuration request.
+ * Configuration change request.
+ * <p>
+ * Configuration change requests are the basis for members joining and leaving the cluster.
+ * When a member wants to join or leave the cluster, it must submit a configuration change
+ * request to the leader where the change will be logged and replicated.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends AbstractRequest<T> {
-  protected Address member;
+public abstract class ConfigurationRequest<T extends ConfigurationRequest<T>> extends AbstractRequest<T> {
+  protected Member member;
 
   /**
    * Returns the joining member.
    *
    * @return The joining member.
    */
-  public Address member() {
+  public Member member() {
     return member;
   }
 
@@ -82,7 +86,7 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
      * @throws NullPointerException if {@code member} is null
      */
     @SuppressWarnings("unchecked")
-    public T withMember(Address member) {
+    public T withMember(Member member) {
       request.member = Assert.notNull(member, "member");
       return (T) this;
     }
@@ -96,22 +100,6 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
       Assert.state(request.member != null, "member cannot be null");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return getClass().isAssignableFrom(object.getClass()) && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }

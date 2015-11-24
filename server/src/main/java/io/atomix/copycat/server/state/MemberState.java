@@ -20,21 +20,36 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Log;
 
 /**
- * Cluster member state.
+ * Manages all state with respect to a specific remote member of the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class MemberState {
-  private final Address address;
-  private int index;
+
+  /**
+   * Member status.
+   */
+  enum Status {
+    UNAVAILABLE,
+    AVAILABLE
+  }
+
+  private static final long HEARTBEAT_TIMEOUT = 60000;
+  private Member member;
+  private long term;
+  private long version;
+  private Status status = Status.AVAILABLE;
+  private long heartbeatIndex;
+  private long heartbeatTime;
+  private long commitIndex;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
   private long commitStartTime;
   private int failures;
 
-  public MemberState(Address address) {
-    this.address = Assert.notNull(address, "address");
+  public MemberState(Address serverAddress) {
+    this.member = new Member(null, Assert.notNull(serverAddress, "serverAddress"), null);
   }
 
   /**
@@ -49,31 +64,171 @@ class MemberState {
   }
 
   /**
-   * Returns the member address.
+   * Returns the member object.
    *
-   * @return The member address.
+   * @return The member object.
    */
-  public Address getAddress() {
-    return address;
+  public Member getMember() {
+    return member;
   }
 
   /**
-   * Returns the member index.
+   * Sets the member type.
    *
-   * @return The member index.
-   */
-  public int getIndex() {
-    return index;
-  }
-
-  /**
-   * Sets the member index.
-   *
-   * @param index The member index.
+   * @param type The member type.
    * @return The member state.
    */
-  MemberState setIndex(int index) {
-    this.index = index;
+  MemberState setMemberType(Member.Type type) {
+    this.member = new Member(type, member.serverAddress(), member.clientAddress());
+    return this;
+  }
+
+  /**
+   * Returns the member type.
+   *
+   * @return The member type.
+   */
+  public Member.Type getMemberType() {
+    return member.type();
+  }
+
+  /**
+   * Sets the client address.
+   *
+   * @param address The client address.
+   * @return The member state.
+   */
+  MemberState setClientAddress(Address address) {
+    this.member = new Member(member.type(), member.serverAddress(), address);
+    return this;
+  }
+
+  /**
+   * Returns the member term.
+   *
+   * @return The member term.
+   */
+  long getTerm() {
+    return term;
+  }
+
+  /**
+   * Sets the member term.
+   *
+   * @param term The member term.
+   * @return The member state.
+   */
+  MemberState setTerm(long term) {
+    this.term = term;
+    return this;
+  }
+
+  /**
+   * Returns the member configuration version.
+   *
+   * @return The member configuration version.
+   */
+  long getVersion() {
+    return version;
+  }
+
+  /**
+   * Sets the member version.
+   *
+   * @param version The member version.
+   * @return The member state.
+   */
+  MemberState setVersion(long version) {
+    this.version = version;
+    return this;
+  }
+
+  /**
+   * Returns the heartbeat index.
+   *
+   * @return The heartbeat index.
+   */
+  long getHeartbeatIndex() {
+    return heartbeatIndex;
+  }
+
+  /**
+   * Sets the heartbeat index.
+   *
+   * @param heartbeatIndex The heartbeat index.
+   * @return The member state.
+   */
+  MemberState setHeartbeatIndex(long heartbeatIndex) {
+    this.heartbeatIndex = Assert.argNot(heartbeatIndex, heartbeatIndex < 0, "heartbeatIndex must be positive");
+    return this;
+  }
+
+  /**
+   * Returns the heartbeat time.
+   *
+   * @return The heartbeat time.
+   */
+  long getHeartbeatTime() {
+    return heartbeatTime;
+  }
+
+  /**
+   * Sets the heartbeat time.
+   *
+   * @param heartbeatTime The heartbeat time.
+   * @return The member state.
+   */
+  MemberState setHeartbeatTime(long heartbeatTime) {
+    this.heartbeatTime = Math.max(this.heartbeatTime, heartbeatTime);
+    return this;
+  }
+
+  /**
+   * Returns the member heartbeat timeout.
+   *
+   * @return The member heartbeat timeout.
+   */
+  public long getHeartbeatTimeout() {
+    return HEARTBEAT_TIMEOUT;
+  }
+
+  /**
+   * Returns the member availability status.
+   *
+   * @return The member availability status.
+   */
+  Status getStatus() {
+    return status;
+  }
+
+  /**
+   * Sets the member availability status.
+   *
+   * @param status The member availability status.
+   * @return The member state.
+   */
+  MemberState setStatus(Status status) {
+    this.status = Assert.notNull(status, "status");
+    return this;
+  }
+
+  /**
+   * Returns the member commit index.
+   *
+   * @return The member commit index.
+   */
+  long getCommitIndex() {
+    return commitIndex;
+  }
+
+  /**
+   * Sets the member commit index.
+   *
+   * @param commitIndex The member commit index.
+   * @return The member state.
+   */
+  MemberState setCommitIndex(long commitIndex) {
+    this.commitIndex = commitIndex;
     return this;
   }
 
@@ -187,7 +342,7 @@ class MemberState {
 
   @Override
   public String toString() {
-    return address.toString();
+    return member.serverAddress().toString();
   }
 
 }

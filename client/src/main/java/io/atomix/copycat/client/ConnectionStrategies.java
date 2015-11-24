@@ -17,10 +17,6 @@ package io.atomix.copycat.client;
 
 import io.atomix.catalyst.transport.Address;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
-
 /**
  * Strategies for managing how clients connect to and communicate with the cluster.
  * <p>
@@ -41,8 +37,8 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    */
   ANY {
     @Override
-    public List<Address> getConnections(Address leader, List<Address> servers) {
-      return servers;
+    public boolean connect(Address member, Address leader) {
+      return true;
     }
   },
 
@@ -57,8 +53,8 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    */
   LEADER {
     @Override
-    public List<Address> getConnections(Address leader, List<Address> servers) {
-      return leader != null ? Collections.singletonList(leader) : servers;
+    public boolean connect(Address member, Address leader) {
+      return leader == null || leader.equals(member);
     }
   },
 
@@ -71,8 +67,8 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    */
   FOLLOWERS {
     @Override
-    public List<Address> getConnections(Address leader, List<Address> servers) {
-      return servers.size() > 1 ? servers.stream().filter(a -> !a.equals(leader)).collect(Collectors.toList()) : servers;
+    public boolean connect(Address member, Address leader) {
+      return leader == null || !leader.equals(member);
     }
   }
 

@@ -27,7 +27,13 @@ import io.atomix.copycat.client.response.Response;
 import java.util.Objects;
 
 /**
- * Protocol append response.
+ * Server append entries response.
+ * <p>
+ * Append entries responses are sent by followers to leaders to indicate whether the handling of
+ * an {@link io.atomix.copycat.server.request.AppendRequest} was successful. Failed append entries
+ * requests do not result in {@link io.atomix.copycat.client.response.Response.Status#ERROR} responses.
+ * Instead, followers provide a successful response which indicates whether the append {@link #succeeded()}
+ * and provides information regarding the follower's updated log to aid in resolving indexes on the leader.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -186,22 +192,6 @@ public class AppendResponse extends AbstractResponse<AppendResponse> {
       }
       return response;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

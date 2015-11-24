@@ -25,7 +25,13 @@ import io.atomix.copycat.client.error.RaftError;
 import java.util.Objects;
 
 /**
- * Protocol publish response.
+ * Event publish response.
+ * <p>
+ * Publish responses are sent by clients to servers to indicate the last successful index for which
+ * an event message was handled in proper sequence. If the client receives an event message out of
+ * sequence, it should respond with the index of the last event it received in sequence. If an event
+ * message is received in sequence, it should respond with the index of that event. Once a client has
+ * responded successfully to an event message, it will be removed from memory on the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

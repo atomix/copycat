@@ -19,21 +19,21 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Collection;
+import java.util.stream.Collectors;
 
 /**
  * Configuration entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=221)
+@SerializeWith(id=222)
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
-  private Collection<Address> active;
-  private Collection<Address> passive;
+  private Collection<Member> members;
 
   public ConfigurationEntry() {
   }
@@ -43,64 +43,41 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   }
 
   /**
-   * Returns the active members.
+   * Returns the members.
    *
-   * @return The active members.
+   * @return The members.
    */
-  public Collection<Address> getActive() {
-    return active;
+  public Collection<Member> getMembers() {
+    return members;
   }
 
   /**
-   * Sets the active members.
+   * Sets the cluster members.
    *
-   * @param members The active members.
+   * @param members The cluster members.
    * @return The configuration entry.
    * @throws NullPointerException if {@code members} is null
    */
-  public ConfigurationEntry setActive(Collection<Address> members) {
-    this.active = Assert.notNull(members, "members");
-    return this;
-  }
-
-  /**
-   * Returns the passive members.
-   *
-   * @return The passive members.
-   */
-  public Collection<Address> getPassive() {
-    return passive;
-  }
-
-  /**
-   * Sets the passive members.
-   *
-   * @param members The passive members.
-   * @return The configuration entry.
-   * @throws NullPointerException if {@code members} is null
-   */
-  public ConfigurationEntry setPassive(Collection<Address> members) {
-    this.passive = Assert.notNull(members, "members");
+  public ConfigurationEntry setMembers(Collection<Member> members) {
+    this.members = Assert.notNull(members, "members");
     return this;
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    serializer.writeObject(active, buffer);
-    serializer.writeObject(passive, buffer);
+    serializer.writeObject(members, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    active = serializer.readObject(buffer);
-    passive = serializer.readObject(buffer);
+    members = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, active=%s, passive=%s]", getClass().getSimpleName(), getIndex(), getTerm(), active, passive);
+    return String.format("%s[index=%d, term=%d, members=[\n  %s\n]]", getClass().getSimpleName(), getIndex(), getTerm(), members.stream().map(Member::toString).collect(Collectors.joining("\n  ")));
   }
 
 }

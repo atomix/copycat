@@ -28,7 +28,11 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Abstract state.
+ * Abstract server state.
+ * <p>
+ * Throughout the lifetime of a server, it transitions through a number of states. Each state is responsible
+ * for handling a set of {@link Request}s in a specific manner. Servers transition between states in response
+ * to requests and various timers. Each concrete state is associated with a specific {@link CopycatServer.State}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -52,7 +56,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getAddress(), request);
+    LOGGER.debug("{} - Received {}", context.getMember().serverAddress(), request);
     return request;
   }
 
@@ -60,7 +64,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getAddress(), response);
+    LOGGER.debug("{} - Sent {}", context.getMember().serverAddress(), response);
     return response;
   }
 
@@ -122,6 +126,16 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Handles a leave request.
    */
   protected abstract CompletableFuture<LeaveResponse> leave(LeaveRequest request);
+
+  /**
+   * Handles a heartbeat request.
+   */
+  protected abstract CompletableFuture<HeartbeatResponse> heartbeat(HeartbeatRequest request);
+
+  /**
+   * Handles a configure request.
+   */
+  protected abstract CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
 
   /**
    * Handles an append request.

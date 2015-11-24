@@ -27,7 +27,11 @@ import io.atomix.copycat.client.response.Response;
 import java.util.Objects;
 
 /**
- * Protocol vote response.
+ * Server vote response.
+ * <p>
+ * Vote responses are sent by active servers in response to vote requests by candidate to indicate
+ * whether the responding server voted for the requesting candidate. This is indicated by the
+ * {@link #voted()} field of the response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -159,22 +163,6 @@ public class VoteResponse extends AbstractResponse<VoteResponse> {
       }
       return response;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).response.equals(response);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

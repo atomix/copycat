@@ -15,13 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.client.request.*;
@@ -32,24 +30,30 @@ import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.*;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
- * Leader state.
+ * The leader is responsible for sending {@link AppendRequest} to followers and handling all
+ * communication that results in entries being committed to the log. This includes all communication
+ * related to registering and maintaining clients sessions and submitting commands.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class LeaderState extends ActiveState {
-  private static final int MAX_BATCH_SIZE = 1024 * 28;
-  private Scheduled currentTimer;
-  private final Replicator replicator = new Replicator();
-  private long leaderTime = System.currentTimeMillis();
-  private long leaderIndex;
+  private final LeaderAppender appender;
+  private final MembershipRebalancer rebalancer;
+  private Scheduled appendTimer;
   private long configuring;
+  private boolean changed;
+  private CompletableFuture<Void> rebalanceFuture;
 
   public LeaderState(ServerState context) {
     super(context);
+    this.appender = new LeaderAppender(context);
+    this.rebalancer = new MembershipRebalancer(context);
   }
 
   @Override
@@ -59,12 +63,15 @@ final class LeaderState extends ActiveState {
 
   @Override
   public synchronized CompletableFuture<AbstractState> open() {
+    // Append initial entries to the log, including an initial no-op entry and the server's configuration.
+    appendInitialEntries();
+
     // Schedule the initial entries commit to occur after the state is opened. Attempting any communication
     // within the open() method will result in a deadlock since RaftProtocol calls this method synchronously.
-    // What is critical about this logic is that the heartbeat timer not be started until a no-op entry has been committed.
-    context.getThreadContext().execute(this::commitEntries).whenComplete((result, error) -> {
+    // What is critical about this logic is that the append timer not be started until a no-op entry has been committed.
+    context.getThreadContext().execute(this::commitInitialEntries).whenComplete((result, error) -> {
       if (isOpen() && error == null) {
-        startHeartbeatTimer();
+        startAppendTimer();
       }
     });
 
@@ -77,33 +84,46 @@ final class LeaderState extends ActiveState {
    * Sets the current node as the cluster leader.
    */
   private void takeLeadership() {
-    context.setLeader(context.getAddress().hashCode());
-    context.getCluster().getMembers().forEach(m -> m.resetState(context.getLog()));
+    context.setLeader(context.getMember().id());
+    context.getMemberStates().forEach(m -> m.resetState(context.getLog()));
+  }
+
+  /**
+   * Appends initial entries to the log to take leadership.
+   */
+  private void appendInitialEntries() {
+    final long term = context.getTerm();
+
+    // Append a no-op entry to reset session timeouts and commit entries from prior terms.
+    try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
+      entry.setTerm(term)
+        .setTimestamp(appender.time());
+      assert context.getLog().append(entry) == appender.index();
+    }
+
+    // Append a configuration entry to propagate the leader's cluster configuration.
+    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+      entry.setTerm(term).setMembers(context.buildMembers());
+    }
   }
 
   /**
    * Commits a no-op entry to the log, ensuring any entries from a previous term are committed.
    */
-  private CompletableFuture<Void> commitEntries() {
-    final long term = context.getTerm();
-    final long index;
-    try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
-      entry.setTerm(term)
-        .setTimestamp(leaderTime);
-      index = context.getLog().append(entry);
-    }
-
-    // Store the index at which the leader took command.
-    leaderIndex = index;
-
+  private CompletableFuture<Void> commitInitialEntries() {
+    // The Raft protocol dictates that leaders cannot commit entries from previous terms until
+    // at least one entry from their current term has been stored on a majority of servers. Thus,
+    // we force entries to be appended up to the leader's no-op entry. The LeaderAppender will ensure
+    // that the commitIndex is not increased until the no-op entry (appender.index()) is committed.
     CompletableFuture<Void> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((resultIndex, error) -> {
+    appender.appendEntries(appender.index()).whenComplete((resultIndex, error) -> {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
           applyEntries(resultIndex);
           future.complete(null);
         } else {
+          context.setLeader(0);
           transition(CopycatServer.State.FOLLOWER);
         }
       }
@@ -122,7 +142,7 @@ final class LeaderState extends ActiveState {
         if (entry != null) {
           context.getStateMachine().apply(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getAddress(), error.getMessage());
+              LOGGER.info("{} - An application error occurred: {}", context.getMember().serverAddress(), error.getMessage());
             }
             entry.release();
           });
@@ -130,43 +150,56 @@ final class LeaderState extends ActiveState {
         count++;
       }
 
-      LOGGER.debug("{} - Applied {} entries to log", context.getAddress(), count);
+      LOGGER.debug("{} - Applied {} entries to log", context.getMember().serverAddress(), count);
       context.getLog().compactor().minorIndex(context.getLastCompleted());
     }
   }
 
   /**
-   * Starts heartbeating all cluster members.
+   * Starts sending AppendEntries requests to all cluster members.
    */
-  private void startHeartbeatTimer() {
+  private void startAppendTimer() {
     // Set a timer that will be used to periodically synchronize with other nodes
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
-    LOGGER.debug("{} - Starting heartbeat timer", context.getAddress());
-    currentTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::heartbeatMembers);
+    LOGGER.debug("{} - Starting append timer", context.getMember().serverAddress());
+    appendTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::appendMembers);
   }
 
   /**
-   * Sends a heartbeat to all members of the cluster.
+   * Sends AppendEntries requests to members of the cluster that haven't heard from the leader in a while.
    */
-  private void heartbeatMembers() {
+  private void appendMembers() {
     context.checkThread();
     if (isOpen()) {
-      replicator.commit().whenComplete((result, error) -> {
+      appender.appendEntries().whenComplete((result, error) -> {
         context.getLog().compactor().minorIndex(context.getLastCompleted());
       });
     }
   }
 
   /**
-   * Checks for expired sessions.
+   * Checks to determine whether any sessions have expired.
+   * <p>
+   * Copycat allows only leaders to explicitly unregister sessions due to expiration. This ensures
+   * that sessions cannot be expired by lengthy election periods or other disruptions to time.
+   * To do so, the leader periodically iterates through registered sessions and checks for sessions
+   * that have been marked suspicious. The internal state machine marks sessions as suspicious when
+   * keep alive entries are not committed for longer than the session timeout. Once the leader marks
+   * a session as suspicious, it will log and replicate an {@link UnregisterEntry} to unregister the session.
    */
   private void checkSessions() {
     long term = context.getTerm();
-    for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
-      if (!session.isUnregistering() && session.isSuspect()) {
-        LOGGER.debug("{} - Detected expired session: {}", context.getAddress(), session.id());
 
+    // Iterate through all currently registered sessions.
+    for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
+      // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
+      // been committed for the session in some time, log and commit a new UnregisterEntry.
+      if (!session.isUnregistering() && session.isSuspect()) {
+        LOGGER.debug("{} - Detected expired session: {}", context.getMember().serverAddress(), session.id());
+
+        // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
+        // This will result in state machine expire() methods being called when the entry is applied.
         final long index;
         try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
           entry.setTerm(term)
@@ -174,16 +207,20 @@ final class LeaderState extends ActiveState {
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+          LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
         }
 
-        replicator.commit(index).whenComplete((result, error) -> {
+        // Commit the unregister entry and apply it to the state machine.
+        appender.appendEntries(index).whenComplete((result, error) -> {
           if (isOpen()) {
             UnregisterEntry entry = context.getLog().get(index);
-            LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+            LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
             context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
           }
         });
+
+        // Mark the session as being unregistered in order to ensure this leader doesn't attempt
+        // to unregister it again.
         session.unregister();
       }
     }
@@ -195,6 +232,9 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
+    // Allowing multiple uncommitted configuration changes can result in split majorities.
+    // This may not be true for configuration changes that simply promote or demote reserve
+    // and passive servers, but we nevertheless follow the rule for simplicity.
     if (configuring > 0) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -204,61 +244,61 @@ final class LeaderState extends ActiveState {
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-    if (leaderIndex == 0 || context.getCommitIndex() < leaderIndex) {
+    if (appender.index() == 0 || context.getCommitIndex() < appender.index()) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
     }
 
     // If the member is already a known member of the cluster, complete the join successfully.
-    if (context.getCluster().getMember(request.member().hashCode()) != null) {
+    MemberState existingMember = context.getMemberState(request.member().id());
+    if (existingMember != null) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
-        .withVersion(context.getCluster().getVersion())
-        .withActiveMembers(context.getCluster().buildActiveMembers())
-        .withPassiveMembers(context.getCluster().buildPassiveMembers())
+        .withVersion(context.getVersion())
+        .withMembers(context.buildMembers())
         .build()));
     }
 
     final long term = context.getTerm();
     final long index;
 
-    Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
-    Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
-    passiveMembers.add(request.member());
+    Collection<Member> members = context.buildMembers();
+
+    // Add the server to the members list as a reserve member.
+    members.add(new Member(Member.Type.RESERVE, request.member().serverAddress(), request.member().clientAddress()));
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(term)
-        .setActive(activeMembers)
-        .setPassive(passiveMembers);
+      entry.setTerm(term).setMembers(members);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+      changed = true;
+      context.configure(entry.getIndex(), entry.getMembers());
     }
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
-        configuring = 0;
-        if (commitError == null) {
-          future.complete(logResponse(JoinResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withVersion(index)
-            .withActiveMembers(activeMembers)
-            .withPassiveMembers(passiveMembers)
-            .build()));
-        } else {
-          future.complete(logResponse(JoinResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
-            .build()));
-        }
+        reconfigure().whenComplete((reconfigureResult, reconfigureError) -> {
+          if (commitError == null) {
+            future.complete(logResponse(JoinResponse.builder()
+              .withStatus(Response.Status.OK)
+              .withVersion(index)
+              .withMembers(context.buildMembers())
+              .build()));
+          } else {
+            future.complete(logResponse(JoinResponse.builder()
+              .withStatus(Response.Status.ERROR)
+              .withError(RaftError.Type.INTERNAL_ERROR)
+              .build()));
+          }
+        });
       }
     });
     return future;
@@ -270,6 +310,9 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
+    // Allowing multiple uncommitted configuration changes can result in split majorities.
+    // This may not be true for configuration changes that simply promote or demote reserve
+    // and passive servers, but we nevertheless follow the rule for simplicity.
     if (configuring > 0) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -279,65 +322,213 @@ final class LeaderState extends ActiveState {
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-    if (leaderIndex == 0 || context.getCommitIndex() < leaderIndex) {
+    if (appender.index() == 0 || context.getCommitIndex() < appender.index()) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
     }
 
     // If the leaving member is not a known member of the cluster, complete the leave successfully.
-    if (context.getMember(request.member().hashCode()) == null) {
+    if (!request.member().equals(context.getMember()) && context.getMember(request.member().id()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
-        .withActiveMembers(context.getCluster().buildActiveMembers())
-        .withPassiveMembers(context.getCluster().buildPassiveMembers())
+        .withMembers(context.buildMembers())
         .build()));
     }
 
     final long term = context.getTerm();
     final long index;
 
-    Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
-    activeMembers.remove(request.member());
-
-    Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
-    passiveMembers.remove(request.member());
+    // Build the members list and remove the member from the configuration.
+    Collection<Member> members = context.buildMembers();
+    members.remove(request.member());
 
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(term)
-        .setActive(activeMembers)
-        .setPassive(passiveMembers);
+      entry.setTerm(term).setMembers(members);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
+      changed = true;
+      context.configure(entry.getIndex(), entry.getMembers());
     }
 
     CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
-        configuring = 0;
+        reconfigure().whenComplete((reconfigureResult, reconfigureError) -> {
+          if (commitError == null) {
+            future.complete(logResponse(LeaveResponse.builder()
+              .withStatus(Response.Status.OK)
+              .withVersion(index)
+              .withMembers(context.buildMembers())
+              .build()));
+          } else {
+            future.complete(logResponse(LeaveResponse.builder()
+              .withStatus(Response.Status.ERROR)
+              .withError(RaftError.Type.INTERNAL_ERROR)
+              .build()));
+          }
+        });
+      }
+    });
+    return future;
+  }
+
+  @Override
+  protected CompletableFuture<HeartbeatResponse> heartbeat(HeartbeatRequest request) {
+    final long timestamp = System.currentTimeMillis();
+    final long index;
+
+    context.checkThread();
+    logRequest(request);
+
+    MemberState member = context.getMemberState(request.member());
+    if (member == null) {
+      return CompletableFuture.completedFuture(logResponse(HeartbeatResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
+    // If the member client address has changed, append a new configuration.
+    if (member.getMember().clientAddress() == null || !member.getMember().clientAddress().equals(request.member().clientAddress())) {
+      member.setClientAddress(request.member().clientAddress());
+
+      // Append a new configuration entry. Note that we don't need to ensure this configuration is not
+      // committed concurrently with other configurations since it's not modifying the structure of the cluster.
+      // This configuration update simply modifies the existing configuration, and new configurations will be
+      // rejected if the current configuration is still being committed.
+      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+        entry.setTerm(context.getTerm()).setMembers(context.buildMembers());
+        context.getLog().append(entry);
+        LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
+      }
+    }
+
+    // Log and commit a heartbeat entry for the member with the member's indicated commitIndex. The commitIndex
+    // provides a consistent way to determine when tombstone entries can be safely removed from the log.
+    try (HeartbeatEntry entry = context.getLog().create(HeartbeatEntry.class)) {
+      entry.setTerm(context.getTerm())
+        .setMember(request.member().id())
+        .setCommitIndex(request.commitIndex())
+        .setTimestamp(timestamp);
+      index = context.getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
+    }
+
+    CompletableFuture<HeartbeatResponse> future = new CompletableFuture<>();
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
         if (commitError == null) {
-          future.complete(logResponse(LeaveResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withVersion(index)
-            .withActiveMembers(activeMembers)
-            .withPassiveMembers(passiveMembers)
-            .build()));
+          HeartbeatEntry entry = context.getLog().get(index);
+          applyEntry(entry).whenComplete((changed, error) -> {
+            if (isOpen()) {
+              if (error == null) {
+                future.complete(logResponse(HeartbeatResponse.builder()
+                  .withStatus(Response.Status.OK)
+                  .withTerm(context.getTerm())
+                  .withLeader(context.getMember().id())
+                  .build()));
+
+                // Once a heartbeat has been committed and applied to the state machine, if the heartbeat
+                // causes the change of availability to any members, rebalance the cluster as necessary.
+                if ((Boolean) changed) {
+                  rebalance();
+                }
+              } else if (error instanceof RaftException) {
+                future.complete(logResponse(HeartbeatResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withTerm(context.getTerm())
+                  .withLeader(context.getMember().id())
+                  .withError(((RaftException) error).getType())
+                  .build()));
+              } else {
+                future.complete(logResponse(HeartbeatResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withTerm(context.getTerm())
+                  .withLeader(context.getMember().id())
+                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .build()));
+              }
+            }
+            entry.release();
+          });
         } else {
-          future.complete(logResponse(LeaveResponse.builder()
+          future.complete(logResponse(HeartbeatResponse.builder()
             .withStatus(Response.Status.ERROR)
+            .withTerm(context.getTerm())
+            .withLeader(context.getMember().id())
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
     });
     return future;
+  }
+
+  /**
+   * Resets the configuration index and rebalances the configuration if necessary.
+   */
+  private CompletableFuture<Void> reconfigure() {
+    configuring = 0;
+    if (changed) {
+      changed = false;
+      return rebalance();
+    }
+    return CompletableFuture.completedFuture(null);
+  }
+
+  /**
+   * Rebalances the cluster configuration according to member statuses.
+   */
+  private CompletableFuture<Void> rebalance() {
+    if (rebalanceFuture == null)
+      rebalanceFuture = new CompletableFuture<>();
+
+    // If a configuration is already under way, just set a flag indicating that another configuration needs
+    // to be appended once the configuration is complete.
+    if (configuring != 0) {
+      changed = true;
+      return rebalanceFuture;
+    }
+
+    LOGGER.debug("{} - Rebalancing cluster", context.getMember().serverAddress());
+
+    // Build a list of all current members in the configuration.
+    List<Member> members = context.buildMembers();
+
+    // If the overall configuration changed, log and commit a new configuration entry.
+    if (rebalancer.rebalance(members)) {
+      final long index;
+      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+        entry.setTerm(context.getTerm()).setMembers(members);
+        index = context.getLog().append(entry);
+        LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
+
+        // Store the index of the configuration entry in order to prevent other configurations from
+        // being logged and committed concurrently. This is an important safety property of Raft.
+        configuring = index;
+        context.configure(entry.getIndex(), entry.getMembers());
+      }
+
+      // Commit the configuration and then reset the configuration index to allow new configurations to proceed.
+      appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+        context.checkThread();
+        if (isOpen()) {
+          rebalanceFuture.complete(null);
+          rebalanceFuture = null;
+          reconfigure();
+        }
+      });
+    } else {
+      rebalanceFuture.complete(null);
+    }
+    return rebalanceFuture;
   }
 
   @Override
@@ -352,7 +543,7 @@ final class LeaderState extends ActiveState {
   @Override
   public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
     if (request.term() > context.getTerm()) {
-      LOGGER.debug("{} - Received greater term", context.getAddress());
+      LOGGER.debug("{} - Received greater term", context.getMember().serverAddress());
       context.setLeader(0);
       transition(CopycatServer.State.FOLLOWER);
       return super.vote(request);
@@ -424,16 +615,21 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
           CommandEntry entry = context.getLog().get(index);
 
-          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
+
+          // Apply the command to the state machine, indicating that the command expects an output.
+          // This will cause linearizable events to be synchronously proxied through appropriate servers
+          // to the client in order to make event messages linearizable (be received between the command
+          // request and response).
           context.getStateMachine().apply(entry, true).whenComplete((result, error) -> {
             if (isOpen()) {
               if (error == null) {
@@ -455,7 +651,6 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
-              checkSessions();
             }
             entry.release();
           });
@@ -476,7 +671,6 @@ final class LeaderState extends ActiveState {
 
   @Override
   protected CompletableFuture<QueryResponse> query(final QueryRequest request) {
-
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
@@ -494,16 +688,25 @@ final class LeaderState extends ActiveState {
       .setVersion(request.version())
       .setQuery(query);
 
+    // Get the query consistency level. The consistency level dictates how the query should be executed.
     Query.ConsistencyLevel consistency = query.consistency();
+
+    // If no consistency level was specified, use the full linearizable consistency level.
     if (consistency == null)
       return submitQueryLinearizable(entry);
 
+    // Evaluate the query according to the query's consistency level.
     switch (consistency) {
+      // Causal and sequential queries are immediately applied to the state machine.
       case CAUSAL:
       case SEQUENTIAL:
         return submitQueryLocal(entry);
+      // Bounded linearizable queries are applied to the state machine if the leader has contacted
+      // a majority of the cluster within an election timeout.
       case BOUNDED_LINEARIZABLE:
         return submitQueryBoundedLinearizable(entry);
+      // Linearizable queries require sending heartbeats to a majority of the cluster to ensure the
+      // leader is indeed still the leader.
       case LINEARIZABLE:
         return submitQueryLinearizable(entry);
       default:
@@ -522,8 +725,9 @@ final class LeaderState extends ActiveState {
    * Submits a query with lease bounded linearizable consistency.
    */
   private CompletableFuture<QueryResponse> submitQueryBoundedLinearizable(QueryEntry entry) {
-    long commitTime = replicator.commitTime();
-    if (System.currentTimeMillis() - commitTime < context.getElectionTimeout().toMillis()) {
+    // If less than an election timeout has elapsed since the last time the leader contacted a majority
+    // of the cluster, immediately apply the query to the state machine.
+    if (System.currentTimeMillis() - appender.time() < context.getElectionTimeout().toMillis()) {
       return submitQueryLocal(entry);
     } else {
       return submitQueryLinearizable(entry);
@@ -534,8 +738,12 @@ final class LeaderState extends ActiveState {
    * Submits a query with strict linearizable consistency.
    */
   private CompletableFuture<QueryResponse> submitQueryLinearizable(QueryEntry entry) {
+    // Send a heartbeat AppendRequest to a majority of the cluster before applying the query to the
+    // state machine. Note that a single heartbeat will actually be sent for multiple calls to
+    // appendEntries rather than sending a separate heartbeat for each query, so this process should
+    // be pretty efficient.
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    replicator.commit().whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
@@ -559,7 +767,7 @@ final class LeaderState extends ActiveState {
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // versions will be the last applied index.
-    final long version = context.getStateMachine().getLastApplied();
+    final long version = context.getLastApplied();
     applyEntry(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
@@ -579,7 +787,6 @@ final class LeaderState extends ActiveState {
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
-        checkSessions();
       }
       entry.release();
     });
@@ -595,33 +802,51 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log and commit a register entry to register the new session. The index of the logged
+    // register entry will become the session ID. The session's timeout is based on the local
+    // server's configured session timeout. Logging the session timeout in the RegisterEntry
+    // ensures that session timeouts for this session are consistent on all servers even though
+    // configured session timeouts on each server may differ.
     try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setTimestamp(timestamp)
         .setClient(request.client())
         .setTimeout(timeout);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
           RegisterEntry entry = context.getLog().get(index);
 
-          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          // Apply the entry to the state machine, indicating that the entry expects an output.
+          // This will cause events triggered during the call to register() on the state machine to be
+          // proxied through the appropriate servers to the client in order to make event messages
+          // linearizable (be received between the client's request and response).
+          LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
+                // Once the session has been registered, respond to the register request with the
+                // registered session ID and session timeout. The session timeout is based on the
+                // local server's timeout and is sent back to the client to allow it to determine
+                // the rate at which to send keep alive requests to the cluster. Additionally, we
+                // send the current leader and active members configuration back to the client to
+                // ensure it has an up-to-date view of the cluster.
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.OK)
                   .withSession((Long) sessionId)
                   .withTimeout(timeout)
-                  .withLeader(context.getAddress())
-                  .withMembers(context.getCluster().buildActiveMembers())
-                  .build()));
+                  .withLeader(context.getMember().clientAddress())
+                  .withMembers(context.buildMembers().stream()
+                    .filter(Member::isActive)
+                    .map(Member::clientAddress)
+                    .filter(m -> m != null)
+                    .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
@@ -633,6 +858,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -653,11 +880,15 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Immediately register the relationship between the client and server. We don't wait for
+    // the AcceptRequest to be committed since the commitment and events of prior entries may rely on
+    // the connection/relationship to be completed.
     context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
 
+    // Proxy an AcceptRequest to log and replicate the connection.
     AcceptRequest acceptRequest = AcceptRequest.builder()
       .withSession(request.session())
-      .withAddress(context.getAddress())
+      .withAddress(context.getMember().serverAddress())
       .build();
     return accept(acceptRequest)
       .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
@@ -672,19 +903,23 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log the relationship between the client and server.
     try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
         .setTimestamp(timestamp)
         .setAddress(request.address());
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
+    // Immediately register the address of the server to which the client is connected. We don't wait for
+    // the ConnectEntry to be committed since the commitment and events of prior entries may rely on
+    // the connection/relationship to be completed.
     context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
@@ -706,6 +941,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -729,6 +966,8 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log the keep alive entry. The logged commandSequence and eventVersion aid in clearing
+    // commands and events from state machine memory once the entry is committed.
     try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
@@ -736,11 +975,11 @@ final class LeaderState extends ActiveState {
         .setEventVersion(request.eventVersion())
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
@@ -748,24 +987,31 @@ final class LeaderState extends ActiveState {
           applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
+                // We send the current leader and active members configuration back to the client to
+                // ensure it has an up-to-date view of the cluster.
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.OK)
-                  .withLeader(context.getAddress())
-                  .withMembers(context.getCluster().buildActiveMembers())
-                  .build()));
+                  .withLeader(context.getMember().clientAddress())
+                  .withMembers(context.buildMembers().stream()
+                    .filter(Member::isActive)
+                    .map(Member::clientAddress)
+                    .filter(m -> m != null)
+                    .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withLeader(context.getAddress())
+                  .withLeader(context.getMember().clientAddress())
                   .withError(((RaftException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withLeader(context.getAddress())
+                  .withLeader(context.getMember().clientAddress())
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -773,7 +1019,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withLeader(context.getAddress())
+            .withLeader(context.getMember().clientAddress())
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -790,23 +1036,31 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Log and commit an UnregisterEntry. Note that the entry is logged with expired = false
+    // to indicate that the session was *not* expired by the leader but was unregistered by
+    // the client. Internal state machines will use this information to call close() by not
+    // expire() event handlers on the session.
     try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
         .setExpired(false)
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getAddress(), entry);
+      LOGGER.debug("{} - Appended {}", context.getMember().serverAddress(), entry);
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
           UnregisterEntry entry = context.getLog().get(index);
 
-          LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+          // Apply the entry to the state machine, indicating that the entry expects an output.
+          // This will cause events triggered during the call to close() on the state machine to be
+          // proxied through the appropriate servers to the client in order to make event messages
+          // linearizable (be received between the client's request and response).
+          LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
           context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
@@ -824,6 +1078,8 @@ final class LeaderState extends ActiveState {
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
+
+              // Check for any sessions that have expired.
               checkSessions();
             }
             entry.release();
@@ -840,505 +1096,18 @@ final class LeaderState extends ActiveState {
   }
 
   /**
-   * Cancels the ping timer.
+   * Cancels the append timer.
    */
-  private void cancelPingTimer() {
-    if (currentTimer != null) {
-      LOGGER.debug("{} - Cancelling heartbeat timer", context.getAddress());
-      currentTimer.cancel();
+  private void cancelAppendTimer() {
+    if (appendTimer != null) {
+      LOGGER.debug("{} - Cancelling append timer", context.getMember().serverAddress());
+      appendTimer.cancel();
     }
   }
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return super.close().thenRun(this::cancelPingTimer);
-  }
-
-  /**
-   * Log replicator.
-   */
-  private class Replicator {
-    private final Set<MemberState> committing = new HashSet<>();
-    private long commitTime;
-    private int commitFailures;
-    private CompletableFuture<Long> commitFuture;
-    private CompletableFuture<Long> nextCommitFuture;
-    private final TreeMap<Long, CompletableFuture<Long>> commitFutures = new TreeMap<>();
-
-    /**
-     * Returns the current quorum index.
-     *
-     * @return The current quorum index.
-     */
-    private int quorumIndex() {
-      return context.getCluster().getQuorum() - 2;
-    }
-
-    /**
-     * Triggers a commit.
-     *
-     * @return A completable future to be completed the next time entries are committed to a majority of the cluster.
-     */
-    private CompletableFuture<Long> commit() {
-      if (context.getCluster().getMembers().size() == 0)
-        return CompletableFuture.completedFuture(null);
-
-      // If no commit future already exists, that indicates there's no heartbeat currently under way.
-      // Create a new commit future and commit to all members in the cluster.
-      if (commitFuture == null) {
-        commitFuture = new CompletableFuture<>();
-        commitTime = System.currentTimeMillis();
-        for (MemberState member : context.getCluster().getMembers()) {
-          commit(member);
-        }
-        return commitFuture;
-      }
-      // If a commit future already exists, that indicates there is a heartbeat currently underway.
-      // We don't want to allow callers to be completed by a heartbeat that may already almost be done.
-      // So, we create the next commit future if necessary and return that. Once the current heartbeat
-      // completes the next future will be used to do another heartbeat. This ensures that only one
-      // heartbeat can be outstanding at any given point in time.
-      else if (nextCommitFuture == null) {
-        nextCommitFuture = new CompletableFuture<>();
-        return nextCommitFuture;
-      } else {
-        return nextCommitFuture;
-      }
-    }
-
-    /**
-     * Registers a commit handler for the given commit index.
-     *
-     * @param index The index for which to register the handler.
-     * @return A completable future to be completed once the given log index has been committed.
-     */
-    private CompletableFuture<Long> commit(long index) {
-      if (index == 0)
-        return commit();
-
-      // If there are no other servers in the cluster, immediately commit the index.
-      if (context.getCluster().getMembers().isEmpty()) {
-        context.setCommitIndex(index);
-        context.setGlobalIndex(index);
-        return CompletableFuture.completedFuture(index);
-      }
-      // If there are no other active members in the cluster, update the commit index and complete
-      // the commit but ensure append entries requests are sent to passive members.
-      else if (context.getCluster().getActiveMembers().isEmpty()) {
-        context.setCommitIndex(index);
-        for (MemberState member : context.getCluster().getMembers()) {
-          commit(member);
-        }
-        return CompletableFuture.completedFuture(index);
-      }
-
-      // Ensure append requests are being sent to all members, including passive members.
-      return commitFutures.computeIfAbsent(index, i -> {
-        for (MemberState member : context.getCluster().getMembers()) {
-          commit(member);
-        }
-        return new CompletableFuture<>();
-      });
-    }
-
-    /**
-     * Returns the last time a majority of the cluster was contacted.
-     */
-    private long commitTime() {
-      int quorumIndex = quorumIndex();
-      if (quorumIndex >= 0) {
-        return context.getCluster().getActiveMembers((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
-      }
-      return System.currentTimeMillis();
-    }
-
-    /**
-     * Sets a commit time or fails the commit if a quorum of successful responses cannot be achieved.
-     */
-    private void commitTime(MemberState member, Throwable error) {
-      if (commitFuture == null) {
-        return;
-      }
-
-      boolean completed = false;
-      if (error != null && member.getCommitStartTime() == this.commitTime) {
-        int activeMemberSize = context.getCluster().getActiveMembers().size() + (context.getCluster().isActive() ? 1 : 0);
-        int quorumSize = context.getCluster().getQuorum();
-        // If a quorum of successful responses cannot be achieved, fail this commit.
-        if (activeMemberSize - quorumSize + 1 <= ++commitFailures) {
-          commitFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
-          completed = true;
-        }
-      } else {
-        member.setCommitTime(System.currentTimeMillis());
-
-        // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
-        // was contacted. If the current commitFuture's time is less than the commit time then trigger the
-        // commit future and reset it to the next commit future.
-        if (this.commitTime <= commitTime()) {
-          commitFuture.complete(null);
-          completed = true;
-        }
-      }
-
-      if (completed) {
-        commitFailures = 0;
-        commitFuture = nextCommitFuture;
-        nextCommitFuture = null;
-        if (commitFuture != null) {
-          this.commitTime = System.currentTimeMillis();
-          for (MemberState replica : context.getCluster().getMembers()) {
-            commit(replica);
-          }
-        }
-      }
-    }
-
-    /**
-     * Checks whether any futures can be completed.
-     */
-    private void commitEntries() {
-      context.checkThread();
-
-      // The global index may have increased even if the commit index didn't. Update the global index.
-      // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
-      // passive members. This is critical since passive members still have state machines and thus it's still
-      // important to ensure that tombstones are applied to their state machines.
-      // If the members list is empty, use the local server's last log index as the global index.
-      long globalMatchIndex = context.getCluster().getMembers().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex());
-      context.setGlobalIndex(globalMatchIndex);
-
-      // Sort the list of replicas, order by the last index that was replicated to the replica. This will allow
-      // us to determine the median index for all known replicated entries across all cluster members.
-      // Note that this sort should be fast in most cases since the list should already be sorted, but there
-      // may still be a more efficient way to go about this.
-      List<MemberState> members = context.getCluster().getActiveMembers((m1, m2) ->
-        Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
-
-      // If the active members list is empty (a configuration change occurred between an append request/response)
-      // ensure all commit futures are completed and cleared.
-      if (members.isEmpty()) {
-        context.setCommitIndex(context.getLog().lastIndex());
-        for (Map.Entry<Long, CompletableFuture<Long>> entry : commitFutures.entrySet()) {
-          entry.getValue().complete(entry.getKey());
-        }
-        commitFutures.clear();
-        return;
-      }
-
-      // Calculate the current commit index as the median matchIndex.
-      long commitIndex = members.get(quorumIndex()).getMatchIndex();
-
-      // If the commit index has increased then update the commit index. Note that in order to ensure
-      // the leader completeness property holds, verify that the commit index is greater than or equal to
-      // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
-      if (commitIndex > 0 && commitIndex > context.getCommitIndex() && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
-        context.setCommitIndex(commitIndex);
-
-        // TODO: This seems like an annoyingly expensive operation to perform on every response.
-        // Futures could simply be stored in a hash map and we could use a sequential index starting
-        // from the previous commit index to get the appropriate futures. But for now, at least this
-        // ensures that no memory leaks can occur.
-        SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
-        for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
-          entry.getValue().complete(entry.getKey());
-        }
-        futures.clear();
-      }
-    }
-
-    /**
-     * Triggers a commit for the replica.
-     */
-    private void commit(MemberState member) {
-      if (!committing.contains(member) && isOpen()) {
-        // If the log is empty then send an empty commit.
-        // If the next index hasn't yet been set then we send an empty commit first.
-        // If the next index is greater than the last index then send an empty commit.
-        // If the member failed to respond to recent communication send an empty commit. This
-        // helps avoid doing expensive work until we can ascertain the member is back up.
-        if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
-          emptyCommit(member);
-        } else {
-          entriesCommit(member);
-        }
-      }
-    }
-
-    /**
-     * Gets the previous index.
-     */
-    private long getPrevIndex(MemberState member) {
-      return member.getNextIndex() - 1;
-    }
-
-    /**
-     * Gets the previous entry.
-     */
-    private Entry getPrevEntry(MemberState member, long prevIndex) {
-      if (prevIndex > 0) {
-        return context.getLog().get(prevIndex);
-      }
-      return null;
-    }
-
-    /**
-     * Performs an empty commit.
-     */
-    private void emptyCommit(MemberState member) {
-      long prevIndex = getPrevIndex(member);
-      Entry prevEntry = getPrevEntry(member, prevIndex);
-
-      AppendRequest.Builder builder = AppendRequest.builder()
-        .withTerm(context.getTerm())
-        .withLeader(context.getAddress().hashCode())
-        .withLogIndex(prevIndex)
-        .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex())
-        .withGlobalIndex(context.getGlobalIndex());
-
-      commit(member, builder.build(), false);
-    }
-
-    /**
-     * Performs a commit with entries.
-     */
-    private void entriesCommit(MemberState member) {
-      long prevIndex = getPrevIndex(member);
-      Entry prevEntry = getPrevEntry(member, prevIndex);
-
-      AppendRequest.Builder builder = AppendRequest.builder()
-        .withTerm(context.getTerm())
-        .withLeader(context.getAddress().hashCode())
-        .withLogIndex(prevIndex)
-        .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex())
-        .withGlobalIndex(context.getGlobalIndex());
-
-      // Build a list of entries to send to the member.
-      if (!context.getLog().isEmpty()) {
-        long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
-
-        // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
-        // be null if they've been compacted and the member to which we're sending entries is just
-        // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
-        // counted towards the size of the batch.
-        int size = 0;
-        while (index <= context.getLog().lastIndex()) {
-          Entry entry = context.getLog().get(index);
-          if (entry != null) {
-            if (size + entry.size() > MAX_BATCH_SIZE) {
-              break;
-            }
-            size += entry.size();
-            builder.addEntry(entry);
-          }
-          index++;
-        }
-      }
-
-      // Release the previous entry back to the entry pool.
-      if (prevEntry != null) {
-        prevEntry.release();
-      }
-
-      commit(member, builder.build(), true);
-    }
-
-    /**
-     * Connects to the member and sends a commit message.
-     */
-    private void commit(MemberState member, AppendRequest request, boolean recursive) {
-      committing.add(member);
-      member.setCommitStartTime(commitTime);
-
-      LOGGER.debug("{} - Sent {} to {}", context.getAddress(), request, member.getAddress());
-      context.getConnections().getConnection(member.getAddress()).whenComplete((connection, error) -> {
-        context.checkThread();
-
-        if (isOpen()) {
-          if (error == null) {
-            commit(connection, member, request, recursive);
-          } else {
-            committing.remove(member);
-            commitTime(member, error);
-            failAttempt(member, error);
-          }
-        }
-      });
-    }
-
-    /**
-     * Sends a commit message.
-     */
-    private void commit(Connection connection, MemberState member, AppendRequest request, boolean recursive) {
-      connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
-        committing.remove(member);
-        context.checkThread();
-
-        if (isOpen()) {
-          if (error == null) {
-            LOGGER.debug("{} - Received {} from {}", context.getAddress(), response, member.getAddress());
-            if (response.status() == Response.Status.OK) {
-              // Reset the member failure count.
-              member.resetFailureCount();
-
-              // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
-              commitTime(member, null);
-
-              // If replication succeeded then trigger commit futures.
-              if (response.succeeded()) {
-                updateMatchIndex(member, response);
-                updateNextIndex(member);
-                updateConfiguration(member);
-
-                // If entries were committed to the replica then check commit indexes.
-                if (recursive) {
-                  commitEntries();
-                }
-
-                // If there are more entries to send then attempt to send another commit.
-                if (hasMoreEntries(member)) {
-                  commit();
-                }
-              } else if (response.term() > context.getTerm()) {
-                context.setLeader(0);
-                transition(CopycatServer.State.FOLLOWER);
-              } else {
-                resetMatchIndex(member, response);
-                resetNextIndex(member);
-
-                // If there are more entries to send then attempt to send another commit.
-                if (hasMoreEntries(member)) {
-                  commit();
-                }
-              }
-            } else if (response.term() > context.getTerm()) {
-              LOGGER.debug("{} - Received higher term from {}", context.getAddress(), member.getAddress());
-              context.setLeader(0);
-              transition(CopycatServer.State.FOLLOWER);
-            } else {
-              int failures = member.incrementFailureCount();
-              if (failures <= 3 || failures % 100 == 0) {
-                LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getAddress(), member.getAddress(), response.error() != null ? response.error() : "");
-              }
-            }
-          } else {
-            commitTime(member, error);
-            failAttempt(member, error);
-          }
-        }
-      });
-    }
-
-    /**
-     * Fails an attempt to contact a member.
-     */
-    private void failAttempt(MemberState member, Throwable error) {
-      int failures = member.incrementFailureCount();
-      if (failures <= 3 || failures % 100 == 0) {
-        LOGGER.warn("{} - {}", context.getAddress(), error.getMessage());
-      }
-
-      // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
-      // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
-      // that a partition occurred and transition back to the FOLLOWER state.
-      if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
-        LOGGER.warn("{} - Suspected network partition. Stepping down", context.getAddress());
-        context.setLeader(0);
-        transition(CopycatServer.State.FOLLOWER);
-      }
-    }
-
-    /**
-     * Returns a boolean value indicating whether there are more entries to send.
-     */
-    private boolean hasMoreEntries(MemberState member) {
-      return member.getNextIndex() < context.getLog().lastIndex();
-    }
-
-    /**
-     * Updates the match index when a response is received.
-     */
-    private void updateMatchIndex(MemberState member, AppendResponse response) {
-      // If the replica returned a valid match index then update the existing match index.
-      member.setMatchIndex(Math.max(member.getMatchIndex(), response.logIndex()));
-    }
-
-    /**
-     * Updates the next index when the match index is updated.
-     */
-    private void updateNextIndex(MemberState member) {
-      // If the match index was set, update the next index to be greater than the match index if necessary.
-      member.setNextIndex(Math.max(member.getNextIndex(), Math.max(member.getMatchIndex() + 1, 1)));
-    }
-
-    /**
-     * Updates the cluster configuration for the given member.
-     */
-    private void updateConfiguration(MemberState member) {
-      if (context.getCluster().isPassiveMember(member) && member.getMatchIndex() >= context.getCommitIndex()) {
-        if (configuring > 0) {
-          commit(configuring).whenComplete((result, error) -> {
-            promoteConfiguration(member);
-          });
-        } else {
-          promoteConfiguration(member);
-        }
-      }
-    }
-
-    /**
-     * Promotes the given member.
-     */
-    private void promoteConfiguration(MemberState member) {
-      LOGGER.info("{} - Promoting {}", context.getAddress(), member);
-
-      Collection<Address> activeMembers = context.getCluster().buildActiveMembers();
-      activeMembers.add(member.getAddress());
-
-      Collection<Address> passiveMembers = context.getCluster().buildPassiveMembers();
-      passiveMembers.remove(member.getAddress());
-
-      try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-        entry.setTerm(context.getTerm())
-          .setActive(activeMembers)
-          .setPassive(passiveMembers);
-        long index = context.getLog().append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, index);
-
-        // Immediately apply the configuration upon appending the configuration entry.
-        // Store the index of the configuration in order to block other configurations from taking
-        // place at the same time.
-        configuring = index;
-        context.getCluster().configure(entry.getIndex(), entry.getActive(), entry.getPassive());
-      }
-
-      commit(configuring).whenComplete((result, error) -> {
-        context.checkThread();
-        configuring = 0;
-      });
-    }
-
-    /**
-     * Resets the match index when a response fails.
-     */
-    private void resetMatchIndex(MemberState member, AppendResponse response) {
-      member.setMatchIndex(response.logIndex());
-      LOGGER.debug("{} - Reset match index for {} to {}", context.getAddress(), member, member.getMatchIndex());
-    }
-
-    /**
-     * Resets the next index when a response fails.
-     */
-    private void resetNextIndex(MemberState member) {
-      if (member.getMatchIndex() != 0) {
-        member.setNextIndex(member.getMatchIndex() + 1);
-      } else {
-        member.setNextIndex(context.getLog().firstIndex());
-      }
-      LOGGER.debug("{} - Reset next index for {} to {}", context.getAddress(), member, member.getNextIndex());
-    }
+    return super.close().thenRun(appender::close).thenRun(this::cancelAppendTimer);
   }
 
 }

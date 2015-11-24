@@ -27,7 +27,12 @@ import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Protocol keep alive response.
+ * Session keep alive response.
+ * <p>
+ * Session keep alive responses are sent upon the completion of a {@link io.atomix.copycat.client.request.KeepAliveRequest}
+ * from a client. Keep alive responses, when successful, provide the current cluster configuration and leader
+ * to the client to ensure clients can evolve with the structure of the cluster and make intelligent decisions
+ * about connecting to the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

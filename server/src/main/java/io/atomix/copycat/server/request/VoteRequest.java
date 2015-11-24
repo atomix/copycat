@@ -25,7 +25,11 @@ import io.atomix.copycat.client.request.AbstractRequest;
 import java.util.Objects;
 
 /**
- * Protocol vote request.
+ * Server vote request.
+ * <p>
+ * Vote requests are sent by candidate servers during an election to determine whether they should
+ * become the leader for a cluster. Vote requests contain the necessary information for followers to
+ * determine whether a candidate should receive their vote based on log and other information.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -197,22 +201,6 @@ public class VoteRequest extends AbstractRequest<VoteRequest> {
       Assert.stateNot(request.logTerm < 0, "log term must not be negative");
       return request;
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(request);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return object instanceof Builder && ((Builder) object).request.equals(request);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[request=%s]", getClass().getCanonicalName(), request);
-    }
-
   }
 
 }

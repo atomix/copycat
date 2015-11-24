@@ -15,22 +15,16 @@
  */
 package io.atomix.copycat.server.state;
 
-import java.util.function.Consumer;
-
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.transport.LocalServerRegistry;
-import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.catalyst.transport.Server;
-import io.atomix.catalyst.transport.Transport;
+import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.Response;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import java.util.function.Consumer;
 
 /**
  * Server context test.
@@ -61,7 +55,7 @@ public class ServerStateTest extends AbstractStateTest<AbstractState> {
     client = transport.client();
 
     serverCtx.execute(() -> {
-      server.listen(members.get(0), serverState::connect).whenComplete((result, error) -> {
+      server.listen(members.get(0).clientAddress(), serverState::connectClient).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -69,7 +63,7 @@ public class ServerStateTest extends AbstractStateTest<AbstractState> {
     await();
 
     clientCtx.execute(() -> {
-      client.connect(members.get(0)).whenComplete((result, error) -> {
+      client.connect(members.get(0).clientAddress()).whenComplete((result, error) -> {
         threadAssertNull(error);
         this.connection = result;
         resume();

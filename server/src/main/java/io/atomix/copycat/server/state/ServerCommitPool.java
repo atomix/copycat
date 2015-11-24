@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,13 +31,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 class ServerCommitPool implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerCommitPool.class);
-  private final ServerCommitCleaner cleaner;
+  private final Log log;
   private final ServerSessionManager sessions;
   private final Queue<ServerCommit> pool = new ConcurrentLinkedQueue<>();
 
-  public ServerCommitPool(ServerCommitCleaner cleaner, ServerSessionManager sessions) {
-    this.cleaner = cleaner;
-    this.sessions = sessions;
+  public ServerCommitPool(Log log, ServerSessionManager sessions) {
+    this.log = Assert.notNull(log, "log");
+    this.sessions = Assert.notNull(sessions, "sessions");
   }
 
   /**
@@ -47,7 +49,7 @@ class ServerCommitPool implements AutoCloseable {
   public ServerCommit acquire(OperationEntry entry, long timestamp) {
     ServerCommit commit = pool.poll();
     if (commit == null) {
-      commit = new ServerCommit(this, cleaner, sessions);
+      commit = new ServerCommit(this, log, sessions);
     }
     commit.reset(entry, timestamp);
     return commit;

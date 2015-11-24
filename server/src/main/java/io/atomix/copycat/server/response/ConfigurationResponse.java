@@ -18,23 +18,29 @@ package io.atomix.copycat.server.response;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
+import io.atomix.copycat.server.state.Member;
 
 import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Protocol configuration response.
+ * Server configuration response.
+ * <p>
+ * Configuration responses are sent in response to configuration change requests once a configuration
+ * change is completed or fails. Note that configuration changes can frequently fail due to the limitation
+ * of commitment of configuration changes. No two configuration changes may take place simultaneously. If a
+ * configuration change is failed due to a conflict, the response status will be
+ * {@link io.atomix.copycat.client.response.Response.Status#ERROR} but the response {@link #error()} will
+ * be {@code null}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends AbstractResponse<T> {
   protected long version;
-  protected Collection<Address> activeMembers;
-  protected Collection<Address> passiveMembers;
+  protected Collection<Member> members;
 
   /**
    * Returns the response version.
@@ -46,21 +52,12 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
   }
 
   /**
-   * Returns the configuration members list.
+   * Returns the active members list.
    *
-   * @return The configuration members list.
+   * @return The active members list.
    */
-  public Collection<Address> activeMembers() {
-    return activeMembers;
-  }
-
-  /**
-   * Returns the configuration members list.
-   *
-   * @return The configuration members list.
-   */
-  public Collection<Address> passiveMembers() {
-    return passiveMembers;
+  public Collection<Member> members() {
+    return members;
   }
 
   @Override
@@ -69,8 +66,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     if (status == Status.OK) {
       error = null;
       version = buffer.readLong();
-      activeMembers = serializer.readObject(buffer);
-      passiveMembers = serializer.readObject(buffer);
+      members = serializer.readObject(buffer);
     } else {
       int errorCode = buffer.readByte();
       if (errorCode != 0) {
@@ -84,8 +80,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(version);
-      serializer.writeObject(activeMembers, buffer);
-      serializer.writeObject(passiveMembers, buffer);
+      serializer.writeObject(members, buffer);
     } else {
       buffer.writeByte(error != null ? error.id() : 0);
     }
@@ -93,7 +88,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, version, activeMembers, passiveMembers);
+    return Objects.hash(getClass(), status, version, members);
   }
 
   @Override
@@ -102,15 +97,14 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       ConfigurationResponse response = (ConfigurationResponse) object;
       return response.status == status
         && response.version == version
-        && response.activeMembers.equals(activeMembers)
-        && response.passiveMembers.equals(passiveMembers);
+        && response.members.equals(members);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, activeMembers=%s, passiveMembers=%s]", getClass().getSimpleName(), status, version, activeMembers, passiveMembers);
+    return String.format("%s[status=%s, version=%d, members=%s]", getClass().getSimpleName(), status, version, members);
   }
 
   /**
@@ -142,32 +136,9 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws NullPointerException if {@code members} is null
      */
     @SuppressWarnings("unchecked")
-    public T withActiveMembers(Collection<Address> members) {
-      response.activeMembers = Assert.notNull(members, "members");
+    public T withMembers(Collection<Member> members) {
+      response.members = Assert.notNull(members, "members");
       return (T) this;
-    }
-
-    /**
-     * Sets the response members.
-     *
-     * @param members The response members.
-     * @return The response builder.
-     * @throws NullPointerException if {@code members} is null
-     */
-    @SuppressWarnings("unchecked")
-    public T withPassiveMembers(Collection<Address> members) {
-      response.passiveMembers = Assert.notNull(members, "members");
-      return (T) this;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(response);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return getClass().isAssignableFrom(object.getClass()) && ((Builder) object).response.equals(response);
     }
 
     /**
@@ -177,17 +148,10 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     public U build() {
       super.build();
       if (response.status == Status.OK) {
-        Assert.state(response.activeMembers != null, "activeMembers members cannot be null");
-        Assert.state(response.passiveMembers != null, "passiveMembers members cannot be null");
+        Assert.state(response.members != null, "members cannot be null");
       }
       return response;
     }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), response);
-    }
-
   }
 
 }

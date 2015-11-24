@@ -37,7 +37,7 @@ public class MajorCompactionTest extends AbstractLogTest {
       .withMaxEntriesPerSegment(10)
       .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
       .build()
-      .open("copycat");
+      .openLog("copycat");
   }
 
   /**

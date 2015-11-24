@@ -26,7 +26,13 @@ import io.atomix.copycat.client.request.SessionRequest;
 import java.util.Objects;
 
 /**
- * Protocol accept client request.
+ * Accept client request.
+ * <p>
+ * Accept requests are sent by followers to the leader to log and replicate the connection of
+ * a specific client to a specific server. The {@link #address()} in the accept request indicates
+ * the server to which the client is connected. Accept requests will ultimately result in a
+ * {@link io.atomix.copycat.server.storage.entry.ConnectEntry} being logged and replicated such
+ * that all server state machines receive updates on the relationships between clients and servers.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

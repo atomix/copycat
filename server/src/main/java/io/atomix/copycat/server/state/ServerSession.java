@@ -46,6 +46,8 @@ class ServerSession implements Session {
   private final long timeout;
   private Connection connection;
   private Address address;
+  private long connectIndex;
+  private long keepAliveIndex;
   private long request;
   private long sequence;
   private long version;
@@ -115,6 +117,46 @@ class ServerSession implements Session {
    */
   ServerSession setTimestamp(long timestamp) {
     this.timestamp = Math.max(this.timestamp, timestamp);
+    return this;
+  }
+
+  /**
+   * Returns the current session connect index.
+   *
+   * @return The current session connect index.
+   */
+  long getConnect() {
+    return connectIndex;
+  }
+
+  /**
+   * Sets the current session connect index.
+   *
+   * @param connectIndex The current session connect index.
+   * @return The server session.
+   */
+  ServerSession setConnect(long connectIndex) {
+    this.connectIndex = connectIndex;
+    return this;
+  }
+
+  /**
+   * Returns the current session keep alive index.
+   *
+   * @return The current session keep alive index.
+   */
+  long getKeepAlive() {
+    return keepAliveIndex;
+  }
+
+  /**
+   * Sets the current session keep alive index.
+   *
+   * @param keepAliveIndex The current session keep alive index.
+   * @return The server session.
+   */
+  ServerSession setKeepAlive(long keepAliveIndex) {
+    this.keepAliveIndex = keepAliveIndex;
     return this;
   }
 

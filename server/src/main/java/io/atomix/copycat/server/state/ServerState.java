@@ -26,11 +26,11 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +39,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Raft server state.
@@ -47,12 +48,24 @@ import java.util.function.Consumer;
  */
 public class ServerState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerState.class);
+  private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
+  private static final int MAX_JOIN_ATTEMPTS = 3;
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
   private ThreadContext threadContext;
   private final StateMachine userStateMachine;
-  private final Address address;
-  private final ClusterState cluster;
+  private final int quorumHint;
+  private final int backupCount;
+  private long version = -1;
+  private final MemberState member;
+  private Map<Integer, MemberState> membersMap = new HashMap<>();
+  private List<MemberState> members = new ArrayList<>();
+  private List<MemberState> activeMembers = new ArrayList<>();
+  private List<MemberState> passiveMembers = new ArrayList<>();
+  private List<MemberState> reserveMembers = new ArrayList<>();
+  private List<MemberState> assignedPassiveMembers = new ArrayList<>();
+  private List<MemberState> assignedReserveMembers = new ArrayList<>();
+  private final MetaStore meta;
   private final Log log;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
@@ -62,28 +75,46 @@ public class ServerState {
   private Duration heartbeatInterval = Duration.ofMillis(150);
   private Scheduled joinTimer;
   private Scheduled leaveTimer;
+  private Scheduled heartbeatTimer;
   private int leader;
   private long term;
   private int lastVotedFor;
+  private long lastApplied;
+  private long lastCompleted;
   private long commitIndex;
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
-    this.address = Assert.notNull(address, "address");
-    Set<Address> activeMembers = new HashSet<>(members);
-    activeMembers.add(address);
-    this.cluster = new ClusterState(this, address);
+  ServerState(Member member, Collection<Address> members, int quorumHint, int backupCount, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+    this.quorumHint = quorumHint;
+    this.backupCount = backupCount;
+    this.member = new MemberState(member.serverAddress()).setClientAddress(member.clientAddress());
+    this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
 
     // Create a state machine executor and configure the state machine.
-    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
+    this.stateMachine = new ServerStateMachine(userStateMachine, this, new ServerStateMachineContext(connections, new ServerSessionManager()), stateContext);
 
-    cluster.configure(0, activeMembers, Collections.EMPTY_LIST);
+    // Load the current term and last vote from disk.
+    this.term = meta.loadTerm();
+    this.lastVotedFor = meta.loadVote();
+
+    // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
+    MetaStore.Configuration configuration = meta.loadConfiguration();
+    if (configuration != null) {
+      configure(configuration.version(), configuration.members());
+    } else if (members.contains(member.serverAddress())) {
+      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(Member.Type.ACTIVE, m, null)).collect(Collectors.toSet());
+      activeMembers.add(new Member(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
+      configure(0, activeMembers);
+    } else {
+      Set<Member> activeMembers = members.stream().map(m -> new Member(Member.Type.ACTIVE, m, null)).collect(Collectors.toSet());
+      configure(0, activeMembers);
+    }
   }
 
   /**
@@ -107,12 +138,39 @@ public class ServerState {
   }
 
   /**
-   * Returns the server address.
+   * Returns the cluster quorum hint.
    *
-   * @return The server address.
+   * @return The cluster quorum hint.
    */
-  public Address getAddress() {
-    return address;
+  int getQuorumHint() {
+    return quorumHint;
+  }
+
+  /**
+   * Returns the cluster backup count.
+   *
+   * @return The cluster backup count.
+   */
+  int getBackupCount() {
+    return backupCount;
+  }
+
+  /**
+   * Returns the remote quorum count.
+   *
+   * @return The remote quorum count.
+   */
+  int getQuorum() {
+    return (int) Math.floor((activeMembers.size() + 1) / 2.0) + 1;
+  }
+
+  /**
+   * Returns the cluster state version.
+   *
+   * @return The cluster state version.
+   */
+  long getVersion() {
+    return version;
   }
 
   /**
@@ -200,46 +258,28 @@ public class ServerState {
    * @return The Raft context.
    */
   ServerState setLeader(int leader) {
-    if (this.leader == 0) {
-      if (leader != 0) {
-        Address address = getMember(leader);
-        Assert.state(address != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.address, address);
-        electionListeners.forEach(l -> l.accept(address));
+    if (this.leader != leader) {
+      // 0 indicates no leader.
+      if (leader == 0) {
+        this.leader = 0;
+      } else {
+        // If a valid leader ID was specified, it must be a member that's currently a member of the
+        // ACTIVE members configuration. Note that we don't throw exceptions for unknown members. It's
+        // possible that a failure following a configuration change could result in an unknown leader
+        // sending AppendRequest to this server. Simply configure the leader if it's known.
+        MemberState member = leader == getMember().id() ? getMemberState() : getMemberState(leader);
+        if (member != null) {
+          this.leader = member.getMember().id();
+          LOGGER.info("{} - Found leader {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
+          electionListeners.forEach(l -> l.accept(member.getMember().serverAddress()));
+        }
       }
-    } else if (leader != 0) {
-      if (this.leader != leader) {
-        Address address = getMember(leader);
-        Assert.state(address != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.address, address);
-        electionListeners.forEach(l -> l.accept(address));
-      }
-    } else {
-      this.leader = 0;
+
+      this.lastVotedFor = 0;
+      meta.storeVote(0);
+      reassign();
     }
     return this;
-  }
-
-  /**
-   * Returns the cluster state.
-   *
-   * @return The cluster state.
-   */
-  ClusterState getCluster() {
-    return cluster;
-  }
-
-  /**
-   * Returns a collection of current members.
-   *
-   * @return A collection of current members.
-   */
-  public Collection<Address> getMembers() {
-    return cluster.buildMembers();
   }
 
   /**
@@ -247,15 +287,15 @@ public class ServerState {
    *
    * @return The state leader.
    */
-  public Address getLeader() {
+  public Member getLeader() {
     if (leader == 0) {
       return null;
-    } else if (leader == address.hashCode()) {
-      return address;
+    } else if (leader == member.getMember().id()) {
+      return member.getMember();
     }
 
-    MemberState member = cluster.getMember(leader);
-    return member != null ? member.getAddress() : null;
+    MemberState member = membersMap.get(leader);
+    return member != null ? member.getMember() : null;
   }
 
   /**
@@ -269,7 +309,9 @@ public class ServerState {
       this.term = term;
       this.leader = 0;
       this.lastVotedFor = 0;
-      LOGGER.debug("{} - Set term {}", address, term);
+      meta.storeTerm(this.term);
+      meta.storeVote(this.lastVotedFor);
+      LOGGER.debug("{} - Set term {}", member.getMember().serverAddress(), term);
     }
     return this;
   }
@@ -292,15 +334,17 @@ public class ServerState {
   ServerState setLastVotedFor(int candidate) {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
     Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
-    Assert.stateNot (leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
-    Address address = getMember(candidate);
-    Assert.state(address != null, "unknown candidate: %d", candidate);
+    Assert.stateNot(leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
+    MemberState member = candidate == getMember().id() ? getMemberState() : getMemberState(candidate);
+    Assert.state(member != null, "unknown candidate: %d", candidate);
+    Assert.state(member.getMember().isActive(), "invalid candidate: ", member.getMember().serverAddress());
     this.lastVotedFor = candidate;
+    meta.storeVote(this.lastVotedFor);
 
     if (candidate != 0) {
-      LOGGER.debug("{} - Voted for {}", this.address, address);
+      LOGGER.debug("{} - Voted for {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
     } else {
-      LOGGER.debug("{} - Reset last voted for", this.address);
+      LOGGER.debug("{} - Reset last voted for", this.member.getMember().serverAddress());
     }
     return this;
   }
@@ -312,6 +356,358 @@ public class ServerState {
    */
   public int getLastVotedFor() {
     return lastVotedFor;
+  }
+
+  /**
+   * Returns the server member.
+   *
+   * @return The server member.
+   */
+  public Member getMember() {
+    return member.getMember();
+  }
+
+  /**
+   * Returns the server member state.
+   *
+   * @return The server member state.
+   */
+  MemberState getMemberState() {
+    return member;
+  }
+
+  /**
+   * Returns a member by ID.
+   *
+   * @param id The member ID.
+   * @return The member.
+   */
+  public Member getMember(int id) {
+    MemberState member = membersMap.get(id);
+    return member != null ? member.getMember() : null;
+  }
+
+  /**
+   * Returns a member state by ID.
+   *
+   * @param id The member state ID.
+   * @return The member state.
+   */
+  MemberState getMemberState(int id) {
+    return membersMap.get(id);
+  }
+
+  /**
+   * Returns a member state by member object.
+   *
+   * @param member The member object.
+   * @return The member state.
+   */
+  MemberState getMemberState(Member member) {
+    return membersMap.get(member.id());
+  }
+
+  /**
+   * Returns a list of all members.
+   *
+   * @return A list of all members.
+   */
+  public Collection<Member> getMembers() {
+    return members.stream().map(MemberState::getMember).collect(Collectors.toList());
+  }
+
+  /**
+   * Returns a list of all member states.
+   *
+   * @return A list of all member states.
+   */
+  List<MemberState> getMemberStates() {
+    return members;
+  }
+
+  /**
+   * Returns a list of active members.
+   *
+   * @return A list of active members.
+   */
+  List<MemberState> getActiveMemberStates() {
+    return activeMembers;
+  }
+
+  /**
+   * Returns a list of active members.
+   *
+   * @param comparator A comparator with which to sort the members list.
+   * @return The sorted members list.
+   */
+  List<MemberState> getActiveMemberStates(Comparator<MemberState> comparator) {
+    Collections.sort(activeMembers, comparator);
+    return activeMembers;
+  }
+
+  /**
+   * Returns a list of passive members.
+   *
+   * @return A list of passive members.
+   */
+  List<MemberState> getPassiveMemberStates() {
+    return passiveMembers;
+  }
+
+  /**
+   * Returns a list of passive members.
+   *
+   * @param comparator A comparator with which to sort the members list.
+   * @return The sorted members list.
+   */
+  List<MemberState> getPassiveMemberStates(Comparator<MemberState> comparator) {
+    Collections.sort(passiveMembers, comparator);
+    return passiveMembers;
+  }
+
+  /**
+   * Returns a list of reserve members.
+   *
+   * @return A list of reserve members.
+   */
+  List<MemberState> getReserveMemberStates() {
+    return reserveMembers;
+  }
+
+  /**
+   * Returns a list of reserve members.
+   *
+   * @param comparator A comparator with which to sort the members list.
+   * @return The sorted members list.
+   */
+  List<MemberState> getReserveMemberStates(Comparator<MemberState> comparator) {
+    Collections.sort(reserveMembers, comparator);
+    return reserveMembers;
+  }
+
+  /**
+   * Returns a list of assigned passive member states.
+   *
+   * @return A list of assigned passive member states.
+   */
+  List<MemberState> getAssignedPassiveMemberStates() {
+    return assignedPassiveMembers;
+  }
+
+  /**
+   * Returns a list of assigned reserve member states.
+   *
+   * @return A list of assigned reserve member states.
+   */
+  List<MemberState> getAssignedReserveMemberStates() {
+    return assignedReserveMembers;
+  }
+
+  /**
+   * Rebuilds assigned member states.
+   */
+  private void reassign() {
+    if (member.getMember().isActive() && member.getMember().id() != leader) {
+      // Calculate this server's index within the collection of active members, excluding the leader.
+      // This is done in a deterministic way by sorting the list of active members by ID.
+      int index = 1;
+      for (MemberState member : getActiveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id())) {
+        if (member.getMember().id() != leader) {
+          if (this.member.getMember().id() < member.getMember().id()) {
+            index++;
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Intersect the active members list with a sorted list of passive members to get assignments.
+      List<MemberState> sortedPassiveMembers = getPassiveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id());
+      assignedPassiveMembers = assignMembers(index, sortedPassiveMembers);
+
+      // Intersect the active members list with a sorted list of reserve members to get assignments.
+      List<MemberState> sortedReserveMembers = getReserveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id());
+      assignedReserveMembers = assignMembers(index, sortedReserveMembers);
+    } else {
+      assignedPassiveMembers = new ArrayList<>(0);
+      assignedReserveMembers = new ArrayList<>(0);
+    }
+  }
+
+  /**
+   * Assigns members using consistent hashing.
+   */
+  private List<MemberState> assignMembers(int index, List<MemberState> sortedMembers) {
+    List<MemberState> members = new ArrayList<>(sortedMembers.size());
+    for (int i = 0; i < sortedMembers.size(); i++) {
+      if ((i + 1) % index == 0) {
+        members.add(sortedMembers.get(i));
+      }
+    }
+    return members;
+  }
+
+  /**
+   * Configures the cluster state.
+   *
+   * @param version The cluster state version.
+   * @param members The configured members.
+   * @return The cluster state.
+   */
+  @SuppressWarnings("unchecked")
+  ServerState configure(long version, Collection<Member> members) {
+    // If the configuration version is less than the currently configured version, ignore it.
+    // Configurations can be persisted and applying old configurations can revert newer configurations.
+    if (version <= this.version)
+      return this;
+
+    // Iterate through members in the new configuration, add any missing members, and update existing members.
+    for (Member member : members) {
+      if (member.equals(this.member.getMember())) {
+        this.member.setMemberType(member.type());
+      } else {
+        // If the member state doesn't already exist, create it.
+        MemberState state = membersMap.get(member.id());
+        if (state == null) {
+          state = new MemberState(member.serverAddress());
+          state.resetState(log);
+          this.members.add(state);
+          membersMap.put(member.id(), state);
+        }
+
+        // If the member type has changed, update the member type and reset its state.
+        if (state.getMemberType() != member.type()) {
+          state.setMemberType(member.type()).resetState(log);
+        }
+
+        // Update the optimized member collections according to the member type.
+        if (member.type() == null) {
+          activeMembers.remove(state);
+          passiveMembers.remove(state);
+          reserveMembers.remove(state);
+        } else {
+          switch (member.type()) {
+            case ACTIVE:
+              if (!activeMembers.contains(state))
+                activeMembers.add(state);
+              passiveMembers.remove(state);
+              reserveMembers.remove(state);
+              break;
+            case PASSIVE:
+              activeMembers.remove(state);
+              if (!passiveMembers.contains(state))
+                passiveMembers.add(state);
+              reserveMembers.remove(state);
+              break;
+            case RESERVE:
+              activeMembers.remove(state);
+              passiveMembers.remove(state);
+              if (!reserveMembers.contains(state))
+                reserveMembers.add(state);
+              break;
+          }
+        }
+      }
+    }
+
+    // If the local member is not part of the configuration, set its type to null.
+    if (!members.contains(this.member.getMember())) {
+      this.member.setMemberType(null);
+    }
+
+    // Iterate through configured members and remove any that no longer exist in the configuration.
+    Iterator<MemberState> iterator = this.members.iterator();
+    while (iterator.hasNext()) {
+      MemberState member = iterator.next();
+      if (!members.contains(member.getMember())) {
+        iterator.remove();
+        activeMembers.remove(member);
+        passiveMembers.remove(member);
+        reserveMembers.remove(member);
+        membersMap.remove(member.getMember().id());
+      }
+    }
+
+    this.version = version;
+
+    // Store the configuration to ensure it can be easily loaded on server restart.
+    meta.storeConfiguration(new MetaStore.Configuration(version, members));
+
+    reassign();
+
+    return this;
+  }
+
+  /**
+   * Builds a list of active members.
+   */
+  List<Member> buildMembers() {
+    // Add all members to a list. The "members" field is only remote members, so we must separately
+    // add the local member to the list if necessary.
+    List<Member> members = new ArrayList<>(this.members.size() + 1);
+    for (MemberState member : this.members) {
+      members.add(member.getMember());
+    }
+
+    // If the local member type is null, that indicates it's not a member of the current configuration.
+    if (member.getMemberType() != null) {
+      members.add(member.getMember());
+    }
+    return members;
+  }
+
+  /**
+   * Returns the last applied index.
+   *
+   * @return The last applied index.
+   */
+  long getLastApplied() {
+    return lastApplied;
+  }
+
+  /**
+   * Sets the last applied index.
+   * <p>
+   * The last applied index is updated *after* each time a non-query entry is applied to the state machine.
+   *
+   * @param lastApplied The last applied index.
+   * @return The server state.
+   */
+  ServerState setLastApplied(long lastApplied) {
+    // If the last applied index decreased then that's very concerning.
+    this.lastApplied = Assert.argNot(lastApplied, lastApplied < this.lastApplied, "lastApplied index must be monotonically increasing");
+    return this;
+  }
+
+  /**
+   * Returns the highest index completed for all sessions.
+   * <p>
+   * The lastCompleted index is representative of the highest index for which related events have been
+   * received by *all* clients. In other words, no events lower than the given index should remain in
+   * memory.
+   *
+   * @return The highest index completed for all sessions.
+   */
+  long getLastCompleted() {
+    return lastCompleted > 0 ? lastCompleted : lastApplied;
+  }
+
+  /**
+   * Sets the last completed index.
+   * <p>
+   * The lastCompleted index is representative of the highest index for which related events have been
+   * received by *all* clients. In other words, no events lower than the given index should remain in
+   * memory.
+   *
+   * @param lastCompleted The last completed index.
+   * @return The server state.
+   */
+  ServerState setLastCompleted(long lastCompleted) {
+    // The last completed index must not have decreased. New sessions will always start their lastCompleted
+    // index at the index of their session registration to ensure the creation of new sessions does not
+    // result in the decrease of the lastCompleted index.
+    this.lastCompleted = Assert.argNot(lastCompleted, lastCompleted < this.lastCompleted, "lastCompleted index must be monotonically increasing");
+    return this;
   }
 
   /**
@@ -369,24 +765,6 @@ public class ServerState {
   }
 
   /**
-   * Returns the last index applied to the state machine.
-   *
-   * @return The last index applied to the state machine.
-   */
-  public long getLastApplied() {
-    return stateMachine.getLastApplied();
-  }
-
-  /**
-   * Returns the last index completed for all sessions.
-   *
-   * @return The last index completed for all sessions.
-   */
-  public long getLastCompleted() {
-    return stateMachine.getLastCompleted();
-  }
-
-  /**
    * Returns the current state.
    *
    * @return The current state.
@@ -412,19 +790,30 @@ public class ServerState {
   }
 
   /**
-   * Handles a connection.
+   * Handles a connection from a client.
    */
-  void connect(Connection connection) {
-    registerHandlers(connection);
+  void connectClient(Connection connection) {
+    threadContext.checkThread();
+
+    // Note we do not use method references here because the "state" variable changes over time.
+    // We have to use lambdas to ensure the request handler points to the current state.
+    connection.handler(RegisterRequest.class, request -> state.register(request));
+    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
+    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
+    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
+    connection.handler(CommandRequest.class, request -> state.command(request));
+    connection.handler(QueryRequest.class, request -> state.query(request));
+
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }
 
   /**
-   * Registers all message handlers.
+   * Handles a connection from another server.
    */
-  private void registerHandlers(Connection connection) {
+  void connectServer(Connection connection) {
     threadContext.checkThread();
 
+    // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
@@ -435,6 +824,8 @@ public class ServerState {
     connection.handler(PublishRequest.class, request -> state.publish(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
+    connection.handler(HeartbeatRequest.class, request -> state.heartbeat(request));
+    connection.handler(ConfigureRequest.class, request -> state.configure(request));
     connection.handler(AppendRequest.class, request -> state.append(request));
     connection.handler(PollRequest.class, request -> state.poll(request));
     connection.handler(VoteRequest.class, request -> state.vote(request));
@@ -448,18 +839,23 @@ public class ServerState {
   public CompletableFuture<CopycatServer.State> transition(CopycatServer.State state) {
     checkThread();
 
-    if (this.state != null && state == this.state.type()) {
+    // If the state has not changed, simply complete the transition.
+    if (state == this.state.type()) {
       return CompletableFuture.completedFuture(this.state.type());
     }
 
-    LOGGER.info("{} - Transitioning to {}", address, state);
+    LOGGER.info("{} - Transitioning to {}", member.getMember().serverAddress(), state);
 
-    if (this.state != null) {
-      try {
-        this.state.close().get();
-      } catch (InterruptedException | ExecutionException e) {
-        throw new IllegalStateException("failed to close Raft state", e);
-      }
+    // If a valid state exists, close the current state synchronously.
+    try {
+      this.state.close().get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IllegalStateException("failed to close Raft state", e);
+    }
+
+    // If we're transitioning out of the RESERVE state, truncate the log.
+    if (this.state.type() == CopycatServer.State.RESERVE) {
+      log.truncate();
     }
 
     // Force state transitions to occur synchronously in order to prevent race conditions.
@@ -475,25 +871,46 @@ public class ServerState {
   }
 
   /**
+   * Creates an internal state for the given state type.
+   */
+  private AbstractState createState(CopycatServer.State state) {
+    switch (state) {
+      case INACTIVE:
+        return new InactiveState(this);
+      case RESERVE:
+        return new ReserveState(this);
+      case PASSIVE:
+        return new PassiveState(this);
+      case FOLLOWER:
+        return new FollowerState(this);
+      case CANDIDATE:
+        return new CandidateState(this);
+      case LEADER:
+        return new LeaderState(this);
+      default:
+        throw new AssertionError();
+    }
+  }
+
+  /**
    * Joins the cluster.
    */
   public CompletableFuture<Void> join() {
     CompletableFuture<Void> future = new CompletableFuture<>();
 
-    List<MemberState> votingMembers = cluster.getActiveMembers();
-    if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", address);
-      term++;
-      transition(CopycatServer.State.LEADER);
+    // If the server type is defined, that indicates it's a member of the current configuration and
+    // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
+    if (member.getMember().type() != null) {
+      if (member.getMember().isActive()) {
+        transition(CopycatServer.State.FOLLOWER);
+      } else if (member.getMember().isPassive()) {
+        transition(CopycatServer.State.PASSIVE);
+      } else if (member.getMember().isReserve()) {
+        transition(CopycatServer.State.RESERVE);
+      }
       future.complete(null);
     } else {
-      joinTimer = threadContext.schedule(electionTimeout, () -> {
-        cluster.setActive(true);
-        transition(CopycatServer.State.FOLLOWER);
-        future.complete(null);
-      });
-
-      join(cluster.getActiveMembers().iterator(), future);
+      join(getActiveMemberStates().iterator(), 1, future);
     }
 
     return future;
@@ -502,57 +919,80 @@ public class ServerState {
   /**
    * Recursively attempts to join the cluster.
    */
-  private void join(Iterator<MemberState> iterator, CompletableFuture<Void> future) {
+  private void join(Iterator<MemberState> iterator, int attempts, CompletableFuture<Void> future) {
     if (iterator.hasNext()) {
       MemberState member = iterator.next();
-      LOGGER.debug("{} - Attempting to join via {}", address, member.getAddress());
+      LOGGER.debug("{} - Attempting to join via {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
 
-      connections.getConnection(member.getAddress()).thenCompose(connection -> {
+      connections.getConnection(member.getMember().serverAddress()).thenCompose(connection -> {
         JoinRequest request = JoinRequest.builder()
-          .withMember(address)
+          .withMember(new Member(this.member.getMember().serverAddress(), this.member.getMember().clientAddress()))
           .build();
         return connection.<JoinRequest, JoinResponse>send(request);
       }).whenComplete((response, error) -> {
         if (error == null) {
           if (response.status() == Response.Status.OK) {
-            LOGGER.info("{} - Successfully joined via {}", address, member.getAddress());
+            LOGGER.info("{} - Successfully joined via {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
 
-            cluster.configure(response.version(), response.activeMembers(), response.passiveMembers());
+            // Configure the cluster with the join response.
+            configure(response.version(), response.members());
 
-            if (cluster.isActive()) {
-              cancelJoinTimer();
-              transition(CopycatServer.State.FOLLOWER);
-              future.complete(null);
-            } else if (cluster.isPassive()) {
-              cancelJoinTimer();
-              transition(CopycatServer.State.PASSIVE);
-              future.complete(null);
-            } else {
+            // Cancel the join timer.
+            cancelJoinTimer();
+
+            // If the local member type is null, that indicates it's not a part of the configuration.
+            Member.Type type = this.member.getMemberType();
+            if (type == null) {
               future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
+            } else {
+              // Transition the state context according to the local member type.
+              switch (type) {
+                case ACTIVE:
+                  transition(CopycatServer.State.FOLLOWER);
+                  break;
+                case PASSIVE:
+                  transition(CopycatServer.State.PASSIVE);
+                  break;
+                case RESERVE:
+                  transition(CopycatServer.State.RESERVE);
+                  break;
+              }
+
+              // Start sending heartbeats to the leader to ensure this server can be considered for promotion.
+              startHeartbeatTimer();
+              future.complete(null);
             }
           } else if (response.error() == null) {
             // If the response error is null, that indicates that no error occurred but the leader was
             // in a state that was incapable of handling the join request. Attempt to join the leader
             // again after an election timeout.
-            LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
+            LOGGER.debug("{} - Failed to join {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
             cancelJoinTimer();
-            joinTimer = threadContext.schedule(electionTimeout, this::join);
+            joinTimer = threadContext.schedule(electionTimeout, () -> {
+              join(getActiveMemberStates().iterator(), attempts, future);
+            });
           } else {
             // If the response error was non-null, attempt to join via the next server in the members list.
-            LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
-            join(iterator, future);
+            LOGGER.debug("{} - Failed to join {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
+            join(iterator, attempts, future);
           }
         } else {
-          LOGGER.debug("{} - Failed to join {}", address, member.getAddress());
-          join(iterator, future);
+          LOGGER.debug("{} - Failed to join {}", this.member.getMember().serverAddress(), member.getMember().serverAddress());
+          join(iterator, attempts, future);
         }
       });
-    } else {
-      LOGGER.info("{} - Failed to join existing cluster", address);
-      cluster.setActive(true);
+    }
+    // If the maximum number of join attempts has been reached, fail the join.
+    else if (attempts >= MAX_JOIN_ATTEMPTS) {
+      future.completeExceptionally(new IllegalStateException("failed to join the cluster"));
+    }
+    // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
+    // for servers to potentially timeout and elect a leader.
+    else {
       cancelJoinTimer();
-      transition(CopycatServer.State.FOLLOWER);
-      future.complete(null);
+      joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
+        join(getActiveMemberStates().iterator(), attempts + 1, future);
+      });
     }
   }
 
@@ -561,7 +1001,7 @@ public class ServerState {
    */
   private void cancelJoinTimer() {
     if (joinTimer != null) {
-      LOGGER.debug("{} - Cancelling join timeout", address);
+      LOGGER.debug("{} - Cancelling join timeout", member.getMember().serverAddress());
       joinTimer.cancel();
       joinTimer = null;
     }
@@ -573,9 +1013,10 @@ public class ServerState {
   public CompletableFuture<Void> leave() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     threadContext.execute(() -> {
-      if (cluster.getActiveMembers().isEmpty()) {
-        LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", address);
-        transition(RaftServer.State.INACTIVE);
+      cancelHeartbeatTimer();
+      if (getActiveMemberStates().isEmpty()) {
+        LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member.getMember().serverAddress());
+        transition(CopycatServer.State.INACTIVE);
         future.complete(null);
       } else {
         leave(future);
@@ -597,12 +1038,12 @@ public class ServerState {
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
     state.leave(LeaveRequest.builder()
-      .withMember(address)
+      .withMember(new Member(member.getMember().serverAddress(), member.getMember().clientAddress()))
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
-        cluster.configure(response.version(), response.activeMembers(), response.passiveMembers());
-        transition(RaftServer.State.INACTIVE);
+        configure(response.version(), response.members());
+        transition(CopycatServer.State.INACTIVE);
         future.complete(null);
       }
     });
@@ -613,42 +1054,40 @@ public class ServerState {
    */
   private void cancelLeaveTimer() {
     if (leaveTimer != null) {
-      LOGGER.debug("{} - Cancelling leave timeout", address);
+      LOGGER.debug("{} - Cancelling leave timeout", member.getMember().serverAddress());
       leaveTimer.cancel();
       leaveTimer = null;
     }
   }
 
   /**
-   * Creates an internal state for the given state type.
+   * Starts the heartbeat timer.
    */
-  private AbstractState createState(CopycatServer.State state) {
-    switch (state) {
-      case INACTIVE:
-        return new InactiveState(this);
-      case PASSIVE:
-        return new PassiveState(this);
-      case FOLLOWER:
-        return new FollowerState(this);
-      case CANDIDATE:
-        return new CandidateState(this);
-      case LEADER:
-        return new LeaderState(this);
-      default:
-        throw new AssertionError();
-    }
+  private void startHeartbeatTimer() {
+    heartbeatTimer = threadContext.schedule(Duration.ZERO, HEARTBEAT_INTERVAL, this::heartbeat);
   }
 
   /**
-   * Returns the cluster member with the corresponding id.
+   * Sends a heartbeat to the leader.
    */
-  Address getMember(int id) {
-    if (this.address.hashCode() == id) {
-      return this.address;
-    }
+  void heartbeat() {
+    HeartbeatRequest request = HeartbeatRequest.builder()
+      .withMember(member.getMember())
+      .withCommitIndex(commitIndex)
+      .build();
 
-    MemberState member = cluster.getMember(id);
-    return member != null ? member.getAddress() : null;
+    state.heartbeat(request);
+  }
+
+  /**
+   * Cancels the heartbeat timer.
+   */
+  private void cancelHeartbeatTimer() {
+    if (heartbeatTimer != null) {
+      LOGGER.debug("{} - Cancelling heartbeat timer", member.getMember().serverAddress());
+      heartbeatTimer.cancel();
+      heartbeatTimer = null;
+    }
   }
 
   @Override

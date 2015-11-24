@@ -38,6 +38,7 @@ import io.atomix.copycat.client.response.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.ConnectException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -114,7 +115,7 @@ public class ClientSession implements Session, Managed<Session> {
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+    this.connectMembers = new ArrayList<>(members);
   }
 
   @Override
@@ -153,7 +154,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members));
+    this.connectMembers = new ArrayList<>(this.members);
   }
 
   /**
@@ -407,8 +408,8 @@ public class ClientSession implements Session, Managed<Session> {
       return future;
     }
 
-    // Remove the next random member from the members list.
-    Address member = connectMembers.remove(random.nextInt(connectMembers.size()));
+    // Select the next member to which to connect.
+    Address member = selectMember();
 
     // Connect to the server. If the connection fails, recursively attempt to connect to the next server,
     // otherwise setup the connection and send the request.
@@ -421,7 +422,7 @@ public class ClientSession implements Session, Managed<Session> {
           if (error == null) {
             request(request, connection, future, checkOpen, recordFailures);
           } else {
-            LOGGER.info("Failed to connect: {}", member.socketAddress());
+            LOGGER.info("Failed to connect: {}", member);
             resetConnection().request(request, future, checkOpen, recordFailures);
           }
         } else {
@@ -534,18 +535,26 @@ public class ClientSession implements Session, Managed<Session> {
     });
     connection.handler(PublishRequest.class, this::handlePublish);
 
+    // When we first connect to a new server, first send a ConnectRequest to the server if the
+    // session has already been registered. Once the connection has been established, send a KeepAlive
+    // request to the new server. This will allow the new server to immediately provide membership info
+    // to the client.
     if (id != 0) {
       ConnectRequest request = ConnectRequest.builder()
         .withSession(id)
         .build();
 
       CompletableFuture<Connection> future = new CompletableFuture<>();
-      connection.send(request).whenComplete((response, error) -> {
+      connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((connectResponse, connectError) -> {
         if (isOpen()) {
-          if (error == null) {
-            future.complete(connection);
+          if (connectError == null && connectResponse.status() == Response.Status.OK) {
+            keepAlive().whenComplete((keepAliveResult, keepAliveError) -> {
+              future.complete(connection);
+            });
+          } else if (connectError == null) {
+            future.completeExceptionally(new ConnectException("failed to connect"));
           } else {
-            future.completeExceptionally(error);
+            future.completeExceptionally(connectError);
           }
         }
       });
@@ -580,9 +589,27 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private ClientSession resetMembers() {
     if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+      connectMembers = new ArrayList<>(members);
     }
     return this;
+  }
+
+  /**
+   * Selects the next member to which to send a request.
+   */
+  private Address selectMember() {
+    // Remove the next member that meets the strategy from the members list.
+    Iterator<Address> iterator = connectMembers.iterator();
+    while (iterator.hasNext()) {
+      Address member = iterator.next();
+      if (connectionStrategy.connect(member, leader)) {
+        iterator.remove();
+        return member;
+      }
+    }
+
+    // If no member in the members list matches the strategy, choose a random member that doesn't match the strategy.
+    return connectMembers.remove(random.nextInt(connectMembers.size()));
   }
 
   /**
@@ -635,9 +662,10 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   /**
-   * Sends and reschedules keep alive request.
+   * Sends a keep alive request.
    */
-  private void keepAlive(Duration interval) {
+  private CompletableFuture<Void> keepAlive() {
+    CompletableFuture<Void> future = new CompletableFuture<>();
     KeepAliveRequest request = KeepAliveRequest.builder()
       .withSession(id)
       .withCommandSequence(commandResponse)
@@ -650,33 +678,31 @@ public class ClientSession implements Session, Managed<Session> {
           setLeader(response.leader());
           setMembers(response.members());
           resetMembers();
-
-          keepAliveFuture = context.schedule(interval, () -> {
-            if (isOpen()) {
-              context.checkThread();
-              keepAlive(interval);
-            }
-          });
+          future.complete(null);
         } else if (isOpen()) {
           if (setLeader(response.leader())) {
             resetMembers();
           }
-
-          keepAliveFuture = context.schedule(interval, () -> {
-            if (isOpen()) {
-              context.checkThread();
-              keepAlive(interval);
-            }
-          });
+          future.complete(null);
         }
       } else if (isOpen()) {
-        keepAliveFuture = context.schedule(interval, () -> {
-          if (isOpen()) {
-            context.checkThread();
-            keepAlive(interval);
-          }
-        });
+        future.completeExceptionally(error);
       }
+    });
+    return future;
+  }
+
+  /**
+   * Sends and reschedules keep alive request.
+   */
+  private void keepAlive(Duration interval) {
+    keepAlive().whenComplete((result, error) -> {
+      keepAliveFuture = context.schedule(interval, () -> {
+        if (isOpen()) {
+          context.checkThread();
+          keepAlive(interval);
+        }
+      });
     });
   }
 

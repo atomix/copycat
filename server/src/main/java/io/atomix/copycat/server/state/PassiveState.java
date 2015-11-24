@@ -15,13 +15,10 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.request.AppendRequest;
+import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -32,11 +29,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Passive state.
+ * The passive state receives {@link AppendRequest}s from followers and maintains a state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class PassiveState extends AbstractState {
+class PassiveState extends ReserveState {
   private final Queue<AtomicInteger> counterPool = new ArrayDeque<>();
 
   public PassiveState(ServerState context) {
@@ -49,7 +46,7 @@ class PassiveState extends AbstractState {
   }
 
   @Override
-  protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
+  protected CompletableFuture<AppendResponse> append(AppendRequest request) {
     context.checkThread();
 
     // If the request indicates a term that is greater than the current term then
@@ -57,20 +54,21 @@ class PassiveState extends AbstractState {
     if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
       context.setTerm(request.term());
       context.setLeader(request.leader());
+      context.heartbeat();
     }
 
     return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
   }
 
   /**
-   * Starts the append process.
+   * Handles an AppendRequest.
    */
   protected AppendResponse handleAppend(AppendRequest request) {
     // If the request term is less than the current term then immediately
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
     if (request.term() < context.getTerm()) {
-      LOGGER.warn("{} - Rejected {}: request term is less than the current term ({})", context.getAddress(), request, context.getTerm());
+      LOGGER.warn("{} - Rejected {}: request term is less than the current term ({})", context.getMember().serverAddress(), request, context.getTerm());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -89,7 +87,7 @@ class PassiveState extends AbstractState {
    */
   protected AppendResponse doCheckPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -97,7 +95,7 @@ class PassiveState extends AbstractState {
         .withLogIndex(context.getLog().lastIndex())
         .build();
     } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -109,7 +107,7 @@ class PassiveState extends AbstractState {
     // If the previous entry term doesn't match the local previous term then reject the request.
     try (Entry entry = context.getLog().get(request.logIndex())) {
       if (entry == null || entry.getTerm() != request.logTerm()) {
-        LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getAddress(), request, entry != null ? entry.getTerm() : "unknown");
+        LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getMember().serverAddress(), request, entry != null ? entry.getTerm() : "unknown");
         return AppendResponse.builder()
           .withStatus(Response.Status.OK)
           .withTerm(context.getTerm())
@@ -135,7 +133,7 @@ class PassiveState extends AbstractState {
         // If the entry index is greater than the last log index, skip missing entries.
         if (context.getLog().lastIndex() < entry.getIndex()) {
           context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+          LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, entry.getIndex());
         } else {
           // Compare the term of the received entry with the matching entry in the log.
           try (Entry match = context.getLog().get(entry.getIndex())) {
@@ -143,13 +141,13 @@ class PassiveState extends AbstractState {
               if (entry.getTerm() != match.getTerm()) {
                 // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
                 // If appending to the log fails, apply commits and reply false to the append request.
-                LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getAddress());
+                LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getMember().serverAddress());
                 context.getLog().truncate(entry.getIndex() - 1).append(entry);
-                LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+                LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, entry.getIndex());
               }
             } else {
               context.getLog().truncate(entry.getIndex() - 1).append(entry);
-              LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+              LOGGER.debug("{} - Appended {} to log at index {}", context.getMember().serverAddress(), entry, entry.getIndex());
             }
           }
         }
@@ -157,18 +155,41 @@ class PassiveState extends AbstractState {
         // If the entry is a configuration entry then immediately configure the cluster.
         if (entry instanceof ConfigurationEntry) {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
-          if (context.getCluster().isPassive()) {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive());
-            if (context.getCluster().isActive()) {
-              transition(CopycatServer.State.FOLLOWER);
-            }
-          } else {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive());
-            if (context.getCluster().isPassive()) {
-              transition(CopycatServer.State.PASSIVE);
+
+          // Store the previous member type for comparison to determine whether this node should transition.
+          Member.Type previousType = context.getMemberState().getMemberType();
+
+          // Configure the cluster membership.
+          context.configure(entry.getIndex(), configurationEntry.getMembers());
+
+          // If the local member type changed, transition the state as appropriate.
+          // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
+          // PASSIVE servers are transitioned to the PASSIVE state.
+          // RESERVE servers are transitioned to the RESERVE state.
+          if (previousType != context.getMemberState().getMemberType()) {
+            Member.Type type = context.getMemberState().getMemberType();
+            if (type != null) {
+              switch (context.getMemberState().getMemberType()) {
+                case ACTIVE:
+                  transition(CopycatServer.State.FOLLOWER);
+                  break;
+                case PASSIVE:
+                  transition(CopycatServer.State.PASSIVE);
+                  break;
+                case RESERVE:
+                  transition(CopycatServer.State.RESERVE);
+                  break;
+              }
+            } else {
+              transition(CopycatServer.State.INACTIVE);
             }
           }
-        } else if (entry instanceof ConnectEntry) {
+        }
+        // If the entry is a ConnectEntry then immediately register the connection. This is necessary to ensure
+        // that connection information is updated even before the commitment of an earlier entry for cases where
+        // the connection information is needed to complete the application of the entry to the state machine,
+        // such as in cases where a command triggers linearizable events that must be completed synchronously.
+        else if (entry instanceof ConnectEntry) {
           ConnectEntry connectEntry = (ConnectEntry) entry;
           context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getSession(), connectEntry.getAddress());
         }
@@ -205,7 +226,7 @@ class PassiveState extends AbstractState {
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
     if (effectiveIndex > lastApplied) {
       long entriesToApply = effectiveIndex - lastApplied;
-      LOGGER.debug("{} - Applying {} commits", context.getAddress(), entriesToApply);
+      LOGGER.debug("{} - Applying {} commits", context.getMember().serverAddress(), entriesToApply);
 
       CompletableFuture<Void> future = new CompletableFuture<>();
 
@@ -217,7 +238,7 @@ class PassiveState extends AbstractState {
         if (entry != null) {
           applyEntry(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getAddress(), error.getMessage());
+              LOGGER.info("{} - An application error occurred: {}", context.getMember().serverAddress(), error.getMessage());
             }
 
             if (counter.incrementAndGet() == entriesToApply) {
@@ -255,175 +276,8 @@ class PassiveState extends AbstractState {
    * Applies an entry to the state machine.
    */
   protected CompletableFuture<?> applyEntry(Entry entry) {
-    LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+    LOGGER.debug("{} - Applying {}", context.getMember().serverAddress(), entry);
     return context.getStateMachine().apply(entry);
-  }
-
-  @Override
-  protected CompletableFuture<PollResponse> poll(PollRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
-    context.checkThread();
-    logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  /**
-   * Forwards the given request to the leader if possible.
-   */
-  protected <T extends Request<T>, U extends Response<U>> CompletableFuture<U> forward(T request) {
-    CompletableFuture<U> future = new CompletableFuture<>();
-    context.getConnections().getConnection(context.getLeader()).whenComplete((connection, connectError) -> {
-      if (connectError == null) {
-        connection.<T, U>send(request).whenComplete((response, responseError) -> {
-          if (responseError == null) {
-            future.complete(response);
-          } else {
-            future.completeExceptionally(responseError);
-          }
-        });
-      } else {
-        future.completeExceptionally(connectError);
-      }
-    });
-    return future;
-  }
-
-  @Override
-  protected CompletableFuture<CommandResponse> command(CommandRequest request) {
-    context.checkThread();
-    logRequest(request);
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
-    }
-  }
-
-  @Override
-  protected CompletableFuture<QueryResponse> query(QueryRequest request) {
-    context.checkThread();
-    logRequest(request);
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
-    }
-  }
-
-  @Override
-  protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withLeader(context.getLeader())
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<JoinResponse> join(JoinRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
-    }
-  }
-
-  @Override
-  protected CompletableFuture<LeaveResponse> leave(LeaveRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
-    }
   }
 
 }
