@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.Assert;
 
 /**
  * Cluster member.
@@ -27,15 +28,35 @@ import io.atomix.catalyst.transport.Address;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class Member implements CatalystSerializable {
+  private MemberType type;
   private Address serverAddress;
   private Address clientAddress;
 
   Member() {
   }
 
-  public Member(Address serverAddress, Address clientAddress) {
-    this.serverAddress = serverAddress;
+  public Member(MemberType type, Address serverAddress, Address clientAddress) {
+    this.type = Assert.notNull(type, "type");
+    this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
+  }
+
+  /**
+   * Returns the member ID.
+   *
+   * @return The member ID.
+   */
+  public int id() {
+    return hashCode();
+  }
+
+  /**
+   * Returns the member type.
+   *
+   * @return The member type.
+   */
+  public MemberType type() {
+    return type;
   }
 
   /**
@@ -54,6 +75,28 @@ public class Member implements CatalystSerializable {
    */
   public Address clientAddress() {
     return clientAddress;
+  }
+
+  /**
+   * Updates the member type.
+   *
+   * @param type The member type.
+   * @return The member.
+   */
+  Member update(MemberType type) {
+    this.type = Assert.notNull(type, "type");
+    return this;
+  }
+
+  /**
+   * Updates the member client addrtess.
+   *
+   * @param clientAddress The member client address.
+   * @return The member.
+   */
+  Member update(Address clientAddress) {
+    this.clientAddress = Assert.notNull(clientAddress, "clientAddres");
+    return this;
   }
 
   @Override

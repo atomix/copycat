@@ -33,8 +33,7 @@ import java.util.Objects;
  */
 public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends AbstractResponse<T> {
   protected long version;
-  protected Collection<Member> activeMembers;
-  protected Collection<Member> passiveMembers;
+  protected Collection<Member> members;
 
   /**
    * Returns the response version.
@@ -50,17 +49,8 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
    *
    * @return The configuration members list.
    */
-  public Collection<Member> activeMembers() {
-    return activeMembers;
-  }
-
-  /**
-   * Returns the configuration members list.
-   *
-   * @return The configuration members list.
-   */
-  public Collection<Member> passiveMembers() {
-    return passiveMembers;
+  public Collection<Member> members() {
+    return members;
   }
 
   @Override
@@ -69,8 +59,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     if (status == Status.OK) {
       error = null;
       version = buffer.readLong();
-      activeMembers = serializer.readObject(buffer);
-      passiveMembers = serializer.readObject(buffer);
+      members = serializer.readObject(buffer);
     } else {
       error = RaftError.forId(buffer.readByte());
     }
@@ -81,8 +70,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(version);
-      serializer.writeObject(activeMembers, buffer);
-      serializer.writeObject(passiveMembers, buffer);
+      serializer.writeObject(members, buffer);
     } else {
       buffer.writeByte(error.id());
     }
@@ -90,7 +78,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, version, activeMembers, passiveMembers);
+    return Objects.hash(getClass(), status, version, members);
   }
 
   @Override
@@ -99,15 +87,14 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       ConfigurationResponse response = (ConfigurationResponse) object;
       return response.status == status
         && response.version == version
-        && response.activeMembers.equals(activeMembers)
-        && response.passiveMembers.equals(passiveMembers);
+        && response.members.equals(members);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, activeMembers=%s, passiveMembers=%s]", getClass().getSimpleName(), status, version, activeMembers, passiveMembers);
+    return String.format("%s[status=%s, version=%d, members=%s]", getClass().getSimpleName(), status, version, members);
   }
 
   /**
@@ -139,21 +126,8 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws NullPointerException if {@code members} is null
      */
     @SuppressWarnings("unchecked")
-    public T withActiveMembers(Collection<Member> members) {
-      response.activeMembers = Assert.notNull(members, "members");
-      return (T) this;
-    }
-
-    /**
-     * Sets the response members.
-     *
-     * @param members The response members.
-     * @return The response builder.
-     * @throws NullPointerException if {@code members} is null
-     */
-    @SuppressWarnings("unchecked")
-    public T withPassiveMembers(Collection<Member> members) {
-      response.passiveMembers = Assert.notNull(members, "members");
+    public T withMembers(Collection<Member> members) {
+      response.members = Assert.notNull(members, "members");
       return (T) this;
     }
 
@@ -174,8 +148,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     public U build() {
       super.build();
       if (response.status == Status.OK) {
-        Assert.state(response.activeMembers != null, "activeMembers members cannot be null");
-        Assert.state(response.passiveMembers != null, "passiveMembers members cannot be null");
+        Assert.state(response.members != null, "activeMembers members cannot be null");
       }
       return response;
     }

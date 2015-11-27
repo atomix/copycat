@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.util.Assert;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Cluster state.
@@ -26,22 +27,12 @@ import java.util.*;
  */
 class ClusterState {
   private final ServerState context;
-  private final Member member;
-  private Type type = Type.PASSIVE;
+  private Member member;
+  private MemberType type = RaftMemberType.PASSIVE;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
-  private final Map<Integer, Type> types = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
-  private final List<MemberState> activeMembers = new ArrayList<>();
-  private final List<MemberState> passiveMembers = new ArrayList<>();
-
-  /**
-   * Member state type.
-   */
-  private enum Type {
-    ACTIVE,
-    PASSIVE
-  }
+  private final Map<MemberType, List<MemberState>> memberTypes = new HashMap<>();
 
   ClusterState(ServerState context, Member member) {
     this.context = Assert.notNull(context, "context");
@@ -53,47 +44,18 @@ class ClusterState {
    *
    * @return The local cluster member.
    */
-  Member getMember() {
+  public Member getMember() {
     return member;
   }
 
   /**
-   * Returns a boolean value indicating whether the local member is active.
+   * Sets the local cluster member.
    *
-   * @return Indicates whether the local member is active.
-   */
-  boolean isActive() {
-    return type == Type.ACTIVE;
-  }
-
-  /**
-   * Sets whether the local member is active.
-   *
-   * @param active Whether the local member is active.
+   * @param member The local cluster member.
    * @return The cluster state.
    */
-  ClusterState setActive(boolean active) {
-    type = active ? Type.ACTIVE : Type.PASSIVE;
-    return this;
-  }
-
-  /**
-   * Returns a boolean value indicating whether the local member is passive.
-   *
-   * @return Indicates whether the local member is passive.
-   */
-  boolean isPassive() {
-    return type == Type.PASSIVE;
-  }
-
-  /**
-   * Sets whether the local member is passive.
-   *
-   * @param passive Whether the local member is passive.
-   * @return The cluster state.
-   */
-  ClusterState setPassive(boolean passive) {
-    type = passive ? Type.PASSIVE : Type.ACTIVE;
+  ClusterState setMember(Member member) {
+    this.member = member;
     return this;
   }
 
@@ -103,7 +65,7 @@ class ClusterState {
    * @return The remote quorum count.
    */
   int getQuorum() {
-    return (int) Math.floor((activeMembers.size() + 1) / 2.0) + 1;
+    return (int) Math.floor((getRemoteMemberStates(RaftMemberType.ACTIVE).size() + 1) / 2.0) + 1;
   }
 
   /**
@@ -116,17 +78,27 @@ class ClusterState {
   }
 
   /**
-   * Clears all members from the cluster state.
+   * Returns a member by ID.
    *
-   * @return The cluster state.
+   * @param id The member ID.
+   * @return The member.
    */
-  private ClusterState clearMembers() {
-    members.clear();
-    activeMembers.clear();
-    passiveMembers.clear();
-    membersMap.clear();
-    types.clear();
-    return this;
+  public Member getMember(int id) {
+    if (member.id() == id) {
+      return member;
+    }
+    return getRemoteMember(id);
+  }
+
+  /**
+   * Returns a member by ID.
+   *
+   * @param id The member ID.
+   * @return The member.
+   */
+  public Member getRemoteMember(int id) {
+    MemberState member = membersMap.get(id);
+    return member != null ? member.getMember() : null;
   }
 
   /**
@@ -135,68 +107,37 @@ class ClusterState {
    * @param id The member ID.
    * @return The member state.
    */
-  MemberState getMember(int id) {
+  MemberState getRemoteMemberState(int id) {
     return membersMap.get(id);
   }
 
   /**
-   * Returns a boolean value indicating whether the given member is active.
+   * Returns the current cluster members.
    *
-   * @param member The member state.
-   * @return Indicates whether the member is active.
+   * @return The current cluster members.
    */
-  boolean isActiveMember(MemberState member) {
-    return types.get(member.getServerAddress().hashCode()) == Type.ACTIVE;
+  public List<Member> getMembers() {
+    // Add all members to a list. The "members" field is only remote members, so we must separately
+    // add the local member to the list if necessary.
+    List<Member> members = new ArrayList<>(this.members.size() + 1);
+    for (MemberState member : this.members) {
+      members.add(member.getMember());
+    }
+
+    // If the local member type is null, that indicates it's not a member of the current configuration.
+    if (member.type() != null) {
+      members.add(member);
+    }
+    return members;
   }
 
   /**
-   * Returns a boolean value indicating whether the given member is passive.
+   * Returns a list of all remote members.
    *
-   * @param member The member state.
-   * @return Indicates whether the member is passive.
+   * @return A list of all remote members.
    */
-  boolean isPassiveMember(MemberState member) {
-    return types.get(member.getServerAddress().hashCode()) == Type.PASSIVE;
-  }
-
-  /**
-   * Returns a list of passive members.
-   *
-   * @return A list of passive members.
-   */
-  List<MemberState> getPassiveMembers() {
-    return passiveMembers;
-  }
-
-  /**
-   * Returns a list of passive members.
-   *
-   * @param comparator A comparator with which to sort the members list.
-   * @return The sorted members list.
-   */
-  List<MemberState> getPassiveMembers(Comparator<MemberState> comparator) {
-    Collections.sort(passiveMembers, comparator);
-    return passiveMembers;
-  }
-
-  /**
-   * Returns a list of active members.
-   *
-   * @return A list of active members.
-   */
-  List<MemberState> getActiveMembers() {
-    return activeMembers;
-  }
-
-  /**
-   * Returns a list of active members.
-   *
-   * @param comparator A comparator with which to sort the members list.
-   * @return The sorted members list.
-   */
-  List<MemberState> getActiveMembers(Comparator<MemberState> comparator) {
-    Collections.sort(activeMembers, comparator);
-    return activeMembers;
+  public List<Member> getRemoteMembers() {
+    return members.stream().map(MemberState::getMember).collect(Collectors.toList());
   }
 
   /**
@@ -204,119 +145,118 @@ class ClusterState {
    *
    * @return A list of all members.
    */
-  List<MemberState> getMembers() {
+  List<MemberState> getRemoteMemberStates() {
     return members;
+  }
+
+  /**
+   * Returns a list of remote members of the given type.
+   *
+   * @param type The type of members to return.
+   * @return A list of the given members.
+   */
+  public List<Member> getRemoteMembers(MemberType type) {
+    return getRemoteMemberStates(type).stream().map(MemberState::getMember).collect(Collectors.toList());
+  }
+
+  /**
+   * Returns a list of passive members.
+   *
+   * @param type The member type.
+   * @return A list of passive members.
+   */
+  List<MemberState> getRemoteMemberStates(MemberType type) {
+    List<MemberState> memberType = memberTypes.get(type);
+    return memberType != null ? memberType : Collections.EMPTY_LIST;
+  }
+
+  /**
+   * Returns a list of passive members.
+   *
+   * @param type The member type.
+   * @param comparator A comparator with which to sort the members list.
+   * @return The sorted members list.
+   */
+  List<MemberState> getRemoteMemberStates(MemberType type, Comparator<MemberState> comparator) {
+    List<MemberState> memberType = getRemoteMemberStates(type);
+    Collections.sort(memberType, comparator);
+    return memberType;
   }
 
   /**
    * Configures the cluster state.
    *
    * @param version The cluster state version.
-   * @param activeMembers The active members.
-   * @param passiveMembers The passive members.
+   * @param members The cluster members.
    * @return The cluster state.
    */
-  ClusterState configure(long version, Collection<Member> activeMembers, Collection<Member> passiveMembers) {
+  ClusterState configure(long version, Collection<Member> members) {
     if (version <= this.version)
       return this;
 
-    List<MemberState> newActiveMembers = buildMembers(activeMembers);
-    List<MemberState> newPassiveMembers = buildMembers(passiveMembers);
+    // If the configuration version is less than the currently configured version, ignore it.
+    // Configurations can be persisted and applying old configurations can revert newer configurations.
+    if (version <= this.version)
+      return this;
 
-    clearMembers();
+    // Iterate through members in the new configuration, add any missing members, and update existing members.
+    for (Member member : members) {
+      if (member.equals(this.member)) {
+        this.member = member;
+      } else {
+        // If the member state doesn't already exist, create it.
+        MemberState state = membersMap.get(member.id());
+        if (state == null) {
+          state = new MemberState(new Member(member.type(), member.serverAddress(), member.clientAddress()));
+          state.resetState(context.getLog());
+          this.members.add(state);
+          membersMap.put(member.id(), state);
+        }
 
-    for (MemberState member : newActiveMembers) {
-      membersMap.put(member.getServerAddress().hashCode(), member);
-      members.add(member);
-      this.activeMembers.add(member);
-      types.put(member.getServerAddress().hashCode(), Type.ACTIVE);
+        // If the member type has changed, update the member type and reset its state.
+        state.getMember().update(member.clientAddress());
+        if (state.getMember().type() != member.type()) {
+          state.getMember().update(member.type());
+          state.resetState(context.getLog());
+        }
+
+        // Update the optimized member collections according to the member type.
+        for (List<MemberState> memberType : memberTypes.values()) {
+          memberType.remove(state);
+        }
+
+        if (member.type() != null) {
+          List<MemberState> memberType = memberTypes.get(member.type());
+          if (memberType == null) {
+            memberType = new ArrayList<>();
+            memberTypes.put(member.type(), memberType);
+          }
+          memberType.add(state);
+        }
+      }
     }
 
-    for (MemberState member : newPassiveMembers) {
-      membersMap.put(member.getServerAddress().hashCode(), member);
-      members.add(member);
-      this.passiveMembers.add(member);
-      types.put(member.getServerAddress().hashCode(), Type.PASSIVE);
+    // If the local member is not part of the configuration, set its type to null.
+    if (!members.contains(this.member)) {
+      this.member.update((MemberType) null);
     }
 
-    if (activeMembers.contains(member)) {
-      type = Type.ACTIVE;
-    } else if (passiveMembers.contains(member)) {
-      type = Type.PASSIVE;
-    } else {
-      type = null;
+    // Iterate through configured members and remove any that no longer exist in the configuration.
+    Iterator<MemberState> iterator = this.members.iterator();
+    while (iterator.hasNext()) {
+      MemberState member = iterator.next();
+      if (!members.contains(member.getMember())) {
+        iterator.remove();
+        for (List<MemberState> memberType : memberTypes.values()) {
+          memberType.remove(member);
+        }
+        membersMap.remove(member.getMember().id());
+      }
     }
 
     this.version = version;
 
     return this;
-  }
-
-  /**
-   * Builds a list of all members.
-   */
-  Collection<Member> buildMembers() {
-    List<Member> members = new ArrayList<>();
-    for (MemberState member : activeMembers) {
-      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
-    }
-    for (MemberState member : passiveMembers) {
-      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
-    }
-
-    if (type != null) {
-      members.add(member);
-    }
-    return members;
-  }
-
-  /**
-   * Builds a list of active members.
-   */
-  Collection<Member> buildActiveMembers() {
-    List<Member> members = new ArrayList<>();
-    for (MemberState member : activeMembers) {
-      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
-    }
-
-    if (type == Type.ACTIVE) {
-      members.add(member);
-    }
-    return members;
-  }
-
-  /**
-   * Builds a list of passive members.
-   */
-  Collection<Member> buildPassiveMembers() {
-    List<Member> members = new ArrayList<>();
-    for (MemberState member : passiveMembers) {
-      members.add(new Member(member.getServerAddress(), member.getClientAddress()));
-    }
-
-    if (type == Type.PASSIVE) {
-      members.add(member);
-    }
-    return members;
-  }
-
-  /**
-   * Builds a members list.
-   */
-  private List<MemberState> buildMembers(Collection<Member> members) {
-    List<MemberState> states = new ArrayList<>(members.size());
-    for (Member member : members) {
-      if (!member.equals(this.member)) {
-        // If the member doesn't already exist, create a new MemberState and initialize the state.
-        MemberState state = membersMap.get(member.hashCode());
-        if (state == null) {
-          state = new MemberState(member.serverAddress());
-          state.resetState(context.getLog());
-        }
-        states.add(state.setClientAddress(member.clientAddress()));
-      }
-    }
-    return states;
   }
 
 }

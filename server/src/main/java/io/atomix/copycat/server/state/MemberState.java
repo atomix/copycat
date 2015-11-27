@@ -25,8 +25,7 @@ import io.atomix.copycat.server.storage.Log;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class MemberState {
-  private final Address serverAddress;
-  private Address clientAddress;
+  private Member member;
   private int index;
   private long matchIndex;
   private long nextIndex;
@@ -34,8 +33,8 @@ class MemberState {
   private long commitStartTime;
   private int failures;
 
-  public MemberState(Address serverAddress) {
-    this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
+  public MemberState(Member member) {
+    this.member = Assert.notNull(member, "member");
   }
 
   /**
@@ -50,31 +49,22 @@ class MemberState {
   }
 
   /**
-   * Returns the server address.
+   * Returs the member.
    *
-   * @return The server address.
+   * @return The member.
    */
-  public Address getServerAddress() {
-    return serverAddress;
+  public Member getMember() {
+    return member;
   }
 
   /**
-   * Returns the client address.
+   * Sets the member.
    *
-   * @return The client address.
-   */
-  public Address getClientAddress() {
-    return clientAddress;
-  }
-
-  /**
-   * Sets the client address.
-   *
-   * @param address The client address.
+   * @param member The member.
    * @return The member state.
    */
-  public MemberState setClientAddress(Address address) {
-    this.clientAddress = clientAddress;
+  MemberState setMember(Member member) {
+    this.member = Assert.notNull(member, "member");
     return this;
   }
 
@@ -208,7 +198,7 @@ class MemberState {
 
   @Override
   public String toString() {
-    return serverAddress.toString();
+    return member.serverAddress().toString();
   }
 
 }

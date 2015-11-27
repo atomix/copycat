@@ -148,7 +148,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   private List<Member> createMembers(int nodes) {
     List<Member> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(new Member(new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
+      members.add(new Member(RaftMemberType.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
     }
     return members;
   }

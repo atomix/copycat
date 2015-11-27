@@ -52,7 +52,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getMember().serverAddress(), request);
+    LOGGER.debug("{} - Received {}", context.getCluster().getMember().serverAddress(), request);
     return request;
   }
 
@@ -60,7 +60,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getMember().serverAddress(), response);
+    LOGGER.debug("{} - Sent {}", context.getCluster().getMember().serverAddress(), response);
     return response;
   }
 
