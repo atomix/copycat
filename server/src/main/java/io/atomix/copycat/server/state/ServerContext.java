@@ -82,11 +82,18 @@ public class ServerContext implements Managed<ServerState> {
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
           state = new ServerState(new Member(serverAddress, clientAddress), members, log, userStateMachine, connections, context);
-          clientServer = transport.server();
-          clientServer.listen(clientAddress, c -> state.connectClient(c)).whenComplete((clientResult, clientError) -> {
+
+          // If the client address is different than the server address, start a separate client server.
+          if (!clientAddress.equals(serverAddress)) {
+            clientServer = transport.server();
+            clientServer.listen(clientAddress, c -> state.connectClient(c)).whenComplete((clientResult, clientError) -> {
+              open = true;
+              future.complete(state);
+            });
+          } else {
             open = true;
             future.complete(state);
-          });
+          }
         } else {
           future.completeExceptionally(internalError);
         }
@@ -115,18 +122,29 @@ public class ServerContext implements Managed<ServerState> {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.executor().execute(() -> {
       open = false;
-      clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
+      if (clientServer != null) {
+        clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
+          internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
+            if (internalError != null) {
+              future.completeExceptionally(internalError);
+            } else if (clientError != null) {
+              future.completeExceptionally(clientError);
+            } else {
+              future.complete(null);
+            }
+            context.close();
+          }, context.executor());
+        }, context.executor());
+      } else {
         internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
           if (internalError != null) {
             future.completeExceptionally(internalError);
-          } else if (clientError != null) {
-            future.completeExceptionally(clientError);
           } else {
             future.complete(null);
           }
           context.close();
         }, context.executor());
-      }, context.executor());
+      }
 
       this.state.transition(RaftServer.State.INACTIVE);
       try {
