@@ -20,6 +20,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -285,7 +286,7 @@ class PassiveState extends AbstractState {
    */
   protected <T extends Request<T>, U extends Response<U>> CompletableFuture<U> forward(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
-    context.getConnections().getConnection(context.getLeader()).whenComplete((connection, connectError) -> {
+    context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
         connection.<T, U>send(request).whenComplete((response, responseError) -> {
           if (responseError == null) {
@@ -369,7 +370,7 @@ class PassiveState extends AbstractState {
 
     return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withLeader(context.getLeader())
+      .withLeader(context.getLeader().serverAddress())
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
@@ -393,6 +394,43 @@ class PassiveState extends AbstractState {
     return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
       .withStatus(Response.Status.ERROR)
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
+  }
+
+  @Override
+  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+    }
+
+    // Store the previous member type for comparison to determine whether this node should transition.
+    MemberType previousType = context.getCluster().getMember().type();
+
+    // Configure the cluster membership.
+    context.getCluster().configure(request.version(), request.members());
+
+    // If the local member type changed, transition the state as appropriate.
+    // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
+    // PASSIVE servers are transitioned to the PASSIVE state.
+    MemberType type = context.getCluster().getMember().type();
+    if (previousType != type) {
+      if (type == RaftMemberType.ACTIVE) {
+        context.transition(RaftServer.State.FOLLOWER);
+      } else if (type == RaftMemberType.PASSIVE) {
+        context.transition(RaftServer.State.PASSIVE);
+      } else {
+        transition(RaftServer.State.INACTIVE);
+      }
+    }
+
+    return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
+      .withStatus(Response.Status.OK)
       .build()));
   }
 

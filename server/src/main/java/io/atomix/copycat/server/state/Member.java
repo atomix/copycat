@@ -29,8 +29,26 @@ import io.atomix.catalyst.util.Assert;
  */
 public class Member implements CatalystSerializable {
   private MemberType type;
+  private Status status = Status.AVAILABLE;
   private Address serverAddress;
   private Address clientAddress;
+
+  /**
+   * Member status.
+   */
+  public enum Status {
+
+    /**
+     * Available member status.
+     */
+    AVAILABLE,
+
+    /**
+     * Unavailable member status.
+     */
+    UNAVAILABLE
+
+  }
 
   Member() {
   }
@@ -57,6 +75,15 @@ public class Member implements CatalystSerializable {
    */
   public MemberType type() {
     return type;
+  }
+
+  /**
+   * Returns the member status.
+   *
+   * @return The member status.
+   */
+  public Status status() {
+    return status;
   }
 
   /**
@@ -89,6 +116,17 @@ public class Member implements CatalystSerializable {
   }
 
   /**
+   * Updates the member status.
+   *
+   * @param status The member status.
+   * @return The member.
+   */
+  Member update(Status status) {
+    this.status = Assert.notNull(status, "status");
+    return this;
+  }
+
+  /**
    * Updates the member client addrtess.
    *
    * @param clientAddress The member client address.
@@ -102,6 +140,7 @@ public class Member implements CatalystSerializable {
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     serializer.writeObject(type, buffer);
+    serializer.writeObject(status, buffer);
     serializer.writeObject(serverAddress, buffer);
     serializer.writeObject(clientAddress, buffer);
   }
@@ -109,6 +148,7 @@ public class Member implements CatalystSerializable {
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     type = serializer.readObject(buffer);
+    status = serializer.readObject(buffer);
     serverAddress = serializer.readObject(buffer);
     clientAddress = serializer.readObject(buffer);
   }
@@ -125,7 +165,7 @@ public class Member implements CatalystSerializable {
 
   @Override
   public String toString() {
-    return String.format("%s[serverAddress=%s, clientAddress=%s]", getClass().getSimpleName(), serverAddress, clientAddress);
+    return String.format("%s[type=%s, status=%s, serverAddress=%s, clientAddress=%s]", getClass().getSimpleName(), type, status, serverAddress, clientAddress);
   }
 
 }

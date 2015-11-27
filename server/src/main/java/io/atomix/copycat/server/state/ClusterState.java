@@ -65,7 +65,7 @@ class ClusterState {
    * @return The remote quorum count.
    */
   int getQuorum() {
-    return (int) Math.floor((getRemoteMemberStates(RaftMemberType.ACTIVE).size() + 1) / 2.0) + 1;
+    return (int) Math.floor((getVotingMemberStates().size() + 1) / 2.0) + 1;
   }
 
   /**
@@ -150,37 +150,51 @@ class ClusterState {
   }
 
   /**
-   * Returns a list of remote members of the given type.
+   * Returns a list of voting members.
    *
-   * @param type The type of members to return.
-   * @return A list of the given members.
+   * @return A list of voting members.
    */
-  public List<Member> getRemoteMembers(MemberType type) {
-    return getRemoteMemberStates(type).stream().map(MemberState::getMember).collect(Collectors.toList());
+  public List<Member> getVotingMembers() {
+    return members.stream().filter(m -> m.getMember().type().isVoting()).map(MemberState::getMember).collect(Collectors.toList());
   }
 
   /**
-   * Returns a list of passive members.
+   * Returns a list of voting members.
    *
-   * @param type The member type.
-   * @return A list of passive members.
+   * @return A list of voting members.
    */
-  List<MemberState> getRemoteMemberStates(MemberType type) {
-    List<MemberState> memberType = memberTypes.get(type);
-    return memberType != null ? memberType : Collections.EMPTY_LIST;
+  List<MemberState> getVotingMemberStates() {
+    return members.stream().filter(m -> m.getMember().type().isVoting()).collect(Collectors.toList());
   }
 
   /**
-   * Returns a list of passive members.
+   * Returns a list of voting members.
    *
-   * @param type The member type.
-   * @param comparator A comparator with which to sort the members list.
-   * @return The sorted members list.
+   * @param comparator A comparator with which to sort the members.
+   * @return A list of voting members.
    */
-  List<MemberState> getRemoteMemberStates(MemberType type, Comparator<MemberState> comparator) {
-    List<MemberState> memberType = getRemoteMemberStates(type);
-    Collections.sort(memberType, comparator);
-    return memberType;
+  List<MemberState> getVotingMemberStates(Comparator<MemberState> comparator) {
+    List<MemberState> members = getVotingMemberStates();
+    Collections.sort(members, comparator);
+    return members;
+  }
+
+  /**
+   * Returns a list of stateful members.
+   *
+   * @return A list of stateful members.
+   */
+  public List<Member> getStatefulMembers() {
+    return members.stream().filter(m -> m.getMember().type().isStateful()).map(MemberState::getMember).collect(Collectors.toList());
+  }
+
+  /**
+   * Returns a list of stateful members.
+   *
+   * @return A list of stateful members.
+   */
+  List<MemberState> getStatefulMemberStates() {
+    return members.stream().filter(m -> m.getMember().type().isStateful()).collect(Collectors.toList());
   }
 
   /**

@@ -114,6 +114,11 @@ abstract class AbstractState implements Managed<AbstractState> {
   protected abstract CompletableFuture<PublishResponse> publish(PublishRequest request);
 
   /**
+   * Handles a configure request.
+   */
+  protected abstract CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
+
+  /**
    * Handles a join request.
    */
   protected abstract CompletableFuture<JoinResponse> join(JoinRequest request);

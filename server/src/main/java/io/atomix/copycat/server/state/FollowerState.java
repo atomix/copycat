@@ -199,7 +199,7 @@ final class FollowerState extends ActiveState {
 
     // Create a quorum that will track the number of nodes that have responded to the poll request.
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<Member> votingMembers = new HashSet<>(context.getCluster().getRemoteMembers(RaftMemberType.ACTIVE));
+    final Set<Member> votingMembers = new HashSet<>(context.getCluster().getVotingMembers());
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {

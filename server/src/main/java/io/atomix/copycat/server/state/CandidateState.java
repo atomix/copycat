@@ -98,7 +98,7 @@ final class CandidateState extends ActiveState {
     });
 
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<MemberState> votingMembers = new HashSet<>(context.getCluster().getRemoteMemberStates(RaftMemberType.ACTIVE));
+    final Set<MemberState> votingMembers = new HashSet<>(context.getCluster().getVotingMemberStates());
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {

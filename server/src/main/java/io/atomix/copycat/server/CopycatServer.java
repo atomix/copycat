@@ -26,6 +26,7 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.state.ServerState;
 import io.atomix.copycat.server.storage.Log;
@@ -225,7 +226,8 @@ public class CopycatServer implements RaftServer {
 
   @Override
   public Address leader() {
-    return state.getLeader();
+    Member leader = state.getLeader();
+    return leader != null ? leader.serverAddress() : null;
   }
 
   /**

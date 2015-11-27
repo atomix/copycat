@@ -255,15 +255,11 @@ public class ServerState {
    *
    * @return The state leader.
    */
-  public Address getLeader() {
+  public Member getLeader() {
     if (leader == 0) {
       return null;
-    } else if (leader == cluster.getMember().id()) {
-      return cluster.getMember().serverAddress();
     }
-
-    Member member = cluster.getRemoteMember(leader);
-    return member != null ? member.serverAddress() : null;
+    return cluster.getMember(leader);
   }
 
   /**
@@ -464,6 +460,7 @@ public class ServerState {
     connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
     connection.handler(PublishRequest.class, request -> state.publish(request));
+    connection.handler(ConfigureRequest.class, request -> state.configure(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
     connection.handler(AppendRequest.class, request -> state.append(request));
@@ -524,7 +521,7 @@ public class ServerState {
         future.completeExceptionally(new IllegalStateException("unknown member type: " + cluster.getMember().type()));
       }
     } else {
-      join(cluster.getRemoteMemberStates(RaftMemberType.ACTIVE).iterator(), 1, future);
+      join(cluster.getVotingMemberStates().iterator(), 1, future);
     }
 
     return future;
@@ -578,7 +575,7 @@ public class ServerState {
             LOGGER.debug("{} - Failed to join {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
             cancelJoinTimer();
             joinTimer = threadContext.schedule(electionTimeout, () -> {
-              join(cluster.getRemoteMemberStates(RaftMemberType.ACTIVE).iterator(), attempts, future);
+              join(cluster.getVotingMemberStates().iterator(), attempts, future);
             });
           } else {
             // If the response error was non-null, attempt to join via the next server in the members list.
@@ -600,7 +597,7 @@ public class ServerState {
     else {
       cancelJoinTimer();
       joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
-        join(cluster.getRemoteMemberStates(RaftMemberType.ACTIVE).iterator(), attempts + 1, future);
+        join(cluster.getVotingMemberStates().iterator(), attempts + 1, future);
       });
     }
   }
@@ -622,7 +619,7 @@ public class ServerState {
   public CompletableFuture<Void> leave() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     threadContext.execute(() -> {
-      if (cluster.getRemoteMemberStates(RaftMemberType.ACTIVE).isEmpty()) {
+      if (cluster.getVotingMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", cluster.getMember().serverAddress());
         transition(CopycatServer.State.INACTIVE);
         future.complete(null);

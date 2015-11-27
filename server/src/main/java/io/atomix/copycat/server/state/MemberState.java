@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Log;
 
@@ -26,7 +25,8 @@ import io.atomix.copycat.server.storage.Log;
  */
 class MemberState {
   private Member member;
-  private int index;
+  private long term;
+  private long version;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
@@ -69,22 +69,42 @@ class MemberState {
   }
 
   /**
-   * Returns the member index.
+   * Returns the member term.
    *
-   * @return The member index.
+   * @return The member term.
    */
-  public int getIndex() {
-    return index;
+  long getTerm() {
+    return term;
   }
 
   /**
-   * Sets the member index.
+   * Sets the member term.
    *
-   * @param index The member index.
+   * @param term The member term.
    * @return The member state.
    */
-  MemberState setIndex(int index) {
-    this.index = index;
+  MemberState setTerm(long term) {
+    this.term = term;
+    return this;
+  }
+
+  /**
+   * Returns the member configuration version.
+   *
+   * @return The member configuration version.
+   */
+  long getVersion() {
+    return version;
+  }
+
+  /**
+   * Sets the member version.
+   *
+   * @param version The member version.
+   * @return The member state.
+   */
+  MemberState setVersion(long version) {
+    this.version = version;
     return this;
   }
 

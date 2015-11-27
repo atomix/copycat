@@ -21,4 +21,19 @@ package io.atomix.copycat.server.state;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public interface MemberType {
+
+  /**
+   * Returns a boolean value indicating whether the member is a stateful member.
+   *
+   * @return Indicates whether the member is a stateful member.
+   */
+  boolean isStateful();
+
+  /**
+   * Returns a boolean value indicating whether the member is a voting member.
+   *
+   * @return Indicates whether the member is a voting member.
+   */
+  boolean isVoting();
+
 }

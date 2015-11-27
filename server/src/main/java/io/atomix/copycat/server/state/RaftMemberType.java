@@ -25,11 +25,31 @@ public enum RaftMemberType implements MemberType {
   /**
    * Active member type.
    */
-  ACTIVE,
+  ACTIVE {
+    @Override
+    public boolean isStateful() {
+      return true;
+    }
+
+    @Override
+    public boolean isVoting() {
+      return true;
+    }
+  },
 
   /**
    * Passive member type.
    */
-  PASSIVE
+  PASSIVE {
+    @Override
+    public boolean isStateful() {
+      return true;
+    }
+
+    @Override
+    public boolean isVoting() {
+      return false;
+    }
+  }
 
 }

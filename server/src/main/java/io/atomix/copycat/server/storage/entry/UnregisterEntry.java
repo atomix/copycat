@@ -26,7 +26,7 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=227)
+@SerializeWith(id=228)
 public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   private boolean expired;
 
