@@ -27,6 +27,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,15 +69,18 @@ public class ServerContext implements Managed<ServerState> {
     CompletableFuture<ServerState> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
+      // Open the meta store.
+      MetaStore meta = storage.openMetaStore("copycat");
+
       // Open the log.
-      Log log = storage.open("copycat");
+      Log log = storage.openLog("copycat");
 
       // Setup the server and connection manager.
       server = transport.server();
       ConnectionManager connections = new ConnectionManager(transport.client());
 
       server.listen(address, c -> state.connect(c)).thenRun(() -> {
-        state = new ServerState(address, members, log, userStateMachine, connections, context);
+        state = new ServerState(address, members, meta, log, userStateMachine, connections, context);
         open = true;
         future.complete(state);
       });
@@ -131,9 +135,17 @@ public class ServerContext implements Managed<ServerState> {
   public CompletableFuture<Void> delete() {
     if (open)
       return Futures.exceptionalFuture(new IllegalStateException("cannot delete open context"));
-    Log log = storage.open("copycat");
+
+    // Delete the metadata store.
+    MetaStore meta = storage.openMetaStore("copycat");
+    meta.close();
+    meta.delete();
+
+    // Delete the log.
+    Log log = storage.openLog("copycat");
     log.close();
     log.delete();
+
     return CompletableFuture.completedFuture(null);
   }
 
