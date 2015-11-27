@@ -101,12 +101,14 @@ public class Member implements CatalystSerializable {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    serializer.writeObject(type, buffer);
     serializer.writeObject(serverAddress, buffer);
     serializer.writeObject(clientAddress, buffer);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    type = serializer.readObject(buffer);
     serverAddress = serializer.readObject(buffer);
     clientAddress = serializer.readObject(buffer);
   }
