@@ -59,10 +59,13 @@ final class LeaderState extends ActiveState {
 
   @Override
   public synchronized CompletableFuture<AbstractState> open() {
+    // Append initial entries to the log, including an initial no-op entry and the server's configuration.
+    appendInitialEntries();
+
     // Schedule the initial entries commit to occur after the state is opened. Attempting any communication
     // within the open() method will result in a deadlock since RaftProtocol calls this method synchronously.
     // What is critical about this logic is that the heartbeat timer not be started until a no-op entry has been committed.
-    context.getThreadContext().execute(this::commitEntries).whenComplete((result, error) -> {
+    context.getThreadContext().execute(this::commitInitialEntries).whenComplete((result, error) -> {
       if (isOpen() && error == null) {
         startHeartbeatTimer();
       }
@@ -82,22 +85,34 @@ final class LeaderState extends ActiveState {
   }
 
   /**
-   * Commits a no-op entry to the log, ensuring any entries from a previous term are committed.
+   * Appends initial entries to the log to take leadership.
    */
-  private CompletableFuture<Void> commitEntries() {
+  private void appendInitialEntries() {
     final long term = context.getTerm();
-    final long index;
+
+    // Append a no-op entry to reset session timeouts and commit entries from prior terms.
     try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(leaderTime);
-      index = context.getLog().append(entry);
+      leaderIndex = entry.getIndex();
     }
 
-    // Store the index at which the leader took command.
-    leaderIndex = index;
+    // Append a configuration entry to propagate the leader's cluster configuration.
+    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
+      entry.setTerm(term).setMembers(context.getCluster().getMembers());
+    }
+  }
 
+  /**
+   * Commits a no-op entry to the log, ensuring any entries from a previous term are committed.
+   */
+  private CompletableFuture<Void> commitInitialEntries() {
+    // The Raft protocol dictates that leaders cannot commit entries from previous terms until
+    // at least one entry from their current term has been stored on a majority of servers. Thus,
+    // we force entries to be appended up to the leader's no-op entry. The LeaderAppender will ensure
+    // that the commitIndex is not increased until the no-op entry (appender.index()) is committed.
     CompletableFuture<Void> future = new CompletableFuture<>();
-    replicator.commit(index).whenComplete((resultIndex, error) -> {
+    replicator.commit(leaderIndex).whenComplete((resultIndex, error) -> {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
