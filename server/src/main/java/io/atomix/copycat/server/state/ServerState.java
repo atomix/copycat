@@ -90,9 +90,11 @@ public class ServerState {
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
 
-    // If the member's server address is listed in the members list, it's considered an ACTIVE member. Otherwise,
-    // it must join the cluster.
-    if (members.contains(member.serverAddress())) {
+    // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
+    MetaStore.Configuration configuration = meta.loadConfiguration();
+    if (configuration != null) {
+      cluster.configure(configuration.version(), configuration.members());
+    } else if (members.contains(member.serverAddress())) {
       Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(RaftMemberType.ACTIVE, m, null)).collect(Collectors.toSet());
       activeMembers.add(new Member(RaftMemberType.ACTIVE, member.serverAddress(), member.clientAddress()));
       cluster.configure(0, activeMembers);
@@ -402,6 +404,15 @@ public class ServerState {
    */
   public CopycatServer.State getState() {
     return state.type();
+  }
+
+  /**
+   * Returns the server metadata store.
+   *
+   * @return The server metadata store.
+   */
+  public MetaStore getMetaStore() {
+    return meta;
   }
 
   /**

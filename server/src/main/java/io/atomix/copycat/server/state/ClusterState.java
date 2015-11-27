@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.MetaStore;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -28,7 +29,6 @@ import java.util.stream.Collectors;
 class ClusterState {
   private final ServerState context;
   private Member member;
-  private MemberType type = RaftMemberType.PASSIVE;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
@@ -255,6 +255,9 @@ class ClusterState {
     }
 
     this.version = version;
+
+    // Store the configuration to ensure it can be easily loaded on server restart.
+    context.getMetaStore().storeConfiguration(new MetaStore.Configuration(version, members));
 
     return this;
   }
