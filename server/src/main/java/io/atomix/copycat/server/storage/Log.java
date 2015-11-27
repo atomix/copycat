@@ -316,8 +316,40 @@ public class Log implements AutoCloseable {
 
     Segment segment = segments.segment(index);
     Assert.index(segment != null, "invalid index: " + index);
+
+    // Get the entry from the segment. If the entry hasn't already been compacted from the segment,
+    // it will be non-null.
     T entry = segment.get(index);
-    return entry != null ? entry : null;
+
+    // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
+    // based on the type of entry and whether it has been cleaned.
+    if (entry != null) {
+      // If the entry has not been cleaned by the state machine, return it. Note that the call to isClean()
+      // on the segment will be done in O(1) time since the search was already done in the get() call.
+      if (!segment.isClean(index)) {
+        return entry;
+      }
+      // If the entry index is equal to or greater than the commitIndex, return it. This ensures that the last committed entry
+      // is always exposed so that consistency checks can be done.
+      else if (index >= segments.commitIndex()) {
+        return entry;
+      }
+      // For tombstone entries, if the entry index is greater than the majorIndex, return the entry. This ensures that entries
+      // are replicated until persisted on all available servers.
+      else if (entry.isTombstone()) {
+        if (index > compactor.majorIndex()) {
+          return entry;
+        }
+      }
+      // If the entry is not a tombstone, return the entry if the index is greater than minorIndex. If the entry is less than minorIndex,
+      // that indicates that it has been committed and events have been received for the entry, so we can safely stop replicating it.
+      else {
+        if (index > compactor.minorIndex()) {
+          return entry;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -420,12 +452,11 @@ public class Log implements AutoCloseable {
     if (lastIndex() == index)
       return this;
 
-    boolean first = true;
-    for (Segment segment : segments.segments()) {
-      if (first && index == 0 || segment.validIndex(index)) {
+    for (Segment segment : segments.reverseSegments()) {
+      if (segment.validIndex(index)) {
         segment.truncate(index);
-        first = false;
-      } else if (segment.descriptor().index() > index) {
+        break;
+      } else if (segment.index() > index) {
         segments.removeSegment(segment);
       }
     }

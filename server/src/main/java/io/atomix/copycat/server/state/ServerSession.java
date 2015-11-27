@@ -64,7 +64,7 @@ class ServerSession implements Session {
   private boolean suspect;
   private boolean unregistering;
   private boolean expired;
-  private boolean closed;
+  private boolean closed = true;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
   private final Listeners<Session> openListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
@@ -80,6 +80,13 @@ class ServerSession implements Session {
   @Override
   public long id() {
     return id;
+  }
+
+  /**
+   * Opens the session.
+   */
+  void open() {
+    closed = false;
   }
 
   /**
@@ -390,6 +397,7 @@ class ServerSession implements Session {
 
   @Override
   public Session publish(String event, Object message) {
+    Assert.stateNot(closed, "session is not open");
     Assert.state(context.consistency() != null, "session events can only be published during command execution");
 
     // If the client acked a version greater than the current event sequence number since we know the client must have received it from another server.

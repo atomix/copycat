@@ -51,6 +51,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
+          .withGlobalIndex(0)
           .build();
 
       AppendResponse response = state.append(request).get();
@@ -66,7 +67,11 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
   public void testAppendTermUpdatedAndTransitionedToFollower() throws Throwable {
     runOnServer(() -> {
       serverState.setTerm(1);
-      AppendRequest request = AppendRequest.builder().withTerm(2).build();
+      AppendRequest request = AppendRequest.builder()
+        .withTerm(2)
+        .withCommitIndex(0)
+        .withGlobalIndex(0)
+        .build();
 
       AppendResponse response = state.append(request).get();
 

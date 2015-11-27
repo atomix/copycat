@@ -28,6 +28,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,8 +75,11 @@ public class ServerContext implements Managed<ServerState> {
     CompletableFuture<ServerState> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
+      // Open the meta store.
+      MetaStore meta = storage.openMetaStore("copycat");
+
       // Open the log.
-      Log log = storage.open("copycat");
+      Log log = storage.openLog("copycat");
 
       // Setup the server and connection manager.
       internalServer = serverTransport.server();
@@ -83,7 +87,7 @@ public class ServerContext implements Managed<ServerState> {
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerState(new Member(null, serverAddress, clientAddress), members, log, userStateMachine, connections, context);
+          state = new ServerState(new Member(null, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
 
           // If the client address is different than the server address, start a separate client server.
           if (!clientAddress.equals(serverAddress)) {
@@ -170,9 +174,17 @@ public class ServerContext implements Managed<ServerState> {
   public CompletableFuture<Void> delete() {
     if (open)
       return Futures.exceptionalFuture(new IllegalStateException("cannot delete open context"));
-    Log log = storage.open("copycat");
+
+    // Delete the metadata store.
+    MetaStore meta = storage.openMetaStore("copycat");
+    meta.close();
+    meta.delete();
+
+    // Delete the log.
+    Log log = storage.openLog("copycat");
     log.close();
     log.delete();
+
     return CompletableFuture.completedFuture(null);
   }
 

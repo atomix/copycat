@@ -61,7 +61,10 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       version = buffer.readLong();
       members = serializer.readObject(buffer);
     } else {
-      error = RaftError.forId(buffer.readByte());
+      int errorCode = buffer.readByte();
+      if (errorCode != 0) {
+        error = RaftError.forId(errorCode);
+      }
     }
   }
 
@@ -72,7 +75,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
       buffer.writeLong(version);
       serializer.writeObject(members, buffer);
     } else {
-      buffer.writeByte(error.id());
+      buffer.writeByte(error != null ? error.id() : 0);
     }
   }
 

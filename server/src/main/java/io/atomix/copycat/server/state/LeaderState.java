@@ -77,7 +77,7 @@ final class LeaderState extends ActiveState {
    * Sets the current node as the cluster leader.
    */
   private void takeLeadership() {
-    context.setLeader(context.getCluster().getMember().serverAddress().hashCode());
+    context.setLeader(context.getCluster().getMember().id());
     context.getCluster().getRemoteMemberStates(RaftMemberType.ACTIVE).forEach(m -> m.resetState(context.getLog()));
   }
 
@@ -132,7 +132,7 @@ final class LeaderState extends ActiveState {
       }
 
       LOGGER.debug("{} - Applied {} entries to log", context.getCluster().getMember().serverAddress(), count);
-      context.getLog().commit(context.getLastCompleted());
+      context.getLog().compactor().minorIndex(context.getLastCompleted());
     }
   }
 
@@ -154,7 +154,7 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     if (isOpen()) {
       replicator.commit().whenComplete((result, error) -> {
-        context.getLog().commit(context.getLastCompleted());
+        context.getLog().compactor().minorIndex(context.getLastCompleted());
       });
     }
   }
@@ -172,6 +172,7 @@ final class LeaderState extends ActiveState {
         try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
           entry.setTerm(term)
             .setSession(session.id())
+            .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
           LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, index);
@@ -232,6 +233,8 @@ final class LeaderState extends ActiveState {
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, index);
 
+      // Store the index of the configuration entry in order to prevent other configurations from
+      // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
       context.getCluster().configure(entry.getIndex(), entry.getMembers());
     }
@@ -240,6 +243,7 @@ final class LeaderState extends ActiveState {
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
+        // Reset the configuration index to allow new configuration changes to be committed.
         configuring = 0;
         if (commitError == null) {
           future.complete(logResponse(JoinResponse.builder()
@@ -299,6 +303,8 @@ final class LeaderState extends ActiveState {
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, index);
 
+      // Store the index of the configuration entry in order to prevent other configurations from
+      // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
       context.getCluster().configure(entry.getIndex(), entry.getMembers());
     }
@@ -307,6 +313,7 @@ final class LeaderState extends ActiveState {
     replicator.commit(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
+        // Reset the configuration index to allow new configuration changes to be committed.
         configuring = 0;
         if (commitError == null) {
           future.complete(logResponse(LeaveResponse.builder()
@@ -595,7 +602,9 @@ final class LeaderState extends ActiveState {
       if (isOpen()) {
         if (commitError == null) {
           RegisterEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenComplete((sessionId, sessionError) -> {
+
+          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
+          context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(RegisterResponse.builder()
@@ -780,6 +789,7 @@ final class LeaderState extends ActiveState {
     try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
+        .setExpired(false)
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
@@ -869,6 +879,8 @@ final class LeaderState extends ActiveState {
       if (context.getCluster().getMembers().size() == 0)
         return CompletableFuture.completedFuture(null);
 
+      // If no commit future already exists, that indicates there's no heartbeat currently under way.
+      // Create a new commit future and commit to all members in the cluster.
       if (commitFuture == null) {
         commitFuture = new CompletableFuture<>();
         commitTime = System.currentTimeMillis();
@@ -876,7 +888,13 @@ final class LeaderState extends ActiveState {
           commit(member);
         }
         return commitFuture;
-      } else if (nextCommitFuture == null) {
+      }
+      // If a commit future already exists, that indicates there is a heartbeat currently underway.
+      // We don't want to allow callers to be completed by a heartbeat that may already almost be done.
+      // So, we create the next commit future if necessary and return that. Once the current heartbeat
+      // completes the next future will be used to do another heartbeat. This ensures that only one
+      // heartbeat can be outstanding at any given point in time.
+      else if (nextCommitFuture == null) {
         nextCommitFuture = new CompletableFuture<>();
         return nextCommitFuture;
       } else {
@@ -894,11 +912,23 @@ final class LeaderState extends ActiveState {
       if (index == 0)
         return commit();
 
+      // If there are no other servers in the cluster, immediately commit the index.
       if (context.getCluster().getRemoteMemberStates().isEmpty()) {
         context.setCommitIndex(index);
+        context.setGlobalIndex(index);
+        return CompletableFuture.completedFuture(index);
+      }
+      // If there are no other active members in the cluster, update the commit index and complete
+      // the commit but ensure append entries requests are sent to passive members.
+      else if (context.getCluster().getRemoteMemberStates(RaftMemberType.ACTIVE).isEmpty()) {
+        context.setCommitIndex(index);
+        for (MemberState member : context.getCluster().getRemoteMemberStates()) {
+          commit(member);
+        }
         return CompletableFuture.completedFuture(index);
       }
 
+      // Ensure append requests are being sent to all members, including passive members.
       return commitFutures.computeIfAbsent(index, i -> {
         for (MemberState member : context.getCluster().getRemoteMemberStates()) {
           commit(member);
@@ -966,21 +996,44 @@ final class LeaderState extends ActiveState {
     private void commitEntries() {
       context.checkThread();
 
+      // The global index may have increased even if the commit index didn't. Update the global index.
+      // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
+      // passive members. This is critical since passive members still have state machines and thus it's still
+      // important to ensure that tombstones are applied to their state machines.
+      // If the members list is empty, use the local server's last log index as the global index.
+      long globalMatchIndex = context.getCluster().getRemoteMemberStates().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex());
+      context.setGlobalIndex(globalMatchIndex);
+
       // Sort the list of replicas, order by the last index that was replicated
       // to the replica. This will allow us to determine the median index
       // for all known replicated entries across all cluster members.
       List<MemberState> members = context.getCluster().getRemoteMemberStates(RaftMemberType.ACTIVE, (m1, m2)->
         Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
 
-      // Set the current commit index as the median replicated index.
-      // Since replicas is a list with zero based indexes, use the negation of
-      // the required quorum count to get the index of the replica with the least
-      // possible quorum replication. That replica's match index is the commit index.
-      // Set the commit index. Once the commit index has been set we can run
-      // all tasks up to the given commit.
+      // If the active members list is empty (a configuration change occurred between an append request/response)
+      // ensure all commit futures are completed and cleared.
+      if (members.isEmpty()) {
+        context.setCommitIndex(context.getLog().lastIndex());
+        for (Map.Entry<Long, CompletableFuture<Long>> entry : commitFutures.entrySet()) {
+          entry.getValue().complete(entry.getKey());
+        }
+        commitFutures.clear();
+        return;
+      }
+
+      // Calculate the current commit index as the median matchIndex.
       long commitIndex = members.get(quorumIndex()).getMatchIndex();
-      if (commitIndex > 0 && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
+
+      // If the commit index has increased then update the commit index. Note that in order to ensure
+      // the leader completeness property holds, verify that the commit index is greater than or equal to
+      // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
+      if (commitIndex > 0 && commitIndex > context.getCommitIndex() && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
         context.setCommitIndex(commitIndex);
+
+        // TODO: This seems like an annoyingly expensive operation to perform on every response.
+        // Futures could simply be stored in a hash map and we could use a sequential index starting
+        // from the previous commit index to get the appropriate futures. But for now, at least this
+        // ensures that no memory leaks can occur.
         SortedMap<Long, CompletableFuture<Long>> futures = commitFutures.headMap(commitIndex, true);
         for (Map.Entry<Long, CompletableFuture<Long>> entry : futures.entrySet()) {
           entry.getValue().complete(entry.getKey());
@@ -1036,7 +1089,8 @@ final class LeaderState extends ActiveState {
         .withLeader(context.getCluster().getMember().serverAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex());
+        .withCommitIndex(context.getCommitIndex())
+        .withGlobalIndex(context.getGlobalIndex());
 
       commit(member, builder.build(), false);
     }
@@ -1053,11 +1107,17 @@ final class LeaderState extends ActiveState {
         .withLeader(context.getCluster().getMember().serverAddress().hashCode())
         .withLogIndex(prevIndex)
         .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-        .withCommitIndex(context.getCommitIndex());
+        .withCommitIndex(context.getCommitIndex())
+        .withGlobalIndex(context.getGlobalIndex());
 
+      // Build a list of entries to send to the member.
       if (!context.getLog().isEmpty()) {
         long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
 
+        // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
+        // be null if they've been compacted and the member to which we're sending entries is just
+        // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
+        // counted towards the size of the batch.
         int size = 0;
         while (index <= context.getLog().lastIndex()) {
           Entry entry = context.getLog().get(index);
@@ -1072,6 +1132,7 @@ final class LeaderState extends ActiveState {
         }
       }
 
+      // Release the previous entry back to the entry pool.
       if (prevEntry != null) {
         prevEntry.release();
       }
@@ -1154,7 +1215,7 @@ final class LeaderState extends ActiveState {
             } else {
               int failures = member.incrementFailureCount();
               if (failures <= 3 || failures % 100 == 0) {
-                LOGGER.warn("{} - {}", context.getCluster().getMember().serverAddress(), response.error() != null ? response.error() : "");
+                LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
               }
             }
           } else {
@@ -1195,8 +1256,7 @@ final class LeaderState extends ActiveState {
      * Updates the match index when a response is received.
      */
     private void updateMatchIndex(MemberState member, AppendResponse response) {
-      // If the replica returned a valid match index then update the existing match index. Because the
-      // replicator pipelines replication, we perform a MAX(matchIndex, logIndex) to get the true match index.
+      // If the replica returned a valid match index then update the existing match index.
       member.setMatchIndex(Math.max(member.getMatchIndex(), response.logIndex()));
     }
 
@@ -1205,8 +1265,6 @@ final class LeaderState extends ActiveState {
      */
     private void updateNextIndex(MemberState member) {
       // If the match index was set, update the next index to be greater than the match index if necessary.
-      // Note that because of pipelining append requests, the next index can potentially be much larger than
-      // the match index. We rely on the algorithm to reject invalid append requests.
       member.setNextIndex(Math.max(member.getNextIndex(), Math.max(member.getMatchIndex() + 1, 1)));
     }
 
@@ -1242,6 +1300,8 @@ final class LeaderState extends ActiveState {
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, index);
 
         // Immediately apply the configuration upon appending the configuration entry.
+        // Store the index of the configuration in order to block other configurations from taking
+        // place at the same time.
         configuring = index;
         context.getCluster().configure(entry.getIndex(), entry.getMembers());
       }

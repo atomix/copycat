@@ -31,6 +31,7 @@ import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +57,7 @@ public class ServerState {
   private ThreadContext threadContext;
   private final StateMachine userStateMachine;
   private final ClusterState cluster;
+  private final MetaStore meta;
   private final Log log;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
@@ -69,10 +71,12 @@ public class ServerState {
   private long term;
   private int lastVotedFor;
   private long commitIndex;
+  private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  ServerState(Member member, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  ServerState(Member member, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.cluster = new ClusterState(this, member);
+    this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
@@ -81,6 +85,10 @@ public class ServerState {
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+
+    // Load the current term and last vote from disk.
+    this.term = meta.loadTerm();
+    this.lastVotedFor = meta.loadVote();
 
     // If the member's server address is listed in the members list, it's considered an ACTIVE member. Otherwise,
     // it must join the cluster.
@@ -199,26 +207,25 @@ public class ServerState {
    * @return The Raft context.
    */
   ServerState setLeader(int leader) {
-    if (this.leader == 0) {
-      if (leader != 0) {
+    if (this.leader != leader) {
+      // 0 indicates no leader.
+      if (leader == 0) {
+        this.leader = 0;
+      } else {
+        // If a valid leader ID was specified, it must be a member that's currently a member of the
+        // ACTIVE members configuration. Note that we don't throw exceptions for unknown members. It's
+        // possible that a failure following a configuration change could result in an unknown leader
+        // sending AppendRequest to this server. Simply configure the leader if it's known.
         Member member = cluster.getMember(leader);
-        Assert.state(member != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", cluster.getMember().serverAddress(), member.serverAddress());
-        electionListeners.forEach(l -> l.accept(member.serverAddress()));
+        if (member != null) {
+          this.leader = leader;
+          LOGGER.info("{} - Found leader {}", cluster.getMember().serverAddress(), member.serverAddress());
+          electionListeners.forEach(l -> l.accept(member.serverAddress()));
+        }
       }
-    } else if (leader != 0) {
-      if (this.leader != leader) {
-        Member member = cluster.getMember(leader);
-        Assert.state(member != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", cluster.getMember().serverAddress(), member.serverAddress());
-        electionListeners.forEach(l -> l.accept(member.serverAddress()));
-      }
-    } else {
-      this.leader = 0;
+
+      this.lastVotedFor = 0;
+      meta.storeVote(0);
     }
     return this;
   }
@@ -268,6 +275,8 @@ public class ServerState {
       this.term = term;
       this.leader = 0;
       this.lastVotedFor = 0;
+      meta.storeTerm(this.term);
+      meta.storeVote(this.lastVotedFor);
       LOGGER.debug("{} - Set term {}", cluster.getMember().serverAddress(), term);
     }
     return this;
@@ -295,6 +304,7 @@ public class ServerState {
     Member member = cluster.getMember(candidate);
     Assert.state(member != null, "unknown candidate: %d", candidate);
     this.lastVotedFor = candidate;
+    meta.storeVote(this.lastVotedFor);
 
     if (candidate != 0) {
       LOGGER.debug("{} - Voted for {}", cluster.getMember().serverAddress(), member.serverAddress());
@@ -323,6 +333,7 @@ public class ServerState {
     Assert.argNot(commitIndex < 0, "commit index must be positive");
     Assert.argNot(commitIndex < this.commitIndex, "cannot decrease commit index");
     this.commitIndex = commitIndex;
+    log.commit(commitIndex);
     return this;
   }
 
@@ -333,6 +344,28 @@ public class ServerState {
    */
   public long getCommitIndex() {
     return commitIndex;
+  }
+
+  /**
+   * Sets the global index.
+   *
+   * @param globalIndex The global index.
+   * @return The Raft context.
+   */
+  ServerState setGlobalIndex(long globalIndex) {
+    Assert.argNot(globalIndex < 0, "global index must be positive");
+    this.globalIndex = Math.max(this.globalIndex, globalIndex);
+    log.compactor().majorIndex(globalIndex);
+    return this;
+  }
+
+  /**
+   * Returns the global index.
+   *
+   * @return The global index.
+   */
+  public long getGlobalIndex() {
+    return globalIndex;
   }
 
   /**

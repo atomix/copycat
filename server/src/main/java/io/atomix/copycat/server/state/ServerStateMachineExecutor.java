@@ -123,8 +123,10 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   /**
    * Executes scheduled callbacks based on the provided time.
+   *
+   * @return The updated executor timestamp. This timestamp is guaranteed to be monotonically increasing.
    */
-  void tick(long timestamp) {
+  long tick(long timestamp) {
     this.timestamp = Math.max(this.timestamp, timestamp);
 
     // Only create an iterator if there are actually tasks scheduled.
@@ -153,6 +155,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
       complete.clear();
     }
+    return this.timestamp;
   }
 
   @Override

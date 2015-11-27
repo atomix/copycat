@@ -80,14 +80,20 @@ class ServerStateMachine implements AutoCloseable {
 
   /**
    * Sets the last applied index.
+   * <p>
+   * The last applied index is updated *after* each time a non-query entry is applied to the state machine.
    *
    * @param lastApplied The last applied index.
    */
   private void setLastApplied(long lastApplied) {
+    // If the last applied index decreased then that's very concerning.
     Assert.argNot(lastApplied < this.lastApplied, "lastApplied index must be greater than previous lastApplied index");
     if (lastApplied > this.lastApplied) {
       this.lastApplied = lastApplied;
 
+      // Update the index for each session. This will be used to trigger queries that are awaiting the
+      // application of specific indexes to the state machine. Setting the session index may cause query
+      // callbacks to be called and queries to be evaluated.
       for (ServerSession session : executor.context().sessions().sessions.values()) {
         session.setVersion(lastApplied);
       }
@@ -96,20 +102,15 @@ class ServerStateMachine implements AutoCloseable {
 
   /**
    * Returns the highest index completed for all sessions.
+   * <p>
+   * The lastCompleted index is representative of the highest index for which related events have been
+   * received by *all* clients. In other words, no events lower than the given index should remain in
+   * memory.
    *
    * @return The highest index completed for all sessions.
    */
   long getLastCompleted() {
     return lastCompleted > 0 ? lastCompleted : lastApplied;
-  }
-
-  /**
-   * Returns the current thread context.
-   *
-   * @return The current thread context.
-   */
-  private ThreadContext getContext() {
-    return ThreadContext.currentContextOrThrow();
   }
 
   /**
@@ -137,7 +138,7 @@ class ServerStateMachine implements AutoCloseable {
       } else if (entry instanceof CommandEntry) {
         return apply((CommandEntry) entry, expectResult);
       } else if (entry instanceof RegisterEntry) {
-        return apply((RegisterEntry) entry);
+        return apply((RegisterEntry) entry, expectResult);
       } else if (entry instanceof KeepAliveEntry) {
         return apply((KeepAliveEntry) entry);
       } else if (entry instanceof UnregisterEntry) {
@@ -151,6 +152,7 @@ class ServerStateMachine implements AutoCloseable {
       }
       return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
     } finally {
+      // After the entry has been applied, update the lastApplied index.
       if (apply) {
         setLastApplied(entry.getIndex());
       }
@@ -166,6 +168,8 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConfigurationEntry entry) {
     long previousConfiguration = configuration;
     configuration = entry.getIndex();
+    // Immediately clean the commit for the previous configuration since configuration entries
+    // completely override the previous configuration.
     if (previousConfiguration > 0) {
       cleaner.clean(previousConfiguration);
     }
@@ -179,6 +183,8 @@ class ServerStateMachine implements AutoCloseable {
    * @return The result.
    */
   private CompletableFuture<Void> apply(ConnectEntry entry) {
+    // Connections are stored in the state machine when they're *written* to the log, so we need only
+    // clean them once they're committed.
     cleaner.clean(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
@@ -189,28 +195,55 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  private CompletableFuture<Long> apply(RegisterEntry entry) {
+  private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
     ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
-    executor.context().sessions().registerSession(session).setTimestamp(entry.getTimestamp());
+    executor.context().sessions().registerSession(session);
 
     // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
+    long timestamp = executor.tick(entry.getTimestamp());
 
-    // Expire any remaining expired sessions.
-    suspectSessions(entry.getTimestamp());
+    // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
+    // is guaranteed to be monotonically increasing, whereas the RegisterEntry may have an earlier timestamp
+    // if, e.g., it was written shortly after a leader change.
+    session.setTimestamp(timestamp);
 
-    ThreadContext context = getContext();
+    // Determine whether any sessions appear to be expired. This won't immediately expire the session(s),
+    // but it will make them available to be unregistered by the leader.
+    suspectSessions(timestamp);
+
+    ThreadContext context = ThreadContext.currentContextOrThrow();
     long index = entry.getIndex();
 
-    // Set last applied only after the operation has been submitted to the state machine executor.
+    // Call the register() method on the user-provided state machine to allow the state machine to react to
+    // a new session being registered. User state machine methods are always called in the state machine thread.
     CompletableFuture<Long> future = new ComposableFuture<>();
     executor.executor().execute(() -> {
+      // Update the state machine context with the register entry's index. This ensures that events published
+      // within the register method will be properly associated with the unregister entry's index. All events
+      // published during registration of a session are linearizable to ensure that clients receive related events
+      // before the registration is completed.
+      executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+
+      // Register the session and then open it. This ensures that state machines cannot publish events to this
+      // session before the client has learned of the session ID.
       stateMachine.register(session);
-      context.execute(() -> future.complete(index));
+      session.open();
+
+      // Once register callbacks have been completed, ensure that events published during the callbacks are
+      // received by clients. The state machine context will generate an event future for all published events
+      // to all sessions.
+      CompletableFuture<Void> sessionFuture = executor.context().commit();
+      if (sessionFuture != null) {
+        sessionFuture.whenComplete((result, error) -> {
+          context.executor().execute(() -> future.complete(index));
+        });
+      } else {
+        context.executor().execute(() -> future.complete(index));
+      }
     });
 
-    // Update the highest index completed for all sessions.
-    updateLastCompleted(entry.getIndex());
+    // Update the highest index completed for all sessions to allow log compaction to progress.
+    updateLastCompleted(index);
 
     return future;
   }
@@ -223,11 +256,14 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(KeepAliveEntry entry) {
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
 
-    // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
+    // Update the deterministic executor time and allow the executor to execute any scheduled events.
+    long timestamp = executor.tick(entry.getTimestamp());
 
-    // Expire any remaining expired sessions.
-    suspectSessions(entry.getTimestamp());
+    // Determine whether any sessions appear to be expired. This won't immediately expire the session(s),
+    // but it will make them available to be unregistered by the leader. Note that it's safe to trigger
+    // scheduled executor callbacks even if the keep-alive entry is for an unknown session since the
+    // leader still committed the entry with its time and so time will still progress deterministically.
+    suspectSessions(timestamp);
 
     CompletableFuture<Void> future;
 
@@ -237,27 +273,35 @@ class ServerStateMachine implements AutoCloseable {
       future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
     }
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
-    // managed to receive a keep alive request from the client before it was removed.
+    // managed to receive a keep alive request from the client before it was removed. This allows the
+    // client some arbitrary leeway in keeping its session alive. It's up to the leader to explicitly
+    // expire a session by committing an UnregisterEntry in order to ensure sessions can't be expired
+    // during leadership changes.
     else {
-      ThreadContext context = getContext();
+      ThreadContext context = ThreadContext.currentContextOrThrow();
 
-      // Set the session as trusted. Sessions only timeout via RegisterEntry.
+      // Set the session as trusted. This will prevent the leader from explicitly unregistering the
+      // session if it hasn't done so already.
       session.trust();
 
-      // The keep alive request contains the
-      session.setTimestamp(entry.getTimestamp());
+      // Update the session's timestamp with the current state machine time.
+      session.setTimestamp(timestamp);
 
       // Store the command/event sequence and event version instead of acquiring a reference to the entry.
       long commandSequence = entry.getCommandSequence();
       long eventVersion = entry.getEventVersion();
 
+      // The keep-alive entry also serves to clear cached command responses and events from memory.
+      // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
       executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventVersion));
 
-      // Update the highest index completed for all sessions.
+      // Since the index of acked events in the session changed, update the highest index completed for all
+      // sessions to allow log compaction to progress. This is only done during session operations and not
+      // within sessions themselves.
       updateLastCompleted(entry.getIndex());
 
       future = new CompletableFuture<>();
-      context.execute(() -> future.complete(null));
+      context.executor().execute(() -> future.complete(null));
     }
 
     // Immediately clean the keep alive entry from the log.
@@ -275,11 +319,14 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(UnregisterEntry entry, boolean synchronous) {
     ServerSession session = executor.context().sessions().unregisterSession(entry.getSession());
 
-    // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
+    // Update the deterministic executor time and allow the executor to execute any scheduled events.
+    long timestamp = executor.tick(entry.getTimestamp());
 
-    // Expire any remaining expired sessions.
-    suspectSessions(entry.getTimestamp());
+    // Determine whether any sessions appear to be expired. This won't immediately expire the session(s),
+    // but it will make them available to be unregistered by the leader. Note that it's safe to trigger
+    // scheduled executor callbacks even if the keep-alive entry is for an unknown session since the
+    // leader still committed the entry with its time and so time will still progress deterministically.
+    suspectSessions(timestamp);
 
     CompletableFuture<Void> future;
 
@@ -291,29 +338,30 @@ class ServerStateMachine implements AutoCloseable {
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
     // managed to receive a keep alive request from the client before it was removed.
     else {
-      ThreadContext context = getContext();
+      ThreadContext context = ThreadContext.currentContextOrThrow();
       future = new CompletableFuture<>();
 
       long index = entry.getIndex();
 
-      // If the session was already marked suspect, that indicates that the session did not commit a keep alive
-      // request before its timeout. We assume that such cases indicate that a session has expired and thus
-      // call expire callbacks in the state machine.
-      if (session.isSuspect()) {
+      // If the entry was marked expired, that indicates that the leader explicitly expired the session due to
+      // the session not being kept alive by the client. In all other cases, we close the session normally.
+      if (entry.isExpired()) {
         executor.executor().execute(() -> {
           // Update the state machine context with the unregister entry's index. This ensures that events published
           // within the expire or close methods will be properly associated with the unregister entry's index.
           // All events published during expiration or closing of a session are linearizable to ensure that clients
           // receive related events before the expiration is completed.
-          executor.context().update(index, Instant.ofEpochMilli(executor.timestamp()), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+          executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
 
+          // Expire the session and call state machine callbacks.
           session.expire();
           stateMachine.expire(session);
           stateMachine.close(session);
 
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
-          // to all sessions.
+          // to all sessions. If the event future is non-null, that indicates events are pending which were published
+          // during the call to expire(). Wait for the events to be received by the client before completing the future.
           CompletableFuture<Void> sessionFuture = executor.context().commit();
           if (sessionFuture != null) {
             sessionFuture.whenComplete((result, error) -> {
@@ -323,20 +371,25 @@ class ServerStateMachine implements AutoCloseable {
             context.executor().execute(() -> future.complete(null));
           }
         });
-      } else {
+      }
+      // If the unregister entry is not indicated as expired, a client must have submitted a request to unregister
+      // the session. In that case, we simply close the session without expiring it.
+      else {
         executor.executor().execute(() -> {
           // Update the state machine context with the unregister entry's index. This ensures that events published
-          // within the expire or close methods will be properly associated with the unregister entry's index.
-          // All events published during expiration or closing of a session are linearizable to ensure that clients
-          // receive related events before the expiration is completed.
-          executor.context().update(index, Instant.ofEpochMilli(executor.timestamp()), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+          // within the close method will be properly associated with the unregister entry's index. All events published
+          // during expiration or closing of a session are linearizable to ensure that clients receive related events
+          // before the expiration is completed.
+          executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
 
+          // Close the session and call state machine callbacks.
           session.close();
           stateMachine.close(session);
 
           // Once close callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
-          // to all sessions.
+          // to all sessions. If the event future is non-null, that indicates events are pending which were published
+          // during the call to expire(). Wait for the events to be received by the client before completing the future.
           CompletableFuture<Void> sessionFuture = executor.context().commit();
           if (sessionFuture != null) {
             sessionFuture.whenComplete((result, error) -> {
@@ -348,7 +401,7 @@ class ServerStateMachine implements AutoCloseable {
         });
       }
 
-      // Clean the session registration entry from the log.
+      // Clean the unregister entry from the log immediately after it's applied.
       cleaner.clean(session.id());
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
@@ -387,7 +440,7 @@ class ServerStateMachine implements AutoCloseable {
     else if (entry.getSequence() > 0 && entry.getSequence() < session.nextSequence()) {
       // Ensure the response check is executed in the state machine thread in order to ensure the
       // command was applied, otherwise there will be a race condition and concurrent modification issues.
-      ThreadContext context = getContext();
+      ThreadContext context = ThreadContext.currentContextOrThrow();
       long sequence = entry.getSequence();
 
       // Get the consistency level of the command. This should match the consistency level of the original command.
@@ -442,7 +495,7 @@ class ServerStateMachine implements AutoCloseable {
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.
     else {
-      executeCommand(entry, session, synchronous, future, getContext());
+      executeCommand(entry, session, synchronous, future, ThreadContext.currentContextOrThrow());
     }
 
     return future;
@@ -455,15 +508,14 @@ class ServerStateMachine implements AutoCloseable {
     context.checkThread();
 
     // Allow the executor to execute any scheduled events.
-    executor.tick(entry.getTimestamp());
-
+    long timestamp = executor.tick(entry.getTimestamp());
     long sequence = entry.getSequence();
 
     Command.ConsistencyLevel consistency = entry.getCommand().consistency();
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-    ServerCommit commit = commits.acquire(entry, executor.timestamp());
+    ServerCommit commit = commits.acquire(entry, timestamp);
     executor.executor().execute(() -> {
 
       // Update the state machine context with the commit index and local server context. The synchronous flag
@@ -508,7 +560,7 @@ class ServerStateMachine implements AutoCloseable {
 
     // Update the session timestamp and command sequence number. This is done in the caller's thread since all
     // timestamp/version/sequence checks are done in this thread prior to executing operations on the state machine thread.
-    session.setTimestamp(entry.getTimestamp()).setSequence(entry.getSequence());
+    session.setTimestamp(timestamp).setSequence(sequence);
 
     return future;
   }
@@ -535,7 +587,7 @@ class ServerStateMachine implements AutoCloseable {
       CompletableFuture<Object> future = new CompletableFuture<>();
 
       // Get the caller's context.
-      ThreadContext context = getContext();
+      ThreadContext context = ThreadContext.currentContextOrThrow();
 
       // Store the entry version and sequence instead of acquiring a reference to the entry.
       long version = entry.getVersion();
@@ -561,7 +613,7 @@ class ServerStateMachine implements AutoCloseable {
     else if (entry.getVersion() > session.getVersion()) {
       CompletableFuture<Object> future = new CompletableFuture<>();
 
-      ThreadContext context = getContext();
+      ThreadContext context = ThreadContext.currentContextOrThrow();
 
       ServerCommit commit = commits.acquire(entry, executor.timestamp());
       session.registerVersionQuery(entry.getVersion(), () -> {
@@ -570,7 +622,7 @@ class ServerStateMachine implements AutoCloseable {
       });
       return future;
     } else {
-      return executeQuery(commits.acquire(entry, executor.timestamp()), new CompletableFuture<>(), getContext());
+      return executeQuery(commits.acquire(entry, executor.timestamp()), new CompletableFuture<>(), ThreadContext.currentContextOrThrow());
     }
   }
 
@@ -598,12 +650,13 @@ class ServerStateMachine implements AutoCloseable {
    */
   private CompletableFuture<Long> apply(NoOpEntry entry) {
     // Iterate through all the server sessions and reset timestamps. This ensures that sessions do not
-    // timeout during leadership changes.
+    // timeout during leadership changes or shortly thereafter.
+    long timestamp = executor.tick(entry.getTimestamp());
     for (ServerSession session : executor.context().sessions().sessions.values()) {
-      session.setTimestamp(entry.getTimestamp());
+      session.setTimestamp(timestamp);
     }
     cleaner.clean(entry.getIndex());
-    return Futures.completedFutureAsync(entry.getIndex(), getContext().executor());
+    return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
 
   /**

@@ -37,7 +37,7 @@ public class MajorCompactionTest extends AbstractLogTest {
       .withMaxEntriesPerSegment(10)
       .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
       .build()
-      .open("copycat");
+      .openLog("copycat");
   }
 
   /**
@@ -51,7 +51,7 @@ public class MajorCompactionTest extends AbstractLogTest {
     for (long index = 21; index < 28; index++) {
       log.clean(index);
     }
-    log.commit(31);
+    log.commit(31).compactor().minorIndex(31).majorIndex(31);
 
     CountDownLatch latch = new CountDownLatch(1);
     log.compactor().compact(Compaction.MAJOR).thenRun(latch::countDown);

@@ -153,7 +153,7 @@ final class OffsetIndex implements AutoCloseable {
 
     if (offset == currentOffset) {
       return currentMatch;
-    } else if (currentOffset != -1 && buffer.readLong((currentMatch + 1) * ENTRY_SIZE) == offset) {
+    } else if (currentOffset != -1 && currentMatch + 1 < size && buffer.readLong((currentMatch + 1) * ENTRY_SIZE) == offset) {
       currentOffset = offset;
       return ++currentMatch;
     }
