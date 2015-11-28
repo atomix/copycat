@@ -67,6 +67,7 @@ public class ServerState {
   private Duration heartbeatInterval = Duration.ofMillis(150);
   private Scheduled joinTimer;
   private Scheduled leaveTimer;
+  private boolean joined;
   private int leader;
   private long term;
   private int lastVotedFor;
@@ -223,6 +224,7 @@ public class ServerState {
           this.leader = leader;
           LOGGER.info("{} - Found leader {}", cluster.getMember().serverAddress(), member.serverAddress());
           electionListeners.forEach(l -> l.accept(member.serverAddress()));
+          joinLeader(member);
         }
       }
 
@@ -298,7 +300,7 @@ public class ServerState {
   ServerState setLastVotedFor(int candidate) {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
     Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
-    Assert.stateNot (leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
+    Assert.stateNot(leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
     Member member = cluster.getMember(candidate);
     Assert.state(member != null, "unknown candidate: %d", candidate);
     this.lastVotedFor = candidate;
@@ -551,6 +553,9 @@ public class ServerState {
             // Cancel the join timer.
             cancelJoinTimer();
 
+            // No need to send further join requests since this node manually joined the cluster.
+            joined = true;
+
             // If the local member type is null, that indicates it's not a part of the configuration.
             MemberType type = cluster.getMember().type();
             if (type == null) {
@@ -610,6 +615,25 @@ public class ServerState {
       LOGGER.debug("{} - Cancelling join timeout", cluster.getMember().serverAddress());
       joinTimer.cancel();
       joinTimer = null;
+    }
+  }
+
+  /**
+   * Sends a join request to the given leader once found.
+   */
+  private void joinLeader(Member leader) {
+    if (!joined && !cluster.getMember().equals(leader)) {
+      LOGGER.debug("{} - Sending server identification to {}", cluster.getMember().serverAddress(), leader.serverAddress());
+      connections.getConnection(leader.serverAddress()).thenCompose(connection -> {
+        JoinRequest request = JoinRequest.builder()
+          .withMember(cluster.getMember())
+          .build();
+        return connection.<JoinRequest, JoinResponse>send(request);
+      }).whenComplete((response, error) -> {
+        if (error == null) {
+          joined = true;
+        }
+      });
     }
   }
 
