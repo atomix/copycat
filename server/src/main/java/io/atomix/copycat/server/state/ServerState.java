@@ -66,8 +66,8 @@ public class ServerState {
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
   private Scheduled joinTimer;
+  private CompletableFuture<Void> joinFuture;
   private Scheduled leaveTimer;
-  private boolean joined;
   private int leader;
   private long term;
   private int lastVotedFor;
@@ -508,31 +508,34 @@ public class ServerState {
    * Joins the cluster.
    */
   public CompletableFuture<Void> join() {
-    CompletableFuture<Void> future = new CompletableFuture<>();
+    if (joinFuture != null)
+      return joinFuture;
+
+    joinFuture = new CompletableFuture<>();
 
     // If the server type is defined, that indicates it's a member of the current configuration and
     // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
+    // Note that we don't complete the join future when transitioning to a valid state since we need
+    // to ensure that the server's configuration has been updated in the cluster before completing the join.
     if (cluster.getMember().type() != null) {
       if (cluster.getMember().type() == RaftMemberType.ACTIVE) {
         transition(RaftServer.State.FOLLOWER);
-        future.complete(null);
       } else if (cluster.getMember().type() == RaftMemberType.PASSIVE) {
         transition(RaftServer.State.PASSIVE);
-        future.complete(null);
       } else {
-        future.completeExceptionally(new IllegalStateException("unknown member type: " + cluster.getMember().type()));
+        joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + cluster.getMember().type()));
       }
     } else {
-      join(cluster.getVotingMemberStates().iterator(), 1, future);
+      join(cluster.getVotingMemberStates().iterator(), 1);
     }
 
-    return future;
+    return joinFuture.whenComplete((result, error) -> joinFuture = null);
   }
 
   /**
    * Recursively attempts to join the cluster.
    */
-  private void join(Iterator<MemberState> iterator, int attempts, CompletableFuture<Void> future) {
+  private void join(Iterator<MemberState> iterator, int attempts) {
     if (iterator.hasNext()) {
       MemberState member = iterator.next();
       LOGGER.debug("{} - Attempting to join via {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
@@ -553,25 +556,18 @@ public class ServerState {
             // Cancel the join timer.
             cancelJoinTimer();
 
-            // No need to send further join requests since this node manually joined the cluster.
-            joined = true;
-
             // If the local member type is null, that indicates it's not a part of the configuration.
             MemberType type = cluster.getMember().type();
             if (type == null) {
-              future.completeExceptionally(new IllegalStateException("not a member of the cluster"));
+              joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
+            } else if (type == RaftMemberType.ACTIVE) {
+              transition(RaftServer.State.FOLLOWER);
+              joinFuture.complete(null);
+            } else if (type == RaftMemberType.PASSIVE) {
+              transition(RaftServer.State.PASSIVE);
+              joinFuture.complete(null);
             } else {
-              if (type == RaftMemberType.ACTIVE) {
-                transition(RaftServer.State.FOLLOWER);
-                future.complete(null);
-              } else if (type == RaftMemberType.PASSIVE) {
-                transition(RaftServer.State.PASSIVE);
-                future.complete(null);
-              } else {
-                future.completeExceptionally(new IllegalStateException("unknown member type: " + type));
-              }
-
-              future.complete(null);
+              joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + type));
             }
           } else if (response.error() == null) {
             // If the response error is null, that indicates that no error occurred but the leader was
@@ -580,29 +576,29 @@ public class ServerState {
             LOGGER.debug("{} - Failed to join {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
             cancelJoinTimer();
             joinTimer = threadContext.schedule(electionTimeout, () -> {
-              join(cluster.getVotingMemberStates().iterator(), attempts, future);
+              join(cluster.getVotingMemberStates().iterator(), attempts);
             });
           } else {
             // If the response error was non-null, attempt to join via the next server in the members list.
             LOGGER.debug("{} - Failed to join {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
-            join(iterator, attempts, future);
+            join(iterator, attempts);
           }
         } else {
           LOGGER.debug("{} - Failed to join {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
-          join(iterator, attempts, future);
+          join(iterator, attempts);
         }
       });
     }
     // If the maximum number of join attempts has been reached, fail the join.
     else if (attempts >= MAX_JOIN_ATTEMPTS) {
-      future.completeExceptionally(new IllegalStateException("failed to join the cluster"));
+      joinFuture.completeExceptionally(new IllegalStateException("failed to join the cluster"));
     }
     // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
     // for servers to potentially timeout and elect a leader.
     else {
       cancelJoinTimer();
       joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
-        join(cluster.getVotingMemberStates().iterator(), attempts + 1, future);
+        join(cluster.getVotingMemberStates().iterator(), attempts + 1);
       });
     }
   }
@@ -622,18 +618,38 @@ public class ServerState {
    * Sends a join request to the given leader once found.
    */
   private void joinLeader(Member leader) {
-    if (!joined && !cluster.getMember().equals(leader)) {
-      LOGGER.debug("{} - Sending server identification to {}", cluster.getMember().serverAddress(), leader.serverAddress());
-      connections.getConnection(leader.serverAddress()).thenCompose(connection -> {
-        JoinRequest request = JoinRequest.builder()
-          .withMember(cluster.getMember())
-          .build();
-        return connection.<JoinRequest, JoinResponse>send(request);
-      }).whenComplete((response, error) -> {
-        if (error == null) {
-          joined = true;
+    if (joinFuture != null) {
+      if (cluster.getMember().equals(leader)) {
+        if (state.type() == RaftServer.State.LEADER && !((LeaderState) state).configuring()) {
+          joinFuture.complete(null);
+        } else {
+          cancelJoinTimer();
+          joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
+            joinLeader(leader);
+          });
         }
-      });
+      } else {
+        LOGGER.debug("{} - Sending server identification to {}", cluster.getMember().serverAddress(), leader.serverAddress());
+        connections.getConnection(leader.serverAddress()).thenCompose(connection -> {
+          JoinRequest request = JoinRequest.builder()
+            .withMember(cluster.getMember())
+            .build();
+          return connection.<JoinRequest, JoinResponse>send(request);
+        }).whenComplete((response, error) -> {
+          if (error == null) {
+            if (response.status() == Response.Status.OK) {
+              cancelJoinTimer();
+              if (joinFuture != null)
+                joinFuture.complete(null);
+            } else if (response.error() == null) {
+              cancelJoinTimer();
+              joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
+                joinLeader(leader);
+              });
+            }
+          }
+        });
+      }
     }
   }
 

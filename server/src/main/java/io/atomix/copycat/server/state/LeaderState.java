@@ -95,9 +95,7 @@ final class LeaderState extends ActiveState {
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
-    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(term).setMembers(context.getCluster().getMembers());
-    }
+    configure(context.getCluster().getMembers());
   }
 
   /**
