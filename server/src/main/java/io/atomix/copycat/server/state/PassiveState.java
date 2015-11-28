@@ -20,7 +20,6 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -37,16 +36,16 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class PassiveState extends AbstractState {
+class PassiveState extends ServerState {
   private final Queue<AtomicInteger> counterPool = new ArrayDeque<>();
 
-  public PassiveState(ServerState context) {
+  public PassiveState(ServerStateContext context) {
     super(context);
   }
 
   @Override
-  public CopycatServer.State type() {
-    return CopycatServer.State.PASSIVE;
+  public Type type() {
+    return RaftStateType.PASSIVE;
   }
 
   @Override
@@ -161,12 +160,12 @@ class PassiveState extends AbstractState {
           if (context.getCluster().getMember().type() == RaftMemberType.PASSIVE) {
             context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
             if (context.getCluster().getMember().type() == RaftMemberType.ACTIVE) {
-              transition(CopycatServer.State.FOLLOWER);
+              context.transition(RaftStateType.FOLLOWER);
             }
           } else {
             context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
             if (context.getCluster().getMember().type() == RaftMemberType.PASSIVE) {
-              transition(CopycatServer.State.PASSIVE);
+              context.transition(RaftStateType.PASSIVE);
             }
           }
         } else if (entry instanceof ConnectEntry) {
@@ -421,11 +420,11 @@ class PassiveState extends AbstractState {
     MemberType type = context.getCluster().getMember().type();
     if (previousType != type) {
       if (type == RaftMemberType.ACTIVE) {
-        context.transition(RaftServer.State.FOLLOWER);
+        context.transition(RaftStateType.FOLLOWER);
       } else if (type == RaftMemberType.PASSIVE) {
-        context.transition(RaftServer.State.PASSIVE);
+        context.transition(RaftStateType.PASSIVE);
       } else {
-        transition(RaftServer.State.INACTIVE);
+        context.transition(RaftStateType.INACTIVE);
       }
     }
 

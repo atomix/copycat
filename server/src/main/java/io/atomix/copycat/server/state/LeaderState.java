@@ -24,7 +24,6 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.*;
@@ -44,18 +43,18 @@ final class LeaderState extends ActiveState {
   private Scheduled appendTimer;
   private long configuring;
 
-  public LeaderState(ServerState context) {
+  public LeaderState(ServerStateContext context) {
     super(context);
     this.appender = new LeaderAppender(this);
   }
 
   @Override
-  public CopycatServer.State type() {
-    return CopycatServer.State.LEADER;
+  public Type type() {
+    return RaftStateType.LEADER;
   }
 
   @Override
-  public synchronized CompletableFuture<AbstractState> open() {
+  public synchronized CompletableFuture<ServerState> open() {
     // Append initial entries to the log, including an initial no-op entry and the server's configuration.
     appendInitialEntries();
 
@@ -115,7 +114,7 @@ final class LeaderState extends ActiveState {
           future.complete(null);
         } else {
           context.setLeader(0);
-          transition(CopycatServer.State.FOLLOWER);
+          context.transition(RaftStateType.FOLLOWER);
         }
       }
     });
@@ -383,7 +382,7 @@ final class LeaderState extends ActiveState {
     if (request.term() > context.getTerm()) {
       LOGGER.debug("{} - Received greater term", context.getCluster().getMember().serverAddress());
       context.setLeader(0);
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
       return super.vote(request);
     } else {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
@@ -408,7 +407,7 @@ final class LeaderState extends ActiveState {
         .build()));
     } else {
       context.setLeader(request.leader());
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
       return super.append(request);
     }
   }

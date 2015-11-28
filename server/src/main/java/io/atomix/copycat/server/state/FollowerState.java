@@ -20,7 +20,6 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AcceptRequest;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
@@ -48,17 +47,17 @@ final class FollowerState extends ActiveState {
   private final Random random = new Random();
   private Scheduled heartbeatTimer;
 
-  public FollowerState(ServerState context) {
+  public FollowerState(ServerStateContext context) {
     super(context);
   }
 
   @Override
-  public CopycatServer.State type() {
-    return CopycatServer.State.FOLLOWER;
+  public Type type() {
+    return RaftStateType.FOLLOWER;
   }
 
   @Override
-  public synchronized CompletableFuture<AbstractState> open() {
+  public synchronized CompletableFuture<ServerState> open() {
     return super.open().thenRun(this::startHeartbeatTimeout).thenApply(v -> this);
   }
 
@@ -204,7 +203,7 @@ final class FollowerState extends ActiveState {
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
       LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().getMember().serverAddress());
-      transition(CopycatServer.State.LEADER);
+      context.transition(RaftStateType.LEADER);
       return;
     }
 
@@ -212,7 +211,7 @@ final class FollowerState extends ActiveState {
       // If a majority of the cluster indicated they would vote for us then transition to candidate.
       complete.set(true);
       if (elected) {
-        transition(CopycatServer.State.CANDIDATE);
+        context.transition(RaftStateType.CANDIDATE);
       } else {
         resetHeartbeatTimeout();
       }

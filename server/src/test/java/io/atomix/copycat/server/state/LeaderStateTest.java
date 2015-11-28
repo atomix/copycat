@@ -15,16 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.RaftServer;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import io.atomix.copycat.client.request.CommandRequest;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.CommandEntry;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Leader state test.
@@ -59,7 +56,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
       threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
-      threadAssertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      threadAssertEquals(serverState.getState(), RaftStateType.FOLLOWER);
     });
   }
 

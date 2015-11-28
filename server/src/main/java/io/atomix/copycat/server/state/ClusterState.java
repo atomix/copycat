@@ -27,14 +27,14 @@ import java.util.stream.Collectors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ClusterState {
-  private final ServerState context;
+  private final ServerStateContext context;
   private final Member member;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
   private final Map<MemberType, List<MemberState>> memberTypes = new HashMap<>();
 
-  ClusterState(ServerState context, Member member) {
+  ClusterState(ServerStateContext context, Member member) {
     this.context = Assert.notNull(context, "context");
     this.member = Assert.notNull(member, "member");
   }

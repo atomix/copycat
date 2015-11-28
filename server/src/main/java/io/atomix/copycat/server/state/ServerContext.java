@@ -25,7 +25,6 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
@@ -41,7 +40,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ServerContext implements Managed<ServerState> {
+public class ServerContext implements Managed<ServerStateContext> {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
   private final Address clientAddress;
   private final Address serverAddress;
@@ -53,7 +52,7 @@ public class ServerContext implements Managed<ServerState> {
   private final ThreadContext context;
   private Server clientServer;
   private Server internalServer;
-  private ServerState state;
+  private ServerStateContext state;
   private volatile boolean open;
 
   public ServerContext(Address clientAddress, Transport clientTransport, Address serverAddress, Transport serverTransport, Collection<Address> members, StateMachine stateMachine, Storage storage, Serializer serializer) {
@@ -71,8 +70,8 @@ public class ServerContext implements Managed<ServerState> {
   }
 
   @Override
-  public CompletableFuture<ServerState> open() {
-    CompletableFuture<ServerState> future = new CompletableFuture<>();
+  public CompletableFuture<ServerStateContext> open() {
+    CompletableFuture<ServerStateContext> future = new CompletableFuture<>();
     context.executor().execute(() -> {
 
       // Open the meta store.
@@ -87,7 +86,7 @@ public class ServerContext implements Managed<ServerState> {
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerState(new Member(null, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
+          state = new ServerStateContext(new Member(null, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
 
           // If the client address is different than the server address, start a separate client server.
           if (!clientAddress.equals(serverAddress)) {
@@ -152,7 +151,7 @@ public class ServerContext implements Managed<ServerState> {
         }, context.executor());
       }
 
-      this.state.transition(RaftServer.State.INACTIVE);
+      this.state.transition(RaftStateType.INACTIVE);
       try {
         this.state.getLog().close();
       } catch (Exception e) {

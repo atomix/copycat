@@ -18,7 +18,6 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -403,7 +402,7 @@ final class LeaderAppender extends AbstractAppender {
     // If we've received a greater term, update the term and transition back to follower.
     else if (response.term() > context.getTerm()) {
       context.setTerm(response.term()).setLeader(0);
-      context.transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
     }
     // If the response failed, the follower should have provided the correct last index in their log. This helps
     // us converge on the matchIndex faster than by simply decrementing nextIndex one index at a time.
@@ -426,7 +425,7 @@ final class LeaderAppender extends AbstractAppender {
     if (response.term() > context.getTerm()) {
       LOGGER.debug("{} - Received higher term from {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
       context.setTerm(response.term()).setLeader(0);
-      context.transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
     } else {
       // If any other error occurred, increment the failure count for the member. Log the first three failures,
       // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
@@ -475,7 +474,7 @@ final class LeaderAppender extends AbstractAppender {
     if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
       LOGGER.warn("{} - Suspected network partition. Stepping down", context.getCluster().getMember().serverAddress());
       context.setLeader(0);
-      context.transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
     }
     // If the number of failures has increased above 3 and the member hasn't been marked as UNAVAILABLE, do so.
     else if (failures >= 3) {

@@ -24,9 +24,9 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.state.RaftStateType;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import net.jodah.concurrentunit.ConcurrentTestCase;
@@ -78,7 +78,7 @@ public class ClusterTest extends ConcurrentTestCase {
     joiner.open().thenRun(this::resume);
     await(30000);
     joiner.onStateChange(state -> {
-      if (state == CopycatServer.State.FOLLOWER)
+      if (state == RaftStateType.FOLLOWER)
         resume();
     });
     await(30000);
@@ -113,7 +113,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testLeaderLeave() throws Throwable {
     List<CopycatServer> servers = createServers(3);
-    CopycatServer server = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
+    CopycatServer server = servers.stream().filter(s -> s.state() == RaftStateType.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
     await(10000);
   }
@@ -124,9 +124,9 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testReplace() throws Throwable {
     List<CopycatServer> servers = createServers(3);
     CopycatClient client = createClient();
-    RaftServer s1 = createServer(members, nextMember()).open().get();
-    RaftServer s2 = createServer(members, nextMember()).open().get();
-    RaftServer s3 = createServer(members, nextMember()).open().get();
+    CopycatServer s1 = createServer(members, nextMember()).open().get();
+    CopycatServer s2 = createServer(members, nextMember()).open().get();
+    CopycatServer s3 = createServer(members, nextMember()).open().get();
 
     for (int i = 0; i < servers.size(); i++) {
       servers.get(i).close().join();
@@ -862,7 +862,7 @@ public class ClusterTest extends ConcurrentTestCase {
       await(30000, 2);
     }
 
-    CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
+    CopycatServer leader = servers.stream().filter(s -> s.state() == RaftStateType.LEADER).findFirst().get();
     leader.close().join();
 
     for (int i = 0 ; i < 100; i++) {

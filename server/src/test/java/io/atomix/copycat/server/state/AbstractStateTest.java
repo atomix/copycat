@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  * Abstract state test.
  */
 @Test
-public abstract class AbstractStateTest<T extends AbstractState> extends ConcurrentTestCase {
+public abstract class AbstractStateTest<T extends ServerState> extends ConcurrentTestCase {
   protected T state;
   protected Serializer serializer;
   protected Storage storage;
@@ -51,7 +51,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
-  protected ServerState serverState;
+  protected ServerStateContext serverState;
   protected List<Member> members;
 
   /**
@@ -72,7 +72,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverState = new ServerStateContext(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**

@@ -19,7 +19,6 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 
@@ -30,15 +29,15 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class InactiveState extends AbstractState {
+class InactiveState extends ServerState {
 
-  public InactiveState(ServerState context) {
+  public InactiveState(ServerStateContext context) {
     super(context);
   }
 
   @Override
-  public CopycatServer.State type() {
-    return CopycatServer.State.INACTIVE;
+  public Type type() {
+    return RaftStateType.INACTIVE;
   }
 
   @Override

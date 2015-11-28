@@ -16,7 +16,6 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.client.response.Response.Status;
-import io.atomix.copycat.server.RaftServer.State;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -79,7 +78,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
       assertTrue(response.succeeded());
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), State.FOLLOWER);
+      assertEquals(serverState.getState(), RaftStateType.FOLLOWER);
     });
   }
 
@@ -183,7 +182,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
       assertTrue(response.voted());
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), State.FOLLOWER);
+      assertEquals(serverState.getState(), RaftStateType.FOLLOWER);
     });
   }
 

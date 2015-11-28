@@ -22,8 +22,6 @@ import io.atomix.copycat.client.request.QueryRequest;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -43,7 +41,7 @@ import java.util.stream.Collectors;
  */
 abstract class ActiveState extends PassiveState {
 
-  protected ActiveState(ServerState context) {
+  protected ActiveState(ServerStateContext context) {
     super(context);
   }
 
@@ -65,7 +63,7 @@ abstract class ActiveState extends PassiveState {
     // If a transition is required then transition back to the follower state.
     // If the node is already a follower then the transition will be ignored.
     if (transition) {
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
     }
     return future;
   }
@@ -126,7 +124,7 @@ abstract class ActiveState extends PassiveState {
 
     CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
     if (transition) {
-      transition(RaftServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
     }
     return future;
   }

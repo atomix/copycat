@@ -32,7 +32,7 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class ServerStateTest extends AbstractStateTest<AbstractState> {
+public class ServerStateTest extends AbstractStateTest<ServerState> {
   private LocalServerRegistry registry;
   private Transport transport;
   private ThreadContext clientCtx;

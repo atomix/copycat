@@ -23,12 +23,13 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.state.ServerContext;
-import io.atomix.copycat.server.state.ServerState;
+import io.atomix.copycat.server.state.ServerStateContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -100,31 +101,19 @@ import java.util.function.Function;
  * </pre>
  * When the server is started, it will attempt to connect to an existing cluster. If the server cannot find any
  * existing members, it will attempt to form its own cluster.
- * <p>
- * Once the server is started, it will communicate with the rest of the nodes in the cluster, periodically
- * transitioning between states. Users can listen for state transitions via {@link #onStateChange(Consumer)}:
- * <pre>
- * {@code
- * server.onStateChange(state -> {
- *   if (state == CopycatServer.State.LEADER) {
- *     System.out.println("Server elected leader!");
- *   }
- * });
- * }
- * </pre>
  *
  * @see StateMachine
  * @see Transport
  * @see Storage
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class CopycatServer implements RaftServer {
+public class CopycatServer implements Managed<CopycatServer> {
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -141,10 +130,10 @@ public class CopycatServer implements RaftServer {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -161,10 +150,10 @@ public class CopycatServer implements RaftServer {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -182,10 +171,10 @@ public class CopycatServer implements RaftServer {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * members will be used to connect to the other members in the Copycat cluster. The local server {@link Address} does
    * not have to be present in the address list.
    * <p>
    * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
@@ -203,9 +192,9 @@ public class CopycatServer implements RaftServer {
   }
 
   private final ServerContext context;
-  private CompletableFuture<RaftServer> openFuture;
+  private CompletableFuture<CopycatServer> openFuture;
   private CompletableFuture<Void> closeFuture;
-  private ServerState state;
+  private ServerStateContext state;
   private final Duration electionTimeout;
   private final Duration heartbeatInterval;
   private final Duration sessionTimeout;
@@ -219,12 +208,32 @@ public class CopycatServer implements RaftServer {
     this.sessionTimeout = sessionTimeout;
   }
 
-  @Override
+  /**
+   * Server state.
+   */
+  public interface State {
+  }
+
+  /**
+   * Returns the current Raft term.
+   * <p>
+   * The term is a monotonically increasing number that essentially acts as a logical time for the cluster. For any
+   * given term, Raft guarantees that only one {@link #leader()} can be elected, but note that a leader may also
+   * not yet exist for the term.
+   *
+   * @return The current Raft term.
+   */
   public long term() {
     return state.getTerm();
   }
 
-  @Override
+  /**
+   * Returns the current Raft leader.
+   * <p>
+   * If no leader has been elected, the leader address will be {@code null}.
+   *
+   * @return The current Raft leader or {@code null} if this server does not know of any leader.
+   */
   public Address leader() {
     Member leader = state.getLeader();
     return leader != null ? leader.serverAddress() : null;
@@ -247,12 +256,11 @@ public class CopycatServer implements RaftServer {
     return state.onLeaderElection(listener);
   }
 
-  @Override
-  public Collection<Address> members() {
-    return state.getMembers();
-  }
-
-  @Override
+  /**
+   * Returns the Copycat server state.
+   *
+   * @return The Raft server state.
+   */
   public State state() {
     return state.getState();
   }
@@ -262,7 +270,7 @@ public class CopycatServer implements RaftServer {
    * <p>
    * Throughout the lifetime of the cluster, the server will periodically transition between various {@link CopycatServer.State states}.
    * Users can listen for and react to state change events. To determine when this server is elected leader, simply
-   * listen for the {@link CopycatServer.State#LEADER} state.
+   * listen for the leader state.
    * <pre>
    *   {@code
    *   server.onStateChange(state -> {
@@ -282,21 +290,63 @@ public class CopycatServer implements RaftServer {
     return state.onStateChange(listener);
   }
 
-  @Override
+  /**
+   * Returns a collection of current cluster members.
+   * <p>
+   * The current members list includes members in all states, including non-voting states. Additionally, because
+   * the membership set can change over time, the set of members on one server may not exactly reflect the
+   * set of members on another server at any given point in time.
+   *
+   * @return A collection of current Copycat cluster members.
+   */
+  public Collection<Address> members() {
+    return state.getMembers();
+  }
+
+  /**
+   * Returns the server execution context.
+   * <p>
+   * The thread context is the event loop that this server uses to communicate other Raft servers.
+   * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
+   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
+   * <p>
+   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
+   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
+   * are not thread safe, so to use the context serializer, users should clone it:
+   * <pre>
+   *   {@code
+   *   Serializer serializer = server.threadContext().serializer().clone();
+   *   Buffer buffer = serializer.writeObject(myObject).flip();
+   *   }
+   * </pre>
+   *
+   * @return The server thread context.
+   */
   public ThreadContext context() {
     return state.getThreadContext();
   }
 
+  /**
+   * Starts the Raft server asynchronously.
+   * <p>
+   * When the server is started, the server will attempt to search for an existing cluster by contacting all of
+   * the members in the provided members list. If no existing cluster is found, the server will immediately transition
+   * to the follower state and continue normal Raft protocol operations. If a cluster is found, the server
+   * will attempt to join the cluster. Once the server has joined or started a cluster and a leader has been found,
+   * the returned {@link CompletableFuture} will be completed.
+   *
+   * @return A completable future to be completed once the server has joined the cluster and a leader has been found.
+   */
   @Override
-  public CompletableFuture<RaftServer> open() {
+  public CompletableFuture<CopycatServer> open() {
     if (open)
       return CompletableFuture.completedFuture(this);
 
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          Function<ServerState, CompletionStage<RaftServer>> completionFunction = state -> {
-            CompletableFuture<RaftServer> future = new CompletableFuture<>();
+          Function<ServerStateContext, CompletionStage<CopycatServer>> completionFunction = state -> {
+            CompletableFuture<CopycatServer> future = new CompletableFuture<>();
             openFuture = null;
             this.state = state;
             state.setElectionTimeout(electionTimeout)
@@ -341,6 +391,14 @@ public class CopycatServer implements RaftServer {
     return open;
   }
 
+  /**
+   * Returns a boolean value indicating whether the server is running.
+   * <p>
+   * Once {@link #open()} is called and the returned {@link CompletableFuture} is completed (meaning this server found
+   * a cluster leader), this method will return {@code true} until {@link #close() closed}.
+   *
+   * @return Indicates whether the server is running.
+   */
   @Override
   public CompletableFuture<Void> close() {
     if (!open)

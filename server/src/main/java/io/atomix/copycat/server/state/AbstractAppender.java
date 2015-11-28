@@ -35,12 +35,12 @@ import java.util.Set;
  */
 abstract class AbstractAppender implements AutoCloseable {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
-  protected final ServerState context;
+  protected final ServerStateContext context;
   private final Set<MemberState> appending = new HashSet<>();
   private final Set<MemberState> configuring = new HashSet<>();
   private boolean open = true;
 
-  AbstractAppender(ServerState context) {
+  AbstractAppender(ServerStateContext context) {
     this.context = context;
   }
 

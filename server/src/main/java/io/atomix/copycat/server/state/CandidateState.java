@@ -17,8 +17,6 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -43,17 +41,17 @@ final class CandidateState extends ActiveState {
   private Quorum quorum;
   private Scheduled currentTimer;
 
-  public CandidateState(ServerState context) {
+  public CandidateState(ServerStateContext context) {
     super(context);
   }
 
   @Override
-  public CopycatServer.State type() {
-    return CopycatServer.State.CANDIDATE;
+  public Type type() {
+    return RaftStateType.CANDIDATE;
   }
 
   @Override
-  public synchronized CompletableFuture<AbstractState> open() {
+  public synchronized CompletableFuture<ServerState> open() {
     return super.open().thenRun(this::startElection).thenApply(v -> this);
   }
 
@@ -103,7 +101,7 @@ final class CandidateState extends ActiveState {
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
       LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().getMember().serverAddress());
-      transition(CopycatServer.State.LEADER);
+      context.transition(RaftStateType.LEADER);
       return;
     }
 
@@ -114,9 +112,9 @@ final class CandidateState extends ActiveState {
     final Quorum quorum = new Quorum(context.getCluster().getQuorum(), (elected) -> {
       complete.set(true);
       if (elected) {
-        transition(CopycatServer.State.LEADER);
+        context.transition(RaftStateType.LEADER);
       } else {
-        transition(RaftServer.State.FOLLOWER);
+        context.transition(RaftStateType.FOLLOWER);
       }
     });
 
@@ -158,7 +156,7 @@ final class CandidateState extends ActiveState {
                 LOGGER.debug("{} - Received greater term from {}", context.getCluster().getMember().serverAddress(), member);
                 context.setTerm(response.term());
                 complete.set(true);
-                transition(CopycatServer.State.FOLLOWER);
+                context.transition(RaftStateType.FOLLOWER);
               } else if (!response.voted()) {
                 LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().getMember().serverAddress(), member);
                 quorum.fail();
@@ -184,7 +182,7 @@ final class CandidateState extends ActiveState {
     // assign that term and leader to the current context and step down as a candidate.
     if (request.term() >= context.getTerm()) {
       context.setTerm(request.term());
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
     }
     return super.append(request);
   }
@@ -197,7 +195,7 @@ final class CandidateState extends ActiveState {
     // assign that term and leader to the current context and step down as a candidate.
     if (request.term() > context.getTerm()) {
       context.setTerm(request.term());
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(RaftStateType.FOLLOWER);
       return super.vote(request);
     }
 
