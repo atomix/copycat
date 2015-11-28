@@ -220,6 +220,15 @@ final class LeaderState extends ActiveState {
   }
 
   /**
+   * Returns a boolean value indicating whether a configuration is currently being committed.
+   *
+   * @return Indicates whether a configuration is currently being committed.
+   */
+  boolean configuring() {
+    return configuring > 0;
+  }
+
+  /**
    * Commits the given configuration.
    */
   protected CompletableFuture<Long> configure(Collection<Member> members) {
@@ -251,7 +260,7 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
-    if (configuring > 0) {
+    if (configuring()) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -267,7 +276,7 @@ final class LeaderState extends ActiveState {
     }
 
     // If the member is already a known member of the cluster, complete the join successfully.
-    Member existingMember = context.getCluster().getRemoteMember(request.member().hashCode());
+    Member existingMember = context.getCluster().getRemoteMember(request.member().id());
     if (existingMember != null && existingMember.clientAddress() != null && existingMember.clientAddress().equals(request.member().clientAddress())) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
@@ -276,15 +285,20 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
+    Member member = request.member();
+
+    // If the member is a joining member, set its type to passive.
+    if (member.type() == null) {
+      member.update(RaftMemberType.PASSIVE);
+    }
+
     Collection<Member> members = context.getCluster().getMembers();
-    members.add(request.member());
+    members.add(member);
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
       context.checkThread();
       if (isOpen()) {
-        // Reset the configuration index to allow new configuration changes to be committed.
-        configuring = 0;
         if (error == null) {
           future.complete(logResponse(JoinResponse.builder()
             .withStatus(Response.Status.OK)
@@ -308,7 +322,7 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
-    if (configuring > 0) {
+    if (configuring()) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -324,22 +338,22 @@ final class LeaderState extends ActiveState {
     }
 
     // If the leaving member is not a known member of the cluster, complete the leave successfully.
-    if (context.getCluster().getMember(request.member().hashCode()) == null) {
+    if (context.getCluster().getMember(request.member().id()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
         .withMembers(context.getCluster().getMembers())
         .build()));
     }
 
+    Member member = request.member();
+
     Collection<Member> members = context.getCluster().getMembers();
-    members.remove(request.member());
+    members.remove(member);
 
     CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
       context.checkThread();
       if (isOpen()) {
-        // Reset the configuration index to allow new configuration changes to be committed.
-        configuring = 0;
         if (error == null) {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.OK)

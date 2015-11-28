@@ -388,6 +388,7 @@ final class LeaderAppender extends AbstractAppender {
     if (response.succeeded()) {
       updateMatchIndex(member, response);
       updateNextIndex(member);
+      updateConfiguration(member);
 
       // If entries were committed to the replica then check commit indexes.
       if (!request.entries().isEmpty()) {
@@ -450,7 +451,7 @@ final class LeaderAppender extends AbstractAppender {
     member.resetFailureCount();
 
     // If the member is currently marked as UNAVAILABLE, change its status to AVAILABLE and update the configuration.
-    if (member.getMember().status() == Member.Status.UNAVAILABLE) {
+    if (member.getMember().status() == Member.Status.UNAVAILABLE && !leader.configuring()) {
       member.getMember().update(Member.Status.AVAILABLE);
       leader.configure(context.getCluster().getMembers());
     }
@@ -479,7 +480,19 @@ final class LeaderAppender extends AbstractAppender {
     // If the number of failures has increased above 3 and the member hasn't been marked as UNAVAILABLE, do so.
     else if (failures >= 3) {
       // If the member is currently marked as AVAILABLE, change its status to UNAVAILABLE and update the configuration.
-      member.getMember().update(Member.Status.UNAVAILABLE);
+      if (member.getMember().status() == Member.Status.AVAILABLE && !leader.configuring()) {
+        member.getMember().update(Member.Status.UNAVAILABLE);
+        leader.configure(context.getCluster().getMembers());
+      }
+    }
+  }
+
+  /**
+   * Updates the cluster configuration for the given member.
+   */
+  private void updateConfiguration(MemberState member) {
+    if (member.getMember().type() == RaftMemberType.PASSIVE && !leader.configuring() && member.getMatchIndex() >= context.getCommitIndex()) {
+      member.getMember().update(RaftMemberType.ACTIVE);
       leader.configure(context.getCluster().getMembers());
     }
   }
