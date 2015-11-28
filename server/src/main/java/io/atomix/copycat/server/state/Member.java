@@ -111,7 +111,7 @@ public class Member implements CatalystSerializable {
    * @return The member.
    */
   Member update(MemberType type) {
-    this.type = Assert.notNull(type, "type");
+    this.type = type;
     return this;
   }
 
@@ -133,7 +133,7 @@ public class Member implements CatalystSerializable {
    * @return The member.
    */
   Member update(Address clientAddress) {
-    this.clientAddress = Assert.notNull(clientAddress, "clientAddres");
+    this.clientAddress = clientAddress;
     return this;
   }
 
