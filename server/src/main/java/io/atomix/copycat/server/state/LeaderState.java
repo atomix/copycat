@@ -871,7 +871,7 @@ final class LeaderState extends ActiveState {
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return super.close().thenRun(this::cancelAppendTimer);
+    return super.close().thenRun(appender::close).thenRun(this::cancelAppendTimer);
   }
 
 }
