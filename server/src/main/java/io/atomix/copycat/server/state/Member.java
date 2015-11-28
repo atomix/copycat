@@ -54,7 +54,7 @@ public class Member implements CatalystSerializable {
   }
 
   public Member(MemberType type, Address serverAddress, Address clientAddress) {
-    this.type = Assert.notNull(type, "type");
+    this.type = type;
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
   }
