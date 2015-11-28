@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.executor;
 
+import io.atomix.copycat.server.session.ServerSessionManager;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -11,29 +11,20 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.executor;
 
 /**
- * Cluster member type.
+ * Server commit cleaner.
  *
- * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface MemberType {
+public interface ServerCommitCleaner {
 
   /**
-   * Returns a boolean value indicating whether the member is a stateful member.
-   *
-   * @return Indicates whether the member is a stateful member.
+   * Cleans the given index from the log.
    */
-  boolean isStateful();
-
-  /**
-   * Returns a boolean value indicating whether the member is a voting member.
-   *
-   * @return Indicates whether the member is a voting member.
-   */
-  boolean isVoting();
+  void clean(long index);
 
 }

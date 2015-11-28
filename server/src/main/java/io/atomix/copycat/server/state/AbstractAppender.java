@@ -16,6 +16,9 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.cluster.MemberState;
+import io.atomix.copycat.server.controller.ServerStateController;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -35,13 +38,13 @@ import java.util.Set;
  */
 abstract class AbstractAppender implements AutoCloseable {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
-  protected final ServerStateContext context;
+  protected final ServerStateController<RaftState> controller;
   private final Set<MemberState> appending = new HashSet<>();
   private final Set<MemberState> configuring = new HashSet<>();
   private boolean open = true;
 
-  AbstractAppender(ServerStateContext context) {
-    this.context = context;
+  AbstractAppender(ServerStateController<RaftState> controller) {
+    this.controller = controller;
   }
 
   /**
@@ -62,14 +65,14 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
     configuring.add(member);
 
-    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
-      context.checkThread();
+    controller.context().getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      controller.context().checkThread();
 
       if (open) {
         if (error == null) {
           sendConfigureRequest(connection, member, request);
         } else {
-          LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+          LOGGER.warn("{} - Failed to configure {}", controller.context().getCluster().getMember().serverAddress(), member.getMember().serverAddress());
           configuring.remove(member);
         }
       }
@@ -80,18 +83,18 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a commit message.
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
+    LOGGER.debug("{} - Sent {} to {}", controller.context().getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
-      context.checkThread();
+      controller.context().checkThread();
       configuring.remove(member);
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+          LOGGER.debug("{} - Received {} from {}", controller.context().getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
           member.setTerm(request.term()).setVersion(request.version());
           appendEntries(member);
         } else {
-          LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+          LOGGER.warn("{} - Failed to configure {}", controller.context().getCluster().getMember().serverAddress(), member.getMember().serverAddress());
         }
       }
     });
@@ -110,7 +113,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    if (member.getTerm() < context.getTerm() || member.getVersion() < context.getCluster().getVersion() && !configuring.contains(member)) {
+    if (member.getTerm() < controller.context().getTerm() || member.getVersion() < controller.context().getCluster().getVersion() && !configuring.contains(member)) {
       configure(member);
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
@@ -126,12 +129,12 @@ abstract class AbstractAppender implements AutoCloseable {
    * Builds a configure request for the given member.
    */
   protected ConfigureRequest buildConfigureRequest(MemberState member) {
-    Member leader = context.getLeader();
+    Member leader = controller.context().getLeader();
     return ConfigureRequest.builder()
-      .withTerm(context.getTerm())
+      .withTerm(controller.context().getTerm())
       .withLeader(leader != null ? leader.id() : 0)
-      .withVersion(context.getCluster().getVersion())
-      .withMembers(context.getCluster().getMembers())
+      .withVersion(controller.context().getCluster().getVersion())
+      .withMembers(controller.context().getCluster().getMembers())
       .build();
   }
 
@@ -152,7 +155,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected Entry getPrevEntry(MemberState member, long prevIndex) {
     if (prevIndex > 0) {
-      return context.getLog().get(prevIndex);
+      return controller.context().getLog().get(prevIndex);
     }
     return null;
   }
@@ -177,9 +180,9 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendAppendRequest(MemberState member, AppendRequest request) {
     startAppendRequest(member, request);
 
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
-    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
-      context.checkThread();
+    LOGGER.debug("{} - Sent {} to {}", controller.context().getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
+    controller.context().getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      controller.context().checkThread();
 
       if (open) {
         if (error == null) {
@@ -198,11 +201,11 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
       endAppendRequest(member, request, error);
-      context.checkThread();
+      controller.context().checkThread();
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+          LOGGER.debug("{} - Received {} from {}", controller.context().getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
           handleAppendResponse(member, request, response);
         } else {
           handleAppendError(member, request, error);
@@ -225,7 +228,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Returns a boolean value indicating whether there are more entries to send.
    */
   protected boolean hasMoreEntries(MemberState member) {
-    return member.getNextIndex() < context.getLog().lastIndex();
+    return member.getNextIndex() < controller.context().getLog().lastIndex();
   }
 
   /**
@@ -249,7 +252,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void resetMatchIndex(MemberState member, AppendResponse response) {
     member.setMatchIndex(response.logIndex());
-    LOGGER.debug("{} - Reset match index for {} to {}", context.getCluster().getMember().serverAddress(), member, member.getMatchIndex());
+    LOGGER.debug("{} - Reset match index for {} to {}", controller.context().getCluster().getMember().serverAddress(), member, member.getMatchIndex());
   }
 
   /**
@@ -259,9 +262,9 @@ abstract class AbstractAppender implements AutoCloseable {
     if (member.getMatchIndex() != 0) {
       member.setNextIndex(member.getMatchIndex() + 1);
     } else {
-      member.setNextIndex(context.getLog().firstIndex());
+      member.setNextIndex(controller.context().getLog().firstIndex());
     }
-    LOGGER.debug("{} - Reset next index for {} to {}", context.getCluster().getMember().serverAddress(), member, member.getNextIndex());
+    LOGGER.debug("{} - Reset next index for {} to {}", controller.context().getCluster().getMember().serverAddress(), member, member.getNextIndex());
   }
 
   @Override

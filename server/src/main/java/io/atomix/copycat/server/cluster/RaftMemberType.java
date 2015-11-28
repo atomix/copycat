@@ -13,7 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.cluster;
+
+import io.atomix.copycat.server.cluster.MemberType;
+import io.atomix.copycat.server.controller.ActiveStateController;
+import io.atomix.copycat.server.controller.InactiveStateController;
+import io.atomix.copycat.server.controller.PassiveStateController;
+import io.atomix.copycat.server.controller.ServerStateController;
+import io.atomix.copycat.server.state.ServerStateContext;
 
 /**
  * Raft member types.
@@ -23,9 +30,34 @@ package io.atomix.copycat.server.state;
 public enum RaftMemberType implements MemberType {
 
   /**
+   * Inactive member type.
+   */
+  INACTIVE {
+    @Override
+    public ServerStateController createController(ServerStateContext context) {
+      return new InactiveStateController(context);
+    }
+
+    @Override
+    public boolean isStateful() {
+      return false;
+    }
+
+    @Override
+    public boolean isVoting() {
+      return false;
+    }
+  },
+
+  /**
    * Active member type.
    */
   ACTIVE {
+    @Override
+    public ServerStateController createController(ServerStateContext context) {
+      return new ActiveStateController(context);
+    }
+
     @Override
     public boolean isStateful() {
       return true;
@@ -41,6 +73,11 @@ public enum RaftMemberType implements MemberType {
    * Passive member type.
    */
   PASSIVE {
+    @Override
+    public ServerStateController createController(ServerStateContext context) {
+      return new PassiveStateController(context);
+    }
+
     @Override
     public boolean isStateful() {
       return true;

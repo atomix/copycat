@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.executor;
 
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.StateMachineContext;
+import io.atomix.copycat.server.cluster.ConnectionManager;
+import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.session.ServerSessionManager;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -30,7 +34,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ServerStateMachineContext implements StateMachineContext {
+public class ServerStateMachineContext implements StateMachineContext {
   private final ServerClock clock = new ServerClock();
   private final ConnectionManager connections;
   private final ServerSessionManager sessions;
@@ -60,8 +64,8 @@ class ServerStateMachineContext implements StateMachineContext {
     long version = this.version;
 
     List<CompletableFuture<Void>> futures = null;
-    for (ServerSession session : sessions.sessions.values()) {
-      CompletableFuture<Void> future = session.commit(version);
+    for (Session session : sessions) {
+      CompletableFuture<Void> future = ((ServerSession) session).commit(version);
       if (future != null) {
         if (futures == null)
           futures = new ArrayList<>(8);
@@ -75,14 +79,14 @@ class ServerStateMachineContext implements StateMachineContext {
   /**
    * Indicates whether the current context is synchronous.
    */
-  boolean synchronous() {
+  public boolean synchronous() {
     return synchronous;
   }
 
   /**
    * Returns the context consistency level.
    */
-  Command.ConsistencyLevel consistency() {
+  public Command.ConsistencyLevel consistency() {
     return consistency;
   }
 
@@ -104,7 +108,7 @@ class ServerStateMachineContext implements StateMachineContext {
   /**
    * Returns the server connections.
    */
-  ConnectionManager connections() {
+  public ConnectionManager connections() {
     return connections;
   }
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.executor;
 
 import java.time.Clock;
 import java.time.Instant;

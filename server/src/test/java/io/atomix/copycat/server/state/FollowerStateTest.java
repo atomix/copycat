@@ -35,7 +35,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new FollowerState(serverState);
+    state = new FollowerState(serverState.getController());
   }
 
   /**

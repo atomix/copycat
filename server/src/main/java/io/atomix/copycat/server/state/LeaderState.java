@@ -24,8 +24,13 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.cluster.RaftMemberType;
+import io.atomix.copycat.server.controller.ServerStateController;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.entry.*;
 
 import java.time.Duration;
@@ -43,8 +48,8 @@ final class LeaderState extends ActiveState {
   private Scheduled appendTimer;
   private long configuring;
 
-  public LeaderState(ServerStateContext context) {
-    super(context);
+  public LeaderState(ServerStateController controller) {
+    super(controller);
     this.appender = new LeaderAppender(this);
   }
 
@@ -61,7 +66,7 @@ final class LeaderState extends ActiveState {
     // Schedule the initial entries commit to occur after the state is opened. Attempting any communication
     // within the open() method will result in a deadlock since RaftProtocol calls this method synchronously.
     // What is critical about this logic is that the heartbeat timer not be started until a no-op entry has been committed.
-    context.getThreadContext().execute(this::commitInitialEntries).whenComplete((result, error) -> {
+    controller.context().getThreadContext().execute(this::commitInitialEntries).whenComplete((result, error) -> {
       if (isOpen() && error == null) {
         startAppendTimer();
       }
@@ -76,25 +81,25 @@ final class LeaderState extends ActiveState {
    * Sets the current node as the cluster leader.
    */
   private void takeLeadership() {
-    context.setLeader(context.getCluster().getMember().id());
-    context.getCluster().getVotingMemberStates().forEach(m -> m.resetState(context.getLog()));
+    controller.context().setLeader(controller.context().getCluster().getMember().id());
+    controller.context().getCluster().getVotingMemberStates().forEach(m -> m.resetState(controller.context().getLog()));
   }
 
   /**
    * Appends initial entries to the log to take leadership.
    */
   private void appendInitialEntries() {
-    final long term = context.getTerm();
+    final long term = controller.context().getTerm();
 
     // Append a no-op entry to reset session timeouts and commit entries from prior terms.
-    try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
+    try (NoOpEntry entry = controller.context().getLog().create(NoOpEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(appender.time());
-      assert context.getLog().append(entry) == appender.index();
+      assert controller.context().getLog().append(entry) == appender.index();
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
-    configure(context.getCluster().getMembers());
+    configure(controller.context().getCluster().getMembers());
   }
 
   /**
@@ -107,14 +112,14 @@ final class LeaderState extends ActiveState {
     // that the commitIndex is not increased until the no-op entry (appender.index()) is committed.
     CompletableFuture<Void> future = new CompletableFuture<>();
     appender.appendEntries(appender.index()).whenComplete((resultIndex, error) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (error == null) {
           applyEntries(resultIndex);
           future.complete(null);
         } else {
-          context.setLeader(0);
-          context.transition(RaftStateType.FOLLOWER);
+          controller.context().setLeader(0);
+          controller.transition(RaftStateType.FOLLOWER);
         }
       }
     });
@@ -125,14 +130,14 @@ final class LeaderState extends ActiveState {
    * Applies all unapplied entries to the log.
    */
   private void applyEntries(long index) {
-    if (!context.getLog().isEmpty()) {
+    if (!controller.context().getLog().isEmpty()) {
       int count = 0;
-      for (long lastApplied = Math.max(context.getLastApplied(), context.getLog().firstIndex()); lastApplied <= index; lastApplied++) {
-        Entry entry = context.getLog().get(lastApplied);
+      for (long lastApplied = Math.max(controller.context().getLastApplied(), controller.context().getLog().firstIndex()); lastApplied <= index; lastApplied++) {
+        Entry entry = controller.context().getLog().get(lastApplied);
         if (entry != null) {
-          context.getStateMachine().apply(entry).whenComplete((result, error) -> {
+          controller.context().getStateMachine().apply(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getCluster().getMember().serverAddress(), error.getMessage());
+              LOGGER.info("{} - An application error occurred: {}", controller.context().getCluster().getMember().serverAddress(), error.getMessage());
             }
             entry.release();
           });
@@ -140,8 +145,8 @@ final class LeaderState extends ActiveState {
         count++;
       }
 
-      LOGGER.debug("{} - Applied {} entries to log", context.getCluster().getMember().serverAddress(), count);
-      context.getLog().compactor().minorIndex(context.getLastCompleted());
+      LOGGER.debug("{} - Applied {} entries to log", controller.context().getCluster().getMember().serverAddress(), count);
+      controller.context().getLog().compactor().minorIndex(controller.context().getLastCompleted());
     }
   }
 
@@ -152,18 +157,18 @@ final class LeaderState extends ActiveState {
     // Set a timer that will be used to periodically synchronize with other nodes
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
-    LOGGER.debug("{} - Starting append timer", context.getCluster().getMember().serverAddress());
-    appendTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::appendMembers);
+    LOGGER.debug("{} - Starting append timer", controller.context().getCluster().getMember().serverAddress());
+    appendTimer = controller.context().getThreadContext().schedule(Duration.ZERO, controller.context().getHeartbeatInterval(), this::appendMembers);
   }
 
   /**
    * Sends AppendEntries requests to members of the cluster that haven't heard from the leader in a while.
    */
   private void appendMembers() {
-    context.checkThread();
+    controller.context().checkThread();
     if (isOpen()) {
       appender.appendEntries().whenComplete((result, error) -> {
-        context.getLog().compactor().minorIndex(context.getLastCompleted());
+        controller.context().getLog().compactor().minorIndex(controller.context().getLastCompleted());
       });
     }
   }
@@ -179,39 +184,40 @@ final class LeaderState extends ActiveState {
    * a session as suspicious, it will log and replicate an {@link UnregisterEntry} to unregister the session.
    */
   private void checkSessions() {
-    long term = context.getTerm();
+    long term = controller.context().getTerm();
 
     // Iterate through all currently registered sessions.
-    for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
+    for (Session session : controller.context().getStateMachine().executor().context().sessions()) {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
-      if (!session.isUnregistering() && session.isSuspect()) {
-        LOGGER.debug("{} - Detected expired session: {}", context.getCluster().getMember().serverAddress(), session.id());
+      ServerSession serverSession = (ServerSession) session;
+      if (!serverSession.isUnregistering() && serverSession.isSuspect()) {
+        LOGGER.debug("{} - Detected expired session: {}", controller.context().getCluster().getMember().serverAddress(), session.id());
 
         // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
         // This will result in state machine expire() methods being called when the entry is applied.
         final long index;
-        try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
+        try (UnregisterEntry entry = controller.context().getLog().create(UnregisterEntry.class)) {
           entry.setTerm(term)
             .setSession(session.id())
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
-          index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
+          index = controller.context().getLog().append(entry);
+          LOGGER.debug("{} - Appended {}", controller.context().getCluster().getMember().serverAddress(), entry);
         }
 
         // Commit the unregister entry and apply it to the state machine.
         appender.appendEntries(index).whenComplete((result, error) -> {
           if (isOpen()) {
-            UnregisterEntry entry = context.getLog().get(index);
-            LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-            context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
+            UnregisterEntry entry = controller.context().getLog().get(index);
+            LOGGER.debug("{} - Applying {}", controller.context().getCluster().getMember().serverAddress(), entry);
+            controller.context().getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
           }
         });
 
         // Mark the session as being unregistered in order to ensure this leader doesn't attempt
         // to unregister it again.
-        session.unregister();
+        serverSession.unregister();
       }
     }
   }
@@ -230,20 +236,20 @@ final class LeaderState extends ActiveState {
    */
   protected CompletableFuture<Long> configure(Collection<Member> members) {
     final long index;
-    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (ConfigurationEntry entry = controller.context().getLog().create(ConfigurationEntry.class)) {
+      entry.setTerm(controller.context().getTerm())
         .setMembers(members);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, index);
+      index = controller.context().getLog().append(entry);
+      LOGGER.debug("{} - Appended {} to log at index {}", controller.context().getCluster().getMember().serverAddress(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getCluster().configure(entry.getIndex(), entry.getMembers());
+      controller.context().getCluster().configure(entry.getIndex(), entry.getMembers());
     }
 
     return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
         configuring = 0;
@@ -253,7 +259,7 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<JoinResponse> join(final JoinRequest request) {
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
@@ -266,19 +272,19 @@ final class LeaderState extends ActiveState {
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-    if (appender.index() == 0 || context.getCommitIndex() < appender.index()) {
+    if (appender.index() == 0 || controller.context().getCommitIndex() < appender.index()) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
     }
 
     // If the member is already a known member of the cluster, complete the join successfully.
-    Member existingMember = context.getCluster().getRemoteMember(request.member().id());
+    Member existingMember = controller.context().getCluster().getRemoteMember(request.member().id());
     if (existingMember != null && existingMember.clientAddress() != null && existingMember.clientAddress().equals(request.member().clientAddress())) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
-        .withVersion(context.getCluster().getVersion())
-        .withMembers(context.getCluster().getMembers())
+        .withVersion(controller.context().getCluster().getVersion())
+        .withMembers(controller.context().getCluster().getMembers())
         .build()));
     }
 
@@ -289,12 +295,12 @@ final class LeaderState extends ActiveState {
       member.update(RaftMemberType.PASSIVE);
     }
 
-    Collection<Member> members = context.getCluster().getMembers();
+    Collection<Member> members = controller.context().getCluster().getMembers();
     members.add(member);
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (error == null) {
           future.complete(logResponse(JoinResponse.builder()
@@ -315,7 +321,7 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<LeaveResponse> leave(final LeaveRequest request) {
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
     // If another configuration change is already under way, reject the configuration.
@@ -328,28 +334,28 @@ final class LeaderState extends ActiveState {
     // If the leader index is 0 or is greater than the commitIndex, reject the join requests.
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-    if (appender.index() == 0 || context.getCommitIndex() < appender.index()) {
+    if (appender.index() == 0 || controller.context().getCommitIndex() < appender.index()) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
     }
 
     // If the leaving member is not a known member of the cluster, complete the leave successfully.
-    if (context.getCluster().getMember(request.member().id()) == null) {
+    if (controller.context().getCluster().getMember(request.member().id()) == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.OK)
-        .withMembers(context.getCluster().getMembers())
+        .withMembers(controller.context().getCluster().getMembers())
         .build()));
     }
 
     Member member = request.member();
 
-    Collection<Member> members = context.getCluster().getMembers();
+    Collection<Member> members = controller.context().getCluster().getMembers();
     members.remove(member);
 
     CompletableFuture<LeaveResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (error == null) {
           future.complete(logResponse(LeaveResponse.builder()
@@ -372,22 +378,22 @@ final class LeaderState extends ActiveState {
   public CompletableFuture<PollResponse> poll(final PollRequest request) {
     return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(Response.Status.OK)
-      .withTerm(context.getTerm())
+      .withTerm(controller.context().getTerm())
       .withAccepted(false)
       .build()));
   }
 
   @Override
   public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
-    if (request.term() > context.getTerm()) {
-      LOGGER.debug("{} - Received greater term", context.getCluster().getMember().serverAddress());
-      context.setLeader(0);
-      context.transition(RaftStateType.FOLLOWER);
+    if (request.term() > controller.context().getTerm()) {
+      LOGGER.debug("{} - Received greater term", controller.context().getCluster().getMember().serverAddress());
+      controller.context().setLeader(0);
+      controller.transition(RaftStateType.FOLLOWER);
       return super.vote(request);
     } else {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withVoted(false)
         .build()));
     }
@@ -395,30 +401,30 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<AppendResponse> append(final AppendRequest request) {
-    context.checkThread();
-    if (request.term() > context.getTerm()) {
+    controller.context().checkThread();
+    if (request.term() > controller.context().getTerm()) {
       return super.append(request);
-    } else if (request.term() < context.getTerm()) {
+    } else if (request.term() < controller.context().getTerm()) {
       return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(controller.context().getLog().lastIndex())
         .build()));
     } else {
-      context.setLeader(request.leader());
-      context.transition(RaftStateType.FOLLOWER);
+      controller.context().setLeader(request.leader());
+      controller.transition(RaftStateType.FOLLOWER);
       return super.append(request);
     }
   }
 
   @Override
-  protected CompletableFuture<CommandResponse> command(final CommandRequest request) {
-    context.checkThread();
+  public CompletableFuture<CommandResponse> command(final CommandRequest request) {
+    controller.context().checkThread();
     logRequest(request);
 
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSession session = controller.context().getStateMachine().executor().context().sessions().getSession(request.session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -440,29 +446,29 @@ final class LeaderState extends ActiveState {
       return future;
     }
 
-    final long term = context.getTerm();
+    final long term = controller.context().getTerm();
     final long timestamp = System.currentTimeMillis();
     final long index;
 
     // Create a CommandEntry and append it to the log.
-    try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
+    try (CommandEntry entry = controller.context().getLog().create(CommandEntry.class)) {
       entry.setTerm(term)
         .setSession(request.session())
         .setTimestamp(timestamp)
         .setSequence(request.sequence())
         .setCommand(command);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, index);
+      index = controller.context().getLog().append(entry);
+      LOGGER.debug("{} - Appended {} to log at index {}", controller.context().getCluster().getMember().serverAddress(), entry, index);
     }
 
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          CommandEntry entry = context.getLog().get(index);
+          CommandEntry entry = controller.context().getLog().get(index);
 
-          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-          context.getStateMachine().apply(entry, true).whenComplete((result, error) -> {
+          LOGGER.debug("{} - Applying {}", controller.context().getCluster().getMember().serverAddress(), entry);
+          controller.context().getStateMachine().apply(entry, true).whenComplete((result, error) -> {
             if (isOpen()) {
               if (error == null) {
                 future.complete(logResponse(CommandResponse.builder()
@@ -503,19 +509,19 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<QueryResponse> query(final QueryRequest request) {
+  public CompletableFuture<QueryResponse> query(final QueryRequest request) {
 
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
-    final long index = context.getCommitIndex();
+    final long index = controller.context().getCommitIndex();
 
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
+    QueryEntry entry = controller.context().getLog().create(QueryEntry.class)
       .setIndex(index)
-      .setTerm(context.getTerm())
+      .setTerm(controller.context().getTerm())
       .setTimestamp(timestamp)
       .setSession(request.session())
       .setSequence(request.sequence())
@@ -550,7 +556,7 @@ final class LeaderState extends ActiveState {
    * Submits a query with lease bounded linearizable consistency.
    */
   private CompletableFuture<QueryResponse> submitQueryBoundedLinearizable(QueryEntry entry) {
-    if (System.currentTimeMillis() - appender.time() < context.getElectionTimeout().toMillis()) {
+    if (System.currentTimeMillis() - appender.time() < controller.context().getElectionTimeout().toMillis()) {
       return submitQueryLocal(entry);
     } else {
       return submitQueryLinearizable(entry);
@@ -563,7 +569,7 @@ final class LeaderState extends ActiveState {
   private CompletableFuture<QueryResponse> submitQueryLinearizable(QueryEntry entry) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (commitError == null) {
           entry.acquire();
@@ -586,7 +592,7 @@ final class LeaderState extends ActiveState {
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // versions will be the last applied index.
-    final long version = context.getStateMachine().getLastApplied();
+    final long version = controller.context().getStateMachine().getLastApplied();
     applyEntry(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
@@ -614,40 +620,40 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
+  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
-    final long timeout = context.getSessionTimeout().toMillis();
+    final long timeout = controller.context().getSessionTimeout().toMillis();
 
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
-    try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (RegisterEntry entry = controller.context().getLog().create(RegisterEntry.class)) {
+      entry.setTerm(controller.context().getTerm())
         .setTimestamp(timestamp)
         .setClient(request.client())
         .setTimeout(timeout);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
+      index = controller.context().getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", controller.context().getCluster().getMember().serverAddress(), entry);
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          RegisterEntry entry = context.getLog().get(index);
+          RegisterEntry entry = controller.context().getLog().get(index);
 
-          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-          context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
+          LOGGER.debug("{} - Applying {}", controller.context().getCluster().getMember().serverAddress(), entry);
+          controller.context().getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.OK)
                   .withSession((Long) sessionId)
                   .withTimeout(timeout)
-                  .withLeader(context.getCluster().getMember().serverAddress())
-                  .withMembers(context.getCluster().getMembers().stream()
+                  .withLeader(controller.context().getCluster().getMember().serverAddress())
+                  .withMembers(controller.context().getCluster().getMembers().stream()
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
@@ -678,15 +684,15 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
-    context.checkThread();
+  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+    controller.context().checkThread();
     logRequest(request);
 
-    context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+    controller.context().getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
 
     AcceptRequest acceptRequest = AcceptRequest.builder()
       .withSession(request.session())
-      .withAddress(context.getCluster().getMember().serverAddress())
+      .withAddress(controller.context().getCluster().getMember().serverAddress())
       .build();
     return accept(acceptRequest)
       .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
@@ -694,30 +700,30 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
-    try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (ConnectEntry entry = controller.context().getLog().create(ConnectEntry.class)) {
+      entry.setTerm(controller.context().getTerm())
         .setSession(request.session())
         .setTimestamp(timestamp)
         .setAddress(request.address());
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
+      index = controller.context().getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", controller.context().getCluster().getMember().serverAddress(), entry);
     }
 
-    context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
+    controller.context().getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          ConnectEntry entry = context.getLog().get(index);
+          ConnectEntry entry = controller.context().getLog().get(index);
           applyEntry(entry).whenComplete((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
@@ -751,60 +757,60 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
-    try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (KeepAliveEntry entry = controller.context().getLog().create(KeepAliveEntry.class)) {
+      entry.setTerm(controller.context().getTerm())
         .setSession(request.session())
         .setCommandSequence(request.commandSequence())
         .setEventVersion(request.eventVersion())
         .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
+      index = controller.context().getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", controller.context().getCluster().getMember().serverAddress(), entry);
     }
 
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          KeepAliveEntry entry = context.getLog().get(index);
+          KeepAliveEntry entry = controller.context().getLog().get(index);
           applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.OK)
-                  .withLeader(context.getCluster().getMember().serverAddress())
-                  .withMembers(context.getCluster().getMembers().stream()
+                  .withLeader(controller.context().getCluster().getMember().serverAddress())
+                  .withMembers(controller.context().getCluster().getMembers().stream()
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withLeader(context.getCluster().getMember().serverAddress())
+                  .withLeader(controller.context().getCluster().getMember().serverAddress())
                   .withError(((RaftException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withLeader(context.getCluster().getMember().serverAddress())
+                  .withLeader(controller.context().getCluster().getMember().serverAddress())
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
             }
             entry.release();
-          }, context.getThreadContext().executor());
+          }, controller.context().getThreadContext().executor());
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withLeader(context.getCluster().getMember().serverAddress())
+            .withLeader(controller.context().getCluster().getMember().serverAddress())
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -814,31 +820,31 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
-    context.checkThread();
+    controller.context().checkThread();
     logRequest(request);
 
-    try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-      entry.setTerm(context.getTerm())
+    try (UnregisterEntry entry = controller.context().getLog().create(UnregisterEntry.class)) {
+      entry.setTerm(controller.context().getTerm())
         .setSession(request.session())
         .setExpired(false)
         .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
+      index = controller.context().getLog().append(entry);
+      LOGGER.debug("{} - Appended {}", controller.context().getCluster().getMember().serverAddress(), entry);
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
+      controller.context().checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          UnregisterEntry entry = context.getLog().get(index);
+          UnregisterEntry entry = controller.context().getLog().get(index);
 
-          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-          context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
+          LOGGER.debug("{} - Applying {}", controller.context().getCluster().getMember().serverAddress(), entry);
+          controller.context().getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
                 future.complete(logResponse(UnregisterResponse.builder()
@@ -875,7 +881,7 @@ final class LeaderState extends ActiveState {
    */
   private void cancelAppendTimer() {
     if (appendTimer != null) {
-      LOGGER.debug("{} - Cancelling append timer", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Cancelling append timer", controller.context().getCluster().getMember().serverAddress());
       appendTimer.cancel();
     }
   }

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Log;
@@ -23,7 +23,7 @@ import io.atomix.copycat.server.storage.Log;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class MemberState {
+public final class MemberState {
   private Member member;
   private long term;
   private long version;
@@ -40,7 +40,7 @@ class MemberState {
   /**
    * Resets the member state.
    */
-  void resetState(Log log) {
+  public void resetState(Log log) {
     matchIndex = 0;
     nextIndex = log.lastIndex() + 1;
     commitTime = 0;
@@ -63,7 +63,7 @@ class MemberState {
    * @param member The member.
    * @return The member state.
    */
-  MemberState setMember(Member member) {
+  public MemberState setMember(Member member) {
     this.member = Assert.notNull(member, "member");
     return this;
   }
@@ -73,7 +73,7 @@ class MemberState {
    *
    * @return The member term.
    */
-  long getTerm() {
+  public long getTerm() {
     return term;
   }
 
@@ -83,7 +83,7 @@ class MemberState {
    * @param term The member term.
    * @return The member state.
    */
-  MemberState setTerm(long term) {
+  public MemberState setTerm(long term) {
     this.term = term;
     return this;
   }
@@ -93,7 +93,7 @@ class MemberState {
    *
    * @return The member configuration version.
    */
-  long getVersion() {
+  public long getVersion() {
     return version;
   }
 
@@ -103,7 +103,7 @@ class MemberState {
    * @param version The member version.
    * @return The member state.
    */
-  MemberState setVersion(long version) {
+  public MemberState setVersion(long version) {
     this.version = version;
     return this;
   }
@@ -113,7 +113,7 @@ class MemberState {
    *
    * @return The member's match index.
    */
-  long getMatchIndex() {
+  public long getMatchIndex() {
     return matchIndex;
   }
 
@@ -123,7 +123,7 @@ class MemberState {
    * @param matchIndex The member's match index.
    * @return The member state.
    */
-  MemberState setMatchIndex(long matchIndex) {
+  public MemberState setMatchIndex(long matchIndex) {
     this.matchIndex = Assert.argNot(matchIndex, matchIndex < this.matchIndex, "matchIndex cannot be decreased");
     return this;
   }
@@ -133,7 +133,7 @@ class MemberState {
    *
    * @return The member's next index.
    */
-  long getNextIndex() {
+  public long getNextIndex() {
     return nextIndex;
   }
 
@@ -143,7 +143,7 @@ class MemberState {
    * @param nextIndex The member's next index.
    * @return The member state.
    */
-  MemberState setNextIndex(long nextIndex) {
+  public MemberState setNextIndex(long nextIndex) {
     this.nextIndex = Assert.argNot(nextIndex, nextIndex <= matchIndex, "nextIndex cannot be less than or equal to matchIndex");
     return this;
   }
@@ -153,7 +153,7 @@ class MemberState {
    *
    * @return The member commit time.
    */
-  long getCommitTime() {
+  public long getCommitTime() {
     return commitTime;
   }
 
@@ -163,7 +163,7 @@ class MemberState {
    * @param commitTime The member commit time.
    * @return The member state.
    */
-  MemberState setCommitTime(long commitTime) {
+  public MemberState setCommitTime(long commitTime) {
     this.commitTime = commitTime;
     return this;
   }
@@ -173,7 +173,7 @@ class MemberState {
    *
    * @return The member commit start time.
    */
-  long getCommitStartTime() {
+  public long getCommitStartTime() {
     return commitStartTime;
   }
 
@@ -183,7 +183,7 @@ class MemberState {
    * @param startTime The member commit attempt start time.
    * @return The member state.
    */
-  MemberState setCommitStartTime(long startTime) {
+  public MemberState setCommitStartTime(long startTime) {
     this.commitStartTime = startTime;
     return this;
   }
@@ -193,7 +193,7 @@ class MemberState {
    *
    * @return The member failure count.
    */
-  int getFailureCount() {
+  public int getFailureCount() {
     return failures;
   }
 
@@ -202,7 +202,7 @@ class MemberState {
    *
    * @return The member state.
    */
-  int incrementFailureCount() {
+  public int incrementFailureCount() {
     return ++failures;
   }
 
@@ -211,7 +211,7 @@ class MemberState {
    *
    * @return The member state.
    */
-  MemberState resetFailureCount() {
+  public MemberState resetFailureCount() {
     failures = 0;
     return this;
   }

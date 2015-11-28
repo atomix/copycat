@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.state.ServerStateContext;
 import io.atomix.copycat.server.storage.MetaStore;
 
 import java.util.*;
@@ -26,7 +27,7 @@ import java.util.stream.Collectors;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ClusterState {
+public final class ClusterState {
   private final ServerStateContext context;
   private final Member member;
   private long version = -1;
@@ -34,7 +35,7 @@ class ClusterState {
   private final List<MemberState> members = new ArrayList<>();
   private final Map<MemberType, List<MemberState>> memberTypes = new HashMap<>();
 
-  ClusterState(ServerStateContext context, Member member) {
+  public ClusterState(ServerStateContext context, Member member) {
     this.context = Assert.notNull(context, "context");
     this.member = Assert.notNull(member, "member");
   }
@@ -53,7 +54,7 @@ class ClusterState {
    *
    * @return The remote quorum count.
    */
-  int getQuorum() {
+  public int getQuorum() {
     return (int) Math.floor((getVotingMemberStates().size() + 1) / 2.0) + 1;
   }
 
@@ -62,7 +63,7 @@ class ClusterState {
    *
    * @return The cluster state version.
    */
-  long getVersion() {
+  public long getVersion() {
     return version;
   }
 
@@ -96,7 +97,7 @@ class ClusterState {
    * @param id The member ID.
    * @return The member state.
    */
-  MemberState getRemoteMemberState(int id) {
+  public MemberState getRemoteMemberState(int id) {
     return membersMap.get(id);
   }
 
@@ -134,7 +135,7 @@ class ClusterState {
    *
    * @return A list of all members.
    */
-  List<MemberState> getRemoteMemberStates() {
+  public List<MemberState> getRemoteMemberStates() {
     return members;
   }
 
@@ -152,7 +153,7 @@ class ClusterState {
    *
    * @return A list of voting members.
    */
-  List<MemberState> getVotingMemberStates() {
+  public List<MemberState> getVotingMemberStates() {
     return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).collect(Collectors.toList());
   }
 
@@ -162,7 +163,7 @@ class ClusterState {
    * @param comparator A comparator with which to sort the members.
    * @return A list of voting members.
    */
-  List<MemberState> getVotingMemberStates(Comparator<MemberState> comparator) {
+  public List<MemberState> getVotingMemberStates(Comparator<MemberState> comparator) {
     List<MemberState> members = getVotingMemberStates();
     Collections.sort(members, comparator);
     return members;
@@ -182,7 +183,7 @@ class ClusterState {
    *
    * @return A list of stateful members.
    */
-  List<MemberState> getStatefulMemberStates() {
+  public List<MemberState> getStatefulMemberStates() {
     return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).collect(Collectors.toList());
   }
 
@@ -193,7 +194,7 @@ class ClusterState {
    * @param members The cluster members.
    * @return The cluster state.
    */
-  ClusterState configure(long version, Collection<Member> members) {
+  public ClusterState configure(long version, Collection<Member> members) {
     if (version <= this.version)
       return this;
 
@@ -241,7 +242,7 @@ class ClusterState {
 
     // If the local member is not part of the configuration, set its type to null.
     if (!members.contains(this.member)) {
-      this.member.update((MemberType) null);
+      this.member.update(RaftMemberType.INACTIVE);
     }
 
     // Iterate through configured members and remove any that no longer exist in the configuration.

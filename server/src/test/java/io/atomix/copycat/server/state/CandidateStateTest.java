@@ -17,6 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Server;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -38,7 +39,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new CandidateState(serverState);
+    state = new CandidateState(serverState.getController());
   }
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {

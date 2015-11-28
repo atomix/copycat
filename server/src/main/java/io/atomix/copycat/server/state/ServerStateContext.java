@@ -23,12 +23,18 @@ import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.request.*;
+import io.atomix.copycat.server.cluster.*;
+import io.atomix.copycat.server.controller.InactiveStateController;
+import io.atomix.copycat.server.controller.ServerStateController;
+import io.atomix.copycat.server.request.JoinRequest;
+import io.atomix.copycat.server.request.LeaveRequest;
 import io.atomix.copycat.server.response.JoinResponse;
+import io.atomix.copycat.server.session.ServerSessionManager;
+import io.atomix.copycat.server.executor.ServerStateMachine;
+import io.atomix.copycat.server.executor.ServerStateMachineContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
 import org.slf4j.Logger;
@@ -36,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -60,7 +67,9 @@ public class ServerStateContext {
   private final Log log;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
-  private ServerState state = new InactiveState(this);
+  private final Set<Connection> clientConnections = new HashSet<>();
+  private final Set<Connection> serverConnections = new HashSet<>();
+  private ServerStateController controller = new InactiveStateController(this);
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
@@ -131,6 +140,15 @@ public class ServerStateContext {
    */
   public ThreadContext getThreadContext() {
     return threadContext;
+  }
+
+  /**
+   * Returns the current server state controller.
+   *
+   * @return The current server state controller.
+   */
+  public ServerStateController<?> getController() {
+    return controller;
   }
 
   /**
@@ -238,7 +256,7 @@ public class ServerStateContext {
    *
    * @return The cluster state.
    */
-  ClusterState getCluster() {
+  public ClusterState getCluster() {
     return cluster;
   }
 
@@ -395,12 +413,21 @@ public class ServerStateContext {
   }
 
   /**
+   * Returns the current member type.
+   *
+   * @return The current member type.
+   */
+  public MemberType getType() {
+    return controller.type();
+  }
+
+  /**
    * Returns the current state.
    *
    * @return The current state.
    */
   public CopycatServer.State getState() {
-    return state.type();
+    return controller.state().type();
   }
 
   /**
@@ -424,7 +451,7 @@ public class ServerStateContext {
   /**
    * Checks that the current thread is the state context thread.
    */
-  void checkThread() {
+  public void checkThread() {
     threadContext.checkThread();
   }
 
@@ -434,16 +461,13 @@ public class ServerStateContext {
   void connectClient(Connection connection) {
     threadContext.checkThread();
 
-    // Note we do not use method references here because the "state" variable changes over time.
-    // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
-
-    connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+    if (clientConnections.add(connection)) {
+      controller.connectClient(connection);
+      connection.closeListener(c -> {
+        stateMachine.executor().context().sessions().unregisterConnection(c);
+        clientConnections.remove(c);
+      });
+    }
   }
 
   /**
@@ -452,55 +476,48 @@ public class ServerStateContext {
   void connectServer(Connection connection) {
     threadContext.checkThread();
 
-    // Handlers for all request types are registered since requests can be proxied between servers.
-    // Note we do not use method references here because the "state" variable changes over time.
-    // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(AcceptRequest.class, request -> state.accept(request));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(PublishRequest.class, request -> state.publish(request));
-    connection.handler(ConfigureRequest.class, request -> state.configure(request));
-    connection.handler(JoinRequest.class, request -> state.join(request));
-    connection.handler(LeaveRequest.class, request -> state.leave(request));
-    connection.handler(AppendRequest.class, request -> state.append(request));
-    connection.handler(PollRequest.class, request -> state.poll(request));
-    connection.handler(VoteRequest.class, request -> state.vote(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    if (serverConnections.add(connection)) {
+      controller.connectServer(connection);
+      connection.closeListener(c -> {
+        serverConnections.remove(c);
+      });
+    }
   }
 
   /**
-   * Transitions the server state.
+   * Configures the server controller.
    */
-  public void transition(ServerState.Type state) {
+  public void configure(MemberType type) {
     checkThread();
 
-    // If the state has not changed, return.
-    if (this.state != null && state == this.state.type())
+    // If the member type has not changed, return.
+    if (controller != null && type == controller.type())
       return;
 
-    LOGGER.info("{} - Transitioning to {}", cluster.getMember().serverAddress(), state);
+    LOGGER.info("{} - Transitioning to {}", cluster.getMember().serverAddress(), type);
 
-    // Close the current state.
-    if (this.state != null) {
+    // Close the current controller.
+    if (controller != null) {
       try {
-        this.state.close().get();
+        controller.close().get();
       } catch (InterruptedException | ExecutionException e) {
-        throw new IllegalStateException("failed to close Raft state", e);
+        throw new IllegalStateException("failed to close state controller", e);
       }
+
+      clientConnections.forEach(controller::disconnectClient);
+      serverConnections.forEach(controller::disconnectServer);
     }
 
-    // Force state transitions to occur synchronously in order to prevent race conditions.
+    // Force controller transitions to occur synchronously in order to prevent race conditions.
+    controller = type.createController(this);
+    serverConnections.forEach(controller::connectServer);
+    clientConnections.forEach(controller::connectClient);
+
     try {
-      this.state = state.createState(this);
-      this.state.open().get();
+      controller.open().get();
     } catch (InterruptedException | ExecutionException e) {
-      throw new IllegalStateException("failed to initialize Raft state", e);
+      throw new IllegalStateException("failed to initialize state controller", e);
     }
-
-    stateChangeListeners.forEach(l -> l.accept(this.state.type()));
   }
 
   /**
@@ -517,13 +534,7 @@ public class ServerStateContext {
     // Note that we don't complete the join future when transitioning to a valid state since we need
     // to ensure that the server's configuration has been updated in the cluster before completing the join.
     if (cluster.getMember().type() != null) {
-      if (cluster.getMember().type() == RaftMemberType.ACTIVE) {
-        transition(RaftStateType.FOLLOWER);
-      } else if (cluster.getMember().type() == RaftMemberType.PASSIVE) {
-        transition(RaftStateType.PASSIVE);
-      } else {
-        joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + cluster.getMember().type()));
-      }
+      configure(cluster.getMember().type());
     } else {
       join(cluster.getVotingMemberStates().iterator(), 1);
     }
@@ -559,14 +570,9 @@ public class ServerStateContext {
             MemberType type = cluster.getMember().type();
             if (type == null) {
               joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
-            } else if (type == RaftMemberType.ACTIVE) {
-              transition(RaftStateType.FOLLOWER);
-              joinFuture.complete(null);
-            } else if (type == RaftMemberType.PASSIVE) {
-              transition(RaftStateType.PASSIVE);
-              joinFuture.complete(null);
             } else {
-              joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + type));
+              configure(type);
+              joinFuture.complete(null);
             }
           } else if (response.error() == null) {
             // If the response error is null, that indicates that no error occurred but the leader was
@@ -619,7 +625,7 @@ public class ServerStateContext {
   private void joinLeader(Member leader) {
     if (joinFuture != null) {
       if (cluster.getMember().equals(leader)) {
-        if (state.type() == RaftStateType.LEADER && !((LeaderState) state).configuring()) {
+        if (controller.state().type() == RaftStateType.LEADER && !((LeaderState) controller.state()).configuring()) {
           joinFuture.complete(null);
         } else {
           cancelJoinTimer();
@@ -660,7 +666,7 @@ public class ServerStateContext {
     threadContext.execute(() -> {
       if (cluster.getVotingMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", cluster.getMember().serverAddress());
-        transition(RaftStateType.INACTIVE);
+        configure(RaftMemberType.INACTIVE);
         future.complete(null);
       } else {
         leave(future);
@@ -681,13 +687,13 @@ public class ServerStateContext {
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    state.leave(LeaveRequest.builder()
+    controller.state().leave(LeaveRequest.builder()
       .withMember(cluster.getMember())
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
         cluster.configure(response.version(), response.members());
-        transition(RaftStateType.INACTIVE);
+        configure(RaftMemberType.INACTIVE);
         future.complete(null);
       }
     });

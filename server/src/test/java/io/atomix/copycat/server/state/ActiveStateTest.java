@@ -37,7 +37,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new ActiveState(serverState) {
+    state = new ActiveState(serverState.getController()) {
     };
   }
 

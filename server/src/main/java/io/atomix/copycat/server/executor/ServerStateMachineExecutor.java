@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.executor;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
@@ -42,7 +42,7 @@ import java.util.function.Supplier;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ServerStateMachineExecutor implements StateMachineExecutor {
+public class ServerStateMachineExecutor implements StateMachineExecutor {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachineExecutor.class);
   private final ThreadContext executor;
   private final ServerStateMachineContext context;

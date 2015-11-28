@@ -13,12 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.session;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.client.session.Session;
-import io.atomix.copycat.server.session.Sessions;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -29,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ServerSessionManager implements Sessions {
+public class ServerSessionManager implements Sessions {
   private final Map<Long, Address> addresses = new ConcurrentHashMap<>();
   private final Map<Long, Connection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
@@ -42,7 +41,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers an address.
    */
-  ServerSessionManager registerAddress(long sessionId, Address address) {
+  public ServerSessionManager registerAddress(long sessionId, Address address) {
     ServerSession session = sessions.get(sessionId);
     if (session != null) {
       session.setAddress(address);
@@ -54,7 +53,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers a connection.
    */
-  ServerSessionManager registerConnection(long sessionId, Connection connection) {
+  public ServerSessionManager registerConnection(long sessionId, Connection connection) {
     ServerSession session = sessions.get(sessionId);
     if (session != null) {
       session.setConnection(connection);
@@ -66,7 +65,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Unregisters a connection.
    */
-  ServerSessionManager unregisterConnection(Connection connection) {
+  public ServerSessionManager unregisterConnection(Connection connection) {
     Iterator<Map.Entry<Long, Connection>> iterator = connections.entrySet().iterator();
     while (iterator.hasNext()) {
       Map.Entry<Long, Connection> entry = iterator.next();
@@ -84,7 +83,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers a session.
    */
-  ServerSession registerSession(ServerSession session) {
+  public ServerSession registerSession(ServerSession session) {
     session.setAddress(addresses.get(session.id()));
     session.setConnection(connections.get(session.id()));
     sessions.put(session.id(), session);
@@ -94,7 +93,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Unregisters a session.
    */
-  ServerSession unregisterSession(long sessionId) {
+  public ServerSession unregisterSession(long sessionId) {
     addresses.remove(sessionId);
     connections.remove(sessionId);
     return sessions.remove(sessionId);
@@ -106,7 +105,7 @@ class ServerSessionManager implements Sessions {
    * @param sessionId The session ID.
    * @return The session or {@code null} if the session doesn't exist.
    */
-  ServerSession getSession(long sessionId) {
+  public ServerSession getSession(long sessionId) {
     return sessions.get(sessionId);
   }
 

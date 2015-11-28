@@ -18,6 +18,8 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.cluster.RaftMemberType;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
@@ -57,8 +59,8 @@ public class MemberTest {
    */
   public void testMemberUpdate() {
     Member member = new Member(RaftMemberType.ACTIVE, new Address("localhost", 5000), null);
-    member.update((MemberType) null);
-    assertNull(member.type());
+    member.update(RaftMemberType.INACTIVE);
+    assertEquals(member.type(), RaftMemberType.INACTIVE);
     member.update(Member.Status.UNAVAILABLE);
     assertEquals(member.status(), Member.Status.UNAVAILABLE);
     assertNull(member.clientAddress());

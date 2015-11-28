@@ -25,7 +25,8 @@ import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.cluster.RaftMemberType;
 import io.atomix.copycat.server.state.RaftStateType;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -961,7 +962,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * @return The next server address.
    */
   private Member nextMember() {
-    return new Member(null, new Address("localhost", ++port), new Address("localhost", port + 1000));
+    return new Member(RaftMemberType.INACTIVE, new Address("localhost", ++port), new Address("localhost", port + 1000));
   }
 
   /**
@@ -1044,7 +1045,7 @@ public class ClusterTest extends ConcurrentTestCase {
     clients.forEach(c -> c.close().join());
     if (servers.size() < count) {
       for (int i = servers.size() + 1; i <= count; i++) {
-        Member member = new Member(null, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
+        Member member = new Member(RaftMemberType.INACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
         createServer(members, member).open().join();
       }
     }

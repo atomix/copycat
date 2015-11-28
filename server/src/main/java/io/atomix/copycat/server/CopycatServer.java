@@ -27,7 +27,7 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.state.ServerStateContext;
 import io.atomix.copycat.server.storage.Log;

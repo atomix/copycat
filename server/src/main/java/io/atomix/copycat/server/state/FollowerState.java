@@ -20,6 +20,8 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.controller.ServerStateController;
 import io.atomix.copycat.server.request.AcceptRequest;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
@@ -28,6 +30,7 @@ import io.atomix.copycat.server.response.AcceptResponse;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 
@@ -47,8 +50,8 @@ final class FollowerState extends ActiveState {
   private final Random random = new Random();
   private Scheduled heartbeatTimer;
 
-  public FollowerState(ServerStateContext context) {
-    super(context);
+  public FollowerState(ServerStateController controller) {
+    super(controller);
   }
 
   @Override
@@ -62,11 +65,11 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
-    context.checkThread();
+  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
+    controller.context().checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
+    if (controller.context().getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.NO_LEADER_ERROR)
@@ -77,22 +80,22 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
-    context.checkThread();
+  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+    controller.context().checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
+    if (controller.context().getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       // Immediately register the session connection and send an accept request to the leader.
-      context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+      controller.context().getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
 
       AcceptRequest acceptRequest = AcceptRequest.builder()
         .withSession(request.session())
-        .withAddress(context.getCluster().getMember().serverAddress())
+        .withAddress(controller.context().getCluster().getMember().serverAddress())
         .build();
       return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
         .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
@@ -101,11 +104,11 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
-    context.checkThread();
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+    controller.context().checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
+    if (controller.context().getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.NO_LEADER_ERROR)
@@ -116,11 +119,11 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    context.checkThread();
+  public CompletableFuture<PublishResponse> publish(PublishRequest request) {
+    controller.context().checkThread();
     logRequest(request);
 
-    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSession session = controller.context().getStateMachine().executor().context().sessions().getSession(request.session());
     if (session == null || session.getConnection() == null) {
       return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -132,11 +135,11 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
-    context.checkThread();
+  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    controller.context().checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
+    if (controller.context().getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.NO_LEADER_ERROR)
@@ -150,7 +153,7 @@ final class FollowerState extends ActiveState {
    * Starts the heartbeat timer.
    */
   private void startHeartbeatTimeout() {
-    LOGGER.debug("{} - Starting heartbeat timer", context.getCluster().getMember().serverAddress());
+    LOGGER.debug("{} - Starting heartbeat timer", controller.context().getCluster().getMember().serverAddress());
     resetHeartbeatTimeout();
   }
 
@@ -158,25 +161,25 @@ final class FollowerState extends ActiveState {
    * Resets the heartbeat timer.
    */
   private void resetHeartbeatTimeout() {
-    context.checkThread();
+    controller.context().checkThread();
     if (isClosed())
       return;
 
     // If a timer is already set, cancel the timer.
     if (heartbeatTimer != null) {
-      LOGGER.debug("{} - Reset heartbeat timeout", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Reset heartbeat timeout", controller.context().getCluster().getMember().serverAddress());
       heartbeatTimer.cancel();
     }
 
     // Set the election timeout in a semi-random fashion with the random range
     // being election timeout and 2 * election timeout.
-    Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
-    heartbeatTimer = context.getThreadContext().schedule(delay, () -> {
+    Duration delay = controller.context().getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) controller.context().getElectionTimeout().toMillis())));
+    heartbeatTimer = controller.context().getThreadContext().schedule(delay, () -> {
       heartbeatTimer = null;
       if (isOpen()) {
-        context.setLeader(0);
-        if (context.getLastVotedFor() == 0) {
-          LOGGER.debug("{} - Heartbeat timed out in {}", context.getCluster().getMember().serverAddress(), delay);
+        controller.context().setLeader(0);
+        if (controller.context().getLastVotedFor() == 0) {
+          LOGGER.debug("{} - Heartbeat timed out in {}", controller.context().getCluster().getMember().serverAddress(), delay);
           sendPollRequests();
         } else {
           // If the node voted for a candidate then reset the election timer.
@@ -191,27 +194,27 @@ final class FollowerState extends ActiveState {
    */
   private void sendPollRequests() {
     // Set a new timer within which other nodes must respond in order for this node to transition to candidate.
-    heartbeatTimer = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
-      LOGGER.debug("{} - Failed to poll a majority of the cluster in {}", context.getCluster().getMember().serverAddress(), context.getElectionTimeout());
+    heartbeatTimer = controller.context().getThreadContext().schedule(controller.context().getElectionTimeout(), () -> {
+      LOGGER.debug("{} - Failed to poll a majority of the cluster in {}", controller.context().getCluster().getMember().serverAddress(), controller.context().getElectionTimeout());
       resetHeartbeatTimeout();
     });
 
     // Create a quorum that will track the number of nodes that have responded to the poll request.
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<Member> votingMembers = new HashSet<>(context.getCluster().getVotingMembers());
+    final Set<Member> votingMembers = new HashSet<>(controller.context().getCluster().getVotingMembers());
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().getMember().serverAddress());
-      context.transition(RaftStateType.LEADER);
+      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", controller.context().getCluster().getMember().serverAddress());
+      controller.transition(RaftStateType.LEADER);
       return;
     }
 
-    final Quorum quorum = new Quorum(context.getCluster().getQuorum(), (elected) -> {
+    final Quorum quorum = new Quorum(controller.context().getCluster().getQuorum(), (elected) -> {
       // If a majority of the cluster indicated they would vote for us then transition to candidate.
       complete.set(true);
       if (elected) {
-        context.transition(RaftStateType.CANDIDATE);
+        controller.transition(RaftStateType.CANDIDATE);
       } else {
         resetHeartbeatTimeout();
       }
@@ -219,8 +222,8 @@ final class FollowerState extends ActiveState {
 
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
-    long lastIndex = context.getLog().lastIndex();
-    Entry lastEntry = lastIndex > 0 ? context.getLog().get(lastIndex) : null;
+    long lastIndex = controller.context().getLog().lastIndex();
+    Entry lastEntry = lastIndex > 0 ? controller.context().getLog().get(lastIndex) : null;
 
     final long lastTerm;
     if (lastEntry != null) {
@@ -230,43 +233,43 @@ final class FollowerState extends ActiveState {
       lastTerm = 0;
     }
 
-    LOGGER.info("{} - Polling members {}", context.getCluster().getMember().serverAddress(), votingMembers);
+    LOGGER.info("{} - Polling members {}", controller.context().getCluster().getMember().serverAddress(), votingMembers);
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
     for (Member member : votingMembers) {
-      LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().getMember().serverAddress(), member, context.getTerm() + 1);
+      LOGGER.debug("{} - Polling {} for next term {}", controller.context().getCluster().getMember().serverAddress(), member, controller.context().getTerm() + 1);
       PollRequest request = PollRequest.builder()
-        .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().getMember().serverAddress().hashCode())
+        .withTerm(controller.context().getTerm())
+        .withCandidate(controller.context().getCluster().getMember().serverAddress().hashCode())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
-      context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
+      controller.context().getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
         connection.<PollRequest, PollResponse>send(request).whenCompleteAsync((response, error) -> {
-          context.checkThread();
+          controller.context().checkThread();
           if (isOpen() && !complete.get()) {
             if (error != null) {
-              LOGGER.warn("{} - {}", context.getCluster().getMember().serverAddress(), error.getMessage());
+              LOGGER.warn("{} - {}", controller.context().getCluster().getMember().serverAddress(), error.getMessage());
               quorum.fail();
             } else {
-              if (response.term() > context.getTerm()) {
-                context.setTerm(response.term());
+              if (response.term() > controller.context().getTerm()) {
+                controller.context().setTerm(response.term());
               }
 
               if (!response.accepted()) {
-                LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received rejected poll from {}", controller.context().getCluster().getMember().serverAddress(), member);
                 quorum.fail();
-              } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().getMember().serverAddress(), member);
+              } else if (response.term() != controller.context().getTerm()) {
+                LOGGER.debug("{} - Received accepted poll for a different term from {}", controller.context().getCluster().getMember().serverAddress(), member);
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received accepted poll from {}", controller.context().getCluster().getMember().serverAddress(), member);
                 quorum.succeed();
               }
             }
           }
-        }, context.getThreadContext().executor());
+        }, controller.context().getThreadContext().executor());
       });
     }
   }
@@ -294,7 +297,7 @@ final class FollowerState extends ActiveState {
    */
   private void cancelHeartbeatTimeout() {
     if (heartbeatTimer != null) {
-      LOGGER.debug("{} - Cancelling heartbeat timer", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Cancelling heartbeat timer", controller.context().getCluster().getMember().serverAddress());
       heartbeatTimer.cancel();
     }
   }

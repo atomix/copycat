@@ -15,13 +15,15 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Managed;
-import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.request.Request;
+import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.controller.ServerStateController;
+import io.atomix.copycat.server.request.JoinRequest;
+import io.atomix.copycat.server.request.LeaveRequest;
+import io.atomix.copycat.server.response.JoinResponse;
+import io.atomix.copycat.server.response.LeaveResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +39,7 @@ public abstract class ServerState implements Managed<ServerState> {
   /**
    * Server state type.
    */
-  public interface Type extends CopycatServer.State {
+  public interface Type<T extends ServerState> extends CopycatServer.State {
 
     /**
      * Creates a new instance of the state.
@@ -45,16 +47,16 @@ public abstract class ServerState implements Managed<ServerState> {
      * @param controller The state controller.
      * @return The server state.
      */
-    ServerState createState(ServerStateContext controller);
+    T createState(ServerStateController controller);
 
   }
 
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
-  protected final ServerStateContext context;
+  protected final ServerStateController controller;
   private boolean open = true;
 
-  protected ServerState(ServerStateContext context) {
-    this.context = context;
+  protected ServerState(ServerStateController controller) {
+    this.controller = controller;
   }
 
   /**
@@ -68,7 +70,7 @@ public abstract class ServerState implements Managed<ServerState> {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getCluster().getMember().serverAddress(), request);
+    LOGGER.debug("{} - Received {}", controller.context().getCluster().getMember().serverAddress(), request);
     return request;
   }
 
@@ -76,13 +78,13 @@ public abstract class ServerState implements Managed<ServerState> {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getCluster().getMember().serverAddress(), response);
+    LOGGER.debug("{} - Sent {}", controller.context().getCluster().getMember().serverAddress(), response);
     return response;
   }
 
   @Override
   public CompletableFuture<ServerState> open() {
-    context.checkThread();
+    controller.context().checkThread();
     open = true;
     return CompletableFuture.completedFuture(null);
   }
@@ -93,78 +95,18 @@ public abstract class ServerState implements Managed<ServerState> {
   }
 
   /**
-   * Handles a register request.
-   */
-  protected abstract CompletableFuture<RegisterResponse> register(RegisterRequest request);
-
-  /**
-   * Handles a connect request.
-   */
-  protected abstract CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection);
-
-  /**
-   * Handles an accept request.
-   */
-  protected abstract CompletableFuture<AcceptResponse> accept(AcceptRequest request);
-
-  /**
-   * Handles a keep alive request.
-   */
-  protected abstract CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
-
-  /**
-   * Handles an unregister request.
-   */
-  protected abstract CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
-
-  /**
-   * Handles a publish request.
-   */
-  protected abstract CompletableFuture<PublishResponse> publish(PublishRequest request);
-
-  /**
-   * Handles a configure request.
-   */
-  protected abstract CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
-
-  /**
    * Handles a join request.
    */
-  protected abstract CompletableFuture<JoinResponse> join(JoinRequest request);
+  public abstract CompletableFuture<JoinResponse> join(JoinRequest request);
 
   /**
    * Handles a leave request.
    */
-  protected abstract CompletableFuture<LeaveResponse> leave(LeaveRequest request);
-
-  /**
-   * Handles an append request.
-   */
-  protected abstract CompletableFuture<AppendResponse> append(AppendRequest request);
-
-  /**
-   * Handles a poll request.
-   */
-  protected abstract CompletableFuture<PollResponse> poll(PollRequest request);
-
-  /**
-   * Handles a vote request.
-   */
-  protected abstract CompletableFuture<VoteResponse> vote(VoteRequest request);
-
-  /**
-   * Handles a command request.
-   */
-  protected abstract CompletableFuture<CommandResponse> command(CommandRequest request);
-
-  /**
-   * Handles a query request.
-   */
-  protected abstract CompletableFuture<QueryResponse> query(QueryRequest request);
+  public abstract CompletableFuture<LeaveResponse> leave(LeaveRequest request);
 
   @Override
   public CompletableFuture<Void> close() {
-    context.checkThread();
+    controller.context().checkThread();
     open = false;
     return CompletableFuture.completedFuture(null);
   }
@@ -176,7 +118,7 @@ public abstract class ServerState implements Managed<ServerState> {
 
   @Override
   public String toString() {
-    return String.format("%s[context=%s]", getClass().getSimpleName(), context);
+    return String.format("%s[context=%s]", getClass().getSimpleName(), controller.context());
   }
 
 }

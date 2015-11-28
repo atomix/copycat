@@ -18,6 +18,9 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.cluster.MemberState;
+import io.atomix.copycat.server.cluster.RaftMemberType;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -45,10 +48,10 @@ final class LeaderAppender extends AbstractAppender {
   private final Map<Long, CompletableFuture<Long>> commitFutures = new HashMap<>();
 
   LeaderAppender(LeaderState leader) {
-    super(leader.context);
+    super(leader.controller);
     this.leader = Assert.notNull(leader, "leader");
     this.leaderTime = System.currentTimeMillis();
-    this.leaderIndex = context.getLog().nextIndex();
+    this.leaderIndex = controller.context().getLog().nextIndex();
     this.commitTime = leaderTime;
   }
 
@@ -76,7 +79,7 @@ final class LeaderAppender extends AbstractAppender {
    * @return The current quorum index.
    */
   private int quorumIndex() {
-    return context.getCluster().getQuorum() - 2;
+    return controller.context().getCluster().getQuorum() - 2;
   }
 
   /**
@@ -92,7 +95,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   public CompletableFuture<Long> appendEntries() {
     // If there are no other active members in the cluster, simply complete the append operation.
-    if (context.getCluster().getRemoteMemberStates().size() == 0)
+    if (controller.context().getCluster().getRemoteMemberStates().size() == 0)
       return CompletableFuture.completedFuture(null);
 
     // If no commit future already exists, that indicates there's no heartbeat currently under way.
@@ -100,7 +103,7 @@ final class LeaderAppender extends AbstractAppender {
     if (commitFuture == null) {
       commitFuture = new CompletableFuture<>();
       commitTime = System.currentTimeMillis();
-      for (MemberState member : context.getCluster().getRemoteMemberStates()) {
+      for (MemberState member : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
       return commitFuture;
@@ -129,16 +132,16 @@ final class LeaderAppender extends AbstractAppender {
       return appendEntries();
 
     // If there are no other servers in the cluster, immediately commit the index.
-    if (context.getCluster().getRemoteMemberStates().isEmpty()) {
-      context.setCommitIndex(index);
-      context.setGlobalIndex(index);
+    if (controller.context().getCluster().getRemoteMemberStates().isEmpty()) {
+      controller.context().setCommitIndex(index);
+      controller.context().setGlobalIndex(index);
       return CompletableFuture.completedFuture(index);
     }
     // If there are no other active members in the cluster, update the commit index and complete
     // the commit but ensure append entries requests are sent to passive members.
-    else if (context.getCluster().getVotingMemberStates().isEmpty()) {
-      context.setCommitIndex(index);
-      for (MemberState member : context.getCluster().getRemoteMemberStates()) {
+    else if (controller.context().getCluster().getVotingMemberStates().isEmpty()) {
+      controller.context().setCommitIndex(index);
+      for (MemberState member : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
       return CompletableFuture.completedFuture(index);
@@ -146,7 +149,7 @@ final class LeaderAppender extends AbstractAppender {
 
     // Ensure append requests are being sent to all members, including passive members.
     return commitFutures.computeIfAbsent(index, i -> {
-      for (MemberState member : context.getCluster().getRemoteMemberStates()) {
+      for (MemberState member : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
       return new CompletableFuture<>();
@@ -163,7 +166,7 @@ final class LeaderAppender extends AbstractAppender {
   private long commitTime() {
     int quorumIndex = quorumIndex();
     if (quorumIndex >= 0) {
-      return context.getCluster().getVotingMemberStates((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
+      return controller.context().getCluster().getVotingMemberStates((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
     }
     return System.currentTimeMillis();
   }
@@ -177,8 +180,8 @@ final class LeaderAppender extends AbstractAppender {
     }
 
     if (error != null && member.getCommitStartTime() == this.commitTime) {
-      int votingMemberSize = context.getCluster().getVotingMemberStates().size() + (context.getCluster().getMember().type().isVoting() ? 1 : 0);
-      int quorumSize = context.getCluster().getQuorum();
+      int votingMemberSize = controller.context().getCluster().getVotingMemberStates().size() + (controller.context().getCluster().getMember().type().isVoting() ? 1 : 0);
+      int quorumSize = controller.context().getCluster().getQuorum();
       // If a quorum of successful responses cannot be achieved, fail this commit.
       if (votingMemberSize - quorumSize + 1 <= ++commitFailures) {
         commitFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
@@ -207,7 +210,7 @@ final class LeaderAppender extends AbstractAppender {
     nextCommitFuture = null;
     if (commitFuture != null) {
       this.commitTime = System.currentTimeMillis();
-      for (MemberState replica : context.getCluster().getRemoteMemberStates()) {
+      for (MemberState replica : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(replica);
       }
     }
@@ -217,26 +220,26 @@ final class LeaderAppender extends AbstractAppender {
    * Checks whether any futures can be completed.
    */
   private void commitEntries() {
-    context.checkThread();
+    controller.context().checkThread();
 
     // The global index may have increased even if the commit index didn't. Update the global index.
     // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
     // passive members. This is critical since passive members still have state machines and thus it's still
     // important to ensure that tombstones are applied to their state machines.
     // If the members list is empty, use the local server's last log index as the global index.
-    long globalMatchIndex = context.getCluster().getRemoteMemberStates().stream().mapToLong(MemberState::getMatchIndex).min().orElse(context.getLog().lastIndex());
-    context.setGlobalIndex(globalMatchIndex);
+    long globalMatchIndex = controller.context().getCluster().getRemoteMemberStates().stream().mapToLong(MemberState::getMatchIndex).min().orElse(controller.context().getLog().lastIndex());
+    controller.context().setGlobalIndex(globalMatchIndex);
 
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
-    List<MemberState> members = context.getCluster().getVotingMemberStates((m1, m2) ->
+    List<MemberState> members = controller.context().getCluster().getVotingMemberStates((m1, m2) ->
       Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
 
     // If the active members list is empty (a configuration change occurred between an append request/response)
     // ensure all commit futures are completed and cleared.
     if (members.isEmpty()) {
-      context.setCommitIndex(context.getLog().lastIndex());
+      controller.context().setCommitIndex(controller.context().getLog().lastIndex());
       for (Map.Entry<Long, CompletableFuture<Long>> entry : commitFutures.entrySet()) {
         entry.getValue().complete(entry.getKey());
       }
@@ -250,9 +253,9 @@ final class LeaderAppender extends AbstractAppender {
     // If the commit index has increased then update the commit index. Note that in order to ensure
     // the leader completeness property holds, verify that the commit index is greater than or equal to
     // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
-    long previousCommitIndex = context.getCommitIndex();
+    long previousCommitIndex = controller.context().getCommitIndex();
     if (commitIndex > 0 && commitIndex > previousCommitIndex && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
-      context.setCommitIndex(commitIndex);
+      controller.context().setCommitIndex(commitIndex);
 
       // Iterate from the previous commitIndex to the updated commitIndex and remove and complete futures.
       for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
@@ -273,11 +276,11 @@ final class LeaderAppender extends AbstractAppender {
     // If the member failed to respond to recent communication send an empty commit. This
     // helps avoid doing expensive work until we can ascertain the member is back up.
     if (!member.getMember().type().isStateful()) {
-      if (member.getMember().status() == Member.Status.UNAVAILABLE || System.currentTimeMillis() - member.getCommitTime() > context.getElectionTimeout().toMillis() * 2) {
+      if (member.getMember().status() == Member.Status.UNAVAILABLE || System.currentTimeMillis() - member.getCommitTime() > controller.context().getElectionTimeout().toMillis() * 2) {
         return buildEmptyRequest(member);
       }
     } else {
-      if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
+      if (controller.context().getLog().isEmpty() || member.getNextIndex() > controller.context().getLog().lastIndex() || member.getFailureCount() > 0) {
         return buildEmptyRequest(member);
       } else {
         return buildEntryRequest(member);
@@ -296,12 +299,12 @@ final class LeaderAppender extends AbstractAppender {
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
     return AppendRequest.builder()
-      .withTerm(context.getTerm())
-      .withLeader(context.getCluster().getMember().id())
+      .withTerm(controller.context().getTerm())
+      .withLeader(controller.context().getCluster().getMember().id())
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-      .withCommitIndex(context.getCommitIndex())
-      .withGlobalIndex(context.getGlobalIndex())
+      .withCommitIndex(controller.context().getCommitIndex())
+      .withGlobalIndex(controller.context().getGlobalIndex())
       .build();
   }
 
@@ -313,27 +316,27 @@ final class LeaderAppender extends AbstractAppender {
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
     AppendRequest.Builder builder = AppendRequest.builder()
-      .withTerm(context.getTerm())
-      .withLeader(context.getCluster().getMember().id())
+      .withTerm(controller.context().getTerm())
+      .withLeader(controller.context().getCluster().getMember().id())
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-      .withCommitIndex(context.getCommitIndex())
-      .withGlobalIndex(context.getGlobalIndex());
+      .withCommitIndex(controller.context().getCommitIndex())
+      .withGlobalIndex(controller.context().getGlobalIndex());
 
     // Build a list of entries to send to the member.
-    if (!context.getLog().isEmpty()) {
-      long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
+    if (!controller.context().getLog().isEmpty()) {
+      long index = prevIndex != 0 ? prevIndex + 1 : controller.context().getLog().firstIndex();
 
       // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
       // be null if they've been compacted and the member to which we're sending entries is just
       // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
       // counted towards the size of the batch.
       int size = 0;
-      while (index <= context.getLog().lastIndex()) {
+      while (index <= controller.context().getLog().lastIndex()) {
         // Get the entry from the log and append it if it's not null. Entries in the log can be null
         // if they've been cleaned or compacted from the log. Each entry sent in the append request
         // has a unique index to handle gaps in the log.
-        Entry entry = context.getLog().get(index);
+        Entry entry = controller.context().getLog().get(index);
         if (entry != null) {
           if (size + entry.size() > MAX_BATCH_SIZE) {
             break;
@@ -400,9 +403,9 @@ final class LeaderAppender extends AbstractAppender {
       }
     }
     // If we've received a greater term, update the term and transition back to follower.
-    else if (response.term() > context.getTerm()) {
-      context.setTerm(response.term()).setLeader(0);
-      context.transition(RaftStateType.FOLLOWER);
+    else if (response.term() > controller.context().getTerm()) {
+      controller.context().setTerm(response.term()).setLeader(0);
+      controller.transition(RaftStateType.FOLLOWER);
     }
     // If the response failed, the follower should have provided the correct last index in their log. This helps
     // us converge on the matchIndex faster than by simply decrementing nextIndex one index at a time.
@@ -422,17 +425,17 @@ final class LeaderAppender extends AbstractAppender {
    */
   private void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     // If we've received a greater term, update the term and transition back to follower.
-    if (response.term() > context.getTerm()) {
-      LOGGER.debug("{} - Received higher term from {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
-      context.setTerm(response.term()).setLeader(0);
-      context.transition(RaftStateType.FOLLOWER);
+    if (response.term() > controller.context().getTerm()) {
+      LOGGER.debug("{} - Received higher term from {}", controller.context().getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+      controller.context().setTerm(response.term()).setLeader(0);
+      controller.transition(RaftStateType.FOLLOWER);
     } else {
       // If any other error occurred, increment the failure count for the member. Log the first three failures,
       // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
       // when attempting to send entries to down followers.
       int failures = member.incrementFailureCount();
       if (failures <= 3 || failures % 100 == 0) {
-        LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
+        LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", controller.context().getCluster().getMember().serverAddress(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
       }
     }
   }
@@ -452,7 +455,7 @@ final class LeaderAppender extends AbstractAppender {
     // If the member is currently marked as UNAVAILABLE, change its status to AVAILABLE and update the configuration.
     if (member.getMember().status() == Member.Status.UNAVAILABLE && !leader.configuring()) {
       member.getMember().update(Member.Status.AVAILABLE);
-      leader.configure(context.getCluster().getMembers());
+      leader.configure(controller.context().getCluster().getMembers());
     }
   }
 
@@ -465,23 +468,23 @@ final class LeaderAppender extends AbstractAppender {
     // when attempting to send entries to down followers.
     int failures = member.incrementFailureCount();
     if (failures <= 3 || failures % 100 == 0) {
-      LOGGER.warn("{} - {}", context.getCluster().getMember().serverAddress(), error.getMessage());
+      LOGGER.warn("{} - {}", controller.context().getCluster().getMember().serverAddress(), error.getMessage());
     }
 
     // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
     // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
     // that a partition occurred and transition back to the FOLLOWER state.
-    if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
-      LOGGER.warn("{} - Suspected network partition. Stepping down", context.getCluster().getMember().serverAddress());
-      context.setLeader(0);
-      context.transition(RaftStateType.FOLLOWER);
+    if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > controller.context().getElectionTimeout().toMillis() * 2) {
+      LOGGER.warn("{} - Suspected network partition. Stepping down", controller.context().getCluster().getMember().serverAddress());
+      controller.context().setLeader(0);
+      controller.transition(RaftStateType.FOLLOWER);
     }
     // If the number of failures has increased above 3 and the member hasn't been marked as UNAVAILABLE, do so.
     else if (failures >= 3) {
       // If the member is currently marked as AVAILABLE, change its status to UNAVAILABLE and update the configuration.
       if (member.getMember().status() == Member.Status.AVAILABLE && !leader.configuring()) {
         member.getMember().update(Member.Status.UNAVAILABLE);
-        leader.configure(context.getCluster().getMembers());
+        leader.configure(controller.context().getCluster().getMembers());
       }
     }
   }
@@ -490,9 +493,9 @@ final class LeaderAppender extends AbstractAppender {
    * Updates the cluster configuration for the given member.
    */
   private void updateConfiguration(MemberState member) {
-    if (member.getMember().type() == RaftMemberType.PASSIVE && !leader.configuring() && member.getMatchIndex() >= context.getCommitIndex()) {
+    if (member.getMember().type() == RaftMemberType.PASSIVE && !leader.configuring() && member.getMatchIndex() >= controller.context().getCommitIndex()) {
       member.getMember().update(RaftMemberType.ACTIVE);
-      leader.configure(context.getCluster().getMembers());
+      leader.configure(controller.context().getCluster().getMembers());
     }
   }
 

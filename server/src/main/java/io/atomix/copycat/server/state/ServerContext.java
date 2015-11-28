@@ -26,6 +26,9 @@ import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.cluster.ConnectionManager;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.cluster.RaftMemberType;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
@@ -86,7 +89,7 @@ public class ServerContext implements Managed<ServerStateContext> {
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerStateContext(new Member(null, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
+          state = new ServerStateContext(new Member(RaftMemberType.INACTIVE, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
 
           // If the client address is different than the server address, start a separate client server.
           if (!clientAddress.equals(serverAddress)) {
@@ -151,7 +154,7 @@ public class ServerContext implements Managed<ServerStateContext> {
         }, context.executor());
       }
 
-      this.state.transition(RaftStateType.INACTIVE);
+      this.state.configure(RaftMemberType.INACTIVE);
       try {
         this.state.getLog().close();
       } catch (Exception e) {

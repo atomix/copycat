@@ -19,6 +19,7 @@ import io.atomix.copycat.client.request.CommandRequest;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.entry.CommandEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -34,7 +35,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new LeaderState(serverState);
+    state = new LeaderState(serverState.getController());
   }
 
   /**

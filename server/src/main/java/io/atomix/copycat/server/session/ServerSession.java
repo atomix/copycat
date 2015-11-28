@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.session;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
@@ -26,6 +26,7 @@ import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.session.Event;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.executor.ServerStateMachineContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +40,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ServerSession implements Session {
+public class ServerSession implements Session {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSession.class);
   private final long id;
   private final ServerStateMachineContext context;
@@ -69,7 +70,7 @@ class ServerSession implements Session {
   private final Listeners<Session> openListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
 
-  ServerSession(long id, ServerStateMachineContext context, long timeout) {
+  public ServerSession(long id, ServerStateMachineContext context, long timeout) {
     this.id = id;
     this.eventAckVersion = id;
     this.version = id - 1;
@@ -85,7 +86,7 @@ class ServerSession implements Session {
   /**
    * Opens the session.
    */
-  void open() {
+  public void open() {
     closed = false;
   }
 
@@ -94,7 +95,7 @@ class ServerSession implements Session {
    *
    * @return The session timeout.
    */
-  long timeout() {
+  public long timeout() {
     return timeout;
   }
 
@@ -103,7 +104,7 @@ class ServerSession implements Session {
    *
    * @return The session timestamp.
    */
-  long getTimestamp() {
+  public long getTimestamp() {
     return timestamp;
   }
 
@@ -113,7 +114,7 @@ class ServerSession implements Session {
    * @param timestamp The session timestamp.
    * @return The server session.
    */
-  ServerSession setTimestamp(long timestamp) {
+  public ServerSession setTimestamp(long timestamp) {
     this.timestamp = Math.max(this.timestamp, timestamp);
     return this;
   }
@@ -123,7 +124,7 @@ class ServerSession implements Session {
    *
    * @return The session request number.
    */
-  long getRequest() {
+  public long getRequest() {
     return request;
   }
 
@@ -132,7 +133,7 @@ class ServerSession implements Session {
    *
    * @return The next session request number.
    */
-  long nextRequest() {
+  public long nextRequest() {
     return request + 1;
   }
 
@@ -142,7 +143,7 @@ class ServerSession implements Session {
    * @param request The session request number.
    * @return The server session.
    */
-  ServerSession setRequest(long request) {
+  public ServerSession setRequest(long request) {
     if (request > this.request) {
       this.request = request;
 
@@ -161,7 +162,7 @@ class ServerSession implements Session {
    *
    * @return The session operation sequence number.
    */
-  long getSequence() {
+  public long getSequence() {
     return sequence;
   }
 
@@ -170,7 +171,7 @@ class ServerSession implements Session {
    *
    * @return The next operation sequence number.
    */
-  long nextSequence() {
+  public long nextSequence() {
     return sequence + 1;
   }
 
@@ -180,7 +181,7 @@ class ServerSession implements Session {
    * @param sequence The session operation sequence number.
    * @return The server session.
    */
-  ServerSession setSequence(long sequence) {
+  public ServerSession setSequence(long sequence) {
     // For each increment of the sequence number, trigger query callbacks that are dependent on the specific sequence.
     for (long i = this.sequence + 1; i <= sequence; i++) {
       this.sequence = i;
@@ -221,7 +222,7 @@ class ServerSession implements Session {
    *
    * @return The session version.
    */
-  long getVersion() {
+  public long getVersion() {
     return version;
   }
 
@@ -231,7 +232,7 @@ class ServerSession implements Session {
    * @param version The session version.
    * @return The server session.
    */
-  ServerSession setVersion(long version) {
+  public ServerSession setVersion(long version) {
     // Query callbacks for this session are added to the versionQueries map to be executed once the required version
     // for the query is reached. For each increment of the version number, trigger query callbacks that are dependent
     // on the specific version.
@@ -257,7 +258,7 @@ class ServerSession implements Session {
    * @param runnable The command to execute.
    * @return The server session.
    */
-  ServerSession registerRequest(long sequence, Runnable runnable) {
+  public ServerSession registerRequest(long sequence, Runnable runnable) {
     commands.put(sequence, runnable);
     return this;
   }
@@ -269,7 +270,7 @@ class ServerSession implements Session {
    * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession registerSequenceQuery(long sequence, Runnable query) {
+  public ServerSession registerSequenceQuery(long sequence, Runnable query) {
     // Add a query to be run once the session's sequence number reaches the given sequence number.
     List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> {
       List<Runnable> q = queriesPool.poll();
@@ -286,7 +287,7 @@ class ServerSession implements Session {
    * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession registerVersionQuery(long version, Runnable query) {
+  public ServerSession registerVersionQuery(long version, Runnable query) {
     // Add a query to be run once the session's version number reaches the given version number.
     List<Runnable> queries = this.versionQueries.computeIfAbsent(version, v -> {
       List<Runnable> q = queriesPool.poll();
@@ -307,7 +308,7 @@ class ServerSession implements Session {
    * @param response The response.
    * @return The server session.
    */
-  ServerSession registerResponse(long sequence, Object response, CompletableFuture<Void> future) {
+  public ServerSession registerResponse(long sequence, Object response, CompletableFuture<Void> future) {
     responses.put(sequence, response);
     if (future != null)
       futures.put(sequence, future);
@@ -324,7 +325,7 @@ class ServerSession implements Session {
    * @param sequence The sequence to clear.
    * @return The server session.
    */
-  ServerSession clearResponses(long sequence) {
+  public ServerSession clearResponses(long sequence) {
     if (sequence > commandLowWaterMark) {
       for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
         responses.remove(i);
@@ -341,7 +342,7 @@ class ServerSession implements Session {
    * @param sequence The response sequence.
    * @return The response.
    */
-  Object getResponse(long sequence) {
+  public Object getResponse(long sequence) {
     return responses.get(sequence);
   }
 
@@ -351,14 +352,14 @@ class ServerSession implements Session {
    * @param sequence The response sequence.
    * @return The response future.
    */
-  CompletableFuture<Void> getResponseFuture(long sequence) {
+  public CompletableFuture<Void> getResponseFuture(long sequence) {
     return futures.get(sequence);
   }
 
   /**
    * Sets the session connection.
    */
-  ServerSession setConnection(Connection connection) {
+  public ServerSession setConnection(Connection connection) {
     this.connection = connection;
     if (connection != null) {
       connection.handler(PublishRequest.class, this::handlePublish);
@@ -371,14 +372,14 @@ class ServerSession implements Session {
    *
    * @return The session connection.
    */
-  Connection getConnection() {
+  public Connection getConnection() {
     return connection;
   }
 
   /**
    * Sets the session address.
    */
-  ServerSession setAddress(Address address) {
+  public ServerSession setAddress(Address address) {
     this.address = address;
     return this;
   }
@@ -386,7 +387,7 @@ class ServerSession implements Session {
   /**
    * Returns the session address.
    */
-  Address getAddress() {
+  public Address getAddress() {
     return address;
   }
 
@@ -420,7 +421,7 @@ class ServerSession implements Session {
   /**
    * Commits events for the given version.
    */
-  CompletableFuture<Void> commit(long version) {
+  public CompletableFuture<Void> commit(long version) {
     if (event != null && event.eventVersion == version) {
       events.add(event);
       sendEvent(event);
@@ -447,7 +448,7 @@ class ServerSession implements Session {
    *
    * @return The index of the highest event acked for the session.
    */
-  long getLastCompleted() {
+  public long getLastCompleted() {
     // If there are any queued events, return the index prior to the first event in the queue.
     EventHolder event = events.peek();
     if (event != null && event.eventVersion > eventAckVersion) {
@@ -483,7 +484,7 @@ class ServerSession implements Session {
    * @param version The version from which to resend events.
    * @return The server session.
    */
-  ServerSession resendEvents(long version) {
+  public ServerSession resendEvents(long version) {
     if (version > eventAckVersion) {
       clearEvents(version);
       for (EventHolder event : events) {
@@ -583,7 +584,7 @@ class ServerSession implements Session {
   /**
    * Closes the session.
    */
-  void close() {
+  public void close() {
     closed = true;
     for (Listener<Session> listener : closeListeners) {
       listener.accept(this);
@@ -607,42 +608,42 @@ class ServerSession implements Session {
   /**
    * Sets the session as suspect.
    */
-  void suspect() {
+  public void suspect() {
     suspect = true;
   }
 
   /**
    * Sets the session as trusted.
    */
-  void trust() {
+  public void trust() {
     suspect = false;
   }
 
   /**
    * Indicates whether the session is suspect.
    */
-  boolean isSuspect() {
+  public boolean isSuspect() {
     return suspect;
   }
 
   /**
    * Sets the session as being unregistered.
    */
-  void unregister() {
+  public void unregister() {
     unregistering = true;
   }
 
   /**
    * Indicates whether the session is being unregistered.
    */
-  boolean isUnregistering() {
+  public boolean isUnregistering() {
     return unregistering;
   }
 
   /**
    * Expires the session.
    */
-  void expire() {
+  public void expire() {
     closed = true;
     expired = true;
     for (EventHolder event : events) {

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.executor;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
@@ -22,7 +22,9 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.entry.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +37,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ServerStateMachine implements AutoCloseable {
+public class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
   private final ServerStateMachineExecutor executor;
@@ -45,7 +47,7 @@ class ServerStateMachine implements AutoCloseable {
   private long lastCompleted;
   private long configuration;
 
-  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
+  public ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
     this.stateMachine = stateMachine;
     this.executor = new ServerStateMachineExecutor(context, executor);
     this.cleaner = cleaner;
@@ -65,7 +67,7 @@ class ServerStateMachine implements AutoCloseable {
    *
    * @return The server state machine executor.
    */
-  ServerStateMachineExecutor executor() {
+  public ServerStateMachineExecutor executor() {
     return executor;
   }
 
@@ -74,7 +76,7 @@ class ServerStateMachine implements AutoCloseable {
    *
    * @return The last applied index.
    */
-  long getLastApplied() {
+  public long getLastApplied() {
     return lastApplied;
   }
 
@@ -94,8 +96,8 @@ class ServerStateMachine implements AutoCloseable {
       // Update the index for each session. This will be used to trigger queries that are awaiting the
       // application of specific indexes to the state machine. Setting the session index may cause query
       // callbacks to be called and queries to be evaluated.
-      for (ServerSession session : executor.context().sessions().sessions.values()) {
-        session.setVersion(lastApplied);
+      for (Session session : executor.context().sessions()) {
+        ((ServerSession) session).setVersion(lastApplied);
       }
     }
   }
@@ -109,7 +111,7 @@ class ServerStateMachine implements AutoCloseable {
    *
    * @return The highest index completed for all sessions.
    */
-  long getLastCompleted() {
+  public long getLastCompleted() {
     return lastCompleted > 0 ? lastCompleted : lastApplied;
   }
 
@@ -119,7 +121,7 @@ class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return The result.
    */
-  CompletableFuture<?> apply(Entry entry) {
+  public CompletableFuture<?> apply(Entry entry) {
     return apply(entry, false);
   }
 
@@ -130,7 +132,7 @@ class ServerStateMachine implements AutoCloseable {
    * @param expectResult Indicates whether this call expects a result.
    * @return The result.
    */
-  CompletableFuture<?> apply(Entry entry, boolean expectResult) {
+  public CompletableFuture<?> apply(Entry entry, boolean expectResult) {
     boolean apply = !(entry instanceof QueryEntry);
     try {
       if (!apply) {
@@ -652,8 +654,8 @@ class ServerStateMachine implements AutoCloseable {
     // Iterate through all the server sessions and reset timestamps. This ensures that sessions do not
     // timeout during leadership changes or shortly thereafter.
     long timestamp = executor.tick(entry.getTimestamp());
-    for (ServerSession session : executor.context().sessions().sessions.values()) {
-      session.setTimestamp(timestamp);
+    for (Session session : executor.context().sessions()) {
+      ((ServerSession) session).setTimestamp(timestamp);
     }
     cleaner.clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
@@ -664,8 +666,8 @@ class ServerStateMachine implements AutoCloseable {
    */
   private void updateLastCompleted(long index) {
     long lastCompleted = index;
-    for (ServerSession session : executor.context().sessions().sessions.values()) {
-      lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
+    for (Session session : executor.context().sessions()) {
+      lastCompleted = Math.min(lastCompleted, ((ServerSession) session).getLastCompleted());
     }
 
     if (lastCompleted < this.lastCompleted)
@@ -677,9 +679,10 @@ class ServerStateMachine implements AutoCloseable {
    * Suspects any sessions that have timed out.
    */
   private void suspectSessions(long timestamp) {
-    for (ServerSession session : executor.context().sessions().sessions.values()) {
-      if (timestamp - session.timeout() > session.getTimestamp()) {
-        session.suspect();
+    for (Session session : executor.context().sessions()) {
+      ServerSession serverSession = (ServerSession) session;
+      if (timestamp - serverSession.timeout() > serverSession.getTimestamp()) {
+        serverSession.suspect();
       }
     }
   }

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-io.atomix.copycat.server.state.Member
+io.atomix.copycat.server.cluster.Member
 
 io.atomix.copycat.server.request.AcceptRequest
 io.atomix.copycat.server.response.AcceptResponse

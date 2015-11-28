@@ -39,7 +39,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new PassiveState(serverState);
+    state = new PassiveState(serverState.getController());
   }
 
   public void testAccept() throws Throwable {

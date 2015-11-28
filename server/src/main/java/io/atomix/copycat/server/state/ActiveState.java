@@ -22,6 +22,8 @@ import io.atomix.copycat.client.request.QueryRequest;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.controller.ServerStateController;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -41,20 +43,20 @@ import java.util.stream.Collectors;
  */
 abstract class ActiveState extends PassiveState {
 
-  protected ActiveState(ServerStateContext context) {
-    super(context);
+  protected ActiveState(ServerStateController controller) {
+    super(controller);
   }
 
   @Override
-  protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
-    context.checkThread();
+  public CompletableFuture<AppendResponse> append(final AppendRequest request) {
+    controller.context().checkThread();
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as leader.
     boolean transition = false;
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
+    if (request.term() > controller.context().getTerm() || (request.term() == controller.context().getTerm() && controller.context().getLeader() == null)) {
+      controller.context().setTerm(request.term());
+      controller.context().setLeader(request.leader());
       transition = true;
     }
 
@@ -63,14 +65,14 @@ abstract class ActiveState extends PassiveState {
     // If a transition is required then transition back to the follower state.
     // If the node is already a follower then the transition will be ignored.
     if (transition) {
-      context.transition(RaftStateType.FOLLOWER);
+      controller.transition(RaftStateType.FOLLOWER);
     }
     return future;
   }
 
   @Override
-  protected CompletableFuture<PollResponse> poll(PollRequest request) {
-    context.checkThread();
+  public CompletableFuture<PollResponse> poll(PollRequest request) {
+    controller.context().checkThread();
     return CompletableFuture.completedFuture(logResponse(handlePoll(logRequest(request))));
   }
 
@@ -80,51 +82,51 @@ abstract class ActiveState extends PassiveState {
   protected PollResponse handlePoll(PollRequest request) {
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context.
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
+    if (request.term() > controller.context().getTerm()) {
+      controller.context().setTerm(request.term());
     }
 
 
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
-    if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getCluster().getMember().serverAddress(), request);
+    if (request.term() < controller.context().getTerm()) {
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", controller.context().getCluster().getMember().serverAddress(), request);
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withAccepted(false)
         .build();
     } else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withAccepted(true)
         .build();
     } else {
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withAccepted(false)
         .build();
     }
   }
 
   @Override
-  protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
-    context.checkThread();
+  public CompletableFuture<VoteResponse> vote(VoteRequest request) {
+    controller.context().checkThread();
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context.
     boolean transition = false;
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
+    if (request.term() > controller.context().getTerm()) {
+      controller.context().setTerm(request.term());
       transition = true;
     }
 
     CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
     if (transition) {
-      context.transition(RaftStateType.FOLLOWER);
+      controller.transition(RaftStateType.FOLLOWER);
     }
     return future;
   }
@@ -136,47 +138,47 @@ abstract class ActiveState extends PassiveState {
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
-    if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getCluster().getMember().serverAddress(), request);
+    if (request.term() < controller.context().getTerm()) {
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", controller.context().getCluster().getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withVoted(false)
         .build();
     }
     // If the requesting candidate is not a known member of the cluster (to this
     // node) then don't vote for it. Only vote for candidates that we know about.
-    else if (!context.getCluster().getMembers().stream().<Integer>map(Member::id).collect(Collectors.toSet()).contains(request.candidate())) {
-      LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getCluster().getMember().serverAddress(), request);
+    else if (!controller.context().getCluster().getMembers().stream().<Integer>map(Member::id).collect(Collectors.toSet()).contains(request.candidate())) {
+      LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", controller.context().getCluster().getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withVoted(false)
         .build();
     }
     // If we've already voted for someone else then don't vote again.
-    else if (context.getLastVotedFor() == 0 || context.getLastVotedFor() == request.candidate()) {
+    else if (controller.context().getLastVotedFor() == 0 || controller.context().getLastVotedFor() == request.candidate()) {
       if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
-        context.setLastVotedFor(request.candidate());
+        controller.context().setLastVotedFor(request.candidate());
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
+          .withTerm(controller.context().getTerm())
           .withVoted(true)
           .build();
       } else {
         return VoteResponse.builder()
           .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
+          .withTerm(controller.context().getTerm())
           .withVoted(false)
           .build();
       }
     }
     // In this case, we've already voted for someone else.
     else {
-      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getCluster().getMember().serverAddress(), request, context.getLastVotedFor());
+      LOGGER.debug("{} - Rejected {}: already voted for {}", controller.context().getCluster().getMember().serverAddress(), request, controller.context().getLastVotedFor());
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
+        .withTerm(controller.context().getTerm())
         .withVoted(false)
         .build();
     }
@@ -187,30 +189,30 @@ abstract class ActiveState extends PassiveState {
    */
   boolean isLogUpToDate(long index, long term, Request request) {
     // If the log is empty then vote for the candidate.
-    if (context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().getMember().serverAddress(), request);
+    if (controller.context().getLog().isEmpty()) {
+      LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", controller.context().getCluster().getMember().serverAddress(), request);
       return true;
     } else {
       // Otherwise, load the last entry in the log. The last entry should be
       // at least as up to date as the candidates entry and term.
-      long lastIndex = context.getLog().lastIndex();
-      Entry entry = context.getLog().get(lastIndex);
+      long lastIndex = controller.context().getLog().lastIndex();
+      Entry entry = controller.context().getLog().get(lastIndex);
       if (entry == null) {
-        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().getMember().serverAddress(), request);
+        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", controller.context().getCluster().getMember().serverAddress(), request);
         return true;
       }
 
       try {
         if (index != 0 && index >= lastIndex) {
           if (term >= entry.getTerm()) {
-            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().getMember().serverAddress(), request);
+            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", controller.context().getCluster().getMember().serverAddress(), request);
             return true;
           } else {
-            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getCluster().getMember().serverAddress(), request, term, entry.getTerm());
+            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", controller.context().getCluster().getMember().serverAddress(), request, term, entry.getTerm());
             return false;
           }
         } else {
-          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().getMember().serverAddress(), request, index, lastIndex);
+          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", controller.context().getCluster().getMember().serverAddress(), request, index, lastIndex);
           return false;
         }
       } finally {
@@ -220,8 +222,8 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  protected CompletableFuture<QueryResponse> query(QueryRequest request) {
-    context.checkThread();
+  public CompletableFuture<QueryResponse> query(QueryRequest request) {
+    controller.context().checkThread();
     logRequest(request);
 
     // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
@@ -230,7 +232,7 @@ abstract class ActiveState extends PassiveState {
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
-      if (context.getLog().lastIndex() < context.getCommitIndex()) {
+      if (controller.context().getLog().lastIndex() < controller.context().getCommitIndex()) {
         LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
         return queryForward(request);
       }
@@ -245,14 +247,14 @@ abstract class ActiveState extends PassiveState {
    * Forwards the query to the leader.
    */
   private CompletableFuture<QueryResponse> queryForward(QueryRequest request) {
-    if (context.getLeader() == null) {
+    if (controller.context().getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.NO_LEADER_ERROR)
         .build()));
     }
 
-    LOGGER.debug("{} - Forwarded {}", context.getCluster().getMember().serverAddress(), request);
+    LOGGER.debug("{} - Forwarded {}", controller.context().getCluster().getMember().serverAddress(), request);
     return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
   }
 
@@ -262,9 +264,9 @@ abstract class ActiveState extends PassiveState {
   private CompletableFuture<QueryResponse> queryLocal(QueryRequest request) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(context.getCommitIndex())
-      .setTerm(context.getTerm())
+    QueryEntry entry = controller.context().getLog().create(QueryEntry.class)
+      .setIndex(controller.context().getCommitIndex())
+      .setTerm(controller.context().getTerm())
       .setTimestamp(System.currentTimeMillis())
       .setSession(request.session())
       .setSequence(request.sequence())
@@ -276,12 +278,12 @@ abstract class ActiveState extends PassiveState {
     // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
     final long version;
     if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      version = context.getStateMachine().getLastApplied();
+      version = controller.context().getStateMachine().getLastApplied();
     } else {
-      version = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+      version = Math.max(request.sequence(), controller.context().getStateMachine().getLastApplied());
     }
 
-    context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {
+    controller.context().getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {
       if (isOpen()) {
         if (error == null) {
           future.complete(logResponse(QueryResponse.builder()
@@ -304,7 +306,7 @@ abstract class ActiveState extends PassiveState {
         }
       }
       entry.release();
-    }, context.getThreadContext().executor());
+    }, controller.context().getThreadContext().executor());
     return future;
   }
 

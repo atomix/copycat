@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.state;
+package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -27,7 +27,7 @@ import io.atomix.catalyst.util.Assert;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class Member implements CatalystSerializable {
+public final class Member implements CatalystSerializable {
   private MemberType type;
   private Status status = Status.AVAILABLE;
   private Address serverAddress;
@@ -54,7 +54,7 @@ public class Member implements CatalystSerializable {
   }
 
   public Member(MemberType type, Address serverAddress, Address clientAddress) {
-    this.type = type;
+    this.type = Assert.notNull(type, "type");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
   }
@@ -110,8 +110,8 @@ public class Member implements CatalystSerializable {
    * @param type The member type.
    * @return The member.
    */
-  Member update(MemberType type) {
-    this.type = type;
+  public Member update(MemberType type) {
+    this.type = Assert.notNull(type, "type");
     return this;
   }
 
@@ -121,7 +121,7 @@ public class Member implements CatalystSerializable {
    * @param status The member status.
    * @return The member.
    */
-  Member update(Status status) {
+  public Member update(Status status) {
     this.status = Assert.notNull(status, "status");
     return this;
   }
@@ -132,7 +132,7 @@ public class Member implements CatalystSerializable {
    * @param clientAddress The member client address.
    * @return The member.
    */
-  Member update(Address clientAddress) {
+  public Member update(Address clientAddress) {
     if (clientAddress != null) {
       this.clientAddress = clientAddress;
     }

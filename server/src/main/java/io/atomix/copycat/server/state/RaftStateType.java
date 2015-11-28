@@ -15,12 +15,14 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.copycat.server.controller.ServerStateController;
+
 /**
  * Raft server state.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public enum RaftStateType implements ServerState.Type {
+public enum RaftStateType implements ServerState.Type<RaftState> {
 
   /**
    * Represents the state of an inactive server.
@@ -29,7 +31,7 @@ public enum RaftStateType implements ServerState.Type {
    */
   INACTIVE {
     @Override
-    public ServerState createState(ServerStateContext controller) {
+    public RaftState createState(ServerStateController controller) {
       return new InactiveState(controller);
     }
   },
@@ -42,7 +44,7 @@ public enum RaftStateType implements ServerState.Type {
    */
   PASSIVE {
     @Override
-    public ServerState createState(ServerStateContext controller) {
+    public RaftState createState(ServerStateController controller) {
       return new PassiveState(controller);
     }
   },
@@ -54,7 +56,7 @@ public enum RaftStateType implements ServerState.Type {
    */
   FOLLOWER {
     @Override
-    public ServerState createState(ServerStateContext controller) {
+    public RaftState createState(ServerStateController controller) {
       return new FollowerState(controller);
     }
   },
@@ -69,7 +71,7 @@ public enum RaftStateType implements ServerState.Type {
    */
   CANDIDATE {
     @Override
-    public ServerState createState(ServerStateContext controller) {
+    public RaftState createState(ServerStateController controller) {
       return new CandidateState(controller);
     }
   },
@@ -82,7 +84,7 @@ public enum RaftStateType implements ServerState.Type {
    */
   LEADER {
     @Override
-    public ServerState createState(ServerStateContext controller) {
+    public RaftState createState(ServerStateController controller) {
       return new LeaderState(controller);
     }
   }
