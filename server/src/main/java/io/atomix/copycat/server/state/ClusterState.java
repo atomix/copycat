@@ -155,7 +155,7 @@ class ClusterState {
    * @return A list of voting members.
    */
   public List<Member> getVotingMembers() {
-    return members.stream().filter(m -> m.getMember().type().isVoting()).map(MemberState::getMember).collect(Collectors.toList());
+    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).map(MemberState::getMember).collect(Collectors.toList());
   }
 
   /**
@@ -164,7 +164,7 @@ class ClusterState {
    * @return A list of voting members.
    */
   List<MemberState> getVotingMemberStates() {
-    return members.stream().filter(m -> m.getMember().type().isVoting()).collect(Collectors.toList());
+    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).collect(Collectors.toList());
   }
 
   /**
@@ -185,7 +185,7 @@ class ClusterState {
    * @return A list of stateful members.
    */
   public List<Member> getStatefulMembers() {
-    return members.stream().filter(m -> m.getMember().type().isStateful()).map(MemberState::getMember).collect(Collectors.toList());
+    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).map(MemberState::getMember).collect(Collectors.toList());
   }
 
   /**
@@ -194,7 +194,7 @@ class ClusterState {
    * @return A list of stateful members.
    */
   List<MemberState> getStatefulMemberStates() {
-    return members.stream().filter(m -> m.getMember().type().isStateful()).collect(Collectors.toList());
+    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).collect(Collectors.toList());
   }
 
   /**
