@@ -231,7 +231,7 @@ final class LeaderAppender extends AbstractAppender {
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
-    List<MemberState> members = context.getCluster().getVotingMemberStates((m1, m2)->
+    List<MemberState> members = context.getCluster().getVotingMemberStates((m1, m2) ->
       Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
 
     // If the active members list is empty (a configuration change occurred between an append request/response)
@@ -302,6 +302,7 @@ final class LeaderAppender extends AbstractAppender {
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withCommitIndex(context.getCommitIndex())
+      .withGlobalIndex(context.getGlobalIndex())
       .build();
   }
 
@@ -317,7 +318,8 @@ final class LeaderAppender extends AbstractAppender {
       .withLeader(context.getCluster().getMember().id())
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
-      .withCommitIndex(context.getCommitIndex());
+      .withCommitIndex(context.getCommitIndex())
+      .withGlobalIndex(context.getGlobalIndex());
 
     // Build a list of entries to send to the member.
     if (!context.getLog().isEmpty()) {
