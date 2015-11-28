@@ -62,7 +62,6 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
     configuring.add(member);
 
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
       context.checkThread();
 
@@ -81,6 +80,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a commit message.
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
+    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
       configuring.remove(member);
