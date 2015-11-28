@@ -402,7 +402,6 @@ public class CopycatServer implements RaftServer {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
       this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
       this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
-      this.cluster.add(serverAddress);
     }
 
     /**
