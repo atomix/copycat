@@ -127,13 +127,15 @@ public class Member implements CatalystSerializable {
   }
 
   /**
-   * Updates the member client addrtess.
+   * Updates the member client address.
    *
    * @param clientAddress The member client address.
    * @return The member.
    */
   Member update(Address clientAddress) {
-    this.clientAddress = clientAddress;
+    if (clientAddress != null) {
+      this.clientAddress = clientAddress;
+    }
     return this;
   }
 

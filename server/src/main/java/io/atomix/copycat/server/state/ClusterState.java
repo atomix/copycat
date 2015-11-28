@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  */
 class ClusterState {
   private final ServerState context;
-  private Member member;
+  private final Member member;
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
@@ -46,17 +46,6 @@ class ClusterState {
    */
   public Member getMember() {
     return member;
-  }
-
-  /**
-   * Sets the local cluster member.
-   *
-   * @param member The local cluster member.
-   * @return The cluster state.
-   */
-  ClusterState setMember(Member member) {
-    this.member = member;
-    return this;
   }
 
   /**
@@ -216,7 +205,7 @@ class ClusterState {
     // Iterate through members in the new configuration, add any missing members, and update existing members.
     for (Member member : members) {
       if (member.equals(this.member)) {
-        this.member = member;
+        this.member.update(member.type()).update(member.clientAddress());
       } else {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
