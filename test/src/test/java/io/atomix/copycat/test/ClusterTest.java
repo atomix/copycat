@@ -24,6 +24,7 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
@@ -115,6 +116,33 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer server = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
     await(10000);
+  }
+
+  /**
+   * Tests scaling the cluster from 1 node to 3 nodes and back.
+   */
+  public void testReplace() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+    CopycatClient client = createClient();
+    RaftServer s1 = createServer(members, nextMember()).open().get();
+    RaftServer s2 = createServer(members, nextMember()).open().get();
+    RaftServer s3 = createServer(members, nextMember()).open().get();
+
+    for (int i = 0; i < servers.size(); i++) {
+      servers.get(i).close().join();
+
+      String value = String.format("Hello world %d!", i);
+      client.submit(new TestCommand(value, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, value);
+        resume();
+      });
+
+      await(30000);
+    }
+
+    s1.close().join();
+    s2.close().join();
+    s3.close().join();
   }
 
   /**
