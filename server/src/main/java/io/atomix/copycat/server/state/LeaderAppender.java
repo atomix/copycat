@@ -93,7 +93,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   public CompletableFuture<Long> appendEntries() {
     // If there are no other active members in the cluster, simply complete the append operation.
-    if (context.getCluster().getMembers().size() == 0)
+    if (context.getCluster().getRemoteMemberStates().size() == 0)
       return CompletableFuture.completedFuture(null);
 
     // If no commit future already exists, that indicates there's no heartbeat currently under way.
