@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ServerStateContext {
+public class ServerStateContext implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateContext.class);
   private static final int MAX_JOIN_ATTEMPTS = 3;
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
@@ -81,8 +81,7 @@ public class ServerStateContext {
   private long commitIndex;
   private long globalIndex;
 
-  @SuppressWarnings("unchecked")
-  ServerStateContext(Member member, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerStateContext(Member member, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.cluster = new ClusterState(this, member);
     this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
@@ -436,9 +435,11 @@ public class ServerStateContext {
   }
 
   /**
-   * Handles a connection from a client.
+   * Connects a client to the state.
+   *
+   * @param connection The client connection.
    */
-  void connectClient(Connection connection) {
+  public void connectClient(Connection connection) {
     threadContext.checkThread();
 
     if (clientConnections.add(connection)) {
@@ -451,9 +452,11 @@ public class ServerStateContext {
   }
 
   /**
-   * Handles a connection from another server.
+   * Connects a server to the state.
+   *
+   * @param connection The server connection.
    */
-  void connectServer(Connection connection) {
+  public void connectServer(Connection connection) {
     threadContext.checkThread();
 
     if (serverConnections.add(connection)) {
@@ -687,6 +690,17 @@ public class ServerStateContext {
       LOGGER.debug("{} - Cancelling leave timeout", cluster.getMember().serverAddress());
       leaveTimer.cancel();
       leaveTimer = null;
+    }
+  }
+
+  @Override
+  public void close() {
+    configure(RaftMemberType.INACTIVE);
+    stateMachine.close();
+    try {
+      log.close();
+      meta.close();
+    } catch (Exception e) {
     }
   }
 
