@@ -27,18 +27,19 @@ import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.cluster.ConnectionManager;
-import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.server.session.ServerSessionManager;
 import io.atomix.copycat.server.executor.ServerStateMachine;
 import io.atomix.copycat.server.executor.ServerStateMachineContext;
+import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.session.ServerSessionManager;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -54,10 +55,10 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private ThreadContext callerContext;
   private ThreadContext stateContext;
   private Transport transport;
+  private Log log;
   private ServerStateMachine stateMachine;
   private long timestamp;
   private AtomicLong sequence;
-  private Set<Long> cleaned;
 
   @BeforeMethod
   public void createStateMachine() {
@@ -65,8 +66,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     stateContext = new SingleThreadContext("state", new Serializer());
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
-    cleaned = new HashSet<>();
-    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaned::add, stateContext);
+    log = new Storage(StorageLevel.MEMORY).openLog("test");
+    stateMachine = new ServerStateMachine(new TestStateMachine(), log, new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), stateContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

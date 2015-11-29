@@ -29,12 +29,12 @@ import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.*;
 import io.atomix.copycat.server.controller.InactiveStateController;
 import io.atomix.copycat.server.controller.ServerStateController;
+import io.atomix.copycat.server.executor.ServerStateMachine;
+import io.atomix.copycat.server.executor.ServerStateMachineContext;
 import io.atomix.copycat.server.request.JoinRequest;
 import io.atomix.copycat.server.request.LeaveRequest;
 import io.atomix.copycat.server.response.JoinResponse;
 import io.atomix.copycat.server.session.ServerSessionManager;
-import io.atomix.copycat.server.executor.ServerStateMachine;
-import io.atomix.copycat.server.executor.ServerStateMachineContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
 import org.slf4j.Logger;
@@ -61,7 +61,6 @@ public class ServerStateContext {
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
   private ThreadContext threadContext;
-  private final StateMachine userStateMachine;
   private final ClusterState cluster;
   private final MetaStore meta;
   private final Log log;
@@ -89,11 +88,10 @@ public class ServerStateContext {
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
-    this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
 
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+    this.stateMachine = new ServerStateMachine(stateMachine, log, new ServerStateMachineContext(connections, new ServerSessionManager()), stateContext);
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
@@ -392,24 +390,6 @@ public class ServerStateContext {
    */
   ServerStateMachine getStateMachine() {
     return stateMachine;
-  }
-
-  /**
-   * Returns the last index applied to the state machine.
-   *
-   * @return The last index applied to the state machine.
-   */
-  public long getLastApplied() {
-    return stateMachine.getLastApplied();
-  }
-
-  /**
-   * Returns the last index completed for all sessions.
-   *
-   * @return The last index completed for all sessions.
-   */
-  public long getLastCompleted() {
-    return stateMachine.getLastCompleted();
   }
 
   /**

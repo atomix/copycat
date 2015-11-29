@@ -25,6 +25,7 @@ import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,18 +41,18 @@ import java.util.concurrent.CompletableFuture;
 public class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
+  private final Log log;
   private final ServerStateMachineExecutor executor;
-  private final ServerCommitCleaner cleaner;
   private final ServerCommitPool commits;
   private long lastApplied;
   private long lastCompleted;
   private long configuration;
 
-  public ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
-    this.stateMachine = stateMachine;
+  public ServerStateMachine(StateMachine stateMachine, Log log, ServerStateMachineContext context, ThreadContext executor) {
+    this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
+    this.log = Assert.notNull(log, "log");
     this.executor = new ServerStateMachineExecutor(context, executor);
-    this.cleaner = cleaner;
-    this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
+    this.commits = new ServerCommitPool(log, this.executor.context().sessions());
     init();
   }
 
@@ -173,7 +174,7 @@ public class ServerStateMachine implements AutoCloseable {
     // Immediately clean the commit for the previous configuration since configuration entries
     // completely override the previous configuration.
     if (previousConfiguration > 0) {
-      cleaner.clean(previousConfiguration);
+      log.clean(previousConfiguration);
     }
     return CompletableFuture.completedFuture(null);
   }
@@ -187,7 +188,7 @@ public class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 
@@ -307,7 +308,7 @@ public class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the keep alive entry from the log.
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
 
     return future;
   }
@@ -404,7 +405,7 @@ public class ServerStateMachine implements AutoCloseable {
       }
 
       // Clean the unregister entry from the log immediately after it's applied.
-      cleaner.clean(session.id());
+      log.clean(session.id());
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
       // index for which logs can be compacted.
@@ -412,7 +413,7 @@ public class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the unregister entry from the log.
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
 
     return future;
   }
@@ -657,7 +658,7 @@ public class ServerStateMachine implements AutoCloseable {
     for (Session session : executor.context().sessions()) {
       ((ServerSession) session).setTimestamp(timestamp);
     }
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
 

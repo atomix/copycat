@@ -132,7 +132,7 @@ final class LeaderState extends ActiveState {
   private void applyEntries(long index) {
     if (!controller.context().getLog().isEmpty()) {
       int count = 0;
-      for (long lastApplied = Math.max(controller.context().getLastApplied(), controller.context().getLog().firstIndex()); lastApplied <= index; lastApplied++) {
+      for (long lastApplied = Math.max(controller.context().getStateMachine().getLastApplied(), controller.context().getLog().firstIndex()); lastApplied <= index; lastApplied++) {
         Entry entry = controller.context().getLog().get(lastApplied);
         if (entry != null) {
           controller.context().getStateMachine().apply(entry).whenComplete((result, error) -> {
@@ -146,7 +146,7 @@ final class LeaderState extends ActiveState {
       }
 
       LOGGER.debug("{} - Applied {} entries to log", controller.context().getCluster().getMember().serverAddress(), count);
-      controller.context().getLog().compactor().minorIndex(controller.context().getLastCompleted());
+      controller.context().getLog().compactor().minorIndex(controller.context().getStateMachine().getLastCompleted());
     }
   }
 
@@ -168,7 +168,7 @@ final class LeaderState extends ActiveState {
     controller.context().checkThread();
     if (isOpen()) {
       appender.appendEntries().whenComplete((result, error) -> {
-        controller.context().getLog().compactor().minorIndex(controller.context().getLastCompleted());
+        controller.context().getLog().compactor().minorIndex(controller.context().getStateMachine().getLastCompleted());
       });
     }
   }

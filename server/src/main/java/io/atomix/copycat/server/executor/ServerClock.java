@@ -25,7 +25,7 @@ import java.time.ZoneId;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ServerClock extends Clock {
+final class ServerClock extends Clock {
   private final ZoneId zoneId = ZoneId.of("UTC");
   private Instant instant;
 

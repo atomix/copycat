@@ -170,7 +170,7 @@ class PassiveState extends RaftState {
     // If we've made it this far, apply commits and send a successful response.
     long commitIndex = request.commitIndex();
     controller.context().getThreadContext().execute(() -> applyCommits(commitIndex)).thenRun(() -> {
-      controller.context().getLog().compactor().minorIndex(controller.context().getLastCompleted());
+      controller.context().getLog().compactor().minorIndex(controller.context().getStateMachine().getLastCompleted());
     });
 
     return AppendResponse.builder()
@@ -190,7 +190,7 @@ class PassiveState extends RaftState {
 
     // The entries to be applied to the state machine are the difference between min(lastIndex, commitIndex) and lastApplied.
     long lastIndex = controller.context().getLog().lastIndex();
-    long lastApplied = controller.context().getLastApplied();
+    long lastApplied = controller.context().getStateMachine().getLastApplied();
 
     long effectiveIndex = Math.min(lastIndex, controller.context().getCommitIndex());
 
