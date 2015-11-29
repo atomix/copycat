@@ -15,12 +15,11 @@
  */
 package io.atomix.copycat.server.cluster;
 
-import io.atomix.copycat.server.cluster.MemberType;
 import io.atomix.copycat.server.controller.ActiveStateController;
 import io.atomix.copycat.server.controller.InactiveStateController;
 import io.atomix.copycat.server.controller.PassiveStateController;
 import io.atomix.copycat.server.controller.ServerStateController;
-import io.atomix.copycat.server.state.ServerStateContext;
+import io.atomix.copycat.server.state.ServerContext;
 
 /**
  * Raft member types.
@@ -34,7 +33,7 @@ public enum RaftMemberType implements MemberType {
    */
   INACTIVE {
     @Override
-    public ServerStateController createController(ServerStateContext context) {
+    public ServerStateController createController(ServerContext context) {
       return new InactiveStateController(context);
     }
 
@@ -54,7 +53,7 @@ public enum RaftMemberType implements MemberType {
    */
   ACTIVE {
     @Override
-    public ServerStateController createController(ServerStateContext context) {
+    public ServerStateController createController(ServerContext context) {
       return new ActiveStateController(context);
     }
 
@@ -74,7 +73,7 @@ public enum RaftMemberType implements MemberType {
    */
   PASSIVE {
     @Override
-    public ServerStateController createController(ServerStateContext context) {
+    public ServerStateController createController(ServerContext context) {
       return new PassiveStateController(context);
     }
 

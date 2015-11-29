@@ -16,7 +16,7 @@
 package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.server.state.ServerStateContext;
+import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.MetaStore;
 
 import java.util.*;
@@ -27,15 +27,15 @@ import java.util.stream.Collectors;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public final class ClusterState {
-  private final ServerStateContext context;
+public final class ClusterContext {
+  private final ServerContext context;
   private final Member member;
   private long version = -1;
-  private final Map<Integer, MemberState> membersMap = new HashMap<>();
-  private final List<MemberState> members = new ArrayList<>();
-  private final Map<MemberType, List<MemberState>> memberTypes = new HashMap<>();
+  private final Map<Integer, MemberContext> membersMap = new HashMap<>();
+  private final List<MemberContext> members = new ArrayList<>();
+  private final Map<MemberType, List<MemberContext>> memberTypes = new HashMap<>();
 
-  public ClusterState(ServerStateContext context, Member member) {
+  public ClusterContext(ServerContext context, Member member) {
     this.context = Assert.notNull(context, "context");
     this.member = Assert.notNull(member, "member");
   }
@@ -87,7 +87,7 @@ public final class ClusterState {
    * @return The member.
    */
   public Member getRemoteMember(int id) {
-    MemberState member = membersMap.get(id);
+    MemberContext member = membersMap.get(id);
     return member != null ? member.getMember() : null;
   }
 
@@ -97,7 +97,7 @@ public final class ClusterState {
    * @param id The member ID.
    * @return The member state.
    */
-  public MemberState getRemoteMemberState(int id) {
+  public MemberContext getRemoteMemberState(int id) {
     return membersMap.get(id);
   }
 
@@ -110,7 +110,7 @@ public final class ClusterState {
     // Add all members to a list. The "members" field is only remote members, so we must separately
     // add the local member to the list if necessary.
     List<Member> members = new ArrayList<>(this.members.size() + 1);
-    for (MemberState member : this.members) {
+    for (MemberContext member : this.members) {
       members.add(member.getMember());
     }
 
@@ -127,7 +127,7 @@ public final class ClusterState {
    * @return A list of all remote members.
    */
   public List<Member> getRemoteMembers() {
-    return members.stream().map(MemberState::getMember).collect(Collectors.toList());
+    return members.stream().map(MemberContext::getMember).collect(Collectors.toList());
   }
 
   /**
@@ -135,7 +135,7 @@ public final class ClusterState {
    *
    * @return A list of all members.
    */
-  public List<MemberState> getRemoteMemberStates() {
+  public List<MemberContext> getRemoteMemberStates() {
     return members;
   }
 
@@ -145,7 +145,7 @@ public final class ClusterState {
    * @return A list of voting members.
    */
   public List<Member> getVotingMembers() {
-    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).map(MemberState::getMember).collect(Collectors.toList());
+    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).map(MemberContext::getMember).collect(Collectors.toList());
   }
 
   /**
@@ -153,7 +153,7 @@ public final class ClusterState {
    *
    * @return A list of voting members.
    */
-  public List<MemberState> getVotingMemberStates() {
+  public List<MemberContext> getVotingMemberStates() {
     return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).collect(Collectors.toList());
   }
 
@@ -163,8 +163,8 @@ public final class ClusterState {
    * @param comparator A comparator with which to sort the members.
    * @return A list of voting members.
    */
-  public List<MemberState> getVotingMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> members = getVotingMemberStates();
+  public List<MemberContext> getVotingMemberStates(Comparator<MemberContext> comparator) {
+    List<MemberContext> members = getVotingMemberStates();
     Collections.sort(members, comparator);
     return members;
   }
@@ -175,7 +175,7 @@ public final class ClusterState {
    * @return A list of stateful members.
    */
   public List<Member> getStatefulMembers() {
-    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).map(MemberState::getMember).collect(Collectors.toList());
+    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).map(MemberContext::getMember).collect(Collectors.toList());
   }
 
   /**
@@ -183,7 +183,7 @@ public final class ClusterState {
    *
    * @return A list of stateful members.
    */
-  public List<MemberState> getStatefulMemberStates() {
+  public List<MemberContext> getStatefulMemberStates() {
     return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).collect(Collectors.toList());
   }
 
@@ -194,7 +194,7 @@ public final class ClusterState {
    * @param members The cluster members.
    * @return The cluster state.
    */
-  public ClusterState configure(long version, Collection<Member> members) {
+  public ClusterContext configure(long version, Collection<Member> members) {
     if (version <= this.version)
       return this;
 
@@ -209,9 +209,9 @@ public final class ClusterState {
         this.member.update(member.type()).update(member.clientAddress());
       } else {
         // If the member state doesn't already exist, create it.
-        MemberState state = membersMap.get(member.id());
+        MemberContext state = membersMap.get(member.id());
         if (state == null) {
-          state = new MemberState(new Member(member.type(), member.serverAddress(), member.clientAddress()));
+          state = new MemberContext(new Member(member.type(), member.serverAddress(), member.clientAddress()));
           state.resetState(context.getLog());
           this.members.add(state);
           membersMap.put(member.id(), state);
@@ -225,12 +225,12 @@ public final class ClusterState {
         }
 
         // Update the optimized member collections according to the member type.
-        for (List<MemberState> memberType : memberTypes.values()) {
+        for (List<MemberContext> memberType : memberTypes.values()) {
           memberType.remove(state);
         }
 
         if (member.type() != null) {
-          List<MemberState> memberType = memberTypes.get(member.type());
+          List<MemberContext> memberType = memberTypes.get(member.type());
           if (memberType == null) {
             memberType = new ArrayList<>();
             memberTypes.put(member.type(), memberType);
@@ -246,12 +246,12 @@ public final class ClusterState {
     }
 
     // Iterate through configured members and remove any that no longer exist in the configuration.
-    Iterator<MemberState> iterator = this.members.iterator();
+    Iterator<MemberContext> iterator = this.members.iterator();
     while (iterator.hasNext()) {
-      MemberState member = iterator.next();
+      MemberContext member = iterator.next();
       if (!members.contains(member.getMember())) {
         iterator.remove();
-        for (List<MemberState> memberType : memberTypes.values()) {
+        for (List<MemberContext> memberType : memberTypes.values()) {
           memberType.remove(member);
         }
         membersMap.remove(member.getMember().id());

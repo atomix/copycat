@@ -19,7 +19,7 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.state.RaftState;
-import io.atomix.copycat.server.state.ServerStateContext;
+import io.atomix.copycat.server.state.ServerContext;
 
 /**
  * Raft server state controller.
@@ -28,7 +28,7 @@ import io.atomix.copycat.server.state.ServerStateContext;
  */
 public abstract class RaftStateController extends ServerStateController<RaftState> {
 
-  public RaftStateController(ServerStateContext context) {
+  public RaftStateController(ServerContext context) {
     super(context);
   }
 

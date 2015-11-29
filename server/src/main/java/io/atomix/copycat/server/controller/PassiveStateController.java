@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class PassiveStateController extends RaftStateController {
 
-  public PassiveStateController(ServerStateContext context) {
+  public PassiveStateController(ServerContext context) {
     super(context);
   }
 

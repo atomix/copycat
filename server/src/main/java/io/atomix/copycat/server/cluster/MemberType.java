@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.cluster;
 
-import io.atomix.copycat.server.state.ServerStateContext;
+import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.controller.ServerStateController;
 
 /**
@@ -31,7 +31,7 @@ public interface MemberType {
    * @param context The server state context.
    * @return The member type controller.
    */
-  ServerStateController createController(ServerStateContext context);
+  ServerStateController createController(ServerContext context);
 
   /**
    * Returns a boolean value indicating whether the member is a stateful member.

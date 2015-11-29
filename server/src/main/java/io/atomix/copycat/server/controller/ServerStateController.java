@@ -23,7 +23,7 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.MemberType;
 import io.atomix.copycat.server.state.ServerState;
-import io.atomix.copycat.server.state.ServerStateContext;
+import io.atomix.copycat.server.state.ServerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,11 +39,11 @@ import java.util.function.Consumer;
 public abstract class ServerStateController<T extends ServerState> implements Managed<ServerStateController<T>> {
   private final Logger LOGGER = LoggerFactory.getLogger(getClass());
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
-  protected final ServerStateContext context;
+  protected final ServerContext context;
   protected T state;
   private boolean open;
 
-  protected ServerStateController(ServerStateContext context) {
+  protected ServerStateController(ServerContext context) {
     this.context = Assert.notNull(context, "context");
   }
 
@@ -68,7 +68,7 @@ public abstract class ServerStateController<T extends ServerState> implements Ma
    *
    * @return The server state context.
    */
-  public ServerStateContext context() {
+  public ServerContext context() {
     return context;
   }
 

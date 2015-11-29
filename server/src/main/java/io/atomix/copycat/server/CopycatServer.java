@@ -32,7 +32,7 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.cluster.ConnectionManager;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.cluster.RaftMemberType;
-import io.atomix.copycat.server.state.ServerStateContext;
+import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
@@ -209,7 +209,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   private final ThreadContext context;
   private Server clientServer;
   private Server internalServer;
-  private ServerStateContext state;
+  private ServerContext state;
   private CompletableFuture<CopycatServer> openFuture;
   private CompletableFuture<Void> closeFuture;
   private volatile boolean open;
@@ -406,7 +406,7 @@ public class CopycatServer implements Managed<CopycatServer> {
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerStateContext(new Member(RaftMemberType.INACTIVE, serverAddress, clientAddress), members, meta, log, stateMachine, connections, context)
+          state = new ServerContext(new Member(RaftMemberType.INACTIVE, serverAddress, clientAddress), members, meta, log, stateMachine, connections, context)
             .setElectionTimeout(electionTimeout)
             .setHeartbeatInterval(heartbeatInterval)
             .setSessionTimeout(sessionTimeout);

@@ -54,7 +54,7 @@ public abstract class AbstractStateTest<T extends ServerState> extends Concurren
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
-  protected ServerStateContext serverState;
+  protected ServerContext serverState;
   protected List<Member> members;
 
   /**
@@ -75,7 +75,7 @@ public abstract class AbstractStateTest<T extends ServerState> extends Concurren
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerStateContext(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverState = new ServerContext(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**

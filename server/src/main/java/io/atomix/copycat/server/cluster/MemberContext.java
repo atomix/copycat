@@ -23,7 +23,7 @@ import io.atomix.copycat.server.storage.Log;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public final class MemberState {
+public final class MemberContext {
   private Member member;
   private long term;
   private long version;
@@ -33,7 +33,7 @@ public final class MemberState {
   private long commitStartTime;
   private int failures;
 
-  public MemberState(Member member) {
+  public MemberContext(Member member) {
     this.member = Assert.notNull(member, "member");
   }
 
@@ -63,7 +63,7 @@ public final class MemberState {
    * @param member The member.
    * @return The member state.
    */
-  public MemberState setMember(Member member) {
+  public MemberContext setMember(Member member) {
     this.member = Assert.notNull(member, "member");
     return this;
   }
@@ -83,7 +83,7 @@ public final class MemberState {
    * @param term The member term.
    * @return The member state.
    */
-  public MemberState setTerm(long term) {
+  public MemberContext setTerm(long term) {
     this.term = term;
     return this;
   }
@@ -103,7 +103,7 @@ public final class MemberState {
    * @param version The member version.
    * @return The member state.
    */
-  public MemberState setVersion(long version) {
+  public MemberContext setVersion(long version) {
     this.version = version;
     return this;
   }
@@ -123,7 +123,7 @@ public final class MemberState {
    * @param matchIndex The member's match index.
    * @return The member state.
    */
-  public MemberState setMatchIndex(long matchIndex) {
+  public MemberContext setMatchIndex(long matchIndex) {
     this.matchIndex = Assert.argNot(matchIndex, matchIndex < this.matchIndex, "matchIndex cannot be decreased");
     return this;
   }
@@ -143,7 +143,7 @@ public final class MemberState {
    * @param nextIndex The member's next index.
    * @return The member state.
    */
-  public MemberState setNextIndex(long nextIndex) {
+  public MemberContext setNextIndex(long nextIndex) {
     this.nextIndex = Assert.argNot(nextIndex, nextIndex <= matchIndex, "nextIndex cannot be less than or equal to matchIndex");
     return this;
   }
@@ -163,7 +163,7 @@ public final class MemberState {
    * @param commitTime The member commit time.
    * @return The member state.
    */
-  public MemberState setCommitTime(long commitTime) {
+  public MemberContext setCommitTime(long commitTime) {
     this.commitTime = commitTime;
     return this;
   }
@@ -183,7 +183,7 @@ public final class MemberState {
    * @param startTime The member commit attempt start time.
    * @return The member state.
    */
-  public MemberState setCommitStartTime(long startTime) {
+  public MemberContext setCommitStartTime(long startTime) {
     this.commitStartTime = startTime;
     return this;
   }
@@ -211,7 +211,7 @@ public final class MemberState {
    *
    * @return The member state.
    */
-  public MemberState resetFailureCount() {
+  public MemberContext resetFailureCount() {
     failures = 0;
     return this;
   }

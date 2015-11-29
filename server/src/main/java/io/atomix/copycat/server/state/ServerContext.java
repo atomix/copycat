@@ -55,13 +55,13 @@ import java.util.stream.Collectors;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ServerStateContext implements AutoCloseable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateContext.class);
+public class ServerContext implements AutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
   private static final int MAX_JOIN_ATTEMPTS = 3;
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Address> electionListeners = new Listeners<>();
   private ThreadContext threadContext;
-  private final ClusterState cluster;
+  private final ClusterContext cluster;
   private final MetaStore meta;
   private final Log log;
   private final ServerStateMachine stateMachine;
@@ -81,8 +81,8 @@ public class ServerStateContext implements AutoCloseable {
   private long commitIndex;
   private long globalIndex;
 
-  public ServerStateContext(Member member, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
-    this.cluster = new ClusterState(this, member);
+  public ServerContext(Member member, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+    this.cluster = new ClusterContext(this, member);
     this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
@@ -163,7 +163,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param electionTimeout The election timeout.
    * @return The Raft context.
    */
-  public ServerStateContext setElectionTimeout(Duration electionTimeout) {
+  public ServerContext setElectionTimeout(Duration electionTimeout) {
     this.electionTimeout = electionTimeout;
     return this;
   }
@@ -183,7 +183,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param heartbeatInterval The Raft heartbeat interval.
    * @return The Raft context.
    */
-  public ServerStateContext setHeartbeatInterval(Duration heartbeatInterval) {
+  public ServerContext setHeartbeatInterval(Duration heartbeatInterval) {
     this.heartbeatInterval = heartbeatInterval;
     return this;
   }
@@ -212,7 +212,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param sessionTimeout The session timeout.
    * @return The Raft state machine.
    */
-  public ServerStateContext setSessionTimeout(Duration sessionTimeout) {
+  public ServerContext setSessionTimeout(Duration sessionTimeout) {
     this.sessionTimeout = sessionTimeout;
     return this;
   }
@@ -223,7 +223,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param leader The state leader.
    * @return The Raft context.
    */
-  ServerStateContext setLeader(int leader) {
+  ServerContext setLeader(int leader) {
     if (this.leader != leader) {
       // 0 indicates no leader.
       if (leader == 0) {
@@ -253,7 +253,7 @@ public class ServerStateContext implements AutoCloseable {
    *
    * @return The cluster state.
    */
-  public ClusterState getCluster() {
+  public ClusterContext getCluster() {
     return cluster;
   }
 
@@ -284,7 +284,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param term The state term.
    * @return The Raft context.
    */
-  ServerStateContext setTerm(long term) {
+  ServerContext setTerm(long term) {
     if (term > this.term) {
       this.term = term;
       this.leader = 0;
@@ -311,7 +311,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param candidate The candidate that was voted for.
    * @return The Raft context.
    */
-  ServerStateContext setLastVotedFor(int candidate) {
+  ServerContext setLastVotedFor(int candidate) {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
     Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
     Assert.stateNot(leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
@@ -343,7 +343,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param commitIndex The commit index.
    * @return The Raft context.
    */
-  ServerStateContext setCommitIndex(long commitIndex) {
+  ServerContext setCommitIndex(long commitIndex) {
     Assert.argNot(commitIndex < 0, "commit index must be positive");
     Assert.argNot(commitIndex < this.commitIndex, "cannot decrease commit index");
     this.commitIndex = commitIndex;
@@ -366,7 +366,7 @@ public class ServerStateContext implements AutoCloseable {
    * @param globalIndex The global index.
    * @return The Raft context.
    */
-  ServerStateContext setGlobalIndex(long globalIndex) {
+  ServerContext setGlobalIndex(long globalIndex) {
     Assert.argNot(globalIndex < 0, "global index must be positive");
     this.globalIndex = Math.max(this.globalIndex, globalIndex);
     log.compactor().majorIndex(globalIndex);
@@ -528,9 +528,9 @@ public class ServerStateContext implements AutoCloseable {
   /**
    * Recursively attempts to join the cluster.
    */
-  private void join(Iterator<MemberState> iterator, int attempts) {
+  private void join(Iterator<MemberContext> iterator, int attempts) {
     if (iterator.hasNext()) {
-      MemberState member = iterator.next();
+      MemberContext member = iterator.next();
       LOGGER.debug("{} - Attempting to join via {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
 
       connections.getConnection(member.getMember().serverAddress()).thenCompose(connection -> {

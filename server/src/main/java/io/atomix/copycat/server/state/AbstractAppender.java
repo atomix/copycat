@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.cluster.MemberState;
+import io.atomix.copycat.server.cluster.MemberContext;
 import io.atomix.copycat.server.controller.ServerStateController;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
@@ -39,8 +39,8 @@ import java.util.Set;
 abstract class AbstractAppender implements AutoCloseable {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerStateController<RaftState> controller;
-  private final Set<MemberState> appending = new HashSet<>();
-  private final Set<MemberState> configuring = new HashSet<>();
+  private final Set<MemberContext> appending = new HashSet<>();
+  private final Set<MemberContext> configuring = new HashSet<>();
   private boolean open = true;
 
   AbstractAppender(ServerStateController<RaftState> controller) {
@@ -50,7 +50,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a configuration to the given member.
    */
-  protected void configure(MemberState member) {
+  protected void configure(MemberContext member) {
     if (!configuring.contains(member)) {
       ConfigureRequest request = buildConfigureRequest(member);
       if (request != null) {
@@ -62,7 +62,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Connects to the member and sends a configure request.
    */
-  protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
+  protected void sendConfigureRequest(MemberContext member, ConfigureRequest request) {
     configuring.add(member);
 
     controller.context().getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
@@ -82,7 +82,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a commit message.
    */
-  protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
+  protected void sendConfigureRequest(Connection connection, MemberContext member, ConfigureRequest request) {
     LOGGER.debug("{} - Sent {} to {}", controller.context().getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
       controller.context().checkThread();
@@ -103,7 +103,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends append entries requests to the given member.
    */
-  protected void appendEntries(MemberState member) {
+  protected void appendEntries(MemberContext member) {
     // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
     if (!open)
       return;
@@ -128,7 +128,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Builds a configure request for the given member.
    */
-  protected ConfigureRequest buildConfigureRequest(MemberState member) {
+  protected ConfigureRequest buildConfigureRequest(MemberContext member) {
     Member leader = controller.context().getLeader();
     return ConfigureRequest.builder()
       .withTerm(controller.context().getTerm())
@@ -141,19 +141,19 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Builds an append request for the given member.
    */
-  protected abstract AppendRequest buildAppendRequest(MemberState member);
+  protected abstract AppendRequest buildAppendRequest(MemberContext member);
 
   /**
    * Gets the previous index.
    */
-  protected long getPrevIndex(MemberState member) {
+  protected long getPrevIndex(MemberContext member) {
     return member.getNextIndex() - 1;
   }
 
   /**
    * Gets the previous entry.
    */
-  protected Entry getPrevEntry(MemberState member, long prevIndex) {
+  protected Entry getPrevEntry(MemberContext member, long prevIndex) {
     if (prevIndex > 0) {
       return controller.context().getLog().get(prevIndex);
     }
@@ -163,21 +163,21 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Starts sending a request.
    */
-  protected void startAppendRequest(MemberState member, AppendRequest request) {
+  protected void startAppendRequest(MemberContext member, AppendRequest request) {
     appending.add(member);
   }
 
   /**
    * Ends sending a request.
    */
-  protected void endAppendRequest(MemberState member, AppendRequest request, Throwable error) {
+  protected void endAppendRequest(MemberContext member, AppendRequest request, Throwable error) {
     appending.remove(member);
   }
 
   /**
    * Connects to the member and sends a commit message.
    */
-  protected void sendAppendRequest(MemberState member, AppendRequest request) {
+  protected void sendAppendRequest(MemberContext member, AppendRequest request) {
     startAppendRequest(member, request);
 
     LOGGER.debug("{} - Sent {} to {}", controller.context().getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
@@ -198,7 +198,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a commit message.
    */
-  protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
+  protected void sendAppendRequest(Connection connection, MemberContext member, AppendRequest request) {
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
       endAppendRequest(member, request, error);
       controller.context().checkThread();
@@ -217,24 +217,24 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Handles an append response.
    */
-  protected abstract void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response);
+  protected abstract void handleAppendResponse(MemberContext member, AppendRequest request, AppendResponse response);
 
   /**
    * Handles an append error.
    */
-  protected abstract void handleAppendError(MemberState member, AppendRequest request, Throwable error);
+  protected abstract void handleAppendError(MemberContext member, AppendRequest request, Throwable error);
 
   /**
    * Returns a boolean value indicating whether there are more entries to send.
    */
-  protected boolean hasMoreEntries(MemberState member) {
+  protected boolean hasMoreEntries(MemberContext member) {
     return member.getNextIndex() < controller.context().getLog().lastIndex();
   }
 
   /**
    * Updates the match index when a response is received.
    */
-  protected void updateMatchIndex(MemberState member, AppendResponse response) {
+  protected void updateMatchIndex(MemberContext member, AppendResponse response) {
     // If the replica returned a valid match index then update the existing match index.
     member.setMatchIndex(response.logIndex());
   }
@@ -242,7 +242,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Updates the next index when the match index is updated.
    */
-  protected void updateNextIndex(MemberState member) {
+  protected void updateNextIndex(MemberContext member) {
     // If the match index was set, update the next index to be greater than the match index if necessary.
     member.setNextIndex(Math.max(member.getNextIndex(), Math.max(member.getMatchIndex() + 1, 1)));
   }
@@ -250,7 +250,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Resets the match index when a response fails.
    */
-  protected void resetMatchIndex(MemberState member, AppendResponse response) {
+  protected void resetMatchIndex(MemberContext member, AppendResponse response) {
     member.setMatchIndex(response.logIndex());
     LOGGER.debug("{} - Reset match index for {} to {}", controller.context().getCluster().getMember().serverAddress(), member, member.getMatchIndex());
   }
@@ -258,7 +258,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Resets the next index when a response fails.
    */
-  protected void resetNextIndex(MemberState member) {
+  protected void resetNextIndex(MemberContext member) {
     if (member.getMatchIndex() != 0) {
       member.setNextIndex(member.getMatchIndex() + 1);
     } else {

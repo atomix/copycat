@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.cluster.MemberState;
+import io.atomix.copycat.server.cluster.MemberContext;
 import io.atomix.copycat.server.controller.ServerStateController;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -98,7 +98,7 @@ final class CandidateState extends ActiveState {
     });
 
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<MemberState> votingMembers = new HashSet<>(controller.context().getCluster().getVotingMemberStates());
+    final Set<MemberContext> votingMembers = new HashSet<>(controller.context().getCluster().getVotingMemberStates());
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
@@ -137,7 +137,7 @@ final class CandidateState extends ActiveState {
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
-    for (MemberState member : votingMembers) {
+    for (MemberContext member : votingMembers) {
       LOGGER.debug("{} - Requesting vote from {} for term {}", controller.context().getCluster().getMember().serverAddress(), member, controller.context().getTerm());
       VoteRequest request = VoteRequest.builder()
         .withTerm(controller.context().getTerm())

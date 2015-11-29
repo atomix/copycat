@@ -19,7 +19,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.cluster.MemberState;
+import io.atomix.copycat.server.cluster.MemberContext;
 import io.atomix.copycat.server.cluster.RaftMemberType;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -103,7 +103,7 @@ final class LeaderAppender extends AbstractAppender {
     if (commitFuture == null) {
       commitFuture = new CompletableFuture<>();
       commitTime = System.currentTimeMillis();
-      for (MemberState member : controller.context().getCluster().getRemoteMemberStates()) {
+      for (MemberContext member : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
       return commitFuture;
@@ -141,7 +141,7 @@ final class LeaderAppender extends AbstractAppender {
     // the commit but ensure append entries requests are sent to passive members.
     else if (controller.context().getCluster().getVotingMemberStates().isEmpty()) {
       controller.context().setCommitIndex(index);
-      for (MemberState member : controller.context().getCluster().getRemoteMemberStates()) {
+      for (MemberContext member : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
       return CompletableFuture.completedFuture(index);
@@ -149,7 +149,7 @@ final class LeaderAppender extends AbstractAppender {
 
     // Ensure append requests are being sent to all members, including passive members.
     return commitFutures.computeIfAbsent(index, i -> {
-      for (MemberState member : controller.context().getCluster().getRemoteMemberStates()) {
+      for (MemberContext member : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
       return new CompletableFuture<>();
@@ -174,7 +174,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Sets a commit time or fails the commit if a quorum of successful responses cannot be achieved.
    */
-  private void commitTime(MemberState member, Throwable error) {
+  private void commitTime(MemberContext member, Throwable error) {
     if (commitFuture == null) {
       return;
     }
@@ -210,7 +210,7 @@ final class LeaderAppender extends AbstractAppender {
     nextCommitFuture = null;
     if (commitFuture != null) {
       this.commitTime = System.currentTimeMillis();
-      for (MemberState replica : controller.context().getCluster().getRemoteMemberStates()) {
+      for (MemberContext replica : controller.context().getCluster().getRemoteMemberStates()) {
         appendEntries(replica);
       }
     }
@@ -227,13 +227,13 @@ final class LeaderAppender extends AbstractAppender {
     // passive members. This is critical since passive members still have state machines and thus it's still
     // important to ensure that tombstones are applied to their state machines.
     // If the members list is empty, use the local server's last log index as the global index.
-    long globalMatchIndex = controller.context().getCluster().getRemoteMemberStates().stream().mapToLong(MemberState::getMatchIndex).min().orElse(controller.context().getLog().lastIndex());
+    long globalMatchIndex = controller.context().getCluster().getRemoteMemberStates().stream().mapToLong(MemberContext::getMatchIndex).min().orElse(controller.context().getLog().lastIndex());
     controller.context().setGlobalIndex(globalMatchIndex);
 
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
-    List<MemberState> members = controller.context().getCluster().getVotingMemberStates((m1, m2) ->
+    List<MemberContext> members = controller.context().getCluster().getVotingMemberStates((m1, m2) ->
       Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
 
     // If the active members list is empty (a configuration change occurred between an append request/response)
@@ -268,7 +268,7 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected AppendRequest buildAppendRequest(MemberState member) {
+  protected AppendRequest buildAppendRequest(MemberContext member) {
     // If the log is empty then send an empty commit.
     // If the member is not stateful then send an empty commit if two election timeouts have passed.
     // If the next index hasn't yet been set then we send an empty commit first.
@@ -294,7 +294,7 @@ final class LeaderAppender extends AbstractAppender {
    * <p>
    * Empty append requests are used as heartbeats to followers.
    */
-  private AppendRequest buildEmptyRequest(MemberState member) {
+  private AppendRequest buildEmptyRequest(MemberContext member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
@@ -311,7 +311,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Builds a populated AppendEntries request.
    */
-  private AppendRequest buildEntryRequest(MemberState member) {
+  private AppendRequest buildEntryRequest(MemberContext member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
@@ -357,19 +357,19 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected void startAppendRequest(MemberState member, AppendRequest request) {
+  protected void startAppendRequest(MemberContext member, AppendRequest request) {
     super.startAppendRequest(member, request);
     member.setCommitStartTime(commitTime);
   }
 
   @Override
-  protected void endAppendRequest(MemberState member, AppendRequest request, Throwable error) {
+  protected void endAppendRequest(MemberContext member, AppendRequest request, Throwable error) {
     super.endAppendRequest(member, request, error);
     commitTime(member, error);
   }
 
   @Override
-  protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
+  protected void handleAppendResponse(MemberContext member, AppendRequest request, AppendResponse response) {
     if (response.status() == Response.Status.OK) {
       handleAppendResponseOk(member, request, response);
     } else {
@@ -380,7 +380,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Handles a {@link Response.Status#OK} response.
    */
-  private void handleAppendResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
+  private void handleAppendResponseOk(MemberContext member, AppendRequest request, AppendResponse response) {
     succeedAttempt(member);
 
     // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
@@ -423,7 +423,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Handles a {@link Response.Status#ERROR} response.
    */
-  private void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
+  private void handleAppendResponseError(MemberContext member, AppendRequest request, AppendResponse response) {
     // If we've received a greater term, update the term and transition back to follower.
     if (response.term() > controller.context().getTerm()) {
       LOGGER.debug("{} - Received higher term from {}", controller.context().getCluster().getMember().serverAddress(), member.getMember().serverAddress());
@@ -441,14 +441,14 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected void handleAppendError(MemberState member, AppendRequest request, Throwable error) {
+  protected void handleAppendError(MemberContext member, AppendRequest request, Throwable error) {
     failAttempt(member, error);
   }
 
   /**
    * Succeeds an attempt to contact a member.
    */
-  private void succeedAttempt(MemberState member) {
+  private void succeedAttempt(MemberContext member) {
     // Reset the member failure count.
     member.resetFailureCount();
 
@@ -462,7 +462,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Fails an attempt to contact a member.
    */
-  private void failAttempt(MemberState member, Throwable error) {
+  private void failAttempt(MemberContext member, Throwable error) {
     // If any append error occurred, increment the failure count for the member. Log the first three failures,
     // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
     // when attempting to send entries to down followers.
@@ -492,7 +492,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Updates the cluster configuration for the given member.
    */
-  private void updateConfiguration(MemberState member) {
+  private void updateConfiguration(MemberContext member) {
     if (member.getMember().type() == RaftMemberType.PASSIVE && !leader.configuring() && member.getMatchIndex() >= controller.context().getCommitIndex()) {
       member.getMember().update(RaftMemberType.ACTIVE);
       leader.configure(controller.context().getCluster().getMembers());

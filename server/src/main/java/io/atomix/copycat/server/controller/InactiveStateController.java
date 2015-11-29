@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class InactiveStateController extends RaftStateController {
 
-  public InactiveStateController(ServerStateContext context) {
+  public InactiveStateController(ServerContext context) {
     super(context);
   }
 
