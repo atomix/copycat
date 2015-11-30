@@ -25,7 +25,7 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.server.RaftServer;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
@@ -152,7 +152,7 @@ public class ServerContext implements Managed<ServerState> {
         }, context.executor());
       }
 
-      this.state.transition(RaftServer.State.INACTIVE);
+      this.state.transition(CopycatServer.State.INACTIVE);
       try {
         this.state.getLog().close();
       } catch (Exception e) {

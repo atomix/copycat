@@ -23,7 +23,6 @@ import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -126,7 +125,7 @@ abstract class ActiveState extends PassiveState {
 
     CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
     if (transition) {
-      transition(RaftServer.State.FOLLOWER);
+      transition(CopycatServer.State.FOLLOWER);
     }
     return future;
   }

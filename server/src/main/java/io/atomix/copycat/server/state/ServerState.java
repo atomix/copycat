@@ -26,7 +26,6 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
@@ -519,9 +518,9 @@ public class ServerState {
     // to ensure that the server's configuration has been updated in the cluster before completing the join.
     if (cluster.getMember().type() != null) {
       if (cluster.getMember().type() == RaftMemberType.ACTIVE) {
-        transition(RaftServer.State.FOLLOWER);
+        transition(CopycatServer.State.FOLLOWER);
       } else if (cluster.getMember().type() == RaftMemberType.PASSIVE) {
-        transition(RaftServer.State.PASSIVE);
+        transition(CopycatServer.State.PASSIVE);
       } else {
         joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + cluster.getMember().type()));
       }
@@ -561,10 +560,10 @@ public class ServerState {
             if (type == null) {
               joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
             } else if (type == RaftMemberType.ACTIVE) {
-              transition(RaftServer.State.FOLLOWER);
+              transition(CopycatServer.State.FOLLOWER);
               joinFuture.complete(null);
             } else if (type == RaftMemberType.PASSIVE) {
-              transition(RaftServer.State.PASSIVE);
+              transition(CopycatServer.State.PASSIVE);
               joinFuture.complete(null);
             } else {
               joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + type));
@@ -620,7 +619,7 @@ public class ServerState {
   private void joinLeader(Member leader) {
     if (joinFuture != null) {
       if (cluster.getMember().equals(leader)) {
-        if (state.type() == RaftServer.State.LEADER && !((LeaderState) state).configuring()) {
+        if (state.type() == CopycatServer.State.LEADER && !((LeaderState) state).configuring()) {
           joinFuture.complete(null);
         } else {
           cancelJoinTimer();
