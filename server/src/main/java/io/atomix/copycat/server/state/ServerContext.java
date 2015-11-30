@@ -87,7 +87,7 @@ public class ServerContext implements Managed<ServerState> {
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerState(new Member(null, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
+          state = new ServerState(new Member(CopycatServer.Type.INACTIVE, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
 
           // If the client address is different than the server address, start a separate client server.
           if (!clientAddress.equals(serverAddress)) {

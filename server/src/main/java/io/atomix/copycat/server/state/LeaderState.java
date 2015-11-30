@@ -78,7 +78,7 @@ final class LeaderState extends ActiveState {
    */
   private void takeLeadership() {
     context.setLeader(context.getCluster().getMember().id());
-    context.getCluster().getVotingMemberStates().forEach(m -> m.resetState(context.getLog()));
+    context.getCluster().getRemoteMemberStates().forEach(m -> m.resetState(context.getLog()));
   }
 
   /**
@@ -286,8 +286,8 @@ final class LeaderState extends ActiveState {
     Member member = request.member();
 
     // If the member is a joining member, set its type to passive.
-    if (member.type() == null) {
-      member.update(RaftMemberType.PASSIVE);
+    if (member.type() == CopycatServer.Type.INACTIVE) {
+      member.update(CopycatServer.Type.PASSIVE);
     }
 
     Collection<Member> members = context.getCluster().getMembers();

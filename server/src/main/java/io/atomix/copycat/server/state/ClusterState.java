@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.storage.MetaStore;
 
 import java.util.*;
@@ -32,7 +33,7 @@ class ClusterState {
   private long version = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
-  private final Map<MemberType, List<MemberState>> memberTypes = new HashMap<>();
+  private final Map<CopycatServer.Type, List<MemberState>> memberTypes = new HashMap<>();
 
   ClusterState(ServerState context, Member member) {
     this.context = Assert.notNull(context, "context");
@@ -54,7 +55,7 @@ class ClusterState {
    * @return The remote quorum count.
    */
   int getQuorum() {
-    return (int) Math.floor((getVotingMemberStates().size() + 1) / 2.0) + 1;
+    return (int) Math.floor((getRemoteMemberStates(CopycatServer.Type.ACTIVE).size() + 1) / 2.0) + 1;
   }
 
   /**
@@ -139,51 +140,37 @@ class ClusterState {
   }
 
   /**
-   * Returns a list of voting members.
+   * Returns a list of remote members for the given type.
    *
-   * @return A list of voting members.
+   * @param type The member type.
+   * @return A list of remote members.
    */
-  public List<Member> getVotingMembers() {
-    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).map(MemberState::getMember).collect(Collectors.toList());
+  public List<Member> getRemoteMembers(CopycatServer.Type type) {
+    return getRemoteMemberStates(type).stream().map(MemberState::getMember).collect(Collectors.toList());
   }
 
   /**
-   * Returns a list of voting members.
+   * Returns a list of remote member states for the given type.
    *
-   * @return A list of voting members.
+   * @param type The member type.
+   * @return A list of remote member states.
    */
-  List<MemberState> getVotingMemberStates() {
-    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isVoting()).collect(Collectors.toList());
+  List<MemberState> getRemoteMemberStates(CopycatServer.Type type) {
+    List<MemberState> memberType = memberTypes.get(type);
+    return memberType != null ? memberType : Collections.EMPTY_LIST;
   }
 
   /**
-   * Returns a list of voting members.
+   * Returns a sorted list of remote member states for the given type.
    *
+   * @param type The member type.
    * @param comparator A comparator with which to sort the members.
-   * @return A list of voting members.
+   * @return A sorted list of remote member states.
    */
-  List<MemberState> getVotingMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> members = getVotingMemberStates();
-    Collections.sort(members, comparator);
-    return members;
-  }
-
-  /**
-   * Returns a list of stateful members.
-   *
-   * @return A list of stateful members.
-   */
-  public List<Member> getStatefulMembers() {
-    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).map(MemberState::getMember).collect(Collectors.toList());
-  }
-
-  /**
-   * Returns a list of stateful members.
-   *
-   * @return A list of stateful members.
-   */
-  List<MemberState> getStatefulMemberStates() {
-    return members.stream().filter(m -> m.getMember().type() != null && m.getMember().type().isStateful()).collect(Collectors.toList());
+  List<MemberState> getRemoteMemberStates(CopycatServer.Type type, Comparator<MemberState> comparator) {
+    List<MemberState> memberType = getRemoteMemberStates(type);
+    Collections.sort(memberType, comparator);
+    return memberType;
   }
 
   /**
@@ -241,7 +228,7 @@ class ClusterState {
 
     // If the local member is not part of the configuration, set its type to null.
     if (!members.contains(this.member)) {
-      this.member.update((MemberType) null);
+      this.member.update((CopycatServer.Type) null);
     }
 
     // Iterate through configured members and remove any that no longer exist in the configuration.

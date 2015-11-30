@@ -157,14 +157,14 @@ class PassiveState extends AbstractState {
         // If the entry is a configuration entry then immediately configure the cluster.
         if (entry instanceof ConfigurationEntry) {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
-          if (context.getCluster().getMember().type() == RaftMemberType.PASSIVE) {
+          if (context.getCluster().getMember().type() == CopycatServer.Type.PASSIVE) {
             context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
-            if (context.getCluster().getMember().type() == RaftMemberType.ACTIVE) {
+            if (context.getCluster().getMember().type() == CopycatServer.Type.ACTIVE) {
               transition(CopycatServer.State.FOLLOWER);
             }
           } else {
             context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
-            if (context.getCluster().getMember().type() == RaftMemberType.PASSIVE) {
+            if (context.getCluster().getMember().type() == CopycatServer.Type.PASSIVE) {
               transition(CopycatServer.State.PASSIVE);
             }
           }
@@ -409,7 +409,7 @@ class PassiveState extends AbstractState {
     }
 
     // Store the previous member type for comparison to determine whether this node should transition.
-    MemberType previousType = context.getCluster().getMember().type();
+    CopycatServer.Type previousType = context.getCluster().getMember().type();
 
     // Configure the cluster membership.
     context.getCluster().configure(request.version(), request.members());
@@ -417,11 +417,11 @@ class PassiveState extends AbstractState {
     // If the local member type changed, transition the state as appropriate.
     // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
     // PASSIVE servers are transitioned to the PASSIVE state.
-    MemberType type = context.getCluster().getMember().type();
+    CopycatServer.Type type = context.getCluster().getMember().type();
     if (previousType != type) {
-      if (type == RaftMemberType.ACTIVE) {
+      if (type == CopycatServer.Type.ACTIVE) {
         context.transition(CopycatServer.State.FOLLOWER);
-      } else if (type == RaftMemberType.PASSIVE) {
+      } else if (type == CopycatServer.Type.PASSIVE) {
         context.transition(CopycatServer.State.PASSIVE);
       } else {
         transition(CopycatServer.State.INACTIVE);

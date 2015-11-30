@@ -138,7 +138,7 @@ final class LeaderAppender extends AbstractAppender {
     }
     // If there are no other active members in the cluster, update the commit index and complete
     // the commit but ensure append entries requests are sent to passive members.
-    else if (context.getCluster().getVotingMemberStates().isEmpty()) {
+    else if (context.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).isEmpty()) {
       context.setCommitIndex(index);
       for (MemberState member : context.getCluster().getRemoteMemberStates()) {
         appendEntries(member);
@@ -165,7 +165,7 @@ final class LeaderAppender extends AbstractAppender {
   private long commitTime() {
     int quorumIndex = quorumIndex();
     if (quorumIndex >= 0) {
-      return context.getCluster().getVotingMemberStates((m1, m2) -> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
+      return context.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE, (m1, m2)-> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
     }
     return System.currentTimeMillis();
   }
@@ -179,7 +179,7 @@ final class LeaderAppender extends AbstractAppender {
     }
 
     if (error != null && member.getCommitStartTime() == this.commitTime) {
-      int votingMemberSize = context.getCluster().getVotingMemberStates().size() + (context.getCluster().getMember().type().isVoting() ? 1 : 0);
+      int votingMemberSize = context.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).size() + (context.getCluster().getMember().type() == CopycatServer.Type.ACTIVE ? 1 : 0);
       int quorumSize = context.getCluster().getQuorum();
       // If a quorum of successful responses cannot be achieved, fail this commit.
       if (votingMemberSize - quorumSize + 1 <= ++commitFailures) {
@@ -232,7 +232,7 @@ final class LeaderAppender extends AbstractAppender {
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
-    List<MemberState> members = context.getCluster().getVotingMemberStates((m1, m2) ->
+    List<MemberState> members = context.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE, (m1, m2)->
       Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
 
     // If the active members list is empty (a configuration change occurred between an append request/response)
@@ -269,23 +269,15 @@ final class LeaderAppender extends AbstractAppender {
   @Override
   protected AppendRequest buildAppendRequest(MemberState member) {
     // If the log is empty then send an empty commit.
-    // If the member is not stateful then send an empty commit if two election timeouts have passed.
     // If the next index hasn't yet been set then we send an empty commit first.
     // If the next index is greater than the last index then send an empty commit.
     // If the member failed to respond to recent communication send an empty commit. This
     // helps avoid doing expensive work until we can ascertain the member is back up.
-    if (!member.getMember().type().isStateful()) {
-      if (member.getMember().status() == Member.Status.UNAVAILABLE || System.currentTimeMillis() - member.getCommitTime() > context.getElectionTimeout().toMillis() * 2) {
-        return buildEmptyRequest(member);
-      }
+    if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
+      return buildEmptyRequest(member);
     } else {
-      if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
-        return buildEmptyRequest(member);
-      } else {
-        return buildEntryRequest(member);
-      }
+      return buildEntryRequest(member);
     }
-    return buildEntryRequest(member);
   }
 
   /**
@@ -492,8 +484,8 @@ final class LeaderAppender extends AbstractAppender {
    * Updates the cluster configuration for the given member.
    */
   private void updateConfiguration(MemberState member) {
-    if (member.getMember().type() == RaftMemberType.PASSIVE && !leader.configuring() && member.getMatchIndex() >= context.getCommitIndex()) {
-      member.getMember().update(RaftMemberType.ACTIVE);
+    if (member.getMember().type() == CopycatServer.Type.PASSIVE && !leader.configuring() && member.getMatchIndex() >= context.getCommitIndex()) {
+      member.getMember().update(CopycatServer.Type.ACTIVE);
       leader.configure(context.getCluster().getMembers());
     }
   }

@@ -97,7 +97,7 @@ final class CandidateState extends ActiveState {
     });
 
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<MemberState> votingMembers = new HashSet<>(context.getCluster().getVotingMemberStates());
+    final Set<Member> votingMembers = new HashSet<>(context.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE));
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
@@ -136,7 +136,7 @@ final class CandidateState extends ActiveState {
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
-    for (MemberState member : votingMembers) {
+    for (Member member : votingMembers) {
       LOGGER.debug("{} - Requesting vote from {} for term {}", context.getCluster().getMember().serverAddress(), member, context.getTerm());
       VoteRequest request = VoteRequest.builder()
         .withTerm(context.getTerm())
@@ -145,7 +145,7 @@ final class CandidateState extends ActiveState {
         .withLogTerm(lastTerm)
         .build();
 
-      context.getConnections().getConnection(member.getMember().serverAddress()).thenAccept(connection -> {
+      context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
         connection.<VoteRequest, VoteResponse>send(request).whenCompleteAsync((response, error) -> {
           context.checkThread();
           if (isOpen() && !complete.get()) {
