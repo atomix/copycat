@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.client.response.Response.Status;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
 import io.atomix.copycat.server.TestStateMachine.TestQuery;
 import io.atomix.copycat.server.request.*;
@@ -103,7 +104,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAppendTermAndLeaderUpdated() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getVotingMembers().iterator().next().id();
+      int leader = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
@@ -129,7 +130,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(1)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(2)
         .withLogTerm(2)
         .withCommitIndex(0)
@@ -152,7 +153,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(2)
         .withLogTerm(2)
         .withCommitIndex(0)
@@ -175,7 +176,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(1)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .withCommitIndex(0)
@@ -199,7 +200,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(2)
         .withLogTerm(2)
         .withCommitIndex(0)
@@ -221,7 +222,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(1)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(0)
         .withLogTerm(0)
         .withCommitIndex(0)
@@ -248,7 +249,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(1)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(0)
         .withLogTerm(0)
         .withCommitIndex(0)
@@ -276,7 +277,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(3)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .withCommitIndex(0)
@@ -305,7 +306,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
       AppendRequest request = AppendRequest.builder()
         .withTerm(1)
-        .withLeader(serverState.getCluster().getVotingMembers().iterator().next().id())
+        .withLeader(serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .withCommitIndex(0)

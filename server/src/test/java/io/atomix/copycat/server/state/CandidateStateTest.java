@@ -44,7 +44,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getVotingMemberStates().iterator().next().getMember().id();
+      int leader = serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id();
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
@@ -104,7 +104,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getVotingMembers().iterator().next().id();
+      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
 
       state.startElection();
@@ -131,7 +131,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getVotingMembers().iterator().next().id();
+      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
 
       append(2, 1);

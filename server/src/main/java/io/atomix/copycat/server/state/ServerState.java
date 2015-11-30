@@ -95,11 +95,11 @@ public class ServerState {
     if (configuration != null) {
       cluster.configure(configuration.version(), configuration.members());
     } else if (members.contains(member.serverAddress())) {
-      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(RaftMemberType.ACTIVE, m, null)).collect(Collectors.toSet());
-      activeMembers.add(new Member(RaftMemberType.ACTIVE, member.serverAddress(), member.clientAddress()));
+      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(CopycatServer.Type.ACTIVE, m, null)).collect(Collectors.toSet());
+      activeMembers.add(new Member(CopycatServer.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
       cluster.configure(0, activeMembers);
     } else {
-      Set<Member> activeMembers = members.stream().map(m -> new Member(RaftMemberType.ACTIVE, m, null)).collect(Collectors.toSet());
+      Set<Member> activeMembers = members.stream().map(m -> new Member(CopycatServer.Type.ACTIVE, m, null)).collect(Collectors.toSet());
       cluster.configure(0, activeMembers);
     }
   }
@@ -395,6 +395,15 @@ public class ServerState {
   }
 
   /**
+   * Returns the current local member type.
+   *
+   * @return The current local member type.
+   */
+  public CopycatServer.Type getType() {
+    return cluster.getMember().type();
+  }
+
+  /**
    * Returns the current state.
    *
    * @return The current state.
@@ -517,15 +526,15 @@ public class ServerState {
     // Note that we don't complete the join future when transitioning to a valid state since we need
     // to ensure that the server's configuration has been updated in the cluster before completing the join.
     if (cluster.getMember().type() != null) {
-      if (cluster.getMember().type() == RaftMemberType.ACTIVE) {
+      if (cluster.getMember().type() == CopycatServer.Type.ACTIVE) {
         transition(CopycatServer.State.FOLLOWER);
-      } else if (cluster.getMember().type() == RaftMemberType.PASSIVE) {
+      } else if (cluster.getMember().type() == CopycatServer.Type.PASSIVE) {
         transition(CopycatServer.State.PASSIVE);
       } else {
         joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + cluster.getMember().type()));
       }
     } else {
-      join(cluster.getVotingMemberStates().iterator(), 1);
+      join(cluster.getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator(), 1);
     }
 
     return joinFuture.whenComplete((result, error) -> joinFuture = null);
@@ -556,13 +565,13 @@ public class ServerState {
             cancelJoinTimer();
 
             // If the local member type is null, that indicates it's not a part of the configuration.
-            MemberType type = cluster.getMember().type();
+            CopycatServer.Type type = cluster.getMember().type();
             if (type == null) {
               joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
-            } else if (type == RaftMemberType.ACTIVE) {
+            } else if (type == CopycatServer.Type.ACTIVE) {
               transition(CopycatServer.State.FOLLOWER);
               joinFuture.complete(null);
-            } else if (type == RaftMemberType.PASSIVE) {
+            } else if (type == CopycatServer.Type.PASSIVE) {
               transition(CopycatServer.State.PASSIVE);
               joinFuture.complete(null);
             } else {
@@ -575,7 +584,7 @@ public class ServerState {
             LOGGER.debug("{} - Failed to join {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
             cancelJoinTimer();
             joinTimer = threadContext.schedule(electionTimeout, () -> {
-              join(cluster.getVotingMemberStates().iterator(), attempts);
+              join(cluster.getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator(), attempts);
             });
           } else {
             // If the response error was non-null, attempt to join via the next server in the members list.
@@ -597,7 +606,7 @@ public class ServerState {
     else {
       cancelJoinTimer();
       joinTimer = threadContext.schedule(electionTimeout.multipliedBy(2), () -> {
-        join(cluster.getVotingMemberStates().iterator(), attempts + 1);
+        join(cluster.getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator(), attempts + 1);
       });
     }
   }
@@ -658,7 +667,7 @@ public class ServerState {
   public CompletableFuture<Void> leave() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     threadContext.execute(() -> {
-      if (cluster.getVotingMemberStates().isEmpty()) {
+      if (cluster.getRemoteMemberStates(CopycatServer.Type.ACTIVE).isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", cluster.getMember().serverAddress());
         transition(CopycatServer.State.INACTIVE);
         future.complete(null);

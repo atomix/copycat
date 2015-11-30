@@ -25,6 +25,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
 import io.atomix.copycat.server.storage.*;
@@ -147,7 +148,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   private List<Member> createMembers(int nodes) {
     List<Member> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(new Member(RaftMemberType.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
+      members.add(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
     }
     return members;
   }

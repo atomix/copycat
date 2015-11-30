@@ -352,13 +352,22 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
-   * Returns the Raft server state.
+   * Returns the current server type.
+   *
+   * @return The current server type.
+   */
+  public Type type() {
+    return state.getType();
+  }
+
+  /**
+   * Returns the Copycat server state.
    * <p>
    * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
    * until it is explicitly shutdown, the server will be in one of the active states - {@link State#PASSIVE},
    * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
    *
-   * @return The Raft server state.
+   * @return The Copycat server state.
    */
   public State state() {
     return state.getState();
