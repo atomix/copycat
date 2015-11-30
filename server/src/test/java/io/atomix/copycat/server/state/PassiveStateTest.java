@@ -94,7 +94,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       AppendResponse response = state.append(request).get();
       
       threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLeader(), members.get(1).serverAddress());
+      threadAssertEquals(serverState.getLeader().serverAddress(), members.get(1).serverAddress());
       threadAssertEquals(serverState.getLastVotedFor(), 0);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.succeeded());

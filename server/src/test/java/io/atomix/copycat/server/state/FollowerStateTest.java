@@ -15,9 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import io.atomix.copycat.client.response.Response.Status;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
@@ -25,6 +22,8 @@ import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Follower state test.
@@ -355,7 +354,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       AppendResponse response2 = state.append(request2).get();
 
       threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(serverState.getLeader(), members.get(2).serverAddress());
+      threadAssertEquals(serverState.getLeader().serverAddress(), members.get(2).serverAddress());
       threadAssertEquals(serverState.getLastVotedFor(), 0);
       threadAssertEquals(response2.term(), 3L);
       threadAssertTrue(response2.succeeded());
