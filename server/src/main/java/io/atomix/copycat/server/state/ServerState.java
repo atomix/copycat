@@ -31,6 +31,7 @@ import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +54,7 @@ public class ServerState {
   private final StateMachine userStateMachine;
   private final Address address;
   private final ClusterState cluster;
+  private final MetaStore meta;
   private final Log log;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
@@ -69,11 +71,12 @@ public class ServerState {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  ServerState(Address address, Collection<Address> members, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  ServerState(Address address, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.address = Assert.notNull(address, "address");
     Set<Address> activeMembers = new HashSet<>(members);
     activeMembers.add(address);
     this.cluster = new ClusterState(this, address);
+    this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
@@ -82,6 +85,10 @@ public class ServerState {
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + address + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+
+    // Load the current term and last vote from disk.
+    this.term = meta.loadTerm();
+    this.lastVotedFor = meta.loadVote();
 
     cluster.configure(0, activeMembers, Collections.EMPTY_LIST);
   }
@@ -200,26 +207,25 @@ public class ServerState {
    * @return The Raft context.
    */
   ServerState setLeader(int leader) {
-    if (this.leader == 0) {
-      if (leader != 0) {
+    if (this.leader != leader) {
+      // 0 indicates no leader.
+      if (leader == 0) {
+        this.leader = 0;
+      } else {
+        // If a valid leader ID was specified, it must be a member that's currently a member of the
+        // ACTIVE members configuration. Note that we don't throw exceptions for unknown members. It's
+        // possible that a failure following a configuration change could result in an unknown leader
+        // sending AppendRequest to this server. Simply configure the leader if it's known.
         Address address = getMember(leader);
-        Assert.state(address != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.address, address);
-        electionListeners.forEach(l -> l.accept(address));
+        if (address != null) {
+          this.leader = leader;
+          LOGGER.info("{} - Found leader {}", this.address, address);
+          electionListeners.forEach(l -> l.accept(address));
+        }
       }
-    } else if (leader != 0) {
-      if (this.leader != leader) {
-        Address address = getMember(leader);
-        Assert.state(address != null, "unknown leader: ", leader);
-        this.leader = leader;
-        this.lastVotedFor = 0;
-        LOGGER.info("{} - Found leader {}", this.address, address);
-        electionListeners.forEach(l -> l.accept(address));
-      }
-    } else {
-      this.leader = 0;
+
+      this.lastVotedFor = 0;
+      meta.storeVote(0);
     }
     return this;
   }
@@ -269,6 +275,8 @@ public class ServerState {
       this.term = term;
       this.leader = 0;
       this.lastVotedFor = 0;
+      meta.storeTerm(this.term);
+      meta.storeVote(this.lastVotedFor);
       LOGGER.debug("{} - Set term {}", address, term);
     }
     return this;
@@ -296,6 +304,7 @@ public class ServerState {
     Address address = getMember(candidate);
     Assert.state(address != null, "unknown candidate: %d", candidate);
     this.lastVotedFor = candidate;
+    meta.storeVote(this.lastVotedFor);
 
     if (candidate != 0) {
       LOGGER.debug("{} - Voted for {}", this.address, address);

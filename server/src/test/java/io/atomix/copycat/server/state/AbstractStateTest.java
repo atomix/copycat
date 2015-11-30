@@ -27,10 +27,7 @@ import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.Storage;
-import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.TestEntry;
+import io.atomix.copycat.server.storage.*;
 import io.atomix.copycat.server.storage.entry.Entry;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
@@ -48,6 +45,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected T state;
   protected Serializer serializer;
   protected Storage storage;
+  protected MetaStore meta;
   protected Log log;
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
@@ -66,13 +64,14 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     storage = new Storage(StorageLevel.MEMORY);
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
 
-    log = storage.open("test");
+    meta = storage.openMetaStore("test");
+    log = storage.openLog("test");
     stateMachine = new TestStateMachine();
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverState = new ServerState(members.get(0), members, meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**

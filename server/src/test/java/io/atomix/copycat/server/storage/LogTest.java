@@ -48,7 +48,7 @@ public abstract class LogTest extends AbstractLogTest {
         .withStorageLevel(storageLevel())
         .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
         .build()
-        .open("copycat");
+        .openLog("copycat");
   }
 
   /**
