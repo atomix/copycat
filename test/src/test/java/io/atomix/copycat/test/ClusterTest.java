@@ -24,7 +24,6 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
@@ -124,9 +123,9 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testReplace() throws Throwable {
     List<CopycatServer> servers = createServers(3);
     CopycatClient client = createClient();
-    RaftServer s1 = createServer(members, nextMember()).open().get();
-    RaftServer s2 = createServer(members, nextMember()).open().get();
-    RaftServer s3 = createServer(members, nextMember()).open().get();
+    CopycatServer s1 = createServer(members, nextMember()).open().get();
+    CopycatServer s2 = createServer(members, nextMember()).open().get();
+    CopycatServer s3 = createServer(members, nextMember()).open().get();
 
     for (int i = 0; i < servers.size(); i++) {
       servers.get(i).close().join();

@@ -20,7 +20,6 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -421,11 +420,11 @@ class PassiveState extends AbstractState {
     MemberType type = context.getCluster().getMember().type();
     if (previousType != type) {
       if (type == RaftMemberType.ACTIVE) {
-        context.transition(RaftServer.State.FOLLOWER);
+        context.transition(CopycatServer.State.FOLLOWER);
       } else if (type == RaftMemberType.PASSIVE) {
-        context.transition(RaftServer.State.PASSIVE);
+        context.transition(CopycatServer.State.PASSIVE);
       } else {
-        transition(RaftServer.State.INACTIVE);
+        transition(CopycatServer.State.INACTIVE);
       }
     }
 

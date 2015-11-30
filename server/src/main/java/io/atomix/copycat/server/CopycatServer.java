@@ -23,6 +23,7 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
@@ -118,7 +119,7 @@ import java.util.function.Function;
  * @see Storage
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class CopycatServer implements RaftServer {
+public class CopycatServer implements Managed<CopycatServer> {
 
   /**
    * Returns a new Raft server builder.
@@ -202,8 +203,84 @@ public class CopycatServer implements RaftServer {
     return new Builder(clientAddress, serverAddress, cluster);
   }
 
+  /**
+   * Copycat server type.
+   * <p>
+   * The server type represents the type of member a server is within a cluster.
+   */
+  public enum Type {
+
+    /**
+     * Represents an inactive server.
+     */
+    INACTIVE,
+
+    /**
+     * Represents a passive server.
+     */
+    PASSIVE,
+
+    /**
+     * Represents an active server.
+     */
+    ACTIVE
+
+  }
+
+  /**
+   * Raft server state types.
+   * <p>
+   * States represent the context of the server's internal state machine. Throughout the lifetime of a server,
+   * the server will periodically transition between states based on requests, responses, and timeouts.
+   *
+   * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+   */
+  public enum State {
+
+    /**
+     * Represents the state of an inactive server.
+     * <p>
+     * All servers start in this state and return to this state when {@link #close() stopped}.
+     */
+    INACTIVE,
+
+    /**
+     * Represents the state of a server in the process of catching up its log.
+     * <p>
+     * Upon successfully joining an existing cluster, the server will transition to the passive state and remain there
+     * until the leader determines that the server has caught up enough to be promoted to a full member.
+     */
+    PASSIVE,
+
+    /**
+     * Represents the state of a server participating in normal log replication.
+     * <p>
+     * The follower state is a standard Raft state in which the server receives replicated log entries from the leader.
+     */
+    FOLLOWER,
+
+    /**
+     * Represents the state of a server attempting to become the leader.
+     * <p>
+     * When a server in the follower state fails to receive communication from a valid leader for some time period,
+     * the follower will transition to the candidate state. During this period, the candidate requests votes from
+     * each of the other servers in the cluster. If the candidate wins the election by receiving votes from a majority
+     * of the cluster, it will transition to the leader state.
+     */
+    CANDIDATE,
+
+    /**
+     * Represents the state of a server which is actively coordinating and replicating logs with other servers.
+     * <p>
+     * Leaders are responsible for handling and replicating writes from clients. Note that more than one leader can
+     * exist at any given time, but Raft guarantees that no two leaders will exist for the same {@link #term()}.
+     */
+    LEADER
+
+  }
+
   private final ServerContext context;
-  private volatile CompletableFuture<RaftServer> openFuture;
+  private volatile CompletableFuture<CopycatServer> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
   private ServerState state;
   private final Duration electionTimeout;
@@ -219,12 +296,26 @@ public class CopycatServer implements RaftServer {
     this.sessionTimeout = sessionTimeout;
   }
 
-  @Override
+  /**
+   * Returns the current Raft term.
+   * <p>
+   * The term is a monotonically increasing number that essentially acts as a logical time for the cluster. For any
+   * given term, Raft guarantees that only one {@link #leader()} can be elected, but note that a leader may also
+   * not yet exist for the term.
+   *
+   * @return The current Raft term.
+   */
   public long term() {
     return state.getTerm();
   }
 
-  @Override
+  /**
+   * Returns the current Raft leader.
+   * <p>
+   * If no leader has been elected, the leader address will be {@code null}.
+   *
+   * @return The current Raft leader or {@code null} if this server does not know of any leader.
+   */
   public Address leader() {
     Member leader = state.getLeader();
     return leader != null ? leader.serverAddress() : null;
@@ -247,12 +338,28 @@ public class CopycatServer implements RaftServer {
     return state.onLeaderElection(listener);
   }
 
-  @Override
+  /**
+   * Returns a collection of current cluster members.
+   * <p>
+   * The current members list includes members in all states, including non-voting states. Additionally, because
+   * the membership set can change over time, the set of members on one server may not exactly reflect the
+   * set of members on another server at any given point in time.
+   *
+   * @return A collection of current Raft cluster members.
+   */
   public Collection<Address> members() {
     return state.getMembers();
   }
 
-  @Override
+  /**
+   * Returns the Raft server state.
+   * <p>
+   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
+   * until it is explicitly shutdown, the server will be in one of the active states - {@link State#PASSIVE},
+   * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
+   *
+   * @return The Raft server state.
+   */
   public State state() {
     return state.getState();
   }
@@ -282,21 +389,50 @@ public class CopycatServer implements RaftServer {
     return state.onStateChange(listener);
   }
 
-  @Override
+  /**
+   * Returns the server execution context.
+   * <p>
+   * The thread context is the event loop that this server uses to communicate other Raft servers.
+   * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
+   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
+   * <p>
+   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
+   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
+   * are not thread safe, so to use the context serializer, users should clone it:
+   * <pre>
+   *   {@code
+   *   Serializer serializer = server.threadContext().serializer().clone();
+   *   Buffer buffer = serializer.writeObject(myObject).flip();
+   *   }
+   * </pre>
+   *
+   * @return The server thread context.
+   */
   public ThreadContext context() {
     return state.getThreadContext();
   }
 
+  /**
+   * Starts the Raft server asynchronously.
+   * <p>
+   * When the server is started, the server will attempt to search for an existing cluster by contacting all of
+   * the members in the provided members list. If no existing cluster is found, the server will immediately transition
+   * to the {@link State#FOLLOWER} state and continue normal Raft protocol operations. If a cluster is found, the server
+   * will attempt to join the cluster. Once the server has joined or started a cluster and a leader has been found,
+   * the returned {@link CompletableFuture} will be completed.
+   *
+   * @return A completable future to be completed once the server has joined the cluster and a leader has been found.
+   */
   @Override
-  public CompletableFuture<RaftServer> open() {
+  public CompletableFuture<CopycatServer> open() {
     if (open)
       return CompletableFuture.completedFuture(this);
 
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          Function<ServerState, CompletionStage<RaftServer>> completionFunction = state -> {
-            CompletableFuture<RaftServer> future = new CompletableFuture<>();
+          Function<ServerState, CompletionStage<CopycatServer>> completionFunction = state -> {
+            CompletableFuture<CopycatServer> future = new CompletableFuture<>();
             openFuture = null;
             this.state = state;
             state.setElectionTimeout(electionTimeout)
@@ -341,6 +477,14 @@ public class CopycatServer implements RaftServer {
     return open;
   }
 
+  /**
+   * Returns a boolean value indicating whether the server is running.
+   * <p>
+   * Once {@link #open()} is called and the returned {@link CompletableFuture} is completed (meaning this server found
+   * a cluster leader), this method will return {@code true} until {@link #close() closed}.
+   *
+   * @return Indicates whether the server is running.
+   */
   @Override
   public CompletableFuture<Void> close() {
     if (!open)
