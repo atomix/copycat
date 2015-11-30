@@ -117,9 +117,9 @@ public class CopycatClient implements RaftClient {
   private final Serializer serializer;
   private final ConnectionStrategy connectionStrategy;
   private final RecoveryStrategy recoveryStrategy;
-  private ClientSession session;
-  private CompletableFuture<RaftClient> openFuture;
-  private CompletableFuture<Void> closeFuture;
+  private volatile ClientSession session;
+  private volatile CompletableFuture<RaftClient> openFuture;
+  private volatile CompletableFuture<Void> closeFuture;
 
   protected CopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
     serializer.resolve(new ServiceLoaderTypeResolver());
