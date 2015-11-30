@@ -160,8 +160,8 @@ public class CopycatServer implements RaftServer {
   }
 
   private final ServerContext context;
-  private CompletableFuture<RaftServer> openFuture;
-  private CompletableFuture<Void> closeFuture;
+  private volatile CompletableFuture<RaftServer> openFuture;
+  private volatile CompletableFuture<Void> closeFuture;
   private ServerState state;
   private final Duration electionTimeout;
   private final Duration heartbeatInterval;
