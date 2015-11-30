@@ -20,6 +20,7 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 
 import java.time.Instant;
@@ -29,9 +30,9 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ServerCommit implements Commit<Operation<?>> {
+final class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
-  private final ServerCommitCleaner cleaner;
+  private final Log log;
   private final ServerSessionManager sessions;
   private long index;
   private Session session;
@@ -39,9 +40,9 @@ class ServerCommit implements Commit<Operation<?>> {
   private Operation operation;
   private volatile boolean open;
 
-  public ServerCommit(ServerCommitPool pool, ServerCommitCleaner cleaner, ServerSessionManager sessions) {
+  public ServerCommit(ServerCommitPool pool, Log log, ServerSessionManager sessions) {
     this.pool = pool;
-    this.cleaner = cleaner;
+    this.log = log;
     this.sessions = sessions;
   }
 
@@ -100,7 +101,7 @@ class ServerCommit implements Commit<Operation<?>> {
   public void clean() {
     checkOpen();
     if (operation instanceof Command)
-      cleaner.clean(index);
+      log.clean(index);
     close();
   }
 

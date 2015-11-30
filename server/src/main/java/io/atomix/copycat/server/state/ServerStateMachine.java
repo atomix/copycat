@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.buffer.Buffer;
+import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Futures;
@@ -22,11 +24,18 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
+import io.atomix.copycat.server.SessionAware;
+import io.atomix.copycat.server.SnapshotAware;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
+import io.atomix.copycat.server.storage.SnapshotReader;
+import io.atomix.copycat.server.storage.SnapshotWriter;
 import io.atomix.copycat.server.storage.entry.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,21 +44,25 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ServerStateMachine implements AutoCloseable {
+final class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
   private final ServerStateMachineExecutor executor;
-  private final ServerCommitCleaner cleaner;
+  private final MetaStore meta;
+  private final Log log;
   private final ServerCommitPool commits;
   private long lastApplied;
   private long lastCompleted;
   private long configuration;
+  private MetaStore.Snapshot pendingSnapshot;
+  private long lastSnapshot;
 
-  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
-    this.stateMachine = stateMachine;
+  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, MetaStore meta, Log log, ThreadContext executor) {
+    this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.executor = new ServerStateMachineExecutor(context, executor);
-    this.cleaner = cleaner;
-    this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
+    this.meta = Assert.notNull(meta, "meta");
+    this.log = Assert.notNull(log, "log");
+    this.commits = new ServerCommitPool(log, this.executor.context().sessions());
     init();
   }
 
@@ -58,6 +71,43 @@ class ServerStateMachine implements AutoCloseable {
    */
   private void init() {
     stateMachine.init(executor);
+    executor.schedule(Duration.ofMinutes(1), Duration.ofMinutes(1), this::snapshot);
+    MetaStore.Snapshot lastSnapshot = meta.loadSnapshot();
+    if (lastSnapshot != null) {
+      setSnapshotIndex(lastSnapshot.version());
+    }
+  }
+
+  /**
+   * Returns the last completed snapshot index.
+   *
+   * @return The last completed snapshot index.
+   */
+  public long getSnapshotIndex() {
+    return lastSnapshot;
+  }
+
+  /**
+   * Resets the server snapshot index.
+   */
+  void setSnapshotIndex(long index) {
+    if (index > lastSnapshot) {
+      this.lastSnapshot = index;
+    }
+  }
+
+  /**
+   * Takes a snapshot of the state machine state.
+   */
+  private void snapshot() {
+    // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
+    // index has met the snapshot index.
+    if (pendingSnapshot == null && stateMachine instanceof SnapshotAware) {
+      Buffer buffer = HeapBuffer.allocate();
+      SnapshotWriter writer = new SnapshotWriter(buffer);
+      ((SnapshotAware) stateMachine).snapshot(writer);
+      pendingSnapshot = new MetaStore.Snapshot(lastApplied, buffer.flip());
+    }
   }
 
   /**
@@ -97,6 +147,15 @@ class ServerStateMachine implements AutoCloseable {
       for (ServerSession session : executor.context().sessions().sessions.values()) {
         session.setVersion(lastApplied);
       }
+
+      // If the last snapshot version is equal to the updated lastApplied version, install the snapshot.
+      if (lastSnapshot == lastApplied) {
+        MetaStore.Snapshot snapshot = meta.loadSnapshot();
+        Assert.state(snapshot.version() == lastSnapshot, "inconsistent snapshot state");
+        SnapshotReader reader = new SnapshotReader(snapshot.data());
+        ((SnapshotAware) stateMachine).install(reader);
+        snapshot.close();
+      }
     }
   }
 
@@ -111,6 +170,30 @@ class ServerStateMachine implements AutoCloseable {
    */
   long getLastCompleted() {
     return lastCompleted > 0 ? lastCompleted : lastApplied;
+  }
+
+  /**
+   * Updates the last completed event version based on a commit at the given index.
+   */
+  private void updateLastCompleted(long index) {
+    // Calculate the last completed index as the lowest index acknowledged by all clients.
+    long lastCompleted = index;
+    for (ServerSession session : executor.context().sessions().sessions.values()) {
+      lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
+    }
+
+    if (lastCompleted < this.lastCompleted)
+      throw new IllegalStateException("inconsistent session state");
+    this.lastCompleted = lastCompleted;
+
+    // If a snapshot is pending to be persisted and the last completed index is greater than the
+    // waiting snapshot version, persist the snapshot and update the last snapshot index.
+    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.version()) {
+      meta.storeSnapshot(pendingSnapshot);
+      lastSnapshot = pendingSnapshot.version();
+      pendingSnapshot.close();
+      pendingSnapshot = null;
+    }
   }
 
   /**
@@ -171,7 +254,7 @@ class ServerStateMachine implements AutoCloseable {
     // Immediately clean the commit for the previous configuration since configuration entries
     // completely override the previous configuration.
     if (previousConfiguration > 0) {
-      cleaner.clean(previousConfiguration);
+      log.clean(previousConfiguration);
     }
     return CompletableFuture.completedFuture(null);
   }
@@ -185,7 +268,7 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 
@@ -226,7 +309,9 @@ class ServerStateMachine implements AutoCloseable {
 
       // Register the session and then open it. This ensures that state machines cannot publish events to this
       // session before the client has learned of the session ID.
-      stateMachine.register(session);
+      if (stateMachine instanceof SessionAware) {
+        ((SessionAware) stateMachine).register(session);
+      }
       session.open();
 
       // Once register callbacks have been completed, ensure that events published during the callbacks are
@@ -305,7 +390,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the keep alive entry from the log.
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
 
     return future;
   }
@@ -355,8 +440,10 @@ class ServerStateMachine implements AutoCloseable {
 
           // Expire the session and call state machine callbacks.
           session.expire();
-          stateMachine.expire(session);
-          stateMachine.close(session);
+          if (stateMachine instanceof SessionAware) {
+            ((SessionAware) stateMachine).expire(session);
+            ((SessionAware) stateMachine).close(session);
+          }
 
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
@@ -384,7 +471,9 @@ class ServerStateMachine implements AutoCloseable {
 
           // Close the session and call state machine callbacks.
           session.close();
-          stateMachine.close(session);
+          if (stateMachine instanceof SessionAware) {
+            ((SessionAware) stateMachine).close(session);
+          }
 
           // Once close callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
@@ -402,7 +491,7 @@ class ServerStateMachine implements AutoCloseable {
       }
 
       // Clean the unregister entry from the log immediately after it's applied.
-      cleaner.clean(session.id());
+      log.clean(session.id());
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
       // index for which logs can be compacted.
@@ -410,7 +499,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the unregister entry from the log.
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
 
     return future;
   }
@@ -655,22 +744,8 @@ class ServerStateMachine implements AutoCloseable {
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
-    cleaner.clean(entry.getIndex());
+    log.clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
-  }
-
-  /**
-   * Updates the last completed event version based on a commit at the given index.
-   */
-  private void updateLastCompleted(long index) {
-    long lastCompleted = index;
-    for (ServerSession session : executor.context().sessions().sessions.values()) {
-      lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
-    }
-
-    if (lastCompleted < this.lastCompleted)
-      throw new IllegalStateException("inconsistent session state");
-    this.lastCompleted = lastCompleted;
   }
 
   /**

@@ -24,6 +24,7 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.SessionAware;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
@@ -1064,13 +1065,28 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Test state machine.
    */
-  public static class TestStateMachine extends StateMachine {
+  public static class TestStateMachine extends StateMachine implements SessionAware {
     private Commit<TestExpire> expire;
+
+    @Override
+    public void register(Session session) {
+
+    }
+
+    @Override
+    public void unregister(Session session) {
+
+    }
 
     @Override
     public void expire(Session session) {
       if (expire != null)
         expire.session().publish("expired");
+    }
+
+    @Override
+    public void close(Session session) {
+
     }
 
     public String command(Commit<TestCommand> commit) {

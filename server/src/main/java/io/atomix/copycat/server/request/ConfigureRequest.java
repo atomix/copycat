@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.request;
 
+import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
@@ -57,6 +58,8 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
   private int leader;
   protected long version;
   protected Collection<Member> members;
+  protected long snapshot;
+  protected Buffer data;
 
   /**
    * Returns the requesting node's current term.
@@ -94,10 +97,29 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
     return members;
   }
 
+  /**
+   * Returns the snapshot index.
+   *
+   * @return The snapshot index.
+   */
+  public long snapshot() {
+    return snapshot;
+  }
+
+  /**
+   * Returns the snapshot data.
+   *
+   * @return The snapshot data.
+   */
+  public Buffer data() {
+    return data;
+  }
+
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term).writeInt(leader).writeLong(version);
+    buffer.writeLong(term).writeInt(leader).writeLong(version).writeLong(snapshot);
     serializer.writeObject(members, buffer);
+    serializer.writeObject(data, buffer);
   }
 
   @Override
@@ -105,12 +127,14 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
     term = buffer.readLong();
     leader = buffer.readInt();
     version = buffer.readLong();
+    snapshot = buffer.readLong();
     members = serializer.readObject(buffer);
+    data = serializer.readObject(buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, version, members);
+    return Objects.hash(getClass(), term, leader, version, snapshot, members);
   }
 
   @Override
@@ -120,6 +144,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
       return request.term == term
         && request.leader == leader
         && request.version == version
+        && request.snapshot == snapshot
         && request.members.equals(members);
     }
     return false;
@@ -127,7 +152,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, version=%d, members=%s]", getClass().getSimpleName(), term, leader, version, members);
+    return String.format("%s[term=%d, leader=%d, version=%d, snapshot=%d, members=%s]", getClass().getSimpleName(), term, leader, version, snapshot, members);
   }
 
   /**
@@ -170,6 +195,29 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
      */
     public Builder withVersion(long version) {
       request.version = Assert.argNot(version, version < 0, "version must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the request snapshot version.
+     *
+     * @param snapshot The snapshot version.
+     * @return The request builder.
+     */
+    public Builder withSnapshot(long snapshot) {
+      request.snapshot = Assert.argNot(snapshot, snapshot < 0, "snapshot must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the request snapshot data.
+     *
+     * @param data The request snapshot data.
+     * @return The request builder.
+     * @throws NullPointerException if {@code member} is null
+     */
+    public Builder withData(Buffer data) {
+      request.data = Assert.notNull(data, "data");
       return this;
     }
 

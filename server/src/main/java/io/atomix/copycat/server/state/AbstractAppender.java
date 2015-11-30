@@ -16,10 +16,12 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.ConfigureResponse;
+import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,12 +129,28 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected ConfigureRequest buildConfigureRequest(MemberState member) {
     Member leader = context.getLeader();
-    return ConfigureRequest.builder()
-      .withTerm(context.getTerm())
-      .withLeader(leader != null ? leader.id() : 0)
-      .withVersion(context.getCluster().getVersion())
-      .withMembers(context.getCluster().getMembers())
-      .build();
+
+    // If the member's match index is less than the last stored snapshot index,
+    // send the snapshot to the member with the initial configuration.
+    if (member.getMatchIndex() < context.getStateMachine().getSnapshotIndex()) {
+      MetaStore.Snapshot snapshot = context.getMetaStore().loadSnapshot();
+      Assert.stateNot(snapshot == null, "inconsistent snapshot state");
+      return ConfigureRequest.builder()
+        .withTerm(context.getTerm())
+        .withLeader(leader != null ? leader.id() : 0)
+        .withVersion(context.getCluster().getVersion())
+        .withSnapshot(snapshot.version())
+        .withData(snapshot.data())
+        .withMembers(context.getCluster().getMembers())
+        .build();
+    } else {
+      return ConfigureRequest.builder()
+        .withTerm(context.getTerm())
+        .withLeader(leader != null ? leader.id() : 0)
+        .withVersion(context.getCluster().getVersion())
+        .withMembers(context.getCluster().getMembers())
+        .build();
+    }
   }
 
   /**

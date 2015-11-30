@@ -26,14 +26,16 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.MetaStore;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -52,7 +54,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private ServerStateMachine stateMachine;
   private long timestamp;
   private AtomicLong sequence;
-  private Set<Long> cleaned;
+  private MetaStore meta;
+  private Log log;
 
   @BeforeMethod
   public void createStateMachine() {
@@ -60,8 +63,10 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     stateContext = new SingleThreadContext("state", new Serializer());
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
-    cleaned = new HashSet<>();
-    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), cleaned::add, stateContext);
+    Storage storage = new Storage(StorageLevel.MEMORY);
+    meta = storage.openMetaStore("test");
+    log = storage.openLog("test");
+    stateMachine = new ServerStateMachine(new TestStateMachine(), new ServerStateMachineContext(new ConnectionManager(new LocalTransport(registry).client()), new ServerSessionManager()), meta, log, stateContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }
@@ -367,6 +372,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   @AfterMethod
   public void closeStateMachine() {
     stateMachine.close();
+    meta.close();
+    log.close();
     stateContext.close();
     callerContext.close();
   }

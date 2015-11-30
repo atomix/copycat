@@ -22,6 +22,7 @@ import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -178,7 +179,7 @@ class PassiveState extends AbstractState {
     // If we've made it this far, apply commits and send a successful response.
     long commitIndex = request.commitIndex();
     context.getThreadContext().execute(() -> applyCommits(commitIndex)).thenRun(() -> {
-      context.getLog().compactor().minorIndex(context.getLastCompleted());
+      context.getLog().compactor().minorIndex(context.getStateMachine().getLastCompleted());
     });
 
     return AppendResponse.builder()
@@ -198,7 +199,7 @@ class PassiveState extends AbstractState {
 
     // The entries to be applied to the state machine are the difference between min(lastIndex, commitIndex) and lastApplied.
     long lastIndex = context.getLog().lastIndex();
-    long lastApplied = context.getLastApplied();
+    long lastApplied = context.getStateMachine().getLastApplied();
 
     long effectiveIndex = Math.min(lastIndex, context.getCommitIndex());
 
@@ -413,6 +414,12 @@ class PassiveState extends AbstractState {
 
     // Configure the cluster membership.
     context.getCluster().configure(request.version(), request.members());
+
+    // Install the snapshot if necessary.
+    if (request.snapshot() > context.getStateMachine().getSnapshotIndex()) {
+      context.getMetaStore().storeSnapshot(new MetaStore.Snapshot(request.version(), request.data()));
+      context.getStateMachine().setSnapshotIndex(request.snapshot());
+    }
 
     // If the local member type changed, transition the state as appropriate.
     // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.

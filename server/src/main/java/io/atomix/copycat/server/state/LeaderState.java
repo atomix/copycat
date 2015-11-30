@@ -128,7 +128,7 @@ final class LeaderState extends ActiveState {
   private void applyEntries(long index) {
     if (!context.getLog().isEmpty()) {
       int count = 0;
-      for (long lastApplied = Math.max(context.getLastApplied(), context.getLog().firstIndex()); lastApplied <= index; lastApplied++) {
+      for (long lastApplied = Math.max(context.getStateMachine().getLastApplied(), context.getLog().firstIndex()); lastApplied <= index; lastApplied++) {
         Entry entry = context.getLog().get(lastApplied);
         if (entry != null) {
           context.getStateMachine().apply(entry).whenComplete((result, error) -> {
@@ -142,7 +142,7 @@ final class LeaderState extends ActiveState {
       }
 
       LOGGER.debug("{} - Applied {} entries to log", context.getCluster().getMember().serverAddress(), count);
-      context.getLog().compactor().minorIndex(context.getLastCompleted());
+      context.getLog().compactor().minorIndex(context.getStateMachine().getLastCompleted());
     }
   }
 
@@ -164,7 +164,7 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     if (isOpen()) {
       appender.appendEntries().whenComplete((result, error) -> {
-        context.getLog().compactor().minorIndex(context.getLastCompleted());
+        context.getLog().compactor().minorIndex(context.getStateMachine().getLastCompleted());
       });
     }
   }

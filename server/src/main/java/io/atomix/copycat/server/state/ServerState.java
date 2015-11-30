@@ -84,7 +84,7 @@ public class ServerState {
 
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), log::clean, stateContext);
+    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), meta, log, stateContext);
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
@@ -374,24 +374,6 @@ public class ServerState {
    */
   ServerStateMachine getStateMachine() {
     return stateMachine;
-  }
-
-  /**
-   * Returns the last index applied to the state machine.
-   *
-   * @return The last index applied to the state machine.
-   */
-  public long getLastApplied() {
-    return stateMachine.getLastApplied();
-  }
-
-  /**
-   * Returns the last index completed for all sessions.
-   *
-   * @return The last index completed for all sessions.
-   */
-  public long getLastCompleted() {
-    return stateMachine.getLastCompleted();
   }
 
   /**

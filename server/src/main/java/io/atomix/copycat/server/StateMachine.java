@@ -226,33 +226,6 @@ public abstract class StateMachine implements AutoCloseable {
   }
 
   /**
-   * Called when a new session is registered.
-   *
-   * @param session The session that was registered.
-   */
-  public void register(Session session) {
-
-  }
-
-  /**
-   * Called when a session is expired.
-   *
-   * @param session The expired session.
-   */
-  public void expire(Session session) {
-
-  }
-
-  /**
-   * Called when a session is closed.
-   *
-   * @param session The session that was closed.
-   */
-  public void close(Session session) {
-
-  }
-
-  /**
    * Closes the state machine.
    */
   @Override

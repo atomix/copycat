@@ -535,9 +535,9 @@ public class CopycatServer implements Managed<CopycatServer> {
    * Raft server builder.
    */
   public static class Builder extends io.atomix.catalyst.util.Builder<CopycatServer> {
-    private static final Duration DEFAULT_RAFT_ELECTION_TIMEOUT = Duration.ofMillis(1000);
-    private static final Duration DEFAULT_RAFT_HEARTBEAT_INTERVAL = Duration.ofMillis(150);
-    private static final Duration DEFAULT_RAFT_SESSION_TIMEOUT = Duration.ofMillis(5000);
+    private static final Duration DEFAULT_ELECTION_TIMEOUT = Duration.ofMillis(1000);
+    private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(150);
+    private static final Duration DEFAULT_SESSION_TIMEOUT = Duration.ofMillis(5000);
 
     private Transport clientTransport;
     private Transport serverTransport;
@@ -547,9 +547,9 @@ public class CopycatServer implements Managed<CopycatServer> {
     private Address clientAddress;
     private Address serverAddress;
     private Set<Address> cluster;
-    private Duration electionTimeout = DEFAULT_RAFT_ELECTION_TIMEOUT;
-    private Duration heartbeatInterval = DEFAULT_RAFT_HEARTBEAT_INTERVAL;
-    private Duration sessionTimeout = DEFAULT_RAFT_SESSION_TIMEOUT;
+    private Duration electionTimeout = DEFAULT_ELECTION_TIMEOUT;
+    private Duration heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
+    private Duration sessionTimeout = DEFAULT_SESSION_TIMEOUT;
 
     private Builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
