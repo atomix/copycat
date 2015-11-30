@@ -99,12 +99,13 @@ final class LeaderAppender extends AbstractAppender {
     // If no commit future already exists, that indicates there's no heartbeat currently under way.
     // Create a new commit future and commit to all members in the cluster.
     if (commitFuture == null) {
-      commitFuture = new CompletableFuture<>();
+      CompletableFuture<Long> newCommitFuture = new CompletableFuture<>();
+      commitFuture = newCommitFuture;
       commitTime = System.currentTimeMillis();
       for (MemberState member : context.getCluster().getRemoteMemberStates()) {
         appendEntries(member);
       }
-      return commitFuture;
+      return newCommitFuture;
     }
     // If a commit future already exists, that indicates there is a heartbeat currently underway.
     // We don't want to allow callers to be completed by a heartbeat that may already almost be done.
