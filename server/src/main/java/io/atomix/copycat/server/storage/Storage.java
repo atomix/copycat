@@ -20,6 +20,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.system.MetaStore;
 
 import java.io.File;
 import java.time.Duration;

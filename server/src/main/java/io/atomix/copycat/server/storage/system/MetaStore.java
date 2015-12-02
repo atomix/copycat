@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.system;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 
 import java.io.File;
 

@@ -30,7 +30,7 @@ import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.MetaStore;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

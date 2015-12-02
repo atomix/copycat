@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.storage.Configuration;
+import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.*;
 import java.util.stream.Collectors;

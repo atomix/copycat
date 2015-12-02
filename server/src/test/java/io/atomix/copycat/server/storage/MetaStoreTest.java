@@ -20,6 +20,8 @@ import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;

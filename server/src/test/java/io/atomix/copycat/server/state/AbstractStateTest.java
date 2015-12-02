@@ -34,7 +34,7 @@ import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.MetaStore;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
