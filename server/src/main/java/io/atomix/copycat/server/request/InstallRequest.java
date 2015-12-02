@@ -15,48 +15,49 @@
  */
 package io.atomix.copycat.server.request;
 
+import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
-import io.atomix.copycat.server.state.Member;
 
-import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Configuration installation request.
+ * Snapshot installation request.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=219)
-public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
+@SerializeWith(id=229)
+public class InstallRequest extends AbstractRequest<InstallRequest> {
 
   /**
-   * Returns a new configuration request builder.
+   * Returns a new install request builder.
    *
-   * @return A new configuration request builder.
+   * @return A new install request builder.
    */
   public static Builder builder() {
-    return new Builder(new ConfigureRequest());
+    return new Builder(new InstallRequest());
   }
 
   /**
-   * Returns an configuration request builder for an existing request.
+   * Returns an install request builder for an existing request.
    *
    * @param request The request to build.
-   * @return The configuration request builder.
+   * @return The install request builder.
    */
-  public static Builder builder(ConfigureRequest request) {
+  public static Builder builder(InstallRequest request) {
     return new Builder(request);
   }
 
   private long term;
   private int leader;
   protected long version;
-  protected Collection<Member> members;
+  protected int offset;
+  protected Buffer snapshot;
+  protected boolean complete;
 
   /**
    * Returns the requesting node's current term.
@@ -77,27 +78,49 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
   }
 
   /**
-   * Returns the configuration version.
+   * Returns the snapshot version.
    *
-   * @return The configuration version.
+   * @return The snapshot version.
    */
   public long version() {
     return version;
   }
 
   /**
-   * Returns the configuration members.
+   * Returns the offset of the snapshot chunk.
    *
-   * @return The configuration members.
+   * @return The offset of the snapshot chunk.
    */
-  public Collection<Member> members() {
-    return members;
+  public int offset() {
+    return offset;
+  }
+
+  /**
+   * Returns the snapshot index.
+   *
+   * @return The snapshot index.
+   */
+  public Buffer snapshot() {
+    return snapshot;
+  }
+
+  /**
+   * Returns a boolean value indicating whether this is the last chunk of the snapshot.
+   *
+   * @return Indicates whether this request is the last chunk of the snapshot.
+   */
+  public boolean complete() {
+    return complete;
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term).writeInt(leader).writeLong(version);
-    serializer.writeObject(members, buffer);
+    buffer.writeLong(term)
+      .writeInt(leader)
+      .writeLong(version)
+      .writeInt(offset)
+      .writeBoolean(complete);
+    serializer.writeObject(snapshot, buffer);
   }
 
   @Override
@@ -105,36 +128,40 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
     term = buffer.readLong();
     leader = buffer.readInt();
     version = buffer.readLong();
-    members = serializer.readObject(buffer);
+    offset = buffer.readInt();
+    complete = buffer.readBoolean();
+    snapshot = serializer.readObject(buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, version, members);
+    return Objects.hash(getClass(), term, leader, version, offset, complete, snapshot);
   }
 
   @Override
   public boolean equals(Object object) {
-    if (object instanceof ConfigureRequest) {
-      ConfigureRequest request = (ConfigureRequest) object;
+    if (object instanceof InstallRequest) {
+      InstallRequest request = (InstallRequest) object;
       return request.term == term
         && request.leader == leader
         && request.version == version
-        && request.members.equals(members);
+        && request.offset == offset
+        && request.complete == complete
+        && request.snapshot == snapshot;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, version=%d, members=%s]", getClass().getSimpleName(), term, leader, version, members);
+    return String.format("%s[term=%d, leader=%d, version=%d, offset=%d, snapshot=%s, complete=%b]", getClass().getSimpleName(), term, leader, version, offset, snapshot, complete);
   }
 
   /**
    * Heartbeat request builder.
    */
-  public static class Builder extends AbstractRequest.Builder<Builder, ConfigureRequest> {
-    protected Builder(ConfigureRequest request) {
+  public static class Builder extends AbstractRequest.Builder<Builder, InstallRequest> {
+    protected Builder(InstallRequest request) {
       super(request);
     }
 
@@ -174,14 +201,36 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
     }
 
     /**
-     * Sets the request members.
+     * Sets the request offset.
      *
-     * @param members The request members.
+     * @param offset The request offset.
+     * @return The request builder.
+     */
+    public Builder withOffset(int offset) {
+      request.offset = Assert.argNot(offset, offset < 0, "offset must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the request snapshot buffer.
+     *
+     * @param snapshot The snapshot buffer.
+     * @return The request builder.
+     */
+    public Builder withSnapshot(Buffer snapshot) {
+      request.snapshot = Assert.notNull(snapshot, "snapshot");
+      return this;
+    }
+
+    /**
+     * Sets whether the request is complete.
+     *
+     * @param complete Whether the snapshot is complete.
      * @return The request builder.
      * @throws NullPointerException if {@code member} is null
      */
-    public Builder withMembers(Collection<Member> members) {
-      request.members = Assert.notNull(members, "members");
+    public Builder withComplete(boolean complete) {
+      request.complete = complete;
       return this;
     }
 
@@ -189,11 +238,11 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
      * @throws IllegalStateException if member is null
      */
     @Override
-    public ConfigureRequest build() {
+    public InstallRequest build() {
       super.build();
       Assert.stateNot(request.term <= 0, "term must be positive");
       Assert.argNot(request.version < 0, "version must be positive");
-      Assert.notNull(request.members, "members");
+      Assert.notNull(request.snapshot, "snapshot");
       return request;
     }
   }
