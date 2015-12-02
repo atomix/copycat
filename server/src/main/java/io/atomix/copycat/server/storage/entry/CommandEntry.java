@@ -45,6 +45,15 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
     return command.persistence() == Command.PersistenceLevel.PERSISTENT;
   }
 
+  /**
+   * Returns a boolean value indicating whether the command can be removed after a snapshot.
+   *
+   * @return Indicates whether the command can be removed after a snapshot.
+   */
+  public boolean isSnapshot() {
+    return command.persistence() == Command.PersistenceLevel.SNAPSHOT;
+  }
+
   @Override
   public Operation getOperation() {
     return command;

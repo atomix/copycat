@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -78,23 +76,13 @@ public class MetaStoreTest {
       new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
       new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
     );
-    meta.storeConfiguration(new MetaStore.Configuration(1, members));
+    meta.storeConfiguration(new Configuration(1, members));
 
-    MetaStore.Configuration configuration = meta.loadConfiguration();
+    Configuration configuration = meta.loadConfiguration();
     assertEquals(configuration.version(), 1);
     assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))));
     assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001))));
     assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))));
-
-    Buffer buffer = HeapBuffer.allocate();
-    buffer.writeLong(1234).writeBoolean(true);
-    MetaStore.Snapshot snapshot = new MetaStore.Snapshot(1, buffer.flip());
-    meta.storeSnapshot(snapshot);
-    snapshot.close();
-    MetaStore.Snapshot result = meta.loadSnapshot();
-    assertEquals(result.version(), 1);
-    assertEquals(result.data().readLong(), 1234);
-    assertTrue(result.data().readBoolean());
   }
 
   /**

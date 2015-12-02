@@ -27,6 +27,8 @@ class MemberState {
   private Member member;
   private long term;
   private long version;
+  private long snapshotIndex;
+  private int snapshotOffset;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
@@ -105,6 +107,46 @@ class MemberState {
    */
   MemberState setVersion(long version) {
     this.version = version;
+    return this;
+  }
+
+  /**
+   * Returns the member's snapshot index.
+   *
+   * @return The member's snapshot index.
+   */
+  long getSnapshotIndex() {
+    return snapshotIndex;
+  }
+
+  /**
+   * Sets the member's snapshot index.
+   *
+   * @param snapshotIndex The member's snapshot index.
+   * @return The member state.
+   */
+  MemberState setSnapshotIndex(long snapshotIndex) {
+    this.snapshotIndex = snapshotIndex;
+    return this;
+  }
+
+  /**
+   * Returns the member's snapshot offset.
+   *
+   * @return The member's snapshot offset.
+   */
+  int getSnapshotOffset() {
+    return snapshotOffset;
+  }
+
+  /**
+   * Sets the member's snapshot offset.
+   *
+   * @param snapshotOffset The member's snapshot offset.
+   * @return The member state.
+   */
+  MemberState setSnapshotOffset(int snapshotOffset) {
+    this.snapshotOffset = snapshotOffset;
     return this;
   }
 

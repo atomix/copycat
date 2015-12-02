@@ -28,8 +28,9 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,13 +82,16 @@ public class ServerContext implements Managed<ServerState> {
       // Open the log.
       Log log = storage.openLog("copycat");
 
+      // Open the snapshot store.
+      SnapshotStore snapshot = storage.openSnapshotStore("copycat");
+
       // Setup the server and connection manager.
       internalServer = serverTransport.server();
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
 
       internalServer.listen(serverAddress, c -> state.connectServer(c)).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
-          state = new ServerState(new Member(CopycatServer.Type.INACTIVE, serverAddress, clientAddress), members, meta, log, userStateMachine, connections, context);
+          state = new ServerState(new Member(CopycatServer.Type.INACTIVE, serverAddress, clientAddress), members, meta, log, snapshot, userStateMachine, connections, context);
 
           // If the client address is different than the server address, start a separate client server.
           if (!clientAddress.equals(serverAddress)) {

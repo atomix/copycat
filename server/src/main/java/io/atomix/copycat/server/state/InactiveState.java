@@ -77,6 +77,11 @@ class InactiveState extends AbstractState {
   }
 
   @Override
+  protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
   protected CompletableFuture<JoinResponse> join(JoinRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }

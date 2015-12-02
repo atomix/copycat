@@ -21,14 +21,8 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.AcceptRequest;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.PollRequest;
-import io.atomix.copycat.server.request.VoteRequest;
-import io.atomix.copycat.server.response.AcceptResponse;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.PollResponse;
-import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.request.*;
+import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 
@@ -273,11 +267,21 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
+  protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+    resetHeartbeatTimeout();
+    return super.install(request);
+  }
+
+  @Override
+  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+    resetHeartbeatTimeout();
+    return super.configure(request);
+  }
+
+  @Override
   public CompletableFuture<AppendResponse> append(AppendRequest request) {
     resetHeartbeatTimeout();
-    CompletableFuture<AppendResponse> response = super.append(request);
-    resetHeartbeatTimeout();
-    return response;
+    return super.append(request);
   }
 
   @Override

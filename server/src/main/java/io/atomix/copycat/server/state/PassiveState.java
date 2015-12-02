@@ -22,10 +22,11 @@ import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
-import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -39,6 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 class PassiveState extends AbstractState {
   private final Queue<AtomicInteger> counterPool = new ArrayDeque<>();
+  private Snapshot pendingSnapshot;
+  private SnapshotWriter pendingSnapshotWriter;
+  private int nextSnapshotOffset;
 
   public PassiveState(ServerState context) {
     super(context);
@@ -261,6 +265,83 @@ class PassiveState extends AbstractState {
   }
 
   @Override
+  protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    // If the request is for a lesser term, reject the request.
+    if (request.term() < context.getTerm()) {
+      return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    }
+
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+    }
+
+    // If a snapshot is currently being received and the snapshot versions don't match, simply
+    // close the existing snapshot. This is a naive implementation that assumes that the leader
+    // will be responsible in sending the correct snapshot to this server. Leaders must dictate
+    // where snapshots must be sent since entries can still legitimately exist prior to the snapshot,
+    // and so snapshots aren't simply sent at the beginning of the follower's log, but rather the
+    // leader dictates when a snapshot needs to be sent.
+    if (pendingSnapshot != null && request.version() != pendingSnapshot.version()) {
+      pendingSnapshotWriter.close();
+      pendingSnapshot.close();
+      pendingSnapshot.delete();
+      pendingSnapshot = null;
+      pendingSnapshotWriter = null;
+      nextSnapshotOffset = 0;
+    }
+
+    // If there is no pending snapshot, create a new snapshot.
+    if (pendingSnapshot == null) {
+      // For new snapshots, the initial snapshot offset must be 0.
+      if (request.offset() > 0) {
+        return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+          .build()));
+      }
+
+      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.version());
+      pendingSnapshotWriter = pendingSnapshot.writer();
+      nextSnapshotOffset = 0;
+    }
+
+    // If the request offset is greater than the next expected snapshot offset, fail the request.
+    if (request.offset() > nextSnapshotOffset) {
+      return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    }
+
+    // Write the data to the snapshot.
+    pendingSnapshotWriter.write(request.data());
+
+    // If the snapshot is complete, store the snapshot and reset state, otherwise update the next snapshot offset.
+    if (request.complete()) {
+      pendingSnapshotWriter.close();
+      pendingSnapshot.complete();
+      pendingSnapshotWriter = null;
+      pendingSnapshot = null;
+      nextSnapshotOffset = 0;
+    } else {
+      nextSnapshotOffset++;
+    }
+
+    return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
+      .withStatus(Response.Status.OK)
+      .build()));
+  }
+
+  @Override
   protected CompletableFuture<PollResponse> poll(PollRequest request) {
     context.checkThread();
     logRequest(request);
@@ -415,12 +496,6 @@ class PassiveState extends AbstractState {
     // Configure the cluster membership.
     context.getCluster().configure(request.version(), request.members());
 
-    // Install the snapshot if necessary.
-    if (request.snapshot() > context.getStateMachine().getSnapshotIndex()) {
-      context.getMetaStore().storeSnapshot(new MetaStore.Snapshot(request.version(), request.data()));
-      context.getStateMachine().setSnapshotIndex(request.snapshot());
-    }
-
     // If the local member type changed, transition the state as appropriate.
     // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
     // PASSIVE servers are transitioned to the PASSIVE state.
@@ -468,6 +543,18 @@ class PassiveState extends AbstractState {
     } else {
       return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
     }
+  }
+
+  @Override
+  public CompletableFuture<Void> close() {
+    if (pendingSnapshot != null) {
+      pendingSnapshotWriter.close();
+      pendingSnapshot.close();
+      pendingSnapshot.delete();
+      pendingSnapshot = null;
+      pendingSnapshotWriter = null;
+    }
+    return super.close();
   }
 
 }

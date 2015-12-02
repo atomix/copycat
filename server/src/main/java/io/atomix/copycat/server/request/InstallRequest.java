@@ -56,7 +56,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
   private int leader;
   protected long version;
   protected int offset;
-  protected Buffer snapshot;
+  protected Buffer data;
   protected boolean complete;
 
   /**
@@ -96,12 +96,12 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
   }
 
   /**
-   * Returns the snapshot index.
+   * Returns the snapshot data.
    *
-   * @return The snapshot index.
+   * @return The snapshot data.
    */
-  public Buffer snapshot() {
-    return snapshot;
+  public Buffer data() {
+    return data;
   }
 
   /**
@@ -120,7 +120,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
       .writeLong(version)
       .writeInt(offset)
       .writeBoolean(complete);
-    serializer.writeObject(snapshot, buffer);
+    serializer.writeObject(data, buffer);
   }
 
   @Override
@@ -130,12 +130,12 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
     version = buffer.readLong();
     offset = buffer.readInt();
     complete = buffer.readBoolean();
-    snapshot = serializer.readObject(buffer);
+    data = serializer.readObject(buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, version, offset, complete, snapshot);
+    return Objects.hash(getClass(), term, leader, version, offset, complete, data);
   }
 
   @Override
@@ -147,18 +147,18 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
         && request.version == version
         && request.offset == offset
         && request.complete == complete
-        && request.snapshot == snapshot;
+        && request.data == data;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, version=%d, offset=%d, snapshot=%s, complete=%b]", getClass().getSimpleName(), term, leader, version, offset, snapshot, complete);
+    return String.format("%s[term=%d, leader=%d, version=%d, offset=%d, data=%s, complete=%b]", getClass().getSimpleName(), term, leader, version, offset, data, complete);
   }
 
   /**
-   * Heartbeat request builder.
+   * Snapshot request builder.
    */
   public static class Builder extends AbstractRequest.Builder<Builder, InstallRequest> {
     protected Builder(InstallRequest request) {
@@ -217,8 +217,8 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
      * @param snapshot The snapshot buffer.
      * @return The request builder.
      */
-    public Builder withSnapshot(Buffer snapshot) {
-      request.snapshot = Assert.notNull(snapshot, "snapshot");
+    public Builder withData(Buffer snapshot) {
+      request.data = Assert.notNull(snapshot, "data");
       return this;
     }
 
@@ -242,7 +242,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
       super.build();
       Assert.stateNot(request.term <= 0, "term must be positive");
       Assert.argNot(request.version < 0, "version must be positive");
-      Assert.notNull(request.snapshot, "snapshot");
+      Assert.notNull(request.data, "data");
       return request;
     }
   }

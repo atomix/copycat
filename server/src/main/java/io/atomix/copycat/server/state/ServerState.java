@@ -29,8 +29,10 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
+import io.atomix.copycat.server.storage.Configuration;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.MetaStore;
+import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +60,7 @@ public class ServerState {
   private final ClusterState cluster;
   private final MetaStore meta;
   private final Log log;
+  private final SnapshotStore snapshot;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
   private AbstractState state = new InactiveState(this);
@@ -74,24 +77,25 @@ public class ServerState {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  ServerState(Member member, Collection<Address> members, MetaStore meta, Log log, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  ServerState(Member member, Collection<Address> members, MetaStore meta, Log log, SnapshotStore snapshot, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.cluster = new ClusterState(this, member);
     this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
+    this.snapshot = Assert.notNull(snapshot, "data");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
 
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, new ServerStateMachineContext(connections, new ServerSessionManager()), meta, log, stateContext);
+    this.stateMachine = new ServerStateMachine(userStateMachine, this, stateContext);
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
 
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
-    MetaStore.Configuration configuration = meta.loadConfiguration();
+    Configuration configuration = meta.loadConfiguration();
     if (configuration != null) {
       cluster.configure(configuration.version(), configuration.members());
     } else if (members.contains(member.serverAddress())) {
@@ -410,6 +414,15 @@ public class ServerState {
    */
   public Log getLog() {
     return log;
+  }
+
+  /**
+   * Returns the server snapshot store.
+   *
+   * @return The server snapshot store.
+   */
+  public SnapshotStore getSnapshotStore() {
+    return snapshot;
   }
 
   /**

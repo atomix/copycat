@@ -177,7 +177,18 @@ public interface Command<T> extends Operation<T> {
      * In the event of a failure and replay of the commit log, persistent commands are guaranteed to be replayed
      * to the server side state machine(s) as long as prior commands remain in the log.
      */
-    PERSISTENT
+    PERSISTENT,
+
+    /**
+     * Indicates that the command should be persisted in the Raft log until a snapshot of the state machine state has been taken.
+     * <p>
+     * The {@code SNAPSHOT} persistence level indicates commands for which resulting state is stored in state machine snapshots.
+     * Snapshot commands will be stored in the Raft log only until a snapshot of the state machine state has been written to disk,
+     * at which time they'll be removed from the log. Note that snapshot commands can still safely trigger state machine events. Commands
+     * that result in the publishing of events will be persisted in the log until related events have been received by all clients even
+     * if a snapshot of the state machine has since been stored.
+     */
+    SNAPSHOT
 
   }
 

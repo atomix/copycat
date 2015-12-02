@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.transport.Transport;
@@ -24,19 +25,19 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.MetaStore;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
+import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.MetaStore;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.testng.Assert.assertEquals;
@@ -50,10 +51,11 @@ import static org.testng.Assert.assertNotNull;
 public abstract class StateMachineTestCase extends ConcurrentTestCase {
   private ThreadContext callerContext;
   private ThreadContext stateContext;
-  private ServerStateMachine stateMachine;
+  private ServerState state;
   private Map<Long, Long> sequence;
   private MetaStore meta;
   private Log log;
+  private SnapshotStore snapshot;
 
   @BeforeMethod
   public void setupStateMachine() {
@@ -64,7 +66,14 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
     Storage storage = new Storage(StorageLevel.MEMORY);
     meta = storage.openMetaStore("test");
     log = storage.openLog("test");
-    stateMachine = new ServerStateMachine(createStateMachine(), new ServerStateMachineContext(new ConnectionManager(transport.client()), new ServerSessionManager()), meta, log, stateContext);
+    snapshot = storage.openSnapshotStore("test");
+    Member member = new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
+    Collection<Address> members = Arrays.asList(
+      new Address("localhost", 5000),
+      new Address("localhost", 5000),
+      new Address("localhost", 5000)
+    );
+    state = new ServerState(member, members, meta, log, snapshot, createStateMachine(), new ConnectionManager(transport.client()), callerContext);
   }
 
   /**
@@ -85,7 +94,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
         .setTimeout(500)
         .setClient(UUID.randomUUID());
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -93,7 +102,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = stateMachine.executor().context().sessions().getSession(index);
+    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(index);
     assertNotNull(session);
     assertEquals(session.id(), index);
     assertEquals(session.getTimestamp(), timestamp);
@@ -115,7 +124,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
         .setCommandSequence(0)
         .setEventVersion(0);
 
-      stateMachine.apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -159,7 +168,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
    */
   protected <T> T apply(long timestamp, Session session, Query<T> query) throws Throwable {
     QueryEntry entry = new QueryEntry()
-      .setIndex(stateMachine.getLastApplied())
+      .setIndex(state.getStateMachine().getLastApplied())
       .setTerm(1)
       .setSession(session.id())
       .setTimestamp(timestamp)
@@ -179,7 +188,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
   @SuppressWarnings("unchecked")
   private <T> T apply(Entry entry) throws Throwable {
     AtomicReference<Object> reference = new AtomicReference<>();
-    callerContext.execute(() -> stateMachine.apply(entry).whenComplete((result, error) -> {
+    callerContext.execute(() -> state.getStateMachine().apply(entry).whenComplete((result, error) -> {
       if (error == null) {
         reference.set(result);
       } else {
@@ -199,7 +208,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
 
   @AfterMethod
   public void teardownStateMachine() {
-    stateMachine.close();
+    state.getStateMachine().close();
     meta.close();
     log.close();
     stateContext.close();

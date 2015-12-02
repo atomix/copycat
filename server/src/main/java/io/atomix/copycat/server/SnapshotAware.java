@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.server.storage.SnapshotReader;
-import io.atomix.copycat.server.storage.SnapshotWriter;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 /**
  * Snapshottable state machine interface.
