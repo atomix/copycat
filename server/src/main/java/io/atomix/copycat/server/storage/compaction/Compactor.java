@@ -55,6 +55,7 @@ public final class Compactor implements AutoCloseable {
   private final ScheduledExecutorService executor;
   private long minorIndex;
   private long majorIndex;
+  private long snapshotIndex;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
   private CompletableFuture<Void> future;
@@ -105,6 +106,26 @@ public final class Compactor implements AutoCloseable {
    */
   public long majorIndex() {
     return majorIndex;
+  }
+
+  /**
+   * Sets the snapshot index to indicate commands entries that can be removed during compaction.
+   *
+   * @param index The maximum index up to which snapshotted commands can be removed.
+   * @return The log compactor.
+   */
+  public Compactor snapshotIndex(long index) {
+    this.snapshotIndex = Math.max(this.snapshotIndex, index);
+    return this;
+  }
+
+  /**
+   * Returns the maximum index up to which snapshotted commands can be removed during compaction.
+   *
+   * @return The maximum index up to which snapshotted commands can be removed during compaction.
+   */
+  public long snapshotIndex() {
+    return snapshotIndex;
   }
 
   /**

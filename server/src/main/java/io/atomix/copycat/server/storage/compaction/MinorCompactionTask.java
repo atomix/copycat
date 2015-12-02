@@ -50,10 +50,12 @@ public final class MinorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MinorCompactionTask.class);
   private final SegmentManager manager;
   private final Segment segment;
+  private final long snapshotIndex;
 
-  MinorCompactionTask(SegmentManager manager, Segment segment) {
+  MinorCompactionTask(SegmentManager manager, Segment segment, long snapshotIndex) {
     this.manager = Assert.notNull(manager, "manager");
     this.segment = Assert.notNull(segment, "segment");
+    this.snapshotIndex = snapshotIndex;
   }
 
   @Override
@@ -106,8 +108,9 @@ public final class MinorCompactionTask implements CompactionTask {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, only remove the entry from the segment if it's not a tombstone that has been cleaned.
       if (entry != null) {
-        // If the entry has been cleaned, determine whether it's a tombstone.
-        if (segment.isClean(index)) {
+        // If the entry has been cleaned or if the entry is a snapshot compacted entry whose index
+        // is less than or equal to the snapshot compaction index, clean the entry.
+        if (segment.isClean(index) || (entry.isSnapshotted() && index <= snapshotIndex)) {
           // If the entry is not a tombstone, clean the entry.
           // If the entry is a tombstone, append the entry to the segment and clean it.
           if (!entry.isTombstone()) {

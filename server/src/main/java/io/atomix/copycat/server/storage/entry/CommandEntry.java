@@ -45,13 +45,9 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
     return command.compact() == Command.CompactionMode.SEQUENTIAL;
   }
 
-  /**
-   * Returns a boolean value indicating whether the command can be removed after a snapshot.
-   *
-   * @return Indicates whether the command can be removed after a snapshot.
-   */
-  public boolean isSnapshot() {
-    return command.compact() == Command.CompactionMode.SNAPSHOT;
+  @Override
+  public boolean isSnapshotted() {
+    return command.compact() == Command.CompactionMode.DEFAULT || command.compact() == Command.CompactionMode.SNAPSHOT;
   }
 
   @Override

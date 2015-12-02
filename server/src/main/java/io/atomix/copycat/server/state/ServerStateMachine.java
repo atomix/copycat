@@ -158,10 +158,14 @@ final class ServerStateMachine implements AutoCloseable {
     // If a snapshot is pending to be persisted and the last completed index is greater than the
     // waiting snapshot version, persist the snapshot and update the last snapshot index.
     if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.version()) {
+      long snapshotIndex = pendingSnapshot.version();
       synchronized (pendingSnapshot) {
         pendingSnapshot.complete();
         pendingSnapshot = null;
       }
+
+      // Once the snapshot has been completed, snapshot dependent entries can be cleaned from the log.
+      state.getLog().compactor().snapshotIndex(snapshotIndex);
     }
   }
 
@@ -189,7 +193,12 @@ final class ServerStateMachine implements AutoCloseable {
     // similarly stored and applied sequentially. There may be gaps in the indexes of entries applied to the
     // state machine due to log compaction.
     Snapshot snapshot = state.getSnapshotStore().currentSnapshot();
-    if (snapshot != null && snapshot.version() > lastSnapshot && snapshot.version() < entry.getIndex() && stateMachine instanceof SnapshotAware) {
+    if (snapshot != null && snapshot.version() > state.getLog().compactor().snapshotIndex() && snapshot.version() < entry.getIndex() && stateMachine instanceof SnapshotAware) {
+
+      // Install the snapshot in the state machine thread. Multiple threads can access snapshots, so we
+      // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
+      // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
+      // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
       executor.executor().execute(() -> {
         synchronized (snapshot) {
           try (SnapshotReader reader = snapshot.reader()) {
@@ -197,7 +206,9 @@ final class ServerStateMachine implements AutoCloseable {
           }
         }
       });
-      lastSnapshot = snapshot.version();
+
+      // Once a snapshot has been applied, snapshot dependent entries can be cleaned from the log.
+      state.getLog().compactor().snapshotIndex(snapshot.version());
     }
 
     boolean apply = !(entry instanceof QueryEntry);

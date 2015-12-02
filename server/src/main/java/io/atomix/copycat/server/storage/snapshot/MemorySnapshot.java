@@ -52,7 +52,7 @@ final class MemorySnapshot extends Snapshot {
   }
 
   @Override
-  public SnapshotReader reader() {
+  public synchronized SnapshotReader reader() {
     return openReader(new SnapshotReader(buffer.position(SnapshotDescriptor.BYTES).slice(), this), descriptor);
   }
 
