@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.snapshot;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferOutput;
@@ -26,10 +26,12 @@ import io.atomix.catalyst.util.Assert;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
-  private final Buffer buffer;
+  final Buffer buffer;
+  private final Snapshot snapshot;
 
-  public SnapshotWriter(Buffer buffer) {
+  SnapshotWriter(Buffer buffer, Snapshot snapshot) {
     this.buffer = Assert.notNull(buffer, "buffer");
+    this.snapshot = Assert.notNull(snapshot, "snapshot");
   }
 
   @Override
@@ -160,6 +162,7 @@ public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
 
   @Override
   public void close() {
+    snapshot.closeWriter(this);
     buffer.close();
   }
 

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.snapshot;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
@@ -27,9 +27,11 @@ import io.atomix.catalyst.util.Assert;
  */
 public class SnapshotReader implements BufferInput<SnapshotReader> {
   private final Buffer buffer;
+  private final Snapshot snapshot;
 
-  public SnapshotReader(Buffer buffer) {
+  SnapshotReader(Buffer buffer, Snapshot snapshot) {
     this.buffer = Assert.notNull(buffer, "buffer");
+    this.snapshot = Assert.notNull(snapshot, "snapshot");
   }
 
   @Override
@@ -156,6 +158,7 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   @Override
   public void close() {
     buffer.close();
+    snapshot.closeReader(this);
   }
 
 }
