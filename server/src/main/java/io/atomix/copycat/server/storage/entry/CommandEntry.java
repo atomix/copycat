@@ -42,7 +42,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   @Override
   public boolean isTombstone() {
-    return command.persistence() == Command.PersistenceLevel.PERSISTENT;
+    return command.compact() == Command.CompactionMode.SEQUENTIAL;
   }
 
   /**
@@ -51,7 +51,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
    * @return Indicates whether the command can be removed after a snapshot.
    */
   public boolean isSnapshot() {
-    return command.persistence() == Command.PersistenceLevel.SNAPSHOT;
+    return command.compact() == Command.CompactionMode.SNAPSHOT;
   }
 
   @Override

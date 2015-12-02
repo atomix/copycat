@@ -25,8 +25,8 @@ import io.atomix.copycat.client.Command;
 public class DeleteCommand implements Command<Void> {
 
   @Override
-  public PersistenceLevel persistence() {
-    return PersistenceLevel.PERSISTENT;
+  public CompactionMode compact() {
+    return CompactionMode.SEQUENTIAL;
   }
 
 }
