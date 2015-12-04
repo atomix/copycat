@@ -18,6 +18,8 @@ package io.atomix.copycat.server.storage.snapshot;
 import io.atomix.catalyst.util.Assert;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
  * Snapshot file utility.
@@ -25,6 +27,10 @@ import java.io.File;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class SnapshotFile {
+  private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddHHmmss");
+  private static final char PART_SEPARATOR = '-';
+  private static final char EXTENSION_SEPARATOR = '.';
+  private static final String EXTENSION = "snapshot";
   private final File file;
 
   /**
@@ -36,22 +42,32 @@ final class SnapshotFile {
     Assert.notNull(name, "name");
     Assert.notNull(file, "file");
     String fileName = file.getName();
-    if (fileName.lastIndexOf('.') == -1 || fileName.lastIndexOf('-') == -1 || fileName.lastIndexOf('.') < fileName.lastIndexOf('-') || !fileName.endsWith(".snapshot"))
+    if (fileName.lastIndexOf(EXTENSION_SEPARATOR) == -1 || fileName.lastIndexOf(PART_SEPARATOR) == -1 || fileName.lastIndexOf(EXTENSION_SEPARATOR) < fileName.lastIndexOf(PART_SEPARATOR) || !fileName.endsWith(EXTENSION))
       return false;
 
-    for (int i = fileName.lastIndexOf('-') + 1; i < fileName.lastIndexOf('.'); i++) {
+    for (int i = fileName.lastIndexOf(PART_SEPARATOR) + 1; i < fileName.lastIndexOf(EXTENSION_SEPARATOR); i++) {
       if (!Character.isDigit(fileName.charAt(i))) {
         return false;
       }
     }
-    return fileName.substring(0, fileName.lastIndexOf('-')).equals(name);
+
+    if (fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1) == -1)
+      return false;
+
+    for (int i = fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1) + 1; i < fileName.lastIndexOf(PART_SEPARATOR); i++) {
+      if (!Character.isDigit(fileName.charAt(i))) {
+        return false;
+      }
+    }
+
+    return fileName.substring(0, fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1)).equals(name);
   }
 
   /**
    * Creates a snapshot file for the given directory, log name, and snapshot version.
    */
-  static File createSnapshotFile(String name, File directory, long version) {
-    return new File(directory, String.format("%s-%d.snapshot", Assert.notNull(name, "name"), version));
+  static File createSnapshotFile(String name, File directory, long version, long timestamp) {
+    return new File(directory, String.format("%s-%d-%s.snapshot", Assert.notNull(name, "name"), version, TIMESTAMP_FORMAT.format(new Date(timestamp))));
   }
 
   /**
@@ -72,9 +88,20 @@ final class SnapshotFile {
 
   /**
    * Returns the snapshot version.
+   *
+   * @return The snapshot version.
    */
   public long version() {
-    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf('-') + 1, file.getName().lastIndexOf('.')));
+    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR, file.getName().lastIndexOf(PART_SEPARATOR) - 1) + 1, file.getName().lastIndexOf(PART_SEPARATOR)));
+  }
+
+  /**
+   * Returns the snapshot timestamp.
+   *
+   * @return The snapshot timestamp.
+   */
+  public long timestamp() {
+    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR) + 1, file.getName().lastIndexOf(EXTENSION_SEPARATOR)));
   }
 
 }

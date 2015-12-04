@@ -44,6 +44,11 @@ final class FileSnapshot extends Snapshot {
   }
 
   @Override
+  public long timestamp() {
+    return file.timestamp();
+  }
+
+  @Override
   public synchronized SnapshotWriter writer() {
     checkWriter();
     Assert.stateNot(file.file().exists(), "cannot create snapshot writer for existing snapshot file: %s", file.file());

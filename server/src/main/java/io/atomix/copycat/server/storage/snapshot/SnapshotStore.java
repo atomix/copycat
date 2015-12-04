@@ -111,7 +111,7 @@ public class SnapshotStore implements AutoCloseable {
         // Valid segments will have been locked. Segments that resulting from failures during log cleaning will be
         // unlocked and should ultimately be deleted from disk.
         if (descriptor.locked()) {
-          snapshots.add(loadSnapshot(descriptor.version()));
+          snapshots.add(loadSnapshot(snapshotFile.version(), snapshotFile.timestamp()));
           descriptor.close();
         }
         // If the segment descriptor wasn't locked, close and delete the descriptor.
@@ -130,10 +130,11 @@ public class SnapshotStore implements AutoCloseable {
    * Loads a specific snapshot.
    *
    * @param version The snapshot version.
+   * @param timestamp The snapshot timestamp.
    * @return The snapshot.
    */
-  private Snapshot loadSnapshot(long version) {
-    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), version));
+  private Snapshot loadSnapshot(long version, long timestamp) {
+    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), version, timestamp));
     LOGGER.debug("Loaded disk snapshot: {} ({})", version, file.file().getName());
     return new FileSnapshot(file, this);
   }
@@ -177,7 +178,7 @@ public class SnapshotStore implements AutoCloseable {
    * Creates a disk snapshot.
    */
   private Snapshot createDiskSnapshot(SnapshotDescriptor descriptor) {
-    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), descriptor.version()));
+    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), descriptor.version(), descriptor.timestamp()));
     Snapshot snapshot = new FileSnapshot(file, this);
     LOGGER.debug("Created disk snapshot: {}", snapshot);
     return snapshot;

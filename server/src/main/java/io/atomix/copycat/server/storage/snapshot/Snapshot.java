@@ -38,6 +38,13 @@ public abstract class Snapshot implements AutoCloseable {
   public abstract long version();
 
   /**
+   * Returns the snapshot timestamp.
+   *
+   * @return The snapshot timestamp.
+   */
+  public abstract long timestamp();
+
+  /**
    * Returns a new snapshot writer.
    *
    * @return A new snapshot writer.

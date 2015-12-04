@@ -40,6 +40,11 @@ final class MemorySnapshot extends Snapshot {
   }
 
   @Override
+  public long timestamp() {
+    return descriptor.timestamp();
+  }
+
+  @Override
   public SnapshotWriter writer() {
     checkWriter();
     return new SnapshotWriter(buffer.position(SnapshotDescriptor.BYTES).slice(), this);
