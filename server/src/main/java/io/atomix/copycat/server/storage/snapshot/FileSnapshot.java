@@ -51,31 +51,32 @@ final class FileSnapshot extends Snapshot {
   @Override
   public synchronized SnapshotWriter writer() {
     checkWriter();
-    Assert.stateNot(file.file().exists(), "cannot create snapshot writer for existing snapshot file: %s", file.file());
-
     SnapshotDescriptor descriptor = SnapshotDescriptor.builder()
       .withVersion(file.version())
-      .withTimestamp(System.currentTimeMillis())
+      .withTimestamp(file.timestamp())
       .build();
 
     Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES, store.storage.maxSnapshotSize());
     descriptor.copyTo(buffer);
-    return openWriter(new SnapshotWriter(buffer.position(SnapshotDescriptor.BYTES).skip(Integer.BYTES).mark(), this), descriptor);
+
+    int length = buffer.position(SnapshotDescriptor.BYTES).readInt();
+    return openWriter(new SnapshotWriter(buffer.skip(length).mark(), this), descriptor);
   }
 
   @Override
   protected void closeWriter(SnapshotWriter writer) {
-    writer.buffer.writeLong(SnapshotDescriptor.BYTES, writer.buffer.position()).flush();
+    int length = (int) (writer.buffer.position() - (SnapshotDescriptor.BYTES + Integer.BYTES));
+    writer.buffer.writeInt(SnapshotDescriptor.BYTES, length).flush();
     super.closeWriter(writer);
   }
 
   @Override
   public synchronized SnapshotReader reader() {
-    Assert.state(file.file().exists(), "cannot create snapshot reader for missing snapshot file: %s", file.file());
+    Assert.state(file.file().exists(), "missing snapshot file: %s", file.file());
     Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES, store.storage.maxSnapshotSize());
     SnapshotDescriptor descriptor = new SnapshotDescriptor(buffer);
     int length = buffer.position(SnapshotDescriptor.BYTES).readInt();
-    return openReader(new SnapshotReader(buffer.mark().limit(length), this), descriptor);
+    return openReader(new SnapshotReader(buffer.mark().limit(SnapshotDescriptor.BYTES + Integer.BYTES + length), this), descriptor);
   }
 
   @Override

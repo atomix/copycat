@@ -28,10 +28,7 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
-import java.util.ArrayDeque;
-import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Passive state.
@@ -39,9 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class PassiveState extends AbstractState {
-  private final Queue<AtomicInteger> counterPool = new ArrayDeque<>();
   private Snapshot pendingSnapshot;
-  private SnapshotWriter pendingSnapshotWriter;
   private int nextSnapshotOffset;
 
   public PassiveState(ServerState context) {
@@ -221,11 +216,9 @@ class PassiveState extends AbstractState {
     // and so snapshots aren't simply sent at the beginning of the follower's log, but rather the
     // leader dictates when a snapshot needs to be sent.
     if (pendingSnapshot != null && request.version() != pendingSnapshot.version()) {
-      pendingSnapshotWriter.close();
       pendingSnapshot.close();
       pendingSnapshot.delete();
       pendingSnapshot = null;
-      pendingSnapshotWriter = null;
       nextSnapshotOffset = 0;
     }
 
@@ -240,7 +233,6 @@ class PassiveState extends AbstractState {
       }
 
       pendingSnapshot = context.getSnapshotStore().createSnapshot(request.version());
-      pendingSnapshotWriter = pendingSnapshot.writer();
       nextSnapshotOffset = 0;
     }
 
@@ -253,13 +245,13 @@ class PassiveState extends AbstractState {
     }
 
     // Write the data to the snapshot.
-    pendingSnapshotWriter.write(request.data());
+    try (SnapshotWriter writer = pendingSnapshot.writer()) {
+      writer.write(request.data());
+    }
 
     // If the snapshot is complete, store the snapshot and reset state, otherwise update the next snapshot offset.
     if (request.complete()) {
-      pendingSnapshotWriter.close();
       pendingSnapshot.complete();
-      pendingSnapshotWriter = null;
       pendingSnapshot = null;
       nextSnapshotOffset = 0;
     } else {
@@ -478,11 +470,9 @@ class PassiveState extends AbstractState {
   @Override
   public CompletableFuture<Void> close() {
     if (pendingSnapshot != null) {
-      pendingSnapshotWriter.close();
       pendingSnapshot.close();
       pendingSnapshot.delete();
       pendingSnapshot = null;
-      pendingSnapshotWriter = null;
     }
     return super.close();
   }

@@ -148,7 +148,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
      * @return The segment descriptor builder.
      */
     public Builder withVersion(long version) {
-      buffer.writeLong(8, version);
+      buffer.writeLong(0, version);
       return this;
     }
 
