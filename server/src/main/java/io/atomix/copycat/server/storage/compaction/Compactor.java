@@ -56,10 +56,17 @@ public class Compactor implements AutoCloseable {
   private long minorIndex;
   private long majorIndex;
   private long snapshotIndex;
-  private boolean compactable;
+  private Compactable compactable = Compactable.NONE;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
   private CompletableFuture<Void> future;
+
+  private enum Compactable {
+    NONE,
+    MINOR,
+    MAJOR,
+    BOTH
+  }
 
   public Compactor(Storage storage, SegmentManager segments, ScheduledExecutorService executor) {
     this.storage = Assert.notNull(storage, "storage");
@@ -78,7 +85,7 @@ public class Compactor implements AutoCloseable {
   public Compactor minorIndex(long index) {
     long minorIndex = Math.max(this.minorIndex, index);
     if (segments.currentSegment().firstIndex() > this.minorIndex && minorIndex >= segments.currentSegment().firstIndex()) {
-      compactable = true;
+      compactable = Compactable.BOTH;
     }
     this.minorIndex = minorIndex;
     return this;
@@ -143,15 +150,34 @@ public class Compactor implements AutoCloseable {
    * @return Indicates whether the log is currently compactable.
    */
   public boolean isCompactable() {
-    return compactable;
+    return compactable != Compactable.NONE;
   }
 
   /**
    * Checks whether the log should be compacted and compacts it with the given compaction strategy if necessary.
    */
   private void checkCompact(Compaction compaction) {
-    if (compactable) {
-      compact(compaction);
+    switch (compactable) {
+      case MINOR:
+        if (compaction == Compaction.MINOR) {
+          compact(Compaction.MINOR);
+          compactable = Compactable.NONE;
+        }
+        break;
+      case MAJOR:
+        if (compaction == Compaction.MAJOR) {
+          compact(Compaction.MAJOR);
+          compactable = Compactable.NONE;
+        }
+        break;
+      case BOTH:
+        compact(compaction);
+        if (compaction == Compaction.MINOR) {
+          compactable = Compactable.MAJOR;
+        } else {
+          compactable = Compactable.MINOR;
+        }
+        break;
     }
   }
 
