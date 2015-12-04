@@ -139,13 +139,6 @@ public interface Command<T> extends Operation<T> {
   enum CompactionMode {
 
     /**
-     * The default compaction mode is a synonym for {@code SNAPSHOT}.
-     *
-     * @see CompactionMode#SNAPSHOT
-     */
-    DEFAULT,
-
-    /**
      * Indicates that the command should be persisted in the Raft log until cleaned.
      * <p>
      * Most commands will be marked {@code CLEAN}. Once a command has been marked for cleaning from the Raft log,
@@ -227,7 +220,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command compaction mode.
    */
   default CompactionMode compact() {
-    return CompactionMode.DEFAULT;
+    return CompactionMode.SNAPSHOT;
   }
 
 }

@@ -47,7 +47,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   @Override
   public boolean isSnapshotted() {
-    return command.compact() == Command.CompactionMode.DEFAULT || command.compact() == Command.CompactionMode.SNAPSHOT;
+    return command.compact() == Command.CompactionMode.SNAPSHOT;
   }
 
   @Override
