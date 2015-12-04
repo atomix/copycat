@@ -17,15 +17,10 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
-import io.atomix.copycat.server.storage.system.Configuration;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -34,8 +29,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.UUID;
 
 import static org.testng.Assert.*;
@@ -96,6 +89,25 @@ public class SnapshotStoreTest {
       assertEquals(reader.readLong(), 11);
       assertEquals(reader.readLong(), 12);
     }
+  }
+
+  /**
+   * Tests storing and loading snapshots.
+   */
+  public void testStoreLoadSnapshot() {
+    SnapshotStore store = createSnapshotStore();
+
+    Snapshot snapshot = store.createSnapshot(1);
+    try (SnapshotWriter writer = snapshot.writer()) {
+      writer.writeLong(10);
+    }
+    snapshot.complete();
+    assertNotNull(store.currentSnapshot());
+    store.close();
+
+    store = createSnapshotStore();
+    assertNotNull(store.currentSnapshot());
+    assertEquals(store.currentSnapshot().version(), 1);
   }
 
   @BeforeMethod
