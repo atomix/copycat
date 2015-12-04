@@ -68,13 +68,16 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Takes a snapshot of the state machine state.
+   * Takes a snapshot of the state machine state if necessary.
    */
   private void takeSnapshot() {
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
     // index has met the snapshot index. Note that this will be executed in the state machine thread.
-    if (pendingSnapshot == null && stateMachine instanceof SnapshotAware
-      && (state.getSnapshotStore().currentSnapshot() == null || lastApplied > state.getSnapshotStore().currentSnapshot().version())) {
+    // Snapshots are only taken of the state machine when the log becomes compactable. If the log can
+    // be compacted, the lastApplied index must be greater than the last snapshot version.
+    Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
+    if (pendingSnapshot == null && stateMachine instanceof SnapshotAware && state.getLog().compactor().isCompactable()
+      && (currentSnapshot == null || lastApplied > currentSnapshot.version())) {
       pendingSnapshot = state.getSnapshotStore().createSnapshot(lastApplied);
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
@@ -84,6 +87,33 @@ final class ServerStateMachine implements AutoCloseable {
           ((SnapshotAware) stateMachine).snapshot(writer);
         }
       }
+    }
+  }
+
+  /**
+   * Installs a snapshot of the state machine state if necessary.
+   */
+  private void installSnapshot() {
+    // If the last stored snapshot has not yet been installed and its version matches the last applied state
+    // machine index, install the snapshot. This requires that the state machine see all indexes sequentially
+    // even for entries that have been compacted from the log.
+    Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
+    if (currentSnapshot != null && currentSnapshot.version() > state.getLog().compactor().snapshotIndex() && currentSnapshot.version() == lastApplied && stateMachine instanceof SnapshotAware) {
+
+      // Install the snapshot in the state machine thread. Multiple threads can access snapshots, so we
+      // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
+      // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
+      // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
+      executor.executor().execute(() -> {
+        synchronized (currentSnapshot) {
+          try (SnapshotReader reader = currentSnapshot.reader()) {
+            ((SnapshotAware) stateMachine).install(reader);
+          }
+        }
+      });
+
+      // Once a snapshot has been applied, snapshot dependent entries can be cleaned from the log.
+      state.getLog().compactor().snapshotIndex(currentSnapshot.version());
     }
   }
 
@@ -131,9 +161,10 @@ final class ServerStateMachine implements AutoCloseable {
    * @param lastApplied The last applied index.
    */
   private void setLastApplied(long lastApplied) {
-    // If the last applied index decreased then that's very concerning.
-    Assert.argNot(lastApplied < this.lastApplied, "lastApplied index must be greater than previous lastApplied index");
+    // lastApplied should be either equal to or one greater than this.lastApplied.
     if (lastApplied > this.lastApplied) {
+      Assert.arg(lastApplied == this.lastApplied + 1, "lastApplied must be sequential");
+
       this.lastApplied = lastApplied;
 
       // Update the index for each session. This will be used to trigger queries that are awaiting the
@@ -142,6 +173,14 @@ final class ServerStateMachine implements AutoCloseable {
       for (ServerSession session : executor.context().sessions().sessions.values()) {
         session.setVersion(lastApplied);
       }
+
+      // Take a state machine snapshot if necessary.
+      takeSnapshot();
+
+      // Install a state machine snapshot if necessary.
+      installSnapshot();
+    } else {
+      Assert.arg(lastApplied == this.lastApplied, "lastApplied cannot be decreased");
     }
   }
 
@@ -195,7 +234,7 @@ final class ServerStateMachine implements AutoCloseable {
       for (long i = lastApplied + 1; i <= index; i++) {
         Entry entry = state.getLog().get(index);
         if (entry != null) {
-          apply(index, entry, false).whenComplete((result, error) -> {
+          apply(entry, false).whenComplete((result, error) -> {
             if (counter.incrementAndGet() == entriesToApply) {
               future.complete(null);
             }
@@ -233,73 +272,35 @@ final class ServerStateMachine implements AutoCloseable {
    */
   public CompletableFuture<?> apply(Entry entry) {
     LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
-    return apply(entry.getIndex(), entry, true);
+    return apply(entry, true);
   }
 
   /**
    * Applies an entry to the state machine.
    *
-   * @param index The index to apply.
    * @param entry The entry to apply.
    * @param expectResult Indicates whether this call expects a result.
    * @return The result.
    */
-  private CompletableFuture<?> apply(long index, Entry entry, boolean expectResult) {
-    // If the entry is null then immediately increment the last applied index. This allows us to ensure
-    // we see indexes increase sequentially and take/apply snapshots at the correct points in time.
-
-    // If a snapshot exists for the prior index, apply the snapshot.
-
-    // If a snapshot exists such that the snapshot version is greater than the version of the last snapshot
-    // applied to the state machine and is less than the index of the entry being applied, apply the snapshot.
-    // This assumes that entries will always be applied to the state machine sequentially, and snapshots are
-    // similarly stored and applied sequentially. There may be gaps in the indexes of entries applied to the
-    // state machine due to log compaction.
-    Snapshot snapshot = state.getSnapshotStore().currentSnapshot();
-    if (snapshot != null && snapshot.version() > state.getLog().compactor().snapshotIndex() && snapshot.version() < entry.getIndex() && stateMachine instanceof SnapshotAware) {
-
-      // Install the snapshot in the state machine thread. Multiple threads can access snapshots, so we
-      // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
-      // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
-      // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
-      executor.executor().execute(() -> {
-        synchronized (snapshot) {
-          try (SnapshotReader reader = snapshot.reader()) {
-            ((SnapshotAware) stateMachine).install(reader);
-          }
-        }
-      });
-
-      // Once a snapshot has been applied, snapshot dependent entries can be cleaned from the log.
-      state.getLog().compactor().snapshotIndex(snapshot.version());
+  private CompletableFuture<?> apply(Entry entry, boolean expectResult) {
+    if (entry instanceof QueryEntry) {
+      return apply((QueryEntry) entry);
+    } else if (entry instanceof CommandEntry) {
+      return apply((CommandEntry) entry, expectResult);
+    } else if (entry instanceof RegisterEntry) {
+      return apply((RegisterEntry) entry, expectResult);
+    } else if (entry instanceof KeepAliveEntry) {
+      return apply((KeepAliveEntry) entry);
+    } else if (entry instanceof UnregisterEntry) {
+      return apply((UnregisterEntry) entry, expectResult);
+    } else if (entry instanceof NoOpEntry) {
+      return apply((NoOpEntry) entry);
+    } else if (entry instanceof ConnectEntry) {
+      return apply((ConnectEntry) entry);
+    } else if (entry instanceof ConfigurationEntry) {
+      return apply((ConfigurationEntry) entry);
     }
-
-    boolean apply = !(entry instanceof QueryEntry);
-    try {
-      if (!apply) {
-        return apply((QueryEntry) entry);
-      } else if (entry instanceof CommandEntry) {
-        return apply((CommandEntry) entry, expectResult);
-      } else if (entry instanceof RegisterEntry) {
-        return apply((RegisterEntry) entry, expectResult);
-      } else if (entry instanceof KeepAliveEntry) {
-        return apply((KeepAliveEntry) entry);
-      } else if (entry instanceof UnregisterEntry) {
-        return apply((UnregisterEntry) entry, expectResult);
-      } else if (entry instanceof NoOpEntry) {
-        return apply((NoOpEntry) entry);
-      } else if (entry instanceof ConnectEntry) {
-        return apply((ConnectEntry) entry);
-      } else if (entry instanceof ConfigurationEntry) {
-        return apply((ConfigurationEntry) entry);
-      }
-      return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
-    } finally {
-      // After the entry has been applied, update the lastApplied index.
-      if (apply) {
-        setLastApplied(index);
-      }
-    }
+    return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
   }
 
   /**

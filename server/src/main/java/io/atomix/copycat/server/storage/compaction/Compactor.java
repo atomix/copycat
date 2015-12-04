@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class Compactor implements AutoCloseable {
+public class Compactor implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(Compactor.class);
   private final Storage storage;
   private final SegmentManager segments;
@@ -56,6 +56,7 @@ public final class Compactor implements AutoCloseable {
   private long minorIndex;
   private long majorIndex;
   private long snapshotIndex;
+  private boolean compactable;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
   private CompletableFuture<Void> future;
@@ -64,8 +65,8 @@ public final class Compactor implements AutoCloseable {
     this.storage = Assert.notNull(storage, "storage");
     this.segments = Assert.notNull(segments, "segments");
     this.executor = Assert.notNull(executor, "executor");
-    minor = executor.scheduleAtFixedRate(() -> compact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
-    major = executor.scheduleAtFixedRate(() -> compact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
+    minor = executor.scheduleAtFixedRate(() -> checkCompact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
+    major = executor.scheduleAtFixedRate(() -> checkCompact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
   }
 
   /**
@@ -75,7 +76,11 @@ public final class Compactor implements AutoCloseable {
    * @return The log compactor.
    */
   public Compactor minorIndex(long index) {
-    this.minorIndex = Math.max(this.minorIndex, index);
+    long minorIndex = Math.max(this.minorIndex, index);
+    if (segments.currentSegment().firstIndex() > this.minorIndex && minorIndex >= segments.currentSegment().firstIndex()) {
+      compactable = true;
+    }
+    this.minorIndex = minorIndex;
     return this;
   }
 
@@ -126,6 +131,28 @@ public final class Compactor implements AutoCloseable {
    */
   public long snapshotIndex() {
     return snapshotIndex;
+  }
+
+  /**
+   * Returns a boolean value indicating whether the log is currently compactable.
+   * <p>
+   * Compactability is determined by the compactor's {@link #minorIndex()}. Each time the minor compaction
+   * index surpasses the boundaries of a log {@link io.atomix.copycat.server.storage.Segment}, the log becomes
+   * considered compactable. Once the log has been compacted thereafter, it will no longer be considered compactable.
+   *
+   * @return Indicates whether the log is currently compactable.
+   */
+  public boolean isCompactable() {
+    return compactable;
+  }
+
+  /**
+   * Checks whether the log should be compacted and compacts it with the given compaction strategy if necessary.
+   */
+  private void checkCompact(Compaction compaction) {
+    if (compactable) {
+      compact(compaction);
+    }
   }
 
   /**
