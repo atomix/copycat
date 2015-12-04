@@ -1017,7 +1017,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
-        .withMaxEntriesPerSegment(128)
+        .withMaxEntriesPerSegment(8)
         .withMinorCompactionInterval(Duration.ofSeconds(3))
         .withMajorCompactionInterval(Duration.ofSeconds(7))
         .build())
