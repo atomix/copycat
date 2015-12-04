@@ -228,7 +228,7 @@ class ClusterState {
 
     // If the local member is not part of the configuration, set its type to null.
     if (!members.contains(this.member)) {
-      this.member.update((CopycatServer.Type) null);
+      this.member.update(CopycatServer.Type.INACTIVE);
     }
 
     // Iterate through configured members and remove any that no longer exist in the configuration.
