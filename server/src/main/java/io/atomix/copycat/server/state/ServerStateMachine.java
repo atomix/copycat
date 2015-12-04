@@ -23,7 +23,7 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.server.SessionAware;
-import io.atomix.copycat.server.SnapshotAware;
+import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -76,7 +76,7 @@ final class ServerStateMachine implements AutoCloseable {
     // Snapshots are only taken of the state machine when the log becomes compactable. If the log can
     // be compacted, the lastApplied index must be greater than the last snapshot version.
     Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
-    if (pendingSnapshot == null && stateMachine instanceof SnapshotAware && state.getLog().compactor().isCompactable()
+    if (pendingSnapshot == null && stateMachine instanceof Snapshottable && state.getLog().compactor().isCompactable()
       && (currentSnapshot == null || lastApplied > currentSnapshot.version())) {
       pendingSnapshot = state.getSnapshotStore().createSnapshot(lastApplied);
 
@@ -85,7 +85,7 @@ final class ServerStateMachine implements AutoCloseable {
       LOGGER.debug("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.version());
       synchronized (pendingSnapshot) {
         try (SnapshotWriter writer = pendingSnapshot.writer()) {
-          ((SnapshotAware) stateMachine).snapshot(writer);
+          ((Snapshottable) stateMachine).snapshot(writer);
         }
       }
     }
@@ -99,7 +99,7 @@ final class ServerStateMachine implements AutoCloseable {
     // machine index, install the snapshot. This requires that the state machine see all indexes sequentially
     // even for entries that have been compacted from the log.
     Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
-    if (currentSnapshot != null && currentSnapshot.version() > state.getLog().compactor().snapshotIndex() && currentSnapshot.version() == lastApplied && stateMachine instanceof SnapshotAware) {
+    if (currentSnapshot != null && currentSnapshot.version() > state.getLog().compactor().snapshotIndex() && currentSnapshot.version() == lastApplied && stateMachine instanceof Snapshottable) {
 
       // Install the snapshot in the state machine thread. Multiple threads can access snapshots, so we
       // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
@@ -109,7 +109,7 @@ final class ServerStateMachine implements AutoCloseable {
       executor.executor().execute(() -> {
         synchronized (currentSnapshot) {
           try (SnapshotReader reader = currentSnapshot.reader()) {
-            ((SnapshotAware) stateMachine).install(reader);
+            ((Snapshottable) stateMachine).install(reader);
           }
         }
       });

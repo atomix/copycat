@@ -23,7 +23,7 @@ import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface SnapshotAware {
+public interface Snapshottable {
 
   /**
    * Takes a snapshot of the state machine state.
