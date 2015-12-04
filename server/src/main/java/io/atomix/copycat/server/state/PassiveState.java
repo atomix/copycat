@@ -184,7 +184,7 @@ class PassiveState extends AbstractState {
     // Apply commits to the state machine asynchronously so the append request isn't blocked on I/O.
     long commitIndex = request.commitIndex();
     context.setCommitIndex(Math.max(context.getCommitIndex(), commitIndex));
-    context.getThreadContext().execute(() -> context.getStateMachine().apply(commitIndex));
+    context.getThreadContext().execute(() -> context.getStateMachine().applyAll(commitIndex));
 
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
