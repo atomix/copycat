@@ -39,4 +39,21 @@ public interface Sessions extends Iterable<Session> {
    */
   Session session(long sessionId);
 
+  /**
+   * Adds a listener to the sessions.
+   *
+   * @param listener The listener to add.
+   * @return The sessions.
+   * @throws NullPointerException if the session {@code listener} is {@code null}
+   */
+  Sessions addListener(SessionListener listener);
+
+  /**
+   * Removes a listener from the sessions.
+   *
+   * @param listener The listener to remove.
+   * @return The sessions.
+   */
+  Sessions removeListener(SessionListener listener);
+
 }

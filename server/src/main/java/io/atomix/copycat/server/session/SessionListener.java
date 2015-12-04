@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server;
+package io.atomix.copycat.server.session;
 
 import io.atomix.copycat.client.session.Session;
 
@@ -22,7 +22,7 @@ import io.atomix.copycat.client.session.Session;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface SessionAware {
+public interface SessionListener {
 
   /**
    * Called when a session is registered.

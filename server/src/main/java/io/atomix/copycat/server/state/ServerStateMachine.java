@@ -22,9 +22,9 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
-import io.atomix.copycat.server.SessionAware;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -373,8 +373,8 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Register the session and then open it. This ensures that state machines cannot publish events to this
       // session before the client has learned of the session ID.
-      if (stateMachine instanceof SessionAware) {
-        ((SessionAware) stateMachine).register(session);
+      for (SessionListener listener : executor.context().sessions().listeners) {
+        listener.register(session);
       }
       session.open();
 
@@ -504,9 +504,9 @@ final class ServerStateMachine implements AutoCloseable {
 
           // Expire the session and call state machine callbacks.
           session.expire();
-          if (stateMachine instanceof SessionAware) {
-            ((SessionAware) stateMachine).expire(session);
-            ((SessionAware) stateMachine).close(session);
+          for (SessionListener listener : executor.context().sessions().listeners) {
+            listener.expire(session);
+            listener.close(session);
           }
 
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
@@ -535,8 +535,9 @@ final class ServerStateMachine implements AutoCloseable {
 
           // Close the session and call state machine callbacks.
           session.close();
-          if (stateMachine instanceof SessionAware) {
-            ((SessionAware) stateMachine).close(session);
+          for (SessionListener listener : executor.context().sessions().listeners) {
+            listener.unregister(session);
+            listener.close(session);
           }
 
           // Once close callbacks have been completed, ensure that events published during the callbacks
