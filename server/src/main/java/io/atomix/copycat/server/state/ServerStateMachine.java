@@ -32,9 +32,9 @@ import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Raft server state machine.
@@ -51,7 +51,6 @@ final class ServerStateMachine implements AutoCloseable {
   private long lastCompleted;
   private long configuration;
   private Snapshot pendingSnapshot;
-  private long lastSnapshot;
 
   ServerStateMachine(StateMachine stateMachine, ServerState state, ThreadContext executor) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
@@ -66,16 +65,16 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private void init() {
     stateMachine.init(executor);
-    executor.schedule(Duration.ofMinutes(1), Duration.ofMinutes(1), this::snapshot);
   }
 
   /**
    * Takes a snapshot of the state machine state.
    */
-  private void snapshot() {
+  private void takeSnapshot() {
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
     // index has met the snapshot index. Note that this will be executed in the state machine thread.
-    if (pendingSnapshot == null && stateMachine instanceof SnapshotAware) {
+    if (pendingSnapshot == null && stateMachine instanceof SnapshotAware
+      && (state.getSnapshotStore().currentSnapshot() == null || lastApplied > state.getSnapshotStore().currentSnapshot().version())) {
       pendingSnapshot = state.getSnapshotStore().createSnapshot(lastApplied);
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
@@ -85,6 +84,24 @@ final class ServerStateMachine implements AutoCloseable {
           ((SnapshotAware) stateMachine).snapshot(writer);
         }
       }
+    }
+  }
+
+  /**
+   * Completes a snapshot of the state machine state.
+   */
+  private void completeSnapshot() {
+    // If a snapshot is pending to be persisted and the last completed index is greater than the
+    // waiting snapshot version, persist the snapshot and update the last snapshot index.
+    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.version()) {
+      long snapshotIndex = pendingSnapshot.version();
+      synchronized (pendingSnapshot) {
+        pendingSnapshot.complete();
+        pendingSnapshot = null;
+      }
+
+      // Once the snapshot has been completed, snapshot dependent entries can be cleaned from the log.
+      state.getLog().compactor().snapshotIndex(snapshotIndex);
     }
   }
 
@@ -155,17 +172,56 @@ final class ServerStateMachine implements AutoCloseable {
       throw new IllegalStateException("inconsistent session state");
     this.lastCompleted = lastCompleted;
 
-    // If a snapshot is pending to be persisted and the last completed index is greater than the
-    // waiting snapshot version, persist the snapshot and update the last snapshot index.
-    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.version()) {
-      long snapshotIndex = pendingSnapshot.version();
-      synchronized (pendingSnapshot) {
-        pendingSnapshot.complete();
-        pendingSnapshot = null;
-      }
+    // Update the log compaction minor index.
+    state.getLog().compactor().minorIndex(lastCompleted);
 
-      // Once the snapshot has been completed, snapshot dependent entries can be cleaned from the log.
-      state.getLog().compactor().snapshotIndex(snapshotIndex);
+    completeSnapshot();
+  }
+
+  /**
+   * Applies all commits up to the given index.
+   *
+   * @param index The index up to which to apply commits.
+   * @return A completable future to be completed once all commits have been applied.
+   */
+  public CompletableFuture<Void> applyAll(long index) {
+    // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
+    if (index > lastApplied) {
+      long entriesToApply = index - lastApplied;
+
+      CompletableFuture<Void> future = new CompletableFuture<>();
+
+      AtomicInteger counter = new AtomicInteger();
+      for (long i = lastApplied + 1; i <= index; i++) {
+        Entry entry = state.getLog().get(index);
+        if (entry != null) {
+          apply(index, entry, false).whenComplete((result, error) -> {
+            if (counter.incrementAndGet() == entriesToApply) {
+              future.complete(null);
+            }
+            entry.release();
+          });
+        }
+        setLastApplied(i);
+      }
+      return future;
+    }
+    return CompletableFuture.completedFuture(null);
+  }
+
+  /**
+   * Applies the commit at the given index.
+   *
+   * @param index The index to apply.
+   * @return A completable future to be completed once the commit has been applied.
+   */
+  public CompletableFuture<?> apply(long index) {
+    Entry entry = state.getLog().get(index);
+    if (entry != null) {
+      return apply(entry).whenComplete((result, error) -> entry.release());
+    } else {
+      setLastApplied(index);
+      return CompletableFuture.completedFuture(null);
     }
   }
 
@@ -173,20 +229,27 @@ final class ServerStateMachine implements AutoCloseable {
    * Applies an entry to the state machine.
    *
    * @param entry The entry to apply.
-   * @return The result.
+   * @return A completable future to be completed with the result.
    */
-  CompletableFuture<?> apply(Entry entry) {
-    return apply(entry, false);
+  public CompletableFuture<?> apply(Entry entry) {
+    LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
+    return apply(entry.getIndex(), entry, true);
   }
 
   /**
    * Applies an entry to the state machine.
    *
+   * @param index The index to apply.
    * @param entry The entry to apply.
    * @param expectResult Indicates whether this call expects a result.
    * @return The result.
    */
-  CompletableFuture<?> apply(Entry entry, boolean expectResult) {
+  private CompletableFuture<?> apply(long index, Entry entry, boolean expectResult) {
+    // If the entry is null then immediately increment the last applied index. This allows us to ensure
+    // we see indexes increase sequentially and take/apply snapshots at the correct points in time.
+
+    // If a snapshot exists for the prior index, apply the snapshot.
+
     // If a snapshot exists such that the snapshot version is greater than the version of the last snapshot
     // applied to the state machine and is less than the index of the entry being applied, apply the snapshot.
     // This assumes that entries will always be applied to the state machine sequentially, and snapshots are
@@ -234,7 +297,7 @@ final class ServerStateMachine implements AutoCloseable {
     } finally {
       // After the entry has been applied, update the lastApplied index.
       if (apply) {
-        setLastApplied(entry.getIndex());
+        setLastApplied(index);
       }
     }
   }

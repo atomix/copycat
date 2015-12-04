@@ -63,15 +63,6 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
     });
   }
 
-  public void testApplyCommits() throws Throwable {
-    runOnServer(() -> {
-      state.applyCommits(3);
-
-      // TODO more assertions
-      threadAssertEquals(serverState.getCommitIndex(), 3L);
-    });
-  }
-
   public void testDoAppendEntries() throws Throwable {
     // TODO
   }

@@ -111,7 +111,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          applyEntries(resultIndex);
+          context.getStateMachine().apply(resultIndex);
           future.complete(null);
         } else {
           context.setLeader(0);
@@ -120,30 +120,6 @@ final class LeaderState extends ActiveState {
       }
     });
     return future;
-  }
-
-  /**
-   * Applies all unapplied entries to the log.
-   */
-  private void applyEntries(long index) {
-    if (!context.getLog().isEmpty()) {
-      int count = 0;
-      for (long lastApplied = Math.max(context.getStateMachine().getLastApplied(), context.getLog().firstIndex()); lastApplied <= index; lastApplied++) {
-        Entry entry = context.getLog().get(lastApplied);
-        if (entry != null) {
-          context.getStateMachine().apply(entry).whenComplete((result, error) -> {
-            if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getCluster().getMember().serverAddress(), error.getMessage());
-            }
-            entry.release();
-          });
-        }
-        count++;
-      }
-
-      LOGGER.debug("{} - Applied {} entries to log", context.getCluster().getMember().serverAddress(), count);
-      context.getLog().compactor().minorIndex(context.getStateMachine().getLastCompleted());
-    }
   }
 
   /**
@@ -204,9 +180,7 @@ final class LeaderState extends ActiveState {
         // Commit the unregister entry and apply it to the state machine.
         appender.appendEntries(index).whenComplete((result, error) -> {
           if (isOpen()) {
-            UnregisterEntry entry = context.getLog().get(index);
-            LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-            context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> entry.release());
+            context.getStateMachine().apply(index);
           }
         });
 
@@ -460,33 +434,29 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          CommandEntry entry = context.getLog().get(index);
-
-          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-          context.getStateMachine().apply(entry, true).whenComplete((result, error) -> {
+          context.getStateMachine().apply(index).whenComplete((result, error) -> {
             if (isOpen()) {
               if (error == null) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.OK)
-                  .withVersion(entry.getIndex())
+                  .withVersion(commitIndex)
                   .withResult(result)
                   .build()));
               } else if (error instanceof RaftException) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withVersion(entry.getIndex())
+                  .withVersion(commitIndex)
                   .withError(((RaftException) error).getType())
                   .build()));
               } else {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withVersion(entry.getIndex())
+                  .withVersion(commitIndex)
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
             }
-            entry.release();
           });
         } else {
           future.complete(logResponse(CommandResponse.builder()
@@ -588,7 +558,7 @@ final class LeaderState extends ActiveState {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // versions will be the last applied index.
     final long version = context.getStateMachine().getLastApplied();
-    applyEntry(entry).whenComplete((result, error) -> {
+    context.getStateMachine().apply(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
           future.complete(logResponse(QueryResponse.builder()
@@ -637,10 +607,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          RegisterEntry entry = context.getLog().get(index);
-
-          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-          context.getStateMachine().apply(entry, true).whenComplete((sessionId, sessionError) -> {
+          context.getStateMachine().apply(index).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(RegisterResponse.builder()
@@ -665,7 +632,6 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-            entry.release();
           });
         } else {
           future.complete(logResponse(RegisterResponse.builder()
@@ -718,8 +684,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          ConnectEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenComplete((connectResult, connectError) -> {
+          context.getStateMachine().apply(index).whenComplete((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
                 future.complete(logResponse(AcceptResponse.builder()
@@ -738,7 +703,6 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-            entry.release();
           });
         } else {
           future.complete(logResponse(AcceptResponse.builder()
@@ -774,8 +738,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          KeepAliveEntry entry = context.getLog().get(index);
-          applyEntry(entry).whenCompleteAsync((sessionResult, sessionError) -> {
+          context.getStateMachine().apply(index).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(KeepAliveResponse.builder()
@@ -800,7 +763,6 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-            entry.release();
           }, context.getThreadContext().executor());
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
@@ -836,10 +798,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          UnregisterEntry entry = context.getLog().get(index);
-
-          LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-          context.getStateMachine().apply(entry, true).whenComplete((unregisterResult, unregisterError) -> {
+          context.getStateMachine().apply(index).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
                 future.complete(logResponse(UnregisterResponse.builder()
@@ -858,7 +817,6 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-            entry.release();
           });
         } else {
           future.complete(logResponse(UnregisterResponse.builder()

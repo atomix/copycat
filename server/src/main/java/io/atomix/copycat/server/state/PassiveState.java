@@ -181,10 +181,10 @@ class PassiveState extends AbstractState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
+    // Apply commits to the state machine asynchronously so the append request isn't blocked on I/O.
     long commitIndex = request.commitIndex();
-    context.getThreadContext().execute(() -> applyCommits(commitIndex)).thenRun(() -> {
-      context.getLog().compactor().minorIndex(context.getStateMachine().getLastCompleted());
-    });
+    context.setCommitIndex(Math.max(context.getCommitIndex(), commitIndex));
+    context.getThreadContext().execute(() -> context.getStateMachine().apply(commitIndex));
 
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
@@ -192,76 +192,6 @@ class PassiveState extends AbstractState {
       .withSucceeded(true)
       .withLogIndex(context.getLog().lastIndex())
       .build();
-  }
-
-  /**
-   * Applies commits to the local state machine.
-   */
-  protected CompletableFuture<Void> applyCommits(long commitIndex) {
-    // Set the commit index, ensuring that the index cannot be decreased.
-    context.setCommitIndex(Math.max(context.getCommitIndex(), commitIndex));
-
-    // The entries to be applied to the state machine are the difference between min(lastIndex, commitIndex) and lastApplied.
-    long lastIndex = context.getLog().lastIndex();
-    long lastApplied = context.getStateMachine().getLastApplied();
-
-    long effectiveIndex = Math.min(lastIndex, context.getCommitIndex());
-
-    // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
-    if (effectiveIndex > lastApplied) {
-      long entriesToApply = effectiveIndex - lastApplied;
-      LOGGER.debug("{} - Applying {} commits", context.getCluster().getMember().serverAddress(), entriesToApply);
-
-      CompletableFuture<Void> future = new CompletableFuture<>();
-
-      // Rather than composing all futures into a single future, use a counter to count completions in order to preserve memory.
-      AtomicInteger counter = getCounter();
-
-      for (long i = lastApplied + 1; i <= effectiveIndex; i++) {
-        Entry entry = context.getLog().get(i);
-        if (entry != null) {
-          applyEntry(entry).whenComplete((result, error) -> {
-            if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getCluster().getMember().serverAddress(), error.getMessage());
-            }
-
-            if (counter.incrementAndGet() == entriesToApply) {
-              future.complete(null);
-              recycleCounter(counter);
-            }
-            entry.release();
-          });
-        }
-      }
-      return future;
-    }
-    return CompletableFuture.completedFuture(null);
-  }
-
-  /**
-   * Gets a counter from the counter pool.
-   */
-  private AtomicInteger getCounter() {
-    AtomicInteger counter = counterPool.poll();
-    if (counter == null)
-      counter = new AtomicInteger();
-    counter.set(0);
-    return counter;
-  }
-
-  /**
-   * Adds a used counter to the counter pool.
-   */
-  private void recycleCounter(AtomicInteger counter) {
-    counterPool.add(counter);
-  }
-
-  /**
-   * Applies an entry to the state machine.
-   */
-  protected CompletableFuture<?> applyEntry(Entry entry) {
-    LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
-    return context.getStateMachine().apply(entry);
   }
 
   @Override
