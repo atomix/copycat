@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.catalyst.buffer.PooledDirectAllocator;
+import io.atomix.catalyst.buffer.PooledHeapAllocator;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -700,7 +700,7 @@ public class CopycatServer implements Managed<CopycatServer> {
 
       // If no serializer instance was provided, create one.
       if (serializer == null) {
-        serializer = new Serializer(new PooledDirectAllocator());
+        serializer = new Serializer(new PooledHeapAllocator());
       }
 
       // Resolve serializer serializable types with the ServiceLoaderTypeResolver.
