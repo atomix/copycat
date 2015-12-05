@@ -415,8 +415,19 @@ public class ClientSession implements Session, Managed<Session> {
     if (connectFuture == null) {
       // If there's no existing connect future, create a new one.
       LOGGER.debug("Connecting: {}", member);
+
+      boolean[] completedAlready = new boolean[] { false };
+
       connectFuture = client.connect(member).thenCompose(this::setupConnection).whenComplete((connection, error) -> {
+        // If the "connect" call is finished quickly, we might execute this piece of code before assigning the result of
+        // "whenComplete" to the connectFuture (line above).
+        // In that case we would first execute "connectFuture=null" and then after that 
+        // "connectFuture = client.connect(..." -> we'd have a connectFuture although we have connected already, all
+        // future calls to this #request(..) method will end up not opening new connections.
+        // We therefore maintain the completedAlready[] boolean which will be true in case the connection finished in
+        // one swoop and we set connectFuture = null in that case again (see below).
         connectFuture = null;
+        completedAlready[0] = true;
         if (!checkOpen || isOpen()) {
           if (error == null) {
             request(request, connection, future, checkOpen, recordFailures);
@@ -428,6 +439,8 @@ public class ClientSession implements Session, Managed<Session> {
           future.completeExceptionally(new IllegalStateException("session not open"));
         }
       });
+      if (completedAlready[0])
+        connectFuture = null;
     } else {
       // We don't want concurrent requests to attempt to connect to the same server at the same time, so
       // if the connection is already being attempted, piggyback on the existing connect future.
