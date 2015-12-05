@@ -166,7 +166,7 @@ class MemberState {
    * @return The member state.
    */
   MemberState setMatchIndex(long matchIndex) {
-    this.matchIndex = Assert.argNot(matchIndex, matchIndex < this.matchIndex, "matchIndex cannot be decreased");
+    this.matchIndex = Assert.argNot(matchIndex, matchIndex < 0, "matchIndex cannot be less than 0");
     return this;
   }
 
@@ -186,7 +186,7 @@ class MemberState {
    * @return The member state.
    */
   MemberState setNextIndex(long nextIndex) {
-    this.nextIndex = Assert.argNot(nextIndex, nextIndex <= matchIndex, "nextIndex cannot be less than or equal to matchIndex");
+    this.nextIndex = Assert.argNot(nextIndex, nextIndex <= 0, "nextIndex cannot be less than or equal to 0");
     return this;
   }
 
