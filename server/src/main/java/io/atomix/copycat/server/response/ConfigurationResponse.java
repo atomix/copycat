@@ -27,7 +27,14 @@ import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Protocol configuration response.
+ * Server configuration response.
+ * <p>
+ * Configuration responses are sent in response to configuration change requests once a configuration
+ * change is completed or fails. Note that configuration changes can frequently fail due to the limitation
+ * of commitment of configuration changes. No two configuration changes may take place simultaneously. If a
+ * configuration change is failed due to a conflict, the response status will be
+ * {@link io.atomix.copycat.client.response.Response.Status#ERROR} but the response {@link #error()} will
+ * be {@code null}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

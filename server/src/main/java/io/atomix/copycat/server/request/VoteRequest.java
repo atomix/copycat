@@ -25,7 +25,11 @@ import io.atomix.copycat.client.request.AbstractRequest;
 import java.util.Objects;
 
 /**
- * Protocol vote request.
+ * Server vote request.
+ * <p>
+ * Vote requests are sent by candidate servers during an election to determine whether they should
+ * become the leader for a cluster. Vote requests contain the necessary information for followers to
+ * determine whether a candidate should receive their vote based on log and other information.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

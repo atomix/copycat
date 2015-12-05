@@ -26,7 +26,14 @@ import io.atomix.copycat.client.request.AbstractRequest;
 import java.util.Objects;
 
 /**
- * Snapshot installation request.
+ * Server snapshot installation request.
+ * <p>
+ * Snapshot installation requests are sent by the leader to a follower when the follower indicates
+ * that its log is further behind than the last snapshot taken by the leader. Snapshots are sent
+ * in chunks, with each chunk being sent in a separate install request. As requests are received by
+ * the follower, the snapshot is reconstructed based on the provided {@link #offset()} and other
+ * metadata. The last install request will be sent with {@link #complete()} being {@code true} to
+ * indicate that all chunks of the snapshot have been sent.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

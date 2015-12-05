@@ -27,7 +27,11 @@ import io.atomix.copycat.client.response.Response;
 import java.util.Objects;
 
 /**
- * Protocol vote response.
+ * Server vote response.
+ * <p>
+ * Vote responses are sent by active servers in response to vote requests by candidate to indicate
+ * whether the responding server voted for the requesting candidate. This is indicated by the
+ * {@link #voted()} field of the response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

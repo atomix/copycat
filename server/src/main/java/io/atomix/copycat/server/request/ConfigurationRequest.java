@@ -25,7 +25,11 @@ import io.atomix.copycat.server.state.Member;
 import java.util.Objects;
 
 /**
- * Protocol configuration request.
+ * Configuration change request.
+ * <p>
+ * Configuration change requests are the basis for members joining and leaving the cluster.
+ * When a member wants to join or leave the cluster, it must submit a configuration change
+ * request to the leader where the change will be logged and replicated.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

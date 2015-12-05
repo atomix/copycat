@@ -26,6 +26,10 @@ import java.util.Objects;
 
 /**
  * Snapshot installation response.
+ * <p>
+ * Install responses are sent once a snapshot installation request has been received and processed.
+ * Install responses provide no additional metadata aside from indicating whether or not the request
+ * was successful.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

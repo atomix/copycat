@@ -18,7 +18,11 @@ package io.atomix.copycat.server.request;
 import io.atomix.catalyst.serializer.SerializeWith;
 
 /**
- * Protocol leave request.
+ * Server leave configuration request.
+ * <p>
+ * The leave request is the mechanism by which servers remove themselves from a cluster. When a server
+ * wants to leave a cluster, it must submit a leave request to the leader. The leader will attempt to commit
+ * the configuration change and, if successful, respond to the join request with the updated configuration.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

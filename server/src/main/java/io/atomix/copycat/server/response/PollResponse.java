@@ -27,7 +27,11 @@ import io.atomix.copycat.client.response.Response;
 import java.util.Objects;
 
 /**
- * Protocol poll response.
+ * Server poll response.
+ * <p>
+ * Poll responses are sent by active servers in response to poll requests by followers to indicate
+ * whether the responding server would vote for the requesting server if it were a candidate. This is
+ * indicated by the {@link #accepted()} field of the response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
