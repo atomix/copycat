@@ -130,6 +130,9 @@ final class LeaderAppender extends AbstractAppender {
     if (index == 0)
       return appendEntries();
 
+    if (index <= context.getCommitIndex())
+      return CompletableFuture.completedFuture(index);
+
     // If there are no other servers in the cluster, immediately commit the index.
     if (context.getCluster().getRemoteMemberStates().isEmpty()) {
       context.setCommitIndex(index);
