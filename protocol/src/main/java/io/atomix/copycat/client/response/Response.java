@@ -19,7 +19,11 @@ import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.copycat.client.error.RaftError;
 
 /**
- * Protocol response.
+ * Base interface for responses.
+ * <p>
+ * Each response has a non-null {@link Response.Status} of either {@link Response.Status#OK} or
+ * {@link Response.Status#ERROR}. Responses where {@link #status()} is {@link Response.Status#ERROR}
+ * may provide an optional {@link #error()} code.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

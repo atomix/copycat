@@ -27,7 +27,13 @@ import java.util.Collection;
 import java.util.Objects;
 
 /**
- * Protocol register client response.
+ * Session register response.
+ * <p>
+ * Session register responses are sent in response to {@link io.atomix.copycat.client.request.RegisterRequest}s
+ * sent by a client. Upon the successful registration of a session, the register response will contain the
+ * registered {@link #session()} identifier, the session {@link #timeout()}, and the current cluster
+ * {@link #leader()} and {@link #members()} to allow the client to make intelligent decisions about
+ * connecting to and communicating with the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

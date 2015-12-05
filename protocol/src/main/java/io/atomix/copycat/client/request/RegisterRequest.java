@@ -25,7 +25,13 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Protocol register client request.
+ * Register session request.
+ * <p>
+ * Clients submit register requests to a Copycat cluster to create a new session. Register requests
+ * can be submitted to any server in the cluster and will be proxied to the leader. The session will
+ * be associated with the provided {@link #client()} ID such that servers can associate client connections
+ * with the session. Once the registration is complete, the client must send {@link KeepAliveRequest}s to
+ * maintain its session with the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

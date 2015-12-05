@@ -18,7 +18,7 @@ package io.atomix.copycat.client.request;
 import io.atomix.catalyst.serializer.CatalystSerializable;
 
 /**
- * Protocol request.
+ * Base interface for requests.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

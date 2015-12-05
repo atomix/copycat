@@ -24,7 +24,7 @@ import io.atomix.copycat.client.error.RaftError;
 import java.util.Objects;
 
 /**
- * Abstract response implementation.
+ * Base response for all client responses.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

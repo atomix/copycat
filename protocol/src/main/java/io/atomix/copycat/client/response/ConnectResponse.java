@@ -24,7 +24,11 @@ import io.atomix.copycat.client.error.RaftError;
 import java.util.Objects;
 
 /**
- * Protocol connect client response.
+ * Connect client response.
+ * <p>
+ * Connect responses are sent in response to a client establishing a new connection with a server.
+ * Connect responses do not provide any additional metadata aside from whether or not the request
+ * succeeded.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

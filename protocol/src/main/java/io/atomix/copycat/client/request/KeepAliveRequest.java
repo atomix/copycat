@@ -24,7 +24,15 @@ import io.atomix.catalyst.util.Assert;
 import java.util.Objects;
 
 /**
- * Protocol keep alive request.
+ * Session keep alive request.
+ * <p>
+ * Keep alive requests are sent by clients to servers to maintain a session registered via
+ * a {@link RegisterRequest}. Once a session has been registered, clients are responsible for sending
+ * keep alive requests to the cluster at a rate less than the provided {@link io.atomix.copycat.client.response.RegisterResponse#timeout()}.
+ * Keep alive requests also server to acknowledge the receipt of responses and events by the client.
+ * The {@link #commandSequence()} number indicates the highest command sequence number for which the client
+ * has received a response, and the {@link #eventVersion()} number indicates the highest index for which the
+ * client has received an event in proper sequence.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

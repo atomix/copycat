@@ -22,7 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import java.util.Objects;
 
 /**
- * Abstract request implementation.
+ * Base request for all client requests.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

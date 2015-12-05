@@ -24,11 +24,14 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -1065,7 +1068,7 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Test state machine.
    */
-  public static class TestStateMachine extends StateMachine implements SessionListener {
+  public static class TestStateMachine extends StateMachine implements SessionListener, Snapshottable {
     private Commit<TestExpire> expire;
 
     @Override
@@ -1087,6 +1090,16 @@ public class ClusterTest extends ConcurrentTestCase {
     @Override
     public void close(Session session) {
 
+    }
+
+    @Override
+    public void snapshot(SnapshotWriter writer) {
+      writer.writeLong(10);
+    }
+
+    @Override
+    public void install(SnapshotReader reader) {
+      assert reader.readLong() == 10;
     }
 
     public String command(Commit<TestCommand> commit) {

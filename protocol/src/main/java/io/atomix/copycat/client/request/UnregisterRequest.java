@@ -20,7 +20,11 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import java.util.Objects;
 
 /**
- * Protocol unregister request.
+ * Session unregister request.
+ * <p>
+ * The unregister request is sent by a client with an open session to the cluster to explicitly
+ * unregister its session. Note that if a client does not send an unregister request, its session will
+ * eventually expire. The unregister request simply provides a more orderly method for closing client sessions.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
