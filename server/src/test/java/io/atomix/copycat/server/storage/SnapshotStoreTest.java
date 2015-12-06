@@ -59,7 +59,7 @@ public class SnapshotStoreTest {
   public void testWriteSnapshotChunks() {
     SnapshotStore store = createSnapshotStore();
     Snapshot snapshot = store.createSnapshot(1);
-    assertEquals(snapshot.version(), 1);
+    assertEquals(snapshot.index(), 1);
     assertNotEquals(snapshot.timestamp(), 0);
     assertNull(store.currentSnapshot());
 
@@ -82,7 +82,7 @@ public class SnapshotStoreTest {
     assertNull(store.currentSnapshot());
     snapshot.complete();
     assertNotNull(store.currentSnapshot());
-    assertEquals(store.currentSnapshot().version(), 1);
+    assertEquals(store.currentSnapshot().index(), 1);
 
     try (SnapshotReader reader = store.currentSnapshot().reader()) {
       assertEquals(reader.readLong(), 10);
@@ -107,7 +107,7 @@ public class SnapshotStoreTest {
 
     store = createSnapshotStore();
     assertNotNull(store.currentSnapshot());
-    assertEquals(store.currentSnapshot().version(), 1);
+    assertEquals(store.currentSnapshot().index(), 1);
   }
 
   @BeforeMethod

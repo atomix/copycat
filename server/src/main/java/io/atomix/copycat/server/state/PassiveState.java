@@ -215,7 +215,7 @@ class PassiveState extends AbstractState {
     // where snapshots must be sent since entries can still legitimately exist prior to the snapshot,
     // and so snapshots aren't simply sent at the beginning of the follower's log, but rather the
     // leader dictates when a snapshot needs to be sent.
-    if (pendingSnapshot != null && request.version() != pendingSnapshot.version()) {
+    if (pendingSnapshot != null && request.index() != pendingSnapshot.index()) {
       pendingSnapshot.close();
       pendingSnapshot.delete();
       pendingSnapshot = null;
@@ -232,7 +232,7 @@ class PassiveState extends AbstractState {
           .build()));
       }
 
-      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.version());
+      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.index());
       nextSnapshotOffset = 0;
     }
 
@@ -416,7 +416,7 @@ class PassiveState extends AbstractState {
     CopycatServer.Type previousType = context.getCluster().getMember().type();
 
     // Configure the cluster membership.
-    context.getCluster().configure(request.version(), request.members());
+    context.getCluster().configure(request.index(), request.members());
 
     // If the local member type changed, transition the state as appropriate.
     // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.

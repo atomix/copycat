@@ -55,7 +55,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
 
   private long term;
   private int leader;
-  protected long version;
+  protected long index;
   protected Collection<Member> members;
 
   /**
@@ -77,12 +77,12 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
   }
 
   /**
-   * Returns the configuration version.
+   * Returns the configuration index.
    *
-   * @return The configuration version.
+   * @return The configuration index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -96,7 +96,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term).writeInt(leader).writeLong(version);
+    buffer.writeLong(term).writeInt(leader).writeLong(index);
     serializer.writeObject(members, buffer);
   }
 
@@ -104,13 +104,13 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     term = buffer.readLong();
     leader = buffer.readInt();
-    version = buffer.readLong();
+    index = buffer.readLong();
     members = serializer.readObject(buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, version, members);
+    return Objects.hash(getClass(), term, leader, index, members);
   }
 
   @Override
@@ -119,7 +119,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
       ConfigureRequest request = (ConfigureRequest) object;
       return request.term == term
         && request.leader == leader
-        && request.version == version
+        && request.index == index
         && request.members.equals(members);
     }
     return false;
@@ -127,7 +127,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, version=%d, members=%s]", getClass().getSimpleName(), term, leader, version, members);
+    return String.format("%s[term=%d, leader=%d, index=%d, members=%s]", getClass().getSimpleName(), term, leader, index, members);
   }
 
   /**
@@ -163,13 +163,13 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
     }
 
     /**
-     * Sets the request version.
+     * Sets the request index.
      *
-     * @param version The request version.
+     * @param index The request index.
      * @return The request builder.
      */
-    public Builder withVersion(long version) {
-      request.version = Assert.argNot(version, version < 0, "version must be positive");
+    public Builder withIndex(long index) {
+      request.index = Assert.argNot(index, index < 0, "index must be positive");
       return this;
     }
 
@@ -192,7 +192,7 @@ public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
     public ConfigureRequest build() {
       super.build();
       Assert.stateNot(request.term <= 0, "term must be positive");
-      Assert.argNot(request.version < 0, "version must be positive");
+      Assert.argNot(request.index < 0, "index must be positive");
       Assert.notNull(request.members, "members");
       return request;
     }

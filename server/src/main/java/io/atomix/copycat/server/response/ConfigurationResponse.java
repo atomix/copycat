@@ -32,16 +32,16 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends AbstractResponse<T> {
-  protected long version;
+  protected long index;
   protected Collection<Member> members;
 
   /**
-   * Returns the response version.
+   * Returns the response index.
    *
-   * @return The response version.
+   * @return The response index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -58,7 +58,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
-      version = buffer.readLong();
+      index = buffer.readLong();
       members = serializer.readObject(buffer);
     } else {
       int errorCode = buffer.readByte();
@@ -72,7 +72,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
-      buffer.writeLong(version);
+      buffer.writeLong(index);
       serializer.writeObject(members, buffer);
     } else {
       buffer.writeByte(error != null ? error.id() : 0);
@@ -81,7 +81,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, version, members);
+    return Objects.hash(getClass(), status, index, members);
   }
 
   @Override
@@ -89,7 +89,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     if (getClass().isAssignableFrom(object.getClass())) {
       ConfigurationResponse response = (ConfigurationResponse) object;
       return response.status == status
-        && response.version == version
+        && response.index == index
         && response.members.equals(members);
     }
     return false;
@@ -97,7 +97,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, members=%s]", getClass().getSimpleName(), status, version, members);
+    return String.format("%s[status=%s, index=%d, members=%s]", getClass().getSimpleName(), status, index, members);
   }
 
   /**
@@ -109,15 +109,15 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
     }
 
     /**
-     * Sets the response version.
+     * Sets the response index.
      *
-     * @param version The response version.
+     * @param index The response index.
      * @return The response builder.
-     * @throws IllegalArgumentException if {@code version} is negative
+     * @throws IllegalArgumentException if {@code index} is negative
      */
     @SuppressWarnings("unchecked")
-    public T withVersion(long version) {
-      response.version = Assert.argNot(version, version < 0, "version cannot be negative");
+    public T withIndex(long index) {
+      response.index = Assert.argNot(index, index < 0, "index cannot be negative");
       return (T) this;
     }
 

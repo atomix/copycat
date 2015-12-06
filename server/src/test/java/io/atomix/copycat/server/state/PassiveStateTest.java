@@ -55,7 +55,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
     runOnServer(() -> {
       KeepAliveRequest request = KeepAliveRequest.builder()
           .withCommandSequence(1)
-          .withEventVersion(1)
+          .withEventIndex(1)
           .withSession(1)
           .build();
       KeepAliveResponse response = state.keepAlive(request).get();
@@ -385,7 +385,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testPublish() throws Throwable {
     runOnServer(() -> {
-      PublishRequest request = PublishRequest.builder().withSession(1).withEventVersion(1).build();
+      PublishRequest request = PublishRequest.builder().withSession(1).withEventIndex(1).build();
       PublishResponse response = state.publish(request).get();
       assertIllegalMemberStateError(response);
     });

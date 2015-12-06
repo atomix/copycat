@@ -87,7 +87,7 @@ public class Segment implements AutoCloseable {
    * Returns the {@link SegmentDescriptor} for the segment.
    * <p>
    * The segment descriptor is stored in {@link SegmentDescriptor#BYTES} bytes at the head of the segment. The descriptor
-   * defines essential information about the segment, including its position in the complete {@link Log} and its {@code version}.
+   * defines essential information about the segment, including its position in the complete {@link Log} and its {@code index}.
    *
    * @return The segment descriptor stored at the head of the segment.
    */

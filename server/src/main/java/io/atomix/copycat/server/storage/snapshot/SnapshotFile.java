@@ -64,10 +64,10 @@ final class SnapshotFile {
   }
 
   /**
-   * Creates a snapshot file for the given directory, log name, and snapshot version.
+   * Creates a snapshot file for the given directory, log name, and snapshot index.
    */
-  static File createSnapshotFile(String name, File directory, long version, long timestamp) {
-    return new File(directory, String.format("%s-%d-%s.snapshot", Assert.notNull(name, "name"), version, TIMESTAMP_FORMAT.format(new Date(timestamp))));
+  static File createSnapshotFile(String name, File directory, long index, long timestamp) {
+    return new File(directory, String.format("%s-%d-%s.snapshot", Assert.notNull(name, "name"), index, TIMESTAMP_FORMAT.format(new Date(timestamp))));
   }
 
   /**
@@ -87,11 +87,11 @@ final class SnapshotFile {
   }
 
   /**
-   * Returns the snapshot version.
+   * Returns the snapshot index.
    *
-   * @return The snapshot version.
+   * @return The snapshot index.
    */
-  public long version() {
+  public long index() {
     return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR, file.getName().lastIndexOf(PART_SEPARATOR) - 1) + 1, file.getName().lastIndexOf(PART_SEPARATOR)));
   }
 

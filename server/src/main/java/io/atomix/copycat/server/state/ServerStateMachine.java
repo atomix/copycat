@@ -74,15 +74,15 @@ final class ServerStateMachine implements AutoCloseable {
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
     // index has met the snapshot index. Note that this will be executed in the state machine thread.
     // Snapshots are only taken of the state machine when the log becomes compactable. If the log can
-    // be compacted, the lastApplied index must be greater than the last snapshot version.
+    // be compacted, the lastApplied index must be greater than the last snapshot index.
     Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
     if (pendingSnapshot == null && stateMachine instanceof Snapshottable && state.getLog().compactor().isCompactable()
-      && (currentSnapshot == null || lastApplied > currentSnapshot.version())) {
+      && (currentSnapshot == null || lastApplied > currentSnapshot.index())) {
       pendingSnapshot = state.getSnapshotStore().createSnapshot(lastApplied);
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
       // of a snapshot is predicated on session events being received by clients up to the snapshot index.
-      LOGGER.debug("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.version());
+      LOGGER.debug("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.index());
       synchronized (pendingSnapshot) {
         try (SnapshotWriter writer = pendingSnapshot.writer()) {
           ((Snapshottable) stateMachine).snapshot(writer);
@@ -95,17 +95,17 @@ final class ServerStateMachine implements AutoCloseable {
    * Installs a snapshot of the state machine state if necessary.
    */
   private void installSnapshot() {
-    // If the last stored snapshot has not yet been installed and its version matches the last applied state
+    // If the last stored snapshot has not yet been installed and its index matches the last applied state
     // machine index, install the snapshot. This requires that the state machine see all indexes sequentially
     // even for entries that have been compacted from the log.
     Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
-    if (currentSnapshot != null && currentSnapshot.version() > state.getLog().compactor().snapshotIndex() && currentSnapshot.version() == lastApplied && stateMachine instanceof Snapshottable) {
+    if (currentSnapshot != null && currentSnapshot.index() > state.getLog().compactor().snapshotIndex() && currentSnapshot.index() == lastApplied && stateMachine instanceof Snapshottable) {
 
       // Install the snapshot in the state machine thread. Multiple threads can access snapshots, so we
       // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
       // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
       // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
-      LOGGER.debug("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.version());
+      LOGGER.debug("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.index());
       executor.executor().execute(() -> {
         synchronized (currentSnapshot) {
           try (SnapshotReader reader = currentSnapshot.reader()) {
@@ -115,7 +115,7 @@ final class ServerStateMachine implements AutoCloseable {
       });
 
       // Once a snapshot has been applied, snapshot dependent entries can be cleaned from the log.
-      state.getLog().compactor().snapshotIndex(currentSnapshot.version());
+      state.getLog().compactor().snapshotIndex(currentSnapshot.index());
     }
   }
 
@@ -124,9 +124,9 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private void completeSnapshot() {
     // If a snapshot is pending to be persisted and the last completed index is greater than the
-    // waiting snapshot version, persist the snapshot and update the last snapshot index.
-    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.version()) {
-      long snapshotIndex = pendingSnapshot.version();
+    // waiting snapshot index, persist the snapshot and update the last snapshot index.
+    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.index()) {
+      long snapshotIndex = pendingSnapshot.index();
       LOGGER.debug("{} - Completing snapshot {}", state.getCluster().getMember().serverAddress(), snapshotIndex);
       synchronized (pendingSnapshot) {
         pendingSnapshot.complete();
@@ -174,7 +174,7 @@ final class ServerStateMachine implements AutoCloseable {
       // application of specific indexes to the state machine. Setting the session index may cause query
       // callbacks to be called and queries to be evaluated.
       for (ServerSession session : executor.context().sessions().sessions.values()) {
-        session.setVersion(lastApplied);
+        session.setLastApplied(lastApplied);
       }
 
       // Take a state machine snapshot if necessary.
@@ -201,7 +201,7 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Updates the last completed event version based on a commit at the given index.
+   * Updates the last completed event index based on a commit at the given index.
    */
   private void updateLastCompleted(long index) {
     // Calculate the last completed index as the lowest index acknowledged by all clients.
@@ -436,13 +436,13 @@ final class ServerStateMachine implements AutoCloseable {
       // Update the session's timestamp with the current state machine time.
       session.setTimestamp(timestamp);
 
-      // Store the command/event sequence and event version instead of acquiring a reference to the entry.
+      // Store the command/event sequence and event index instead of acquiring a reference to the entry.
       long commandSequence = entry.getCommandSequence();
-      long eventVersion = entry.getEventVersion();
+      long eventIndex = entry.getEventIndex();
 
       // The keep-alive entry also serves to clear cached command responses and events from memory.
       // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
-      executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventVersion));
+      executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventIndex));
 
       // Since the index of acked events in the session changed, update the highest index completed for all
       // sessions to allow log compaction to progress. This is only done during session operations and not
@@ -591,7 +591,7 @@ final class ServerStateMachine implements AutoCloseable {
     // If the command's sequence number is less than the next session sequence number then that indicates that
     // we've received a command that was previously applied to the state machine. Ensure linearizability by
     // returning the cached response instead of applying it to the user defined state machine.
-    else if (entry.getSequence() > 0 && entry.getSequence() < session.nextSequence()) {
+    else if (entry.getSequence() > 0 && entry.getSequence() < session.nextCommandSequence()) {
       // Ensure the response check is executed in the state machine thread in order to ensure the
       // command was applied, otherwise there will be a race condition and concurrent modification issues.
       ThreadContext context = ThreadContext.currentContextOrThrow();
@@ -713,8 +713,8 @@ final class ServerStateMachine implements AutoCloseable {
     });
 
     // Update the session timestamp and command sequence number. This is done in the caller's thread since all
-    // timestamp/version/sequence checks are done in this thread prior to executing operations on the state machine thread.
-    session.setTimestamp(timestamp).setSequence(sequence);
+    // timestamp/index/sequence checks are done in this thread prior to executing operations on the state machine thread.
+    session.setTimestamp(timestamp).setCommandSequence(sequence);
 
     return future;
   }
@@ -734,26 +734,26 @@ final class ServerStateMachine implements AutoCloseable {
       LOGGER.warn("Unknown session: " + entry.getSession());
       return Futures.exceptionalFuture(new UnknownSessionException("unknown session " + entry.getSession()));
     }
-    // Query execution is determined by the sequence and version supplied for the query. All queries are queued until the state
-    // machine advances at least until the provided sequence and version.
+    // Query execution is determined by the sequence and index supplied for the query. All queries are queued until the state
+    // machine advances at least until the provided sequence and index.
     // If the query sequence number is greater than the current sequence number for the session, queue the query.
-    else if (entry.getSequence() > session.getSequence()) {
+    else if (entry.getSequence() > session.getCommandSequence()) {
       CompletableFuture<Object> future = new CompletableFuture<>();
 
       // Get the caller's context.
       ThreadContext context = ThreadContext.currentContextOrThrow();
 
-      // Store the entry version and sequence instead of acquiring a reference to the entry.
-      long version = entry.getVersion();
+      // Store the entry index and sequence instead of acquiring a reference to the entry.
+      long index = entry.getIndex();
       long sequence = entry.getSequence();
 
-      // Once the query has met its sequence requirement, check whether it has also met its version requirement. If the version
-      // requirement is not yet met, queue the query for the state machine to catch up to the required version.
+      // Once the query has met its sequence requirement, check whether it has also met its index requirement. If the index
+      // requirement is not yet met, queue the query for the state machine to catch up to the required index.
       ServerCommit commit = commits.acquire(entry, executor.timestamp());
       session.registerSequenceQuery(sequence, () -> {
         context.checkThread();
-        if (version > session.getVersion()) {
-          session.registerVersionQuery(version, () -> {
+        if (index > session.getLastApplied()) {
+          session.registerIndexQuery(index, () -> {
             context.checkThread();
             executeQuery(commit, future, context);
           });
@@ -763,14 +763,14 @@ final class ServerStateMachine implements AutoCloseable {
       });
       return future;
     }
-    // If the query version number is greater than the current version number for the session, queue the query.
-    else if (entry.getVersion() > session.getVersion()) {
+    // If the query index is greater than the last applied index for the session, queue the query.
+    else if (entry.getIndex() > session.getLastApplied()) {
       CompletableFuture<Object> future = new CompletableFuture<>();
 
       ThreadContext context = ThreadContext.currentContextOrThrow();
 
       ServerCommit commit = commits.acquire(entry, executor.timestamp());
-      session.registerVersionQuery(entry.getVersion(), () -> {
+      session.registerIndexQuery(entry.getIndex(), () -> {
         context.checkThread();
         executeQuery(commit, future, context);
       });

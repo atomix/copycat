@@ -54,7 +54,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
 
   private long term;
   private int leader;
-  protected long version;
+  protected long index;
   protected int offset;
   protected Buffer data;
   protected boolean complete;
@@ -78,12 +78,12 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
   }
 
   /**
-   * Returns the snapshot version.
+   * Returns the snapshot index.
    *
-   * @return The snapshot version.
+   * @return The snapshot index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -117,7 +117,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeLong(term)
       .writeInt(leader)
-      .writeLong(version)
+      .writeLong(index)
       .writeInt(offset)
       .writeBoolean(complete);
     serializer.writeObject(data, buffer);
@@ -127,7 +127,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     term = buffer.readLong();
     leader = buffer.readInt();
-    version = buffer.readLong();
+    index = buffer.readLong();
     offset = buffer.readInt();
     complete = buffer.readBoolean();
     data = serializer.readObject(buffer);
@@ -135,7 +135,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, version, offset, complete, data);
+    return Objects.hash(getClass(), term, leader, index, offset, complete, data);
   }
 
   @Override
@@ -144,7 +144,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
       InstallRequest request = (InstallRequest) object;
       return request.term == term
         && request.leader == leader
-        && request.version == version
+        && request.index == index
         && request.offset == offset
         && request.complete == complete
         && request.data == data;
@@ -154,7 +154,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, version=%d, offset=%d, data=%s, complete=%b]", getClass().getSimpleName(), term, leader, version, offset, data, complete);
+    return String.format("%s[term=%d, leader=%d, index=%d, offset=%d, data=%s, complete=%b]", getClass().getSimpleName(), term, leader, index, offset, data, complete);
   }
 
   /**
@@ -190,13 +190,13 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
     }
 
     /**
-     * Sets the request version.
+     * Sets the request index.
      *
-     * @param version The request version.
+     * @param index The request index.
      * @return The request builder.
      */
-    public Builder withVersion(long version) {
-      request.version = Assert.argNot(version, version < 0, "version must be positive");
+    public Builder withIndex(long index) {
+      request.index = Assert.argNot(index, index < 0, "index must be positive");
       return this;
     }
 
@@ -241,7 +241,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
     public InstallRequest build() {
       super.build();
       Assert.stateNot(request.term <= 0, "term must be positive");
-      Assert.argNot(request.version < 0, "version must be positive");
+      Assert.argNot(request.index < 0, "index must be positive");
       Assert.notNull(request.data, "data");
       return request;
     }

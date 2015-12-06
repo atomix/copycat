@@ -252,7 +252,7 @@ final class LeaderState extends ActiveState {
     if (existingMember != null && existingMember.clientAddress() != null && existingMember.clientAddress().equals(request.member().clientAddress())) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
-        .withVersion(context.getCluster().getVersion())
+        .withIndex(context.getCluster().getVersion())
         .withMembers(context.getCluster().getMembers())
         .build()));
     }
@@ -274,7 +274,7 @@ final class LeaderState extends ActiveState {
         if (error == null) {
           future.complete(logResponse(JoinResponse.builder()
             .withStatus(Response.Status.OK)
-            .withVersion(index)
+            .withIndex(index)
             .withMembers(members)
             .build()));
         } else {
@@ -329,7 +329,7 @@ final class LeaderState extends ActiveState {
         if (error == null) {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.OK)
-            .withVersion(index)
+            .withIndex(index)
             .withMembers(members)
             .build()));
         } else {
@@ -410,7 +410,7 @@ final class LeaderState extends ActiveState {
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
     // sequence number. In that case, it's likely that the command was submitted more than once to the
     // cluster, and the command will be deduplicated once applied to the state machine.
-    if (request.sequence() > session.nextRequest()) {
+    if (request.sequence() > session.nextRequestSequence()) {
       session.registerRequest(request.sequence(), () -> command(request).whenComplete(future));
       return future;
     }
@@ -439,19 +439,19 @@ final class LeaderState extends ActiveState {
               if (error == null) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.OK)
-                  .withVersion(commitIndex)
+                  .withIndex(commitIndex)
                   .withResult(result)
                   .build()));
               } else if (error instanceof RaftException) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withVersion(commitIndex)
+                  .withIndex(commitIndex)
                   .withError(((RaftException) error).getType())
                   .build()));
               } else {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withVersion(commitIndex)
+                  .withIndex(commitIndex)
                   .withError(RaftError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -468,7 +468,7 @@ final class LeaderState extends ActiveState {
     });
 
     // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
-    session.setRequest(request.sequence());
+    session.setRequestSequence(request.sequence());
 
     return future;
   }
@@ -479,18 +479,16 @@ final class LeaderState extends ActiveState {
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
-    final long index = context.getCommitIndex();
 
     context.checkThread();
     logRequest(request);
 
     QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(index)
+      .setIndex(request.index())
       .setTerm(context.getTerm())
       .setTimestamp(timestamp)
       .setSession(request.session())
       .setSequence(request.sequence())
-      .setVersion(request.version())
       .setQuery(query);
 
     Query.ConsistencyLevel consistency = query.consistency();
@@ -556,14 +554,14 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
-    // versions will be the last applied index.
-    final long version = context.getStateMachine().getLastApplied();
+    // indexs will be the last applied index.
+    final long index = context.getStateMachine().getLastApplied();
     context.getStateMachine().apply(entry).whenComplete((result, error) -> {
       if (isOpen()) {
         if (error == null) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.OK)
-            .withVersion(version)
+            .withIndex(index)
             .withResult(result)
             .build()));
         } else if (error instanceof RaftException) {
@@ -727,7 +725,7 @@ final class LeaderState extends ActiveState {
       entry.setTerm(context.getTerm())
         .setSession(request.session())
         .setCommandSequence(request.commandSequence())
-        .setEventVersion(request.eventVersion())
+        .setEventIndex(request.eventIndex())
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);

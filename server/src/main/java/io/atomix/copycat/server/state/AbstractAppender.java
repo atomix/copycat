@@ -96,7 +96,7 @@ abstract class AbstractAppender implements AutoCloseable {
       if (open) {
         if (error == null) {
           LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
-          member.setTerm(request.term()).setVersion(request.version());
+          member.setConfigTerm(request.term()).setConfigIndex(request.index());
           appendEntries(member);
         } else {
           LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
@@ -166,16 +166,16 @@ abstract class AbstractAppender implements AutoCloseable {
     if (!open)
       return;
 
-    // If the member term is less than the current term or the member's configuration version is less
-    // than the local configuration version, send a configuration update to the member.
+    // If the member term is less than the current term or the member's configuration index is less
+    // than the local configuration index, send a configuration update to the member.
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    if (member.getTerm() < context.getTerm() || member.getVersion() < context.getCluster().getVersion() && !configuring.contains(member)) {
+    if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion() && !configuring.contains(member)) {
       configure(member);
     }
     // If the member's next index is less than or equal to the current snapshot index, send the snapshot.
-    else if (context.getSnapshotStore().currentSnapshot() != null && member.getNextIndex() <= context.getSnapshotStore().currentSnapshot().version()) {
+    else if (context.getSnapshotStore().currentSnapshot() != null && member.getNextIndex() <= context.getSnapshotStore().currentSnapshot().index()) {
       // If an install request is already being sent, skip the request. This condition is inside of the
       // outer condition to ensure append requests are not sent concurrently with install requests.
       if (!installing.contains(member)) {
@@ -199,7 +199,7 @@ abstract class AbstractAppender implements AutoCloseable {
     return ConfigureRequest.builder()
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
-      .withVersion(context.getCluster().getVersion())
+      .withIndex(context.getCluster().getVersion())
       .withMembers(context.getCluster().getMembers())
       .build();
   }
@@ -209,8 +209,8 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected InstallRequest buildInstallRequest(MemberState member) {
     Snapshot snapshot = context.getSnapshotStore().currentSnapshot();
-    if (member.getSnapshotIndex() != snapshot.version()) {
-      member.setSnapshotIndex(snapshot.version()).setSnapshotOffset(0);
+    if (member.getSnapshotIndex() != snapshot.index()) {
+      member.setSnapshotIndex(snapshot.index()).setSnapshotOffset(0);
     }
 
     InstallRequest request;
@@ -228,7 +228,7 @@ abstract class AbstractAppender implements AutoCloseable {
         request = InstallRequest.builder()
           .withTerm(context.getTerm())
           .withLeader(leader != null ? leader.id() : 0)
-          .withVersion(member.getSnapshotIndex())
+          .withIndex(member.getSnapshotIndex())
           .withOffset(member.getSnapshotOffset())
           .withData(buffer.flip())
           .withComplete(buffer.hasRemaining())

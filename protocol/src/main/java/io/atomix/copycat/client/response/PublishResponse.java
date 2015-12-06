@@ -52,15 +52,15 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     return new Builder(response);
   }
 
-  private long version;
+  private long index;
 
   /**
-   * Returns the event version number.
+   * Returns the event index.
    *
-   * @return The event version number.
+   * @return The event index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   @Override
@@ -71,7 +71,7 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     } else if (buffer.readBoolean()) {
       error = RaftError.forId(buffer.readByte());
     }
-    version = buffer.readLong();
+    index = buffer.readLong();
   }
 
   @Override
@@ -84,7 +84,7 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
         buffer.writeBoolean(false);
       }
     }
-    buffer.writeLong(version);
+    buffer.writeLong(index);
   }
 
   @Override
@@ -97,14 +97,14 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     if (object instanceof PublishResponse) {
       PublishResponse response = (PublishResponse) object;
       return response.status == status
-        && response.version == version;
+        && response.index == index;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d]", getClass().getSimpleName(), status, version);
+    return String.format("%s[status=%s, index=%d]", getClass().getSimpleName(), status, index);
   }
 
   /**
@@ -116,14 +116,14 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     }
 
     /**
-     * Sets the event version number.
+     * Sets the event index.
      *
-     * @param version The event version number.
+     * @param index The event index.
      * @return The response builder.
-     * @throws IllegalArgumentException if {@code version} is less than {@code 1}
+     * @throws IllegalArgumentException if {@code index} is less than {@code 1}
      */
-    public Builder withVersion(long version) {
-      response.version = Assert.argNot(version, version < 0, "version cannot be less than 0");
+    public Builder withIndex(long index) {
+      response.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
       return this;
     }
 
@@ -133,7 +133,7 @@ public class PublishResponse extends SessionResponse<PublishResponse> {
     @Override
     public PublishResponse build() {
       super.build();
-      Assert.stateNot(response.version < 0, "version cannot be less than 0");
+      Assert.stateNot(response.index < 0, "index cannot be less than 0");
       return response;
     }
   }

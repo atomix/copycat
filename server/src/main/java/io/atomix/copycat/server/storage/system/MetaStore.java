@@ -95,7 +95,7 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public MetaStore storeConfiguration(Configuration configuration) {
-    buffer.position(12).writeLong(configuration.version());
+    buffer.position(12).writeLong(configuration.index());
     storage.serializer().writeObject(configuration.members(), buffer);
     return this;
   }
@@ -106,10 +106,10 @@ public class MetaStore implements AutoCloseable {
    * @return The current cluster configuration.
    */
   public Configuration loadConfiguration() {
-    long version = buffer.position(12).readLong();
-    if (version > 0) {
+    long index = buffer.position(12).readLong();
+    if (index > 0) {
       return new Configuration(
-        version,
+        index,
         storage.serializer().readObject(buffer)
       );
     }

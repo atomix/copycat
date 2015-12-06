@@ -81,7 +81,7 @@ public class MetaStoreTest {
     meta.storeConfiguration(new Configuration(1, members));
 
     Configuration configuration = meta.loadConfiguration();
-    assertEquals(configuration.version(), 1);
+    assertEquals(configuration.index(), 1);
     assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))));
     assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001))));
     assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))));

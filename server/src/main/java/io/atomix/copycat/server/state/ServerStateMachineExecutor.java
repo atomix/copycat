@@ -139,7 +139,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
         ServerScheduledTask task = iterator.next();
         if (task.complete(this.timestamp)) {
           executor.executor().execute(() -> {
-            context.update(context.version(), Instant.ofEpochMilli(task.time), false, Command.ConsistencyLevel.SEQUENTIAL);
+            context.update(context.index(), Instant.ofEpochMilli(task.time), false, Command.ConsistencyLevel.SEQUENTIAL);
             task.execute();
           });
           complete.add(task);

@@ -29,16 +29,16 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class OperationResponse<T extends OperationResponse<T>> extends SessionResponse<T> {
-  protected long version;
+  protected long index;
   protected Object result;
 
   /**
-   * Returns the query version.
+   * Returns the query index.
    *
-   * @return The query version.
+   * @return The query index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -53,7 +53,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
-    version = buffer.readLong();
+    index = buffer.readLong();
     if (status == Status.OK) {
       error = null;
       result = serializer.readObject(buffer);
@@ -64,7 +64,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeByte(status.id()).writeLong(version);
+    buffer.writeByte(status.id()).writeLong(index);
     if (status == Status.OK) {
       serializer.writeObject(result, buffer);
     } else {
@@ -82,7 +82,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
     if (getClass().isAssignableFrom(object.getClass())) {
       OperationResponse response = (OperationResponse) object;
       return response.status == status
-        && response.version == version
+        && response.index == index
         && ((response.result == null && result == null)
         || response.result != null && result != null && response.result.equals(result));
     }
@@ -91,7 +91,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, version=%d, result=%s]", getClass().getSimpleName(), status, version, result);
+    return String.format("%s[status=%s, index=%d, result=%s]", getClass().getSimpleName(), status, index, result);
   }
 
   /**
@@ -103,15 +103,15 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
     }
 
     /**
-     * Sets the response version number.
+     * Sets the response index.
      *
-     * @param version The request version number.
+     * @param index The request index.
      * @return The response builder.
-     * @throws IllegalArgumentException If the response version number is not positive.
+     * @throws IllegalArgumentException If the response index is not positive.
      */
     @SuppressWarnings("unchecked")
-    public T withVersion(long version) {
-      response.version = Assert.argNot(version, version < 0, "version must be positive");
+    public T withIndex(long index) {
+      response.index = Assert.argNot(index, index < 0, "index must be positive");
       return (T) this;
     }
 
@@ -132,7 +132,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
     public U build() {
       super.build();
       if (response.status == Status.OK) {
-        Assert.stateNot(response.version < 0, "version cannot be less than 0");
+        Assert.stateNot(response.index < 0, "index cannot be less than 0");
       }
       return response;
     }

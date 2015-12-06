@@ -53,7 +53,7 @@ public class SnapshotStore implements AutoCloseable {
    */
   private void open() {
     for (Snapshot snapshot : loadSnapshots()) {
-      snapshots.put(snapshot.version(), snapshot);
+      snapshots.put(snapshot.index(), snapshot);
     }
 
     if (!snapshots.isEmpty()) {
@@ -80,13 +80,13 @@ public class SnapshotStore implements AutoCloseable {
   }
 
   /**
-   * Returns a snapshot by version.
+   * Returns a snapshot by index.
    *
-   * @param version The snapshot version.
+   * @param index The snapshot index.
    * @return The snapshot.
    */
-  public Snapshot snapshot(long version) {
-    return snapshots.get(version);
+  public Snapshot snapshot(long index) {
+    return snapshots.get(index);
   }
 
   /**
@@ -111,12 +111,12 @@ public class SnapshotStore implements AutoCloseable {
         // Valid segments will have been locked. Segments that resulting from failures during log cleaning will be
         // unlocked and should ultimately be deleted from disk.
         if (descriptor.locked()) {
-          snapshots.add(loadSnapshot(snapshotFile.version(), snapshotFile.timestamp()));
+          snapshots.add(loadSnapshot(snapshotFile.index(), snapshotFile.timestamp()));
           descriptor.close();
         }
         // If the segment descriptor wasn't locked, close and delete the descriptor.
         else {
-          LOGGER.debug("Deleting partial snapshot: {} ({})", descriptor.version(), snapshotFile.file().getName());
+          LOGGER.debug("Deleting partial snapshot: {} ({})", descriptor.index(), snapshotFile.file().getName());
           descriptor.close();
           descriptor.delete();
         }
@@ -129,25 +129,25 @@ public class SnapshotStore implements AutoCloseable {
   /**
    * Loads a specific snapshot.
    *
-   * @param version The snapshot version.
+   * @param index The snapshot index.
    * @param timestamp The snapshot timestamp.
    * @return The snapshot.
    */
-  private Snapshot loadSnapshot(long version, long timestamp) {
-    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), version, timestamp));
-    LOGGER.debug("Loaded disk snapshot: {} ({})", version, file.file().getName());
+  private Snapshot loadSnapshot(long index, long timestamp) {
+    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), index, timestamp));
+    LOGGER.debug("Loaded disk snapshot: {} ({})", index, file.file().getName());
     return new FileSnapshot(file, this);
   }
 
   /**
    * Creates a new snapshot.
    *
-   * @param version The snapshot version.
+   * @param index The snapshot index.
    * @return The snapshot.
    */
-  public Snapshot createSnapshot(long version) {
+  public Snapshot createSnapshot(long index) {
     SnapshotDescriptor descriptor = SnapshotDescriptor.builder()
-      .withVersion(version)
+      .withIndex(index)
       .withTimestamp(System.currentTimeMillis())
       .build();
     return createSnapshot(descriptor);
@@ -178,7 +178,7 @@ public class SnapshotStore implements AutoCloseable {
    * Creates a disk snapshot.
    */
   private Snapshot createDiskSnapshot(SnapshotDescriptor descriptor) {
-    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), descriptor.version(), descriptor.timestamp()));
+    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), descriptor.index(), descriptor.timestamp()));
     Snapshot snapshot = new FileSnapshot(file, this);
     LOGGER.debug("Created disk snapshot: {}", snapshot);
     return snapshot;
@@ -189,9 +189,9 @@ public class SnapshotStore implements AutoCloseable {
    */
   protected void completeSnapshot(Snapshot snapshot) {
     Assert.notNull(snapshot, "snapshot");
-    snapshots.put(snapshot.version(), snapshot);
+    snapshots.put(snapshot.index(), snapshot);
 
-    if (currentSnapshot == null || snapshot.version() > currentSnapshot.version()) {
+    if (currentSnapshot == null || snapshot.index() > currentSnapshot.index()) {
       currentSnapshot = snapshot;
     }
 
@@ -200,7 +200,7 @@ public class SnapshotStore implements AutoCloseable {
       Iterator<Map.Entry<Long, Snapshot>> iterator = snapshots.entrySet().iterator();
       while (iterator.hasNext()) {
         Snapshot oldSnapshot = iterator.next().getValue();
-        if (oldSnapshot.version() < snapshot.version()) {
+        if (oldSnapshot.index() < snapshot.index()) {
           iterator.remove();
           oldSnapshot.close();
           oldSnapshot.delete();
