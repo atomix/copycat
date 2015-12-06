@@ -490,8 +490,8 @@ public class Log implements AutoCloseable {
   public void close() {
     assertIsOpen();
     flush();
-    segments.close();
     compactor.close();
+    segments.close();
     open = false;
   }
 
