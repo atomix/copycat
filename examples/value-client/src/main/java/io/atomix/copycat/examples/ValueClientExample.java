@@ -17,7 +17,7 @@ package io.atomix.copycat.examples;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.NettyTransport;
-import io.atomix.copycat.client.DefaultCopycatClient;
+import io.atomix.copycat.client.CopycatClient;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -44,7 +44,7 @@ public class ValueClientExample {
       members.add(new Address(parts[0], Integer.valueOf(parts[1])));
     }
 
-    DefaultCopycatClient client = DefaultCopycatClient.builder(members)
+    CopycatClient client = CopycatClient.builder(members)
       .withTransport(new NettyTransport())
       .build();
 
@@ -60,7 +60,7 @@ public class ValueClientExample {
   /**
    * Recursively sets state machine values.
    */
-  private static void recursiveSet(DefaultCopycatClient client) {
+  private static void recursiveSet(CopycatClient client) {
     client.submit(new SetCommand(UUID.randomUUID().toString())).thenRun(() -> {
       client.submit(new GetQuery()).thenAccept(value -> {
         client.context().schedule(Duration.ofMillis(10), () -> recursiveSet(client));

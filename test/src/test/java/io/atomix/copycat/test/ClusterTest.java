@@ -19,7 +19,7 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.DefaultCopycatClient;
+import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
@@ -52,7 +52,7 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile LocalServerRegistry registry;
   protected volatile int port;
   protected volatile List<Member> members;
-  protected volatile List<DefaultCopycatClient> clients = new ArrayList<>();
+  protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
   private int count;
 
@@ -71,7 +71,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testServerJoinLate() throws Throwable {
     createServers(3);
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     submit(client, 0, 10000);
     await(30000);
     CopycatServer joiner = createServer(members, nextMember());
@@ -87,7 +87,7 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Submits a bunch of commands recursively.
    */
-  private void submit(DefaultCopycatClient client, int count, int total) {
+  private void submit(CopycatClient client, int count, int total) {
     if (count < total) {
       client.submit(new TestCommand("Hello world!", Command.ConsistencyLevel.LINEARIZABLE)).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -123,7 +123,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testReplace() throws Throwable {
     List<CopycatServer> servers = createServers(3);
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     RaftServer s1 = createServer(members, nextMember()).open().get();
     RaftServer s2 = createServer(members, nextMember()).open().get();
     RaftServer s3 = createServer(members, nextMember()).open().get();
@@ -150,7 +150,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testClientKeepAlive() throws Throwable {
     createServers(3);
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     Thread.sleep(Duration.ofSeconds(10).toMillis());
     threadAssertTrue(client.session().isOpen());
   }
@@ -266,7 +266,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSubmitCommand(int nodes, Command.ConsistencyLevel consistency) throws Throwable {
     createServers(nodes);
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
@@ -344,7 +344,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSubmitCommand(int live, int total, Command.ConsistencyLevel consistency) throws Throwable {
     createServers(live, total);
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
@@ -499,7 +499,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSubmitQuery(int nodes, Query.ConsistencyLevel consistency) throws Throwable {
     createServers(nodes);
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.submit(new TestQuery("Hello world!", consistency)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
@@ -549,7 +549,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSequentialEvent(int nodes) throws Throwable {
     createServers(nodes);
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, "Hello world!");
       resume();
@@ -604,7 +604,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSequentialEvents(int nodes) throws Throwable {
     createServers(nodes);
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, "Hello world!");
       resume();
@@ -669,7 +669,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     AtomicInteger counter = new AtomicInteger();
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, "Hello world!");
       counter.incrementAndGet();
@@ -728,7 +728,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     AtomicInteger counter = new AtomicInteger();
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, "Hello world!");
       counter.incrementAndGet();
@@ -769,7 +769,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     AtomicInteger counter = new AtomicInteger();
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, "Hello world!");
       counter.incrementAndGet();
@@ -805,7 +805,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     AtomicReference<String> value = new AtomicReference<>();
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, value.get());
       resume();
@@ -845,7 +845,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     AtomicReference<String> value = new AtomicReference<>();
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, value.get());
       resume();
@@ -892,7 +892,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     AtomicReference<String> value = new AtomicReference<>();
 
-    DefaultCopycatClient client = createClient();
+    CopycatClient client = createClient();
     client.session().onEvent("test", message -> {
       threadAssertEquals(message, value.get());
       resume();
@@ -947,8 +947,8 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSessionExpire(int nodes) throws Throwable {
     createServers(nodes);
 
-    DefaultCopycatClient client1 = createClient();
-    DefaultCopycatClient client2 = createClient();
+    CopycatClient client1 = createClient();
+    CopycatClient client2 = createClient();
     client1.session().onEvent("expired", this::resume);
     client1.submit(new TestExpire()).thenRun(this::resume);
     client2.close().thenRun(this::resume);
@@ -1030,8 +1030,8 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Creates a Copycat client.
    */
-  private DefaultCopycatClient createClient() throws Throwable {
-    DefaultCopycatClient client = DefaultCopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList())).withTransport(new LocalTransport(registry)).build();
+  private CopycatClient createClient() throws Throwable {
+    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList())).withTransport(new LocalTransport(registry)).build();
     client.open().thenRun(this::resume);
     await(10000);
     clients.add(client);
