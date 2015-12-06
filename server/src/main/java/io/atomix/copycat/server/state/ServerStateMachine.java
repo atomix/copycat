@@ -37,7 +37,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Raft server state machine.
+ * Internal server state machine.
+ * <p>
+ * The internal state machine handles application of commands to the user provided {@link StateMachine}
+ * and keeps track of internal state like sessions and the various indexes relevant to log compaction.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -69,6 +72,10 @@ final class ServerStateMachine implements AutoCloseable {
 
   /**
    * Takes a snapshot of the state machine state if necessary.
+   * <p>
+   * Snapshots of the state machine are taken only once the log becomes compactable. This means snapshots
+   * are largely dependent on the storage configuration and ensures that snapshots are not taken more
+   * frequently than will benefit log compaction.
    */
   private void takeSnapshot() {
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
@@ -93,6 +100,9 @@ final class ServerStateMachine implements AutoCloseable {
 
   /**
    * Installs a snapshot of the state machine state if necessary.
+   * <p>
+   * Snapshots are installed only if there's a local snapshot stored with a version equal to the
+   * last applied index.
    */
   private void installSnapshot() {
     // If the last stored snapshot has not yet been installed and its version matches the last applied state
@@ -121,6 +131,12 @@ final class ServerStateMachine implements AutoCloseable {
 
   /**
    * Completes a snapshot of the state machine state.
+   * <p>
+   * When a snapshot of the state machine is taken, the snapshot isn't immediately made available for
+   * recovery or replication. Session events are dependent on original commands being retained in the log
+   * for fault tolerance. Thus, a snapshot cannot be completed until all prior events have been received
+   * by clients. So, we take a snapshot of the state machine state and complete the snapshot only after
+   * prior events have been received.
    */
   private void completeSnapshot() {
     // If a snapshot is pending to be persisted and the last completed index is greater than the
@@ -222,6 +238,9 @@ final class ServerStateMachine implements AutoCloseable {
 
   /**
    * Applies all commits up to the given index.
+   * <p>
+   * Calls to this method are assumed not to expect a result. This allows some optimizations to be
+   * made internally since linearizable events don't have to be waited to complete the command.
    *
    * @param index The index up to which to apply commits.
    * @return A completable future to be completed once all commits have been applied.
@@ -252,7 +271,11 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies the commit at the given index.
+   * Applies the entry at the given index to the state machine.
+   * <p>
+   * Calls to this method are assumed to expect a result. This means linearizable session events
+   * triggered by the application of the command at the given index will be awaited before completing
+   * the returned future.
    *
    * @param index The index to apply.
    * @return A completable future to be completed once the commit has been applied.
@@ -269,6 +292,9 @@ final class ServerStateMachine implements AutoCloseable {
 
   /**
    * Applies an entry to the state machine.
+   * <p>
+   * Calls to this method are assumed to expect a result. This means linearizable session events
+   * triggered by the application of the given entry will be awaited before completing the returned future.
    *
    * @param entry The entry to apply.
    * @return A completable future to be completed with the result.
@@ -307,10 +333,11 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @return The result.
+   * Applies a configuration entry to the internal state machine.
+   * <p>
+   * Configuration entries are applied to internal server state when written to the log. Thus, no significant
+   * logic needs to take place in the handling of configuration entries. We simply clean the previous configuration
+   * entry since it was overwritten by a more recent committed configuration entry.
    */
   private CompletableFuture<Void> apply(ConfigurationEntry entry) {
     long previousConfiguration = configuration;
@@ -324,10 +351,14 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @return The result.
+   * Applies connect entry to the state machine.
+   * <p>
+   * Connect entries are applied to internal server state when written to the log. Thus, no significant logic needs
+   * to take place in the handling of connect entries. We simply clean the previous connect entry for the session
+   * from the log. This ensures that the most recent connection is always retained in the log and replicated. Note
+   * that connection indexes are not stored when applied to the internal state since a ConnectEntry may be applied
+   * but never committed. Storing indexes in the internal state machine ensures that the stored index is committed
+   * and will therefore be retained in the log.
    */
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
@@ -337,10 +368,13 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @return The result.
+   * Applies register session entry to the state machine.
+   * <p>
+   * Register entries are applied to the state machine to create a new session. The resulting session ID is the
+   * index of the RegisterEntry. Once a new session is registered, we call register() on the state machine.
+   * In the event that the {@code synchronous} flag is set, that indicates that the registration command expects a
+   * response, i.e. it was applied by a leader. In that case, any events published during the execution of the
+   * state machine's register() method must be completed synchronously prior to the completion of the returned future.
    */
   private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
     ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
@@ -398,9 +432,27 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
+   * Applies a session keep alive entry to the state machine.
+   * <p>
+   * Keep alive entries are applied to the internal state machine to reset the timeout for a specific session.
+   * If the session indicated by the KeepAliveEntry is still held in memory, we mark the session as trusted,
+   * indicating that the client has committed a keep alive within the required timeout. Additionally, we check
+   * all other sessions for expiration based on the timestamp provided by this KeepAliveEntry. Note that sessions
+   * are never completely expired via this method. Leaders must explicitly commit an UnregisterEntry to expire
+   * a session.
+   * <p>
+   * When a KeepAliveEntry is committed to the internal state machine, two specific fields provided in the entry
+   * are used to update server-side session state. The {@code commandSequence} indicates the highest command for
+   * which the session has received a successful response in the proper sequence. By applying the {@code commandSequence}
+   * to the server session, we clear command output held in memory up to that point. The {@code eventVersion} indicates
+   * the index up to which the client has received event messages in sequence for the session. Applying the
+   * {@code eventVersion} to the server-side session results in events up to that index being removed from memory
+   * as they were acknowledged by the client. It's essential that both of these fields be applied via entries committed
+   * to the Raft log to ensure they're applied on all servers in sequential order.
+   * <p>
+   * Keep alive entries are retained in the log until the next time the client sends a keep alive entry or until the
+   * client's session is expired. This ensures for sessions that have long timeouts, keep alive entries cannot be cleaned
+   * from the log before they're replicated to some servers.
    */
   private CompletableFuture<Void> apply(KeepAliveEntry entry) {
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
@@ -460,10 +512,23 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @return The result.
+   * Applies an unregister session entry to the state machine.
+   * <p>
+   * Unregister entries may either be committed by clients or by the cluster's leader. Clients will commit
+   * an unregister entry when closing their session normally. Leaders will commit an unregister entry when
+   * an expired session is detected. This ensures that sessions are never expired purely on gaps in the log
+   * which may result from normal log cleaning or lengthy leadership changes.
+   * <p>
+   * If the session was unregistered by the client, the isExpired flag will be false. Sessions expired by
+   * the client are only close()ed on the state machine but not expire()d. Alternatively, entries where
+   * isExpired is true were committed by a leader. For expired sessions, the state machine's expire() method
+   * is called before close().
+   * <p>
+   * State machines may publish events during the handling of session expired or closed events. If the
+   * {@code synchronous} flag passed to this method is true, events published during the commitment of the
+   * UnregisterEntry must be synchronously completed prior to the completion of the returned future. This
+   * ensures that state changes resulting from the expiration or closing of a session are completed before
+   * the session close itself is completed.
    */
   private CompletableFuture<Void> apply(UnregisterEntry entry, boolean synchronous) {
     ServerSession session = executor.context().sessions().unregisterSession(entry.getSession());
@@ -570,11 +635,26 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @param synchronous Whether the call expects a result.
-   * @return The result.
+   * Applies a command entry to the state machine.
+   * <p>
+   * Command entries result in commands being executed on the user provided {@link StateMachine} and a
+   * response being sent back to the client by completing the returned future. All command responses are
+   * cached in the command's {@link ServerSession} for fault tolerance. In the event that the same command
+   * is applied to the state machine more than once, the original response will be returned.
+   * <p>
+   * Command entries are written with a sequence number. The sequence number is used to ensure that
+   * commands are applied to the state machine in sequential order. If a command entry has a sequence
+   * number that is less than the next sequence number for the session, that indicates that it is a
+   * duplicate of a command that was already applied. Otherwise, commands are assumed to have been
+   * received in sequential order. The reason for this assumption is because leaders always sequence
+   * commands as they're written to the log, so no sequence number will be skipped.
+   * <p>
+   * During the execution of a command, state machines may publish zero or many session events.
+   * The command's {@link io.atomix.copycat.client.Command.ConsistencyLevel} and the {@code synchronous}
+   * flag dictate how commands that publish session events should be handled. If {@code synchronous}
+   * is {@code true}, that indicates a response is expected (this is the leader's state machine). For
+   * linearizable commands, we wait for events to be received and acknowledged by their respective
+   * clients.
    */
   private CompletableFuture<Object> apply(CommandEntry entry, boolean synchronous) {
     final CompletableFuture<Object> future = new CompletableFuture<>();
@@ -720,10 +800,22 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @return The result.
+   * Applies a query entry to the state machine.
+   * <p>
+   * Query entries are applied to the user {@link StateMachine} for read-only operations.
+   * Because queries are read-only, they may only be applied on a single server in the cluster,
+   * and query entries do not go through the Raft log. Thus, it is critical that measures be taken
+   * to ensure clients see a consistent view of the cluster event when switching servers. To do so,
+   * clients provide a sequence and version number for each query. The sequence number is the order
+   * in which the query was sent by the client. Sequence numbers are shared across both commands and
+   * queries. The version number indicates the last index for which the client saw a command or query
+   * response. In the event that the lastApplied index of this state machine does not meet the provided
+   * version number, we wait for the state machine to catch up before applying the query. This ensures
+   * clients see state progress monotonically even when switching servers.
+   * <p>
+   * Because queries may only be applied on a single server in the cluster they cannot result in the
+   * publishing of session events. Events require commands to be written to the Raft log to ensure
+   * fault-tolerance and consistency across the cluster.
    */
   private CompletableFuture<Object> apply(QueryEntry entry) {
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
@@ -797,10 +889,13 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @return The result.
+   * Applies a no-op entry to the state machine.
+   * <p>
+   * No-op entries are committed by leaders at the start of their term. Typically, no-op entries
+   * serve as a mechanism to allow leaders to commit entries from prior terms. However, we extend
+   * the functionality of the no-op entry to use it as an indicator that a leadership change occurred.
+   * In order to ensure timeouts do not expire during lengthy leadership changes, we use no-op entries
+   * to reset timeouts for client sessions and server heartbeats.
    */
   private CompletableFuture<Long> apply(NoOpEntry entry) {
     // Iterate through all the server sessions and reset timestamps. This ensures that sessions do not
@@ -814,7 +909,13 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Suspects any sessions that have timed out.
+   * Marked as suspicious any sessions that have timed out according to the given timestamp.
+   * <p>
+   * Sessions are marked suspicious instead of being expired since log cleaning can result in large
+   * gaps in time between entries in the log. Thus, once log compaction has occurred, it's possible
+   * that a session could be marked expired when in fact its keep alive entries were simply compacted
+   * from the log. Forcing the leader to expire sessions ensures that keep alives are not missed with
+   * regard to session expiration.
    */
   private void suspectSessions(long timestamp) {
     for (ServerSession session : executor.context().sessions().sessions.values()) {
