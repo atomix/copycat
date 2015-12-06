@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Server;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.RaftServer;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -44,7 +44,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getVotingMemberStates().iterator().next().getMember().id();
+      int leader = serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id();
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
@@ -60,7 +60,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(serverState.getLeader().hashCode(), leader);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
@@ -104,7 +104,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getVotingMembers().iterator().next().id();
+      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
 
       state.startElection();
@@ -125,13 +125,13 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 3L);
       assertEquals(serverState.getLastVotedFor(), candidate);
       assertEquals(response.term(), 3L);
-      assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getVotingMembers().iterator().next().id();
+      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
 
       append(2, 1);
@@ -154,13 +154,13 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 3L);
       assertEquals(serverState.getLastVotedFor(), 0);
       assertEquals(response.term(), 3L);
-      assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateTransitionsToLeaderOnElection() throws Throwable {
     serverState.onStateChange(state -> {
-      if (state == RaftServer.State.LEADER)
+      if (state == CopycatServer.State.LEADER)
         resume();
     });
 
@@ -192,7 +192,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateTransitionsToFollowerOnRejection() throws Throwable {
     serverState.onStateChange(state -> {
-      if (state == RaftServer.State.FOLLOWER)
+      if (state == CopycatServer.State.FOLLOWER)
         resume();
     });
 

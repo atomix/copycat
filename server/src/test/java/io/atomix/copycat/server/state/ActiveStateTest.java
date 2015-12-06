@@ -16,7 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.client.response.Response.Status;
-import io.atomix.copycat.server.RaftServer.State;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -79,7 +79,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
       assertTrue(response.succeeded());
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
@@ -172,7 +172,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getCluster().getVotingMemberStates().iterator().next().getMember().id())
+        .withCandidate(serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -183,7 +183,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
       assertTrue(response.voted());
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
@@ -193,7 +193,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(1)
-        .withCandidate(serverState.getCluster().getVotingMemberStates().iterator().next().getMember().id())
+        .withCandidate(serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -214,7 +214,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getCluster().getVotingMemberStates().iterator().next().getMember().id())
+        .withCandidate(serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id())
         .withLogIndex(1)
         .withLogTerm(1)
         .build();
@@ -236,7 +236,7 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(2)
-        .withCandidate(serverState.getCluster().getVotingMemberStates().iterator().next().getMember().id())
+        .withCandidate(serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id())
         .withLogIndex(4)
         .withLogTerm(1)
         .build();

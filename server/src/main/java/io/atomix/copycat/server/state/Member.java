@@ -21,6 +21,7 @@ import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.CopycatServer;
 
 /**
  * Cluster member.
@@ -28,7 +29,7 @@ import io.atomix.catalyst.util.Assert;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class Member implements CatalystSerializable {
-  private MemberType type;
+  private CopycatServer.Type type;
   private Status status = Status.AVAILABLE;
   private Address serverAddress;
   private Address clientAddress;
@@ -53,8 +54,8 @@ public class Member implements CatalystSerializable {
   Member() {
   }
 
-  public Member(MemberType type, Address serverAddress, Address clientAddress) {
-    this.type = type;
+  public Member(CopycatServer.Type type, Address serverAddress, Address clientAddress) {
+    this.type = Assert.notNull(type, "type");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
   }
@@ -73,7 +74,7 @@ public class Member implements CatalystSerializable {
    *
    * @return The member type.
    */
-  public MemberType type() {
+  public CopycatServer.Type type() {
     return type;
   }
 
@@ -110,8 +111,8 @@ public class Member implements CatalystSerializable {
    * @param type The member type.
    * @return The member.
    */
-  Member update(MemberType type) {
-    this.type = type;
+  Member update(CopycatServer.Type type) {
+    this.type = Assert.notNull(type, "type");
     return this;
   }
 
