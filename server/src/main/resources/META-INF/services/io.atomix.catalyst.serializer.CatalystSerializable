@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+io.atomix.copycat.server.state.Member
+
 io.atomix.copycat.server.request.AcceptRequest
 io.atomix.copycat.server.response.AcceptResponse
 io.atomix.copycat.server.request.AppendRequest
@@ -21,6 +23,8 @@ io.atomix.copycat.server.request.JoinRequest
 io.atomix.copycat.server.response.JoinResponse
 io.atomix.copycat.server.request.LeaveRequest
 io.atomix.copycat.server.response.LeaveResponse
+io.atomix.copycat.server.request.ConfigureRequest
+io.atomix.copycat.server.response.ConfigureResponse
 io.atomix.copycat.server.request.PollRequest
 io.atomix.copycat.server.response.PollResponse
 io.atomix.copycat.server.request.VoteRequest

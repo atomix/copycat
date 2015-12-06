@@ -36,6 +36,7 @@ import org.testng.annotations.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Abstract state test.
@@ -51,7 +52,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
   protected ServerState serverState;
-  protected List<Address> members;
+  protected List<Member> members;
 
   /**
    * Sets up a server state.
@@ -71,7 +72,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members, meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**
@@ -143,10 +144,10 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   /**
    * Creates a collection of member addresses.
    */
-  private List<Address> createMembers(int nodes) {
-    List<Address> members = new ArrayList<>();
+  private List<Member> createMembers(int nodes) {
+    List<Member> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(new Address("localhost", 5000 + i));
+      members.add(new Member(RaftMemberType.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
     }
     return members;
   }

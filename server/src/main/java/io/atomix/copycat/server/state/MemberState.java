@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Log;
 
@@ -25,16 +24,17 @@ import io.atomix.copycat.server.storage.Log;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class MemberState {
-  private final Address address;
-  private int index;
+  private Member member;
+  private long term;
+  private long version;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
   private long commitStartTime;
   private int failures;
 
-  public MemberState(Address address) {
-    this.address = Assert.notNull(address, "address");
+  public MemberState(Member member) {
+    this.member = Assert.notNull(member, "member");
   }
 
   /**
@@ -49,31 +49,62 @@ class MemberState {
   }
 
   /**
-   * Returns the member address.
+   * Returs the member.
    *
-   * @return The member address.
+   * @return The member.
    */
-  public Address getAddress() {
-    return address;
+  public Member getMember() {
+    return member;
   }
 
   /**
-   * Returns the member index.
+   * Sets the member.
    *
-   * @return The member index.
-   */
-  public int getIndex() {
-    return index;
-  }
-
-  /**
-   * Sets the member index.
-   *
-   * @param index The member index.
+   * @param member The member.
    * @return The member state.
    */
-  MemberState setIndex(int index) {
-    this.index = index;
+  MemberState setMember(Member member) {
+    this.member = Assert.notNull(member, "member");
+    return this;
+  }
+
+  /**
+   * Returns the member term.
+   *
+   * @return The member term.
+   */
+  long getTerm() {
+    return term;
+  }
+
+  /**
+   * Sets the member term.
+   *
+   * @param term The member term.
+   * @return The member state.
+   */
+  MemberState setTerm(long term) {
+    this.term = term;
+    return this;
+  }
+
+  /**
+   * Returns the member configuration version.
+   *
+   * @return The member configuration version.
+   */
+  long getVersion() {
+    return version;
+  }
+
+  /**
+   * Sets the member version.
+   *
+   * @param version The member version.
+   * @return The member state.
+   */
+  MemberState setVersion(long version) {
+    this.version = version;
     return this;
   }
 
@@ -187,7 +218,7 @@ class MemberState {
 
   @Override
   public String toString() {
-    return address.toString();
+    return member.serverAddress().toString();
   }
 
 }

@@ -24,7 +24,6 @@ import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Value state machine example.
@@ -40,9 +39,11 @@ public class ValueStateMachineExample {
     if (args.length < 2)
       throw new IllegalArgumentException("must supply a local port and at least one remote host:port tuple");
 
-    int port = Integer.valueOf(args[0]);
+    int clientPort = Integer.valueOf(args[0]);
+    int serverPort = Integer.valueOf(args[1]);
 
-    Address address = new Address(InetAddress.getLocalHost().getHostName(), port);
+    Address clientAddress = new Address(InetAddress.getLocalHost().getHostName(), clientPort);
+    Address serverAddress = new Address(InetAddress.getLocalHost().getHostName(), serverPort);
 
     List<Address> members = new ArrayList<>();
     for (int i = 1; i < args.length; i++) {
@@ -50,11 +51,11 @@ public class ValueStateMachineExample {
       members.add(new Address(parts[0], Integer.valueOf(parts[1])));
     }
 
-    CopycatServer server = CopycatServer.builder(address, members)
+    CopycatServer server = CopycatServer.builder(clientAddress, serverAddress, members)
       .withStateMachine(new ValueStateMachine())
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
-        .withDirectory(System.getProperty("user.dir") + "/logs/" + port)
+        .withDirectory(System.getProperty("user.dir") + "/logs/" + serverPort)
         // Limit the number of entries per segment and compaction intervals to demonstrate compaction.
         .withMaxEntriesPerSegment(1024)
         .withMinorCompactionInterval(Duration.ofSeconds(27))

@@ -26,6 +26,7 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.state.ServerState;
 import io.atomix.copycat.server.storage.Log;
@@ -131,12 +132,12 @@ public class CopycatServer implements RaftServer {
    * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
    * file to your {@code META-INF/services} folder on the classpath.
    *
-   * @param address The local server member ID. This must be the ID of a member listed in the provided members list.
+   * @param address The address through which clients and servers connect to this server.
    * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
   public static Builder builder(Address address, Address... cluster) {
-    return builder(address, Arrays.asList(cluster));
+    return builder(address, address, Arrays.asList(cluster));
   }
 
   /**
@@ -151,12 +152,54 @@ public class CopycatServer implements RaftServer {
    * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
    * file to your {@code META-INF/services} folder on the classpath.
    *
-   * @param address The local server member ID. This must be the ID of a member listed in the provided members list.
+   * @param address The address through which clients and servers connect to this server.
    * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
   public static Builder builder(Address address, Collection<Address> cluster) {
-    return new Builder(address, cluster);
+    return new Builder(address, address, cluster);
+  }
+
+  /**
+   * Returns a new Raft server builder.
+   * <p>
+   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
+   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * not have to be present in the address list.
+   * <p>
+   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
+   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
+   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
+   * file to your {@code META-INF/services} folder on the classpath.
+   *
+   * @param clientAddress The address through which clients connect to the server.
+   * @param serverAddress The local server member address.
+   * @param cluster The cluster members to which to connect.
+   * @return The server builder.
+   */
+  public static Builder builder(Address clientAddress, Address serverAddress, Address... cluster) {
+    return builder(clientAddress, serverAddress, Arrays.asList(cluster));
+  }
+
+  /**
+   * Returns a new Raft server builder.
+   * <p>
+   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
+   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * not have to be present in the address list.
+   * <p>
+   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
+   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
+   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
+   * file to your {@code META-INF/services} folder on the classpath.
+   *
+   * @param clientAddress The address through which clients connect to the server.
+   * @param serverAddress The local server member address.
+   * @param cluster The cluster members to which to connect.
+   * @return The server builder.
+   */
+  public static Builder builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
+    return new Builder(clientAddress, serverAddress, cluster);
   }
 
   private final ServerContext context;
@@ -183,7 +226,8 @@ public class CopycatServer implements RaftServer {
 
   @Override
   public Address leader() {
-    return state.getLeader();
+    Member leader = state.getLeader();
+    return leader != null ? leader.serverAddress() : null;
   }
 
   /**
@@ -342,20 +386,48 @@ public class CopycatServer implements RaftServer {
     private static final Duration DEFAULT_RAFT_HEARTBEAT_INTERVAL = Duration.ofMillis(150);
     private static final Duration DEFAULT_RAFT_SESSION_TIMEOUT = Duration.ofMillis(5000);
 
-    private Transport transport;
+    private Transport clientTransport;
+    private Transport serverTransport;
     private Storage storage;
     private Serializer serializer;
     private StateMachine stateMachine;
-    private Address address;
+    private Address clientAddress;
+    private Address serverAddress;
     private Set<Address> cluster;
     private Duration electionTimeout = DEFAULT_RAFT_ELECTION_TIMEOUT;
     private Duration heartbeatInterval = DEFAULT_RAFT_HEARTBEAT_INTERVAL;
     private Duration sessionTimeout = DEFAULT_RAFT_SESSION_TIMEOUT;
 
-    private Builder(Address address, Collection<Address> cluster) {
-      this.address = Assert.notNull(address, "address");
+    private Builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
+      this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
+      this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
       this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
-      this.cluster.add(address);
+    }
+
+    /**
+     * Sets the client and server transport.
+     *
+     * @param transport The client and server transport.
+     * @return The server builder.
+     * @throws NullPointerException if {@code transport} is null
+     */
+    public Builder withTransport(Transport transport) {
+      Assert.notNull(transport, "transport");
+      this.clientTransport = transport;
+      this.serverTransport = transport;
+      return this;
+    }
+
+    /**
+     * Sets the client transport.
+     *
+     * @param transport The client transport.
+     * @return The server builder.
+     * @throws NullPointerException if {@code transport} is null
+     */
+    public Builder withClientTransport(Transport transport) {
+      this.clientTransport = Assert.notNull(transport, "transport");
+      return this;
     }
 
     /**
@@ -365,8 +437,8 @@ public class CopycatServer implements RaftServer {
      * @return The server builder.
      * @throws NullPointerException if {@code transport} is null
      */
-    public Builder withTransport(Transport transport) {
-      this.transport = Assert.notNull(transport, "transport");
+    public Builder withServerTransport(Transport transport) {
+      this.serverTransport = Assert.notNull(transport, "transport");
       return this;
     }
 
@@ -460,12 +532,17 @@ public class CopycatServer implements RaftServer {
         throw new ConfigurationException("state machine not configured");
 
       // If the transport is not configured, attempt to use the default Netty transport.
-      if (transport == null) {
+      if (serverTransport == null) {
         try {
-          transport = (Transport) Class.forName("io.atomix.catalyst.transport.NettyTransport").newInstance();
+          serverTransport = (Transport) Class.forName("io.atomix.catalyst.transport.NettyTransport").newInstance();
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
           throw new ConfigurationException("transport not configured");
         }
+      }
+
+      // If the client transport is not configured, default it to the server transport.
+      if (clientTransport == null) {
+        clientTransport = serverTransport;
       }
 
       // If no serializer instance was provided, create one.
@@ -483,7 +560,7 @@ public class CopycatServer implements RaftServer {
           .build();
       }
 
-      ServerContext context = new ServerContext(address, cluster, stateMachine, transport, storage, serializer);
+      ServerContext context = new ServerContext(clientAddress, clientTransport, serverAddress, serverTransport, cluster, stateMachine, storage, serializer);
       return new CopycatServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
     }
   }

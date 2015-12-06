@@ -20,6 +20,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -70,7 +71,7 @@ class PassiveState extends AbstractState {
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
     if (request.term() < context.getTerm()) {
-      LOGGER.warn("{} - Rejected {}: request term is less than the current term ({})", context.getAddress(), request, context.getTerm());
+      LOGGER.warn("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().getMember().serverAddress(), request, context.getTerm());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -89,7 +90,7 @@ class PassiveState extends AbstractState {
    */
   protected AppendResponse doCheckPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -97,7 +98,7 @@ class PassiveState extends AbstractState {
         .withLogIndex(context.getLog().lastIndex())
         .build();
     } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.warn("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -109,7 +110,7 @@ class PassiveState extends AbstractState {
     // If the previous entry term doesn't match the local previous term then reject the request.
     try (Entry entry = context.getLog().get(request.logIndex())) {
       if (entry == null || entry.getTerm() != request.logTerm()) {
-        LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getAddress(), request, entry != null ? entry.getTerm() : "unknown");
+        LOGGER.warn("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().getMember().serverAddress(), request, entry != null ? entry.getTerm() : "unknown");
         return AppendResponse.builder()
           .withStatus(Response.Status.OK)
           .withTerm(context.getTerm())
@@ -135,7 +136,7 @@ class PassiveState extends AbstractState {
         // If the entry index is greater than the last log index, skip missing entries.
         if (context.getLog().lastIndex() < entry.getIndex()) {
           context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+          LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, entry.getIndex());
         } else {
           // Compare the term of the received entry with the matching entry in the log.
           try (Entry match = context.getLog().get(entry.getIndex())) {
@@ -143,13 +144,13 @@ class PassiveState extends AbstractState {
               if (entry.getTerm() != match.getTerm()) {
                 // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
                 // If appending to the log fails, apply commits and reply false to the append request.
-                LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getAddress());
+                LOGGER.warn("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().getMember().serverAddress());
                 context.getLog().truncate(entry.getIndex() - 1).append(entry);
-                LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+                LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, entry.getIndex());
               }
             } else {
               context.getLog().truncate(entry.getIndex() - 1).append(entry);
-              LOGGER.debug("{} - Appended {} to log at index {}", context.getAddress(), entry, entry.getIndex());
+              LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, entry.getIndex());
             }
           }
         }
@@ -157,14 +158,14 @@ class PassiveState extends AbstractState {
         // If the entry is a configuration entry then immediately configure the cluster.
         if (entry instanceof ConfigurationEntry) {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
-          if (context.getCluster().isPassive()) {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive());
-            if (context.getCluster().isActive()) {
+          if (context.getCluster().getMember().type() == RaftMemberType.PASSIVE) {
+            context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
+            if (context.getCluster().getMember().type() == RaftMemberType.ACTIVE) {
               transition(CopycatServer.State.FOLLOWER);
             }
           } else {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getActive(), configurationEntry.getPassive());
-            if (context.getCluster().isPassive()) {
+            context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
+            if (context.getCluster().getMember().type() == RaftMemberType.PASSIVE) {
               transition(CopycatServer.State.PASSIVE);
             }
           }
@@ -205,7 +206,7 @@ class PassiveState extends AbstractState {
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
     if (effectiveIndex > lastApplied) {
       long entriesToApply = effectiveIndex - lastApplied;
-      LOGGER.debug("{} - Applying {} commits", context.getAddress(), entriesToApply);
+      LOGGER.debug("{} - Applying {} commits", context.getCluster().getMember().serverAddress(), entriesToApply);
 
       CompletableFuture<Void> future = new CompletableFuture<>();
 
@@ -217,7 +218,7 @@ class PassiveState extends AbstractState {
         if (entry != null) {
           applyEntry(entry).whenComplete((result, error) -> {
             if (isOpen() && error != null) {
-              LOGGER.info("{} - An application error occurred: {}", context.getAddress(), error.getMessage());
+              LOGGER.info("{} - An application error occurred: {}", context.getCluster().getMember().serverAddress(), error.getMessage());
             }
 
             if (counter.incrementAndGet() == entriesToApply) {
@@ -255,7 +256,7 @@ class PassiveState extends AbstractState {
    * Applies an entry to the state machine.
    */
   protected CompletableFuture<?> applyEntry(Entry entry) {
-    LOGGER.debug("{} - Applying {}", context.getAddress(), entry);
+    LOGGER.debug("{} - Applying {}", context.getCluster().getMember().serverAddress(), entry);
     return context.getStateMachine().apply(entry);
   }
 
@@ -285,7 +286,7 @@ class PassiveState extends AbstractState {
    */
   protected <T extends Request<T>, U extends Response<U>> CompletableFuture<U> forward(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
-    context.getConnections().getConnection(context.getLeader()).whenComplete((connection, connectError) -> {
+    context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
         connection.<T, U>send(request).whenComplete((response, responseError) -> {
           if (responseError == null) {
@@ -369,7 +370,7 @@ class PassiveState extends AbstractState {
 
     return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withLeader(context.getLeader())
+      .withLeader(context.getLeader() != null ? context.getLeader().serverAddress() : null)
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
@@ -393,6 +394,43 @@ class PassiveState extends AbstractState {
     return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
       .withStatus(Response.Status.ERROR)
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .build()));
+  }
+
+  @Override
+  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+    }
+
+    // Store the previous member type for comparison to determine whether this node should transition.
+    MemberType previousType = context.getCluster().getMember().type();
+
+    // Configure the cluster membership.
+    context.getCluster().configure(request.version(), request.members());
+
+    // If the local member type changed, transition the state as appropriate.
+    // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
+    // PASSIVE servers are transitioned to the PASSIVE state.
+    MemberType type = context.getCluster().getMember().type();
+    if (previousType != type) {
+      if (type == RaftMemberType.ACTIVE) {
+        context.transition(RaftServer.State.FOLLOWER);
+      } else if (type == RaftMemberType.PASSIVE) {
+        context.transition(RaftServer.State.PASSIVE);
+      } else {
+        transition(RaftServer.State.INACTIVE);
+      }
+    }
+
+    return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
+      .withStatus(Response.Status.OK)
       .build()));
   }
 
