@@ -115,7 +115,7 @@ class ClusterState {
     }
 
     // If the local member type is null, that indicates it's not a member of the current configuration.
-    if (member.type() != null) {
+    if (member.type() != CopycatServer.Type.INACTIVE) {
       members.add(member);
     }
     return members;
@@ -215,14 +215,12 @@ class ClusterState {
           memberType.remove(state);
         }
 
-        if (member.type() != null) {
-          List<MemberState> memberType = memberTypes.get(member.type());
-          if (memberType == null) {
-            memberType = new ArrayList<>();
-            memberTypes.put(member.type(), memberType);
-          }
-          memberType.add(state);
+        List<MemberState> memberType = memberTypes.get(member.type());
+        if (memberType == null) {
+          memberType = new ArrayList<>();
+          memberTypes.put(member.type(), memberType);
         }
+        memberType.add(state);
       }
     }
 

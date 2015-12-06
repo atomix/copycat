@@ -1041,7 +1041,13 @@ public class ClusterTest extends ConcurrentTestCase {
   @BeforeMethod
   @AfterMethod
   public void clearTests() throws Exception {
-    clients.forEach(c -> c.close().join());
+    clients.forEach(c -> {
+      try {
+        c.close().join();
+      } catch (Exception e) {
+      }
+    });
+
     if (servers.size() < count) {
       for (int i = servers.size() + 1; i <= count; i++) {
         Member member = new Member(CopycatServer.Type.INACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
@@ -1050,8 +1056,11 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     servers.forEach(s -> {
-      s.close().join();
-      s.delete().join();
+      try {
+        s.close().join();
+        s.delete().join();
+      } catch (Exception e) {
+      }
     });
 
     registry = new LocalServerRegistry();
