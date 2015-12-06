@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
@@ -65,11 +66,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
   @BeforeMethod
   public void createStateMachine() {
-    callerContext = new SingleThreadContext("caller", new Serializer());
-    stateContext = new SingleThreadContext("state", new Serializer());
+    callerContext = new SingleThreadContext("caller", new Serializer(new ServiceLoaderTypeResolver()));
+    stateContext = new SingleThreadContext("state", new Serializer(new ServiceLoaderTypeResolver()));
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
     Storage storage = new Storage(StorageLevel.MEMORY);
+    storage.serializer().resolve(new ServiceLoaderTypeResolver());
     meta = storage.openMetaStore("test");
     log = storage.openLog("test");
     snapshot = storage.openSnapshotStore("test");
@@ -90,14 +92,16 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void testSessionRegisterKeepAlive() throws Throwable {
     callerContext.execute(() -> {
 
-      RegisterEntry entry = new RegisterEntry()
-        .setIndex(1)
-        .setTerm(1)
-        .setTimestamp(timestamp)
-        .setTimeout(500)
-        .setClient(UUID.randomUUID());
+      long index;
+      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp)
+          .setTimeout(500)
+          .setClient(UUID.randomUUID());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -112,15 +116,17 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      KeepAliveEntry entry = new KeepAliveEntry()
-        .setIndex(2)
-        .setTerm(1)
-        .setSession(1)
-        .setTimestamp(timestamp + 1000)
-        .setCommandSequence(0)
-        .setEventVersion(0);
+      long index;
+      try (KeepAliveEntry entry = log.create(KeepAliveEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setTimestamp(timestamp + 1000)
+          .setCommandSequence(0)
+          .setEventVersion(0);
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -137,14 +143,16 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void testSessionLeaderReset() throws Throwable {
     callerContext.execute(() -> {
 
-      RegisterEntry entry = new RegisterEntry()
-        .setIndex(1)
-        .setTerm(1)
-        .setTimestamp(timestamp)
-        .setTimeout(500)
-        .setClient(UUID.randomUUID());
+      long index;
+      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp)
+          .setTimeout(500)
+          .setClient(UUID.randomUUID());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -159,12 +167,14 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      NoOpEntry entry = new NoOpEntry()
-        .setIndex(2)
-        .setTerm(1)
-        .setTimestamp(timestamp + 100);
+      long index;
+      try (NoOpEntry entry = log.create(NoOpEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp + 100);
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -181,14 +191,16 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void testSessionSuspect() throws Throwable {
     callerContext.execute(() -> {
 
-      RegisterEntry entry = new RegisterEntry()
-        .setIndex(1)
-        .setTerm(1)
-        .setTimestamp(timestamp)
-        .setTimeout(500)
-        .setClient(UUID.randomUUID());
+      long index;
+      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp)
+          .setTimeout(500)
+          .setClient(UUID.randomUUID());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -203,15 +215,17 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      KeepAliveEntry entry = new KeepAliveEntry()
-        .setIndex(3)
-        .setTerm(1)
-        .setSession(2)
-        .setTimestamp(timestamp + 1000)
-        .setCommandSequence(0)
-        .setEventVersion(0);
+      long index;
+      try (KeepAliveEntry entry = log.create(KeepAliveEntry.class)) {
+        entry.setTerm(1)
+          .setSession(2)
+          .setTimestamp(timestamp + 1000)
+          .setCommandSequence(0)
+          .setEventVersion(0);
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNotNull(error);
         resume();
       });
@@ -228,14 +242,16 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void testCommandSequence() throws Throwable {
     callerContext.execute(() -> {
 
-      RegisterEntry entry = new RegisterEntry()
-        .setIndex(1)
-        .setTerm(1)
-        .setTimestamp(timestamp)
-        .setTimeout(500)
-        .setClient(UUID.randomUUID());
+      long index;
+      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp)
+          .setTimeout(500)
+          .setClient(UUID.randomUUID());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -251,15 +267,17 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      CommandEntry entry = new CommandEntry()
-        .setIndex(2)
-        .setTerm(1)
-        .setSession(1)
-        .setSequence(1)
-        .setTimestamp(timestamp + 100)
-        .setCommand(new TestCommand());
+      long index;
+      try (CommandEntry entry = log.create(CommandEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setSequence(1)
+          .setTimestamp(timestamp + 100)
+          .setCommand(new TestCommand());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertEquals(result, 1L);
         resume();
       });
@@ -273,15 +291,17 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      CommandEntry entry = new CommandEntry()
-        .setIndex(3)
-        .setTerm(1)
-        .setSession(1)
-        .setSequence(2)
-        .setTimestamp(timestamp + 200)
-        .setCommand(new TestCommand());
+      long index;
+      try (CommandEntry entry = log.create(CommandEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setSequence(2)
+          .setTimestamp(timestamp + 200)
+          .setCommand(new TestCommand());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertEquals(result, 2L);
         resume();
       });
@@ -290,15 +310,17 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      CommandEntry entry = new CommandEntry()
-        .setIndex(4)
-        .setTerm(1)
-        .setSession(1)
-        .setSequence(3)
-        .setTimestamp(timestamp + 300)
-        .setCommand(new TestCommand());
+      long index;
+      try (CommandEntry entry = log.create(CommandEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setSequence(3)
+          .setTimestamp(timestamp + 300)
+          .setCommand(new TestCommand());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertEquals(result, 3L);
         resume();
       });
@@ -317,19 +339,21 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   public void testQuerySerialize() throws Throwable {
     callerContext.execute(() -> {
 
-      RegisterEntry entry = new RegisterEntry()
-        .setIndex(1)
-        .setTerm(1)
-        .setTimestamp(timestamp)
-        .setTimeout(500)
-        .setClient(UUID.randomUUID());
+      long index;
+      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp)
+          .setTimeout(500)
+          .setClient(UUID.randomUUID());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
 
-      threadAssertEquals(state.getStateMachine().getLastApplied(), 1l);
+      threadAssertEquals(state.getStateMachine().getLastApplied(), index);
     });
 
     await();
@@ -342,16 +366,18 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      QueryEntry entry = new QueryEntry()
-        .setIndex(state.getStateMachine().getLastApplied())
-        .setTerm(1)
-        .setSession(1)
-        .setTimestamp(timestamp + 200)
-        .setSequence(0)
-        .setVersion(0)
-        .setQuery(new TestQuery());
+      long index;
+      try (QueryEntry entry = log.create(QueryEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setTimestamp(timestamp + 200)
+          .setSequence(0)
+          .setVersion(0)
+          .setQuery(new TestQuery());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertEquals(result, 1L);
         resume();
       });
@@ -360,20 +386,22 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      CommandEntry entry = new CommandEntry()
-        .setIndex(2)
-        .setTerm(1)
-        .setSession(1)
-        .setSequence(1)
-        .setTimestamp(timestamp + 100)
-        .setCommand(new TestCommand());
+      long index;
+      try (CommandEntry entry = log.create(CommandEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setSequence(1)
+          .setTimestamp(timestamp + 100)
+          .setCommand(new TestCommand());
+        index = log.append(entry);
+      }
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
         threadAssertEquals(result, 2L);
         resume();
       });
 
-      threadAssertEquals(state.getStateMachine().getLastApplied(), 2l);
+      threadAssertEquals(state.getStateMachine().getLastApplied(), index);
     });
 
     await(1000, 2);
