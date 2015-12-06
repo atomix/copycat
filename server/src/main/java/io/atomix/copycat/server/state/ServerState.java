@@ -525,7 +525,7 @@ public class ServerState {
     // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
     // Note that we don't complete the join future when transitioning to a valid state since we need
     // to ensure that the server's configuration has been updated in the cluster before completing the join.
-    if (cluster.getMember().type() != null) {
+    if (cluster.getMember().type() != CopycatServer.Type.INACTIVE) {
       if (cluster.getMember().type() == CopycatServer.Type.ACTIVE) {
         transition(CopycatServer.State.FOLLOWER);
       } else if (cluster.getMember().type() == CopycatServer.Type.PASSIVE) {
