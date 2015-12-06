@@ -258,6 +258,10 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once the commit has been applied.
    */
   public CompletableFuture<?> apply(long index) {
+    if (index > lastApplied + 1) {
+      applyAll(index - 1);
+    }
+
     Entry entry = state.getLog().get(index);
     if (entry != null) {
       try {
