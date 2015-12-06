@@ -332,7 +332,14 @@ final class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    state.getLog().clean(entry.getIndex());
+    ServerSession session = executor().context().sessions().getSession(entry.getSession());
+    if (session != null) {
+      long previousIndex = session.getConnectIndex();
+      session.setConnectIndex(entry.getIndex());
+      if (previousIndex > 0) {
+        state.getLog().clean(previousIndex);
+      }
+    }
     return CompletableFuture.completedFuture(null);
   }
 
@@ -429,6 +436,9 @@ final class ServerStateMachine implements AutoCloseable {
     else {
       ThreadContext context = ThreadContext.currentContextOrThrow();
 
+      // Store the index of the previous keep alive request.
+      long previousIndex = session.getKeepAliveIndex();
+
       // Set the session as trusted. This will prevent the leader from explicitly unregistering the
       // session if it hasn't done so already.
       session.trust();
@@ -449,12 +459,17 @@ final class ServerStateMachine implements AutoCloseable {
       // within sessions themselves.
       updateLastCompleted(entry.getIndex());
 
+      // Update the session keep alive index for log cleaning.
+      session.setKeepAliveIndex(entry.getIndex());
+
+      // If a prior keep alive entry was already committed, clean it as it no longer contributes to the session's state.
+      if (previousIndex > 0) {
+        state.getLog().clean(previousIndex);
+      }
+
       future = new CompletableFuture<>();
       context.executor().execute(() -> future.complete(null));
     }
-
-    // Immediately clean the keep alive entry from the log.
-    state.getLog().clean(entry.getIndex());
 
     return future;
   }
@@ -557,6 +572,12 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Clean the unregister entry from the log immediately after it's applied.
       state.getLog().clean(session.id());
+
+      // Clean the session's last keep alive entry from the log if one exists.
+      long keepAliveIndex = session.getKeepAliveIndex();
+      if (keepAliveIndex > 0) {
+        state.getLog().clean(keepAliveIndex);
+      }
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
       // index for which logs can be compacted.
