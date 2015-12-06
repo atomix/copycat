@@ -296,6 +296,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
     private Transport transport;
     private Serializer serializer;
     private Set<Address> members;
+    private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private SubmissionStrategy submissionStrategy = SubmissionStrategies.FOLLOWERS;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
@@ -329,6 +330,18 @@ public interface CopycatClient extends Managed<CopycatClient> {
      */
     public Builder withSerializer(Serializer serializer) {
       this.serializer = Assert.notNull(serializer, "serializer");
+      return this;
+    }
+
+    /**
+     * Sets the client connection strategy.
+     *
+     * @param connectionStrategy The client connection strategy.
+     * @return The client builder.
+     * @throws NullPointerException If the connection strategy is {@code null}
+     */
+    public Builder withConnectionStrategy(ConnectionStrategy connectionStrategy) {
+      this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
       return this;
     }
 
@@ -373,7 +386,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
       if (serializer == null) {
         serializer = new Serializer();
       }
-      return new DefaultCopycatClient(transport, members, serializer, submissionStrategy, recoveryStrategy);
+      return new DefaultCopycatClient(transport, members, serializer, connectionStrategy, submissionStrategy, recoveryStrategy);
     }
   }
 
