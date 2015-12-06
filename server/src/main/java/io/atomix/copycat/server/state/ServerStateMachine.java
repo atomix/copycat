@@ -260,7 +260,11 @@ final class ServerStateMachine implements AutoCloseable {
   public CompletableFuture<?> apply(long index) {
     Entry entry = state.getLog().get(index);
     if (entry != null) {
-      return apply(entry).whenComplete((result, error) -> entry.release());
+      try {
+        return apply(entry).whenComplete((result, error) -> entry.release());
+      } finally {
+        setLastApplied(index);
+      }
     } else {
       setLastApplied(index);
       return CompletableFuture.completedFuture(null);
