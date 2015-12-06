@@ -29,7 +29,7 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.ConnectionStrategy;
+import io.atomix.copycat.client.SubmissionStrategy;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
@@ -86,7 +86,7 @@ public class ClientSession implements Session, Managed<Session> {
   private Address leader;
   private Set<Address> members;
   private final ThreadContext context;
-  private final ConnectionStrategy connectionStrategy;
+  private final SubmissionStrategy submissionStrategy;
   private List<Address> connectMembers;
   private Connection connection;
   private volatile State state = State.CLOSED;
@@ -109,13 +109,13 @@ public class ClientSession implements Session, Managed<Session> {
   private long eventVersion;
   private long completeVersion;
 
-  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy) {
+  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, SubmissionStrategy submissionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.client = Assert.notNull(transport, "transport").client();
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
-    this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+    this.submissionStrategy = Assert.notNull(submissionStrategy, "submissionStrategy");
+    this.connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(members));
   }
 
   @Override
@@ -154,7 +154,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members));
+    this.connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(this.members));
   }
 
   /**
@@ -589,7 +589,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private ClientSession resetMembers() {
     if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+      connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(members));
     }
     return this;
   }

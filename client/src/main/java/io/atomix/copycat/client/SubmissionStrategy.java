@@ -20,16 +20,16 @@ import io.atomix.catalyst.transport.Address;
 import java.util.List;
 
 /**
- * Strategy for managing client connections.
+ * Strategy for submitting operations to the cluster.
  * <p>
- * Connection strategies are responsible for defining the servers to which a client can connect.
+ * Submission strategies are responsible for defining the servers to which a client can connect.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface ConnectionStrategy {
+public interface SubmissionStrategy {
 
   /**
-   * Returns a list of servers to which the client can connect.
+   * Returns a list of servers to which the client can submit operations.
    *
    * @param leader The current cluster leader.
    * @param servers The current list of servers.

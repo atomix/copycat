@@ -86,18 +86,18 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Transport transport;
   private final Collection<Address> members;
   private final Serializer serializer;
-  private final ConnectionStrategy connectionStrategy;
+  private final SubmissionStrategy submissionStrategy;
   private final RecoveryStrategy recoveryStrategy;
   private volatile ClientSession session;
   private volatile CompletableFuture<CopycatClient> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
 
-  protected DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
+  protected DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, SubmissionStrategy submissionStrategy, RecoveryStrategy recoveryStrategy) {
     serializer.resolve(new ServiceLoaderTypeResolver());
     this.transport = Assert.notNull(transport, "transport");
     this.members = Assert.notNull(members, "members");
     this.serializer = Assert.notNull(serializer, "serializer");
-    this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
+    this.submissionStrategy = Assert.notNull(submissionStrategy, "submissionStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
   }
 
@@ -145,7 +145,7 @@ public class DefaultCopycatClient implements CopycatClient {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          ClientSession session = new ClientSession(id, transport, members, serializer, connectionStrategy);
+          ClientSession session = new ClientSession(id, transport, members, serializer, submissionStrategy);
           if (closeFuture == null) {
             openFuture = session.open().thenApply(s -> {
               synchronized (this) {
