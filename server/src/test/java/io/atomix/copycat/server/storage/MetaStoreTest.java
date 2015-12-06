@@ -17,6 +17,11 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -25,9 +30,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.UUID;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Metastore test.
@@ -55,12 +63,28 @@ public class MetaStoreTest {
   @SuppressWarnings("unchecked")
   public void testMetaStore() {
     MetaStore meta = createMetaStore();
+
     assertEquals(meta.loadTerm(), 0);
     assertEquals(meta.loadVote(), 0);
+
     meta.storeTerm(1);
     meta.storeVote(2);
+
     assertEquals(meta.loadTerm(), 1);
     assertEquals(meta.loadVote(), 2);
+
+    Collection<Member> members = Arrays.asList(
+      new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000)),
+      new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
+      new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
+    );
+    meta.storeConfiguration(new Configuration(1, members));
+
+    Configuration configuration = meta.loadConfiguration();
+    assertEquals(configuration.version(), 1);
+    assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))));
+    assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001))));
+    assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))));
   }
 
   /**

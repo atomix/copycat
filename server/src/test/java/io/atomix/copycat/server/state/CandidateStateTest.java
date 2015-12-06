@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Server;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.RaftServer;
+import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -44,7 +44,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
+      int leader = serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id();
       serverState.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
@@ -60,13 +60,13 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 2L);
       assertEquals(serverState.getLeader().hashCode(), leader);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateIncrementsTermVotesForSelfOnElection() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getCluster().getMember().serverAddress().hashCode();
       serverState.setTerm(2);
 
       state.startElection();
@@ -78,7 +78,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesForSelfOnRequest() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getCluster().getMember().serverAddress().hashCode();
       serverState.setTerm(2);
 
       state.startElection();
@@ -104,7 +104,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
+      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
 
       state.startElection();
@@ -125,13 +125,13 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 3L);
       assertEquals(serverState.getLastVotedFor(), candidate);
       assertEquals(response.term(), 3L);
-      assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getActiveMembers().iterator().next().getAddress().hashCode();
+      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
       serverState.setTerm(1);
 
       append(2, 1);
@@ -154,20 +154,20 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       assertEquals(serverState.getTerm(), 3L);
       assertEquals(serverState.getLastVotedFor(), 0);
       assertEquals(response.term(), 3L);
-      assertEquals(serverState.getState(), RaftServer.State.FOLLOWER);
+      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateTransitionsToLeaderOnElection() throws Throwable {
     serverState.onStateChange(state -> {
-      if (state == RaftServer.State.LEADER)
+      if (state == CopycatServer.State.LEADER)
         resume();
     });
 
     runOnServer(() -> {
-      for (MemberState member : serverState.getCluster().getActiveMembers()) {
+      for (Member member : serverState.getCluster().getMembers()) {
         Server server = transport.server();
-        server.listen(member.getAddress(), c -> {
+        server.listen(member.serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(true)
@@ -176,10 +176,10 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       }
     });
 
-    await(1000, serverState.getCluster().getActiveMembers().size());
+    await(1000, serverState.getCluster().getMembers().size());
 
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getCluster().getMember().serverAddress().hashCode();
       serverState.setTerm(1);
 
       state.startElection();
@@ -192,14 +192,14 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
   public void testCandidateTransitionsToFollowerOnRejection() throws Throwable {
     serverState.onStateChange(state -> {
-      if (state == RaftServer.State.FOLLOWER)
+      if (state == CopycatServer.State.FOLLOWER)
         resume();
     });
 
     runOnServer(() -> {
-      for (MemberState member : serverState.getCluster().getActiveMembers()) {
+      for (Member member : serverState.getCluster().getMembers()) {
         Server server = transport.server();
-        server.listen(member.getAddress(), c -> {
+        server.listen(member.serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(false)
@@ -208,10 +208,10 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       }
     });
 
-    await(1000, serverState.getCluster().getActiveMembers().size());
+    await(1000, serverState.getCluster().getMembers().size());
 
     runOnServer(() -> {
-      int self = serverState.getAddress().hashCode();
+      int self = serverState.getCluster().getMember().serverAddress().hashCode();
       serverState.setTerm(1);
 
       state.startElection();

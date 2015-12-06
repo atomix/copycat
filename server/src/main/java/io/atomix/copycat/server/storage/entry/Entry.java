@@ -86,11 +86,20 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   }
 
   /**
-   * Returns a boolean value indicating whether the command is a tombstone.
+   * Returns a boolean value indicating whether the entry is a tombstone.
    *
-   * @return Indicates whether the command is a tombstone.
+   * @return Indicates whether the entry is a tombstone.
    */
   public boolean isTombstone() {
+    return false;
+  }
+
+  /**
+   * Returns a boolean value indicating whether the command can be removed after a snapshot.
+   *
+   * @return Indicates whether the command can be removed after a snapshot.
+   */
+  public boolean isSnapshotted() {
     return false;
   }
 

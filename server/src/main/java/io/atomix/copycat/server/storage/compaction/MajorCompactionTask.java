@@ -95,11 +95,13 @@ public final class MajorCompactionTask implements CompactionTask {
   private final SegmentManager manager;
   private final List<List<Segment>> groups;
   private List<List<Predicate<Long>>> cleaners;
+  private final long snapshotIndex;
   private final long compactIndex;
 
-  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups, long compactIndex) {
+  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups, long snapshotIndex, long compactIndex) {
     this.manager = Assert.notNull(manager, "manager");
     this.groups = Assert.notNull(groups, "segments");
+    this.snapshotIndex = snapshotIndex;
     this.compactIndex = compactIndex;
   }
 
@@ -197,16 +199,22 @@ public final class MajorCompactionTask implements CompactionTask {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, remove the entry from the segment.
       if (entry != null) {
+        // If the entry is a snapshotted entry and its index is less than the snapshot index it can be safely
+        // removed and doesn't have to be explicitly cleaned.
+        if (entry.isSnapshotted() && index <= snapshotIndex) {
+          compactSegment.skip(1);
+          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        }
         // If the entry's index is less than the major compact index then it can be safely removed if cleaned.
         // If the entry's index is greater than the major compact index, the entry must not be a tombstone.
         // Tombstones may only be removed from the log if their index is less than the major compact index.
-        if (index <= compactIndex || !entry.isTombstone()) {
+        else if (!entry.isTombstone() || index <= compactIndex) {
           // If the entry has been cleaned, skip the entry in the compact segment.
           // Note that for major compaction this process includes normal and tombstone entries.
           long offset = segment.offset(index);
           if (offset == -1 || cleaner.test(offset)) {
             compactSegment.skip(1);
-            LOGGER.debug("Cleaned entry {} from segment {}", index, segment.descriptor().id());
+            LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
           }
           // If the entry hasn't been cleaned, simply transfer it to the new segment.
           else {

@@ -25,6 +25,9 @@ import java.io.File;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class SegmentFile {
+  private static final char PART_SEPARATOR = '-';
+  private static final char EXTENSION_SEPARATOR = '.';
+  private static final String EXTENSION = "log";
   private final File file;
 
   /**
@@ -36,25 +39,25 @@ final class SegmentFile {
     Assert.notNull(name, "name");
     Assert.notNull(file, "file");
     String fileName = file.getName();
-    if (fileName.lastIndexOf('.') == -1 || fileName.lastIndexOf('-') == -1 || fileName.lastIndexOf('.') < fileName.lastIndexOf('-') || !fileName.endsWith(".log"))
+    if (fileName.lastIndexOf(EXTENSION_SEPARATOR) == -1 || fileName.lastIndexOf(PART_SEPARATOR) == -1 || fileName.lastIndexOf(EXTENSION_SEPARATOR) < fileName.lastIndexOf(PART_SEPARATOR) || !fileName.endsWith(EXTENSION))
       return false;
 
-    for (int i = fileName.lastIndexOf('-') + 1; i < fileName.lastIndexOf('.'); i++) {
+    for (int i = fileName.lastIndexOf(PART_SEPARATOR) + 1; i < fileName.lastIndexOf(EXTENSION_SEPARATOR); i++) {
       if (!Character.isDigit(fileName.charAt(i))) {
         return false;
       }
     }
 
-    if (fileName.lastIndexOf('-', fileName.lastIndexOf('-') - 1) == -1)
+    if (fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1) == -1)
       return false;
 
-    for (int i = fileName.lastIndexOf('-', fileName.lastIndexOf('-') - 1) + 1; i < fileName.lastIndexOf('-'); i++) {
+    for (int i = fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1) + 1; i < fileName.lastIndexOf(PART_SEPARATOR); i++) {
       if (!Character.isDigit(fileName.charAt(i))) {
         return false;
       }
     }
 
-    return fileName.substring(0, fileName.lastIndexOf('-', fileName.lastIndexOf('-') - 1)).equals(name);
+    return fileName.substring(0, fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1)).equals(name);
   }
 
   /**
@@ -81,26 +84,17 @@ final class SegmentFile {
   }
 
   /**
-   * Returns the segment index file.
-   *
-   * @return The segment index file.
-   */
-  public File index() {
-    return new File(file.getParentFile(), file.getName().substring(0, file.getName().lastIndexOf('.') + 1) + "index");
-  }
-
-  /**
    * Returns the segment identifier.
    */
   public long id() {
-    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf('-', file.getName().lastIndexOf('-') - 1) + 1, file.getName().lastIndexOf('-')));
+    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR, file.getName().lastIndexOf(PART_SEPARATOR) - 1) + 1, file.getName().lastIndexOf(PART_SEPARATOR)));
   }
 
   /**
    * Returns the segment version.
    */
   public long version() {
-    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf('-') + 1, file.getName().lastIndexOf('.')));
+    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR) + 1, file.getName().lastIndexOf(EXTENSION_SEPARATOR)));
   }
 
 }

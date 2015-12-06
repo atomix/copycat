@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.system;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 
 import java.io.File;
 
@@ -31,9 +34,11 @@ import java.io.File;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class MetaStore implements AutoCloseable {
+  private final Storage storage;
   private final Buffer buffer;
 
-  MetaStore(String name, Storage storage) {
+  public MetaStore(String name, Storage storage) {
+    this.storage = Assert.notNull(storage, "storage");
     if (storage.level() == StorageLevel.MEMORY) {
       buffer = HeapBuffer.allocate(12);
     } else {
@@ -81,6 +86,34 @@ public class MetaStore implements AutoCloseable {
    */
   public int loadVote() {
     return buffer.readInt(8);
+  }
+
+  /**
+   * Stores the current cluster configuration.
+   *
+   * @param configuration The current cluster configuration.
+   * @return The metastore.
+   */
+  public MetaStore storeConfiguration(Configuration configuration) {
+    buffer.position(12).writeLong(configuration.version());
+    storage.serializer().writeObject(configuration.members(), buffer);
+    return this;
+  }
+
+  /**
+   * Loads the current cluster configuration.
+   *
+   * @return The current cluster configuration.
+   */
+  public Configuration loadConfiguration() {
+    long version = buffer.position(12).readLong();
+    if (version > 0) {
+      return new Configuration(
+        version,
+        storage.serializer().readObject(buffer)
+      );
+    }
+    return null;
   }
 
   @Override

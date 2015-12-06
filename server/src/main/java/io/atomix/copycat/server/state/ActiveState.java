@@ -23,7 +23,6 @@ import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.RaftServer;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.PollRequest;
 import io.atomix.copycat.server.request.VoteRequest;
@@ -91,7 +90,7 @@ abstract class ActiveState extends PassiveState {
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getCluster().getMember().serverAddress(), request);
       return PollResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -126,7 +125,7 @@ abstract class ActiveState extends PassiveState {
 
     CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
     if (transition) {
-      transition(RaftServer.State.FOLLOWER);
+      transition(CopycatServer.State.FOLLOWER);
     }
     return future;
   }
@@ -139,7 +138,7 @@ abstract class ActiveState extends PassiveState {
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getAddress(), request);
+      LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getCluster().getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -148,8 +147,8 @@ abstract class ActiveState extends PassiveState {
     }
     // If the requesting candidate is not a known member of the cluster (to this
     // node) then don't vote for it. Only vote for candidates that we know about.
-    else if (!context.getCluster().getActiveMembers().stream().<Integer>map(m -> m.getAddress().hashCode()).collect(Collectors.toSet()).contains(request.candidate())) {
-      LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getAddress(), request);
+    else if (!context.getCluster().getMembers().stream().<Integer>map(Member::id).collect(Collectors.toSet()).contains(request.candidate())) {
+      LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getCluster().getMember().serverAddress(), request);
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -175,7 +174,7 @@ abstract class ActiveState extends PassiveState {
     }
     // In this case, we've already voted for someone else.
     else {
-      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getAddress(), request, context.getLastVotedFor());
+      LOGGER.debug("{} - Rejected {}: already voted for {}", context.getCluster().getMember().serverAddress(), request, context.getLastVotedFor());
       return VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -190,7 +189,7 @@ abstract class ActiveState extends PassiveState {
   boolean isLogUpToDate(long index, long term, Request request) {
     // If the log is empty then vote for the candidate.
     if (context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
+      LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().getMember().serverAddress(), request);
       return true;
     } else {
       // Otherwise, load the last entry in the log. The last entry should be
@@ -198,21 +197,21 @@ abstract class ActiveState extends PassiveState {
       long lastIndex = context.getLog().lastIndex();
       Entry entry = context.getLog().get(lastIndex);
       if (entry == null) {
-        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
+        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().getMember().serverAddress(), request);
         return true;
       }
 
       try {
         if (index != 0 && index >= lastIndex) {
           if (term >= entry.getTerm()) {
-            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getAddress(), request);
+            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().getMember().serverAddress(), request);
             return true;
           } else {
-            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getAddress(), request, term, entry.getTerm());
+            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getCluster().getMember().serverAddress(), request, term, entry.getTerm());
             return false;
           }
         } else {
-          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getAddress(), request, index, lastIndex);
+          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().getMember().serverAddress(), request, index, lastIndex);
           return false;
         }
       } finally {
@@ -254,7 +253,7 @@ abstract class ActiveState extends PassiveState {
         .build()));
     }
 
-    LOGGER.debug("{} - Forwarded {}", context.getAddress(), request);
+    LOGGER.debug("{} - Forwarded {}", context.getCluster().getMember().serverAddress(), request);
     return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
   }
 

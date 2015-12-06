@@ -133,8 +133,7 @@ public class Log implements AutoCloseable {
    */
   protected Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(),
-        new CatalystThreadFactory("copycat-compactor-%d")));
+    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-compactor-%d")));
   }
 
   /**
@@ -241,6 +240,15 @@ public class Log implements AutoCloseable {
    */
   public long lastIndex() {
     return !isEmpty() ? segments.lastSegment().lastIndex() : 0;
+  }
+
+  /**
+   * Returns the next index in the log.
+   *
+   * @return The next index in the log.
+   */
+  public long nextIndex() {
+    return lastIndex() + 1;
   }
 
   /**

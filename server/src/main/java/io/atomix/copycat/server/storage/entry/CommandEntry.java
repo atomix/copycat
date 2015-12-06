@@ -29,7 +29,7 @@ import io.atomix.copycat.client.Operation;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=220)
+@SerializeWith(id=221)
 public class CommandEntry extends OperationEntry<CommandEntry> {
   private Command command;
 
@@ -42,7 +42,12 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
 
   @Override
   public boolean isTombstone() {
-    return command.persistence() == Command.PersistenceLevel.PERSISTENT;
+    return command.compact() == Command.CompactionMode.SEQUENTIAL;
+  }
+
+  @Override
+  public boolean isSnapshotted() {
+    return command.compact() == Command.CompactionMode.SNAPSHOT;
   }
 
   @Override

@@ -17,11 +17,15 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -33,10 +37,23 @@ class ServerSessionManager implements Sessions {
   private final Map<Long, Address> addresses = new ConcurrentHashMap<>();
   private final Map<Long, Connection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
+  final Set<SessionListener> listeners = new HashSet<>();
 
   @Override
   public Session session(long sessionId) {
     return sessions.get(sessionId);
+  }
+
+  @Override
+  public Sessions addListener(SessionListener listener) {
+    listeners.add(Assert.notNull(listener, "listener"));
+    return this;
+  }
+
+  @Override
+  public Sessions removeListener(SessionListener listener) {
+    listeners.remove(Assert.notNull(listener, "listener"));
+    return this;
   }
 
   /**

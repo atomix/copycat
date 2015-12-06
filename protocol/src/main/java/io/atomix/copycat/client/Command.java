@@ -43,11 +43,11 @@ package io.atomix.copycat.client;
  * When commands are submitted to the Raft cluster, they're written to a commit log on disk or in memory (based on the
  * storage configuration) and replicated to a majority of the cluster. As disk usage grows over time, servers compact
  * their logs to remove commands that no longer contribute to the state machine's state. In order to ensure state machines
- * remain deterministic, commands must provide {@link io.atomix.copycat.client.Command.PersistenceLevel persistence levels}
+ * remain deterministic, commands must provide {@link CompactionMode persistence levels}
  * to aid servers in deciding when it's safe to remove a command from the log. The persistence level allows state machines
  * to safely handle the complexities of removing state from state machines while ensuring state machines remain
  * deterministic, particularly in the event of a failure and replay of the commit log. See the
- * {@link io.atomix.copycat.client.Command.PersistenceLevel} documentation for more info.
+ * {@link CompactionMode} documentation for more info.
  * <p>
  * <b>Serialization</b>
  * <p>
@@ -59,7 +59,7 @@ package io.atomix.copycat.client;
  * or on the associated client/server {@link io.atomix.catalyst.serializer.Serializer} instance.
  *
  * @see io.atomix.copycat.client.Command.ConsistencyLevel
- * @see io.atomix.copycat.client.Command.PersistenceLevel
+ * @see CompactionMode
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -123,25 +123,25 @@ public interface Command<T> extends Operation<T> {
    * deterministic. If a tombstone command is removed from the log before any commands for which it removed state, the
    * state machine should be considered non-deterministic. <em>Determinism is the number one rule for state machines!</em>
    * <p>
-   * Commands that remove state from the state machine should <em>always</em> be marked as {@link #PERSISTENT}. This
+   * Commands that remove state from the state machine should <em>always</em> be marked as {@link #SEQUENTIAL}. This
    * will ensure that the commands remain in the log until after any prior commands are removed. Note that in some cases
    * it may not be totally evident that a command needs to be marked persistent. For instance, in an imaginary map
-   * state machine, a command that sets a key with a TTL (time-to-live) should be marked {@link #PERSISTENT} because,
+   * state machine, a command that sets a key with a TTL (time-to-live) should be marked {@link #SEQUENTIAL} because,
    * while it contributes to the state machine's state for some time period, ultimately it removes state from the
    * state machine once it expires.
    * <p>
-   * All commands that do not remove prior command state from a state machine can be safely marked {@link #EPHEMERAL}.
+   * All commands that do not remove prior command state from a state machine can be safely marked {@link #CLEAN}.
    *
-   * @see #persistence()
+   * @see #compact()
    *
    * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
    */
-  enum PersistenceLevel {
+  enum CompactionMode {
 
     /**
      * Indicates that the command should be persisted in the Raft log until cleaned.
      * <p>
-     * Most commands will be marked {@code EPHEMERAL}. Once a command has been marked for cleaning from the Raft log,
+     * Most commands will be marked {@code CLEAN}. Once a command has been marked for cleaning from the Raft log,
      * it may be removed from the log at any time
      * <p>
      * Some examples of ephemeral commands include:
@@ -154,15 +154,15 @@ public interface Command<T> extends Operation<T> {
      * <p>
      * Be careful for potential error in commands that disappear from the state machine after some time interval,
      * such as setting a key in a map with a TTL (time-to-live). Commands that result in the removal of state machine
-     * state should <em>always</em> be marked {@link #PERSISTENT} even if the removal happens at some arbitrary point
+     * state should <em>always</em> be marked {@link #SEQUENTIAL} even if the removal happens at some arbitrary point
      * in the future.
      */
-    EPHEMERAL,
+    CLEAN,
 
     /**
      * Indicates the command should be persisted in the Raft log until all prior related commands have been cleaned.
      * <p>
-     * The {@code PERSISTENT} persistence level is useful for things like tombstones. Tombstones are commands that
+     * The {@code CLEAN_TOMBSTONE} persistence level is useful for things like tombstones. Tombstones are commands that
      * remove state from the state machine. They essentially represent the deletion of history, and as such they
      * must be persisted in the log until the history prior to the tombstone is physically deleted from disk
      * (or memory).
@@ -177,7 +177,18 @@ public interface Command<T> extends Operation<T> {
      * In the event of a failure and replay of the commit log, persistent commands are guaranteed to be replayed
      * to the server side state machine(s) as long as prior commands remain in the log.
      */
-    PERSISTENT
+    SEQUENTIAL,
+
+    /**
+     * Indicates that the command should be persisted in the Raft log until a snapshot of the state machine state has been taken.
+     * <p>
+     * The {@code SNAPSHOT} persistence level indicates commands for which resulting state is stored in state machine snapshots.
+     * Snapshot commands will be stored in the Raft log only until a snapshot of the state machine state has been written to disk,
+     * at which time they'll be removed from the log. Note that snapshot commands can still safely trigger state machine events. Commands
+     * that result in the publishing of events will be persisted in the log until related events have been received by all clients even
+     * if a snapshot of the state machine has since been stored.
+     */
+    SNAPSHOT
 
   }
 
@@ -200,16 +211,16 @@ public interface Command<T> extends Operation<T> {
   }
 
   /**
-   * Returns the command persistence level.
+   * Returns the command compaction mode.
    * <p>
-   * The persistence level will dictate how long the command is persisted in the Raft log before it can be cleaned.
+   * The compaction mode will dictate how long the command is persisted in the Raft log before it can be compacted.
    *
-   * @see PersistenceLevel
+   * @see CompactionMode
    *
-   * @return The command persistence level.
+   * @return The command compaction mode.
    */
-  default PersistenceLevel persistence() {
-    return PersistenceLevel.EPHEMERAL;
+  default CompactionMode compact() {
+    return CompactionMode.SNAPSHOT;
   }
 
 }

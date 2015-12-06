@@ -22,34 +22,41 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
+import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.entry.*;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Raft server state machine.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ServerStateMachine implements AutoCloseable {
+final class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
+  private final ServerState state;
   private final ServerStateMachineExecutor executor;
-  private final ServerCommitCleaner cleaner;
   private final ServerCommitPool commits;
-  private long lastApplied;
+  private volatile long lastApplied;
   private long lastCompleted;
   private long configuration;
+  private Snapshot pendingSnapshot;
 
-  ServerStateMachine(StateMachine stateMachine, ServerStateMachineContext context, ServerCommitCleaner cleaner, ThreadContext executor) {
-    this.stateMachine = stateMachine;
-    this.executor = new ServerStateMachineExecutor(context, executor);
-    this.cleaner = cleaner;
-    this.commits = new ServerCommitPool(cleaner, this.executor.context().sessions());
+  ServerStateMachine(StateMachine stateMachine, ServerState state, ThreadContext executor) {
+    this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
+    this.state = Assert.notNull(state, "state");
+    this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager()), executor);
+    this.commits = new ServerCommitPool(state.getLog(), this.executor.context().sessions());
     init();
   }
 
@@ -58,6 +65,77 @@ class ServerStateMachine implements AutoCloseable {
    */
   private void init() {
     stateMachine.init(executor);
+  }
+
+  /**
+   * Takes a snapshot of the state machine state if necessary.
+   */
+  private void takeSnapshot() {
+    // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
+    // index has met the snapshot index. Note that this will be executed in the state machine thread.
+    // Snapshots are only taken of the state machine when the log becomes compactable. If the log can
+    // be compacted, the lastApplied index must be greater than the last snapshot version.
+    Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
+    if (pendingSnapshot == null && stateMachine instanceof Snapshottable && state.getLog().compactor().isCompactable()
+      && (currentSnapshot == null || lastApplied > currentSnapshot.version())) {
+      pendingSnapshot = state.getSnapshotStore().createSnapshot(lastApplied);
+
+      // Write the snapshot data. Note that we don't complete the snapshot here since the completion
+      // of a snapshot is predicated on session events being received by clients up to the snapshot index.
+      LOGGER.debug("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.version());
+      synchronized (pendingSnapshot) {
+        try (SnapshotWriter writer = pendingSnapshot.writer()) {
+          ((Snapshottable) stateMachine).snapshot(writer);
+        }
+      }
+    }
+  }
+
+  /**
+   * Installs a snapshot of the state machine state if necessary.
+   */
+  private void installSnapshot() {
+    // If the last stored snapshot has not yet been installed and its version matches the last applied state
+    // machine index, install the snapshot. This requires that the state machine see all indexes sequentially
+    // even for entries that have been compacted from the log.
+    Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
+    if (currentSnapshot != null && currentSnapshot.version() > state.getLog().compactor().snapshotIndex() && currentSnapshot.version() == lastApplied && stateMachine instanceof Snapshottable) {
+
+      // Install the snapshot in the state machine thread. Multiple threads can access snapshots, so we
+      // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
+      // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
+      // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
+      LOGGER.debug("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.version());
+      executor.executor().execute(() -> {
+        synchronized (currentSnapshot) {
+          try (SnapshotReader reader = currentSnapshot.reader()) {
+            ((Snapshottable) stateMachine).install(reader);
+          }
+        }
+      });
+
+      // Once a snapshot has been applied, snapshot dependent entries can be cleaned from the log.
+      state.getLog().compactor().snapshotIndex(currentSnapshot.version());
+    }
+  }
+
+  /**
+   * Completes a snapshot of the state machine state.
+   */
+  private void completeSnapshot() {
+    // If a snapshot is pending to be persisted and the last completed index is greater than the
+    // waiting snapshot version, persist the snapshot and update the last snapshot index.
+    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.version()) {
+      long snapshotIndex = pendingSnapshot.version();
+      LOGGER.debug("{} - Completing snapshot {}", state.getCluster().getMember().serverAddress(), snapshotIndex);
+      synchronized (pendingSnapshot) {
+        pendingSnapshot.complete();
+        pendingSnapshot = null;
+      }
+
+      // Once the snapshot has been completed, snapshot dependent entries can be cleaned from the log.
+      state.getLog().compactor().snapshotIndex(snapshotIndex);
+    }
   }
 
   /**
@@ -86,9 +164,10 @@ class ServerStateMachine implements AutoCloseable {
    * @param lastApplied The last applied index.
    */
   private void setLastApplied(long lastApplied) {
-    // If the last applied index decreased then that's very concerning.
-    Assert.argNot(lastApplied < this.lastApplied, "lastApplied index must be greater than previous lastApplied index");
+    // lastApplied should be either equal to or one greater than this.lastApplied.
     if (lastApplied > this.lastApplied) {
+      Assert.arg(lastApplied == this.lastApplied + 1, "lastApplied must be sequential");
+
       this.lastApplied = lastApplied;
 
       // Update the index for each session. This will be used to trigger queries that are awaiting the
@@ -97,6 +176,14 @@ class ServerStateMachine implements AutoCloseable {
       for (ServerSession session : executor.context().sessions().sessions.values()) {
         session.setVersion(lastApplied);
       }
+
+      // Take a state machine snapshot if necessary.
+      takeSnapshot();
+
+      // Install a state machine snapshot if necessary.
+      installSnapshot();
+    } else {
+      Assert.arg(lastApplied == this.lastApplied, "lastApplied cannot be decreased");
     }
   }
 
@@ -114,13 +201,81 @@ class ServerStateMachine implements AutoCloseable {
   }
 
   /**
+   * Updates the last completed event version based on a commit at the given index.
+   */
+  private void updateLastCompleted(long index) {
+    // Calculate the last completed index as the lowest index acknowledged by all clients.
+    long lastCompleted = index;
+    for (ServerSession session : executor.context().sessions().sessions.values()) {
+      lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
+    }
+
+    if (lastCompleted < this.lastCompleted)
+      throw new IllegalStateException("inconsistent session state");
+    this.lastCompleted = lastCompleted;
+
+    // Update the log compaction minor index.
+    state.getLog().compactor().minorIndex(lastCompleted);
+
+    completeSnapshot();
+  }
+
+  /**
+   * Applies all commits up to the given index.
+   *
+   * @param index The index up to which to apply commits.
+   * @return A completable future to be completed once all commits have been applied.
+   */
+  public CompletableFuture<Void> applyAll(long index) {
+    // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
+    if (index > lastApplied) {
+      long entriesToApply = index - lastApplied;
+
+      CompletableFuture<Void> future = new CompletableFuture<>();
+
+      AtomicInteger counter = new AtomicInteger();
+      for (long i = lastApplied + 1; i <= index; i++) {
+        Entry entry = state.getLog().get(index);
+        if (entry != null) {
+          apply(entry, false).whenComplete((result, error) -> {
+            if (counter.incrementAndGet() == entriesToApply) {
+              future.complete(null);
+            }
+            entry.release();
+          });
+        }
+        setLastApplied(i);
+      }
+      return future;
+    }
+    return CompletableFuture.completedFuture(null);
+  }
+
+  /**
+   * Applies the commit at the given index.
+   *
+   * @param index The index to apply.
+   * @return A completable future to be completed once the commit has been applied.
+   */
+  public CompletableFuture<?> apply(long index) {
+    Entry entry = state.getLog().get(index);
+    if (entry != null) {
+      return apply(entry).whenComplete((result, error) -> entry.release());
+    } else {
+      setLastApplied(index);
+      return CompletableFuture.completedFuture(null);
+    }
+  }
+
+  /**
    * Applies an entry to the state machine.
    *
    * @param entry The entry to apply.
-   * @return The result.
+   * @return A completable future to be completed with the result.
    */
-  CompletableFuture<?> apply(Entry entry) {
-    return apply(entry, false);
+  public CompletableFuture<?> apply(Entry entry) {
+    LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
+    return apply(entry, true);
   }
 
   /**
@@ -130,33 +285,25 @@ class ServerStateMachine implements AutoCloseable {
    * @param expectResult Indicates whether this call expects a result.
    * @return The result.
    */
-  CompletableFuture<?> apply(Entry entry, boolean expectResult) {
-    boolean apply = !(entry instanceof QueryEntry);
-    try {
-      if (!apply) {
-        return apply((QueryEntry) entry);
-      } else if (entry instanceof CommandEntry) {
-        return apply((CommandEntry) entry, expectResult);
-      } else if (entry instanceof RegisterEntry) {
-        return apply((RegisterEntry) entry, expectResult);
-      } else if (entry instanceof KeepAliveEntry) {
-        return apply((KeepAliveEntry) entry);
-      } else if (entry instanceof UnregisterEntry) {
-        return apply((UnregisterEntry) entry, expectResult);
-      } else if (entry instanceof NoOpEntry) {
-        return apply((NoOpEntry) entry);
-      } else if (entry instanceof ConnectEntry) {
-        return apply((ConnectEntry) entry);
-      } else if (entry instanceof ConfigurationEntry) {
-        return apply((ConfigurationEntry) entry);
-      }
-      return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
-    } finally {
-      // After the entry has been applied, update the lastApplied index.
-      if (apply) {
-        setLastApplied(entry.getIndex());
-      }
+  private CompletableFuture<?> apply(Entry entry, boolean expectResult) {
+    if (entry instanceof QueryEntry) {
+      return apply((QueryEntry) entry);
+    } else if (entry instanceof CommandEntry) {
+      return apply((CommandEntry) entry, expectResult);
+    } else if (entry instanceof RegisterEntry) {
+      return apply((RegisterEntry) entry, expectResult);
+    } else if (entry instanceof KeepAliveEntry) {
+      return apply((KeepAliveEntry) entry);
+    } else if (entry instanceof UnregisterEntry) {
+      return apply((UnregisterEntry) entry, expectResult);
+    } else if (entry instanceof NoOpEntry) {
+      return apply((NoOpEntry) entry);
+    } else if (entry instanceof ConnectEntry) {
+      return apply((ConnectEntry) entry);
+    } else if (entry instanceof ConfigurationEntry) {
+      return apply((ConfigurationEntry) entry);
     }
+    return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
   }
 
   /**
@@ -171,7 +318,7 @@ class ServerStateMachine implements AutoCloseable {
     // Immediately clean the commit for the previous configuration since configuration entries
     // completely override the previous configuration.
     if (previousConfiguration > 0) {
-      cleaner.clean(previousConfiguration);
+      state.getLog().clean(previousConfiguration);
     }
     return CompletableFuture.completedFuture(null);
   }
@@ -185,7 +332,7 @@ class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 
@@ -226,7 +373,9 @@ class ServerStateMachine implements AutoCloseable {
 
       // Register the session and then open it. This ensures that state machines cannot publish events to this
       // session before the client has learned of the session ID.
-      stateMachine.register(session);
+      for (SessionListener listener : executor.context().sessions().listeners) {
+        listener.register(session);
+      }
       session.open();
 
       // Once register callbacks have been completed, ensure that events published during the callbacks are
@@ -305,7 +454,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the keep alive entry from the log.
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
 
     return future;
   }
@@ -355,8 +504,10 @@ class ServerStateMachine implements AutoCloseable {
 
           // Expire the session and call state machine callbacks.
           session.expire();
-          stateMachine.expire(session);
-          stateMachine.close(session);
+          for (SessionListener listener : executor.context().sessions().listeners) {
+            listener.expire(session);
+            listener.close(session);
+          }
 
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
@@ -384,7 +535,10 @@ class ServerStateMachine implements AutoCloseable {
 
           // Close the session and call state machine callbacks.
           session.close();
-          stateMachine.close(session);
+          for (SessionListener listener : executor.context().sessions().listeners) {
+            listener.unregister(session);
+            listener.close(session);
+          }
 
           // Once close callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
@@ -402,7 +556,7 @@ class ServerStateMachine implements AutoCloseable {
       }
 
       // Clean the unregister entry from the log immediately after it's applied.
-      cleaner.clean(session.id());
+      state.getLog().clean(session.id());
 
       // Update the highest index completed for all sessions. This will be used to indicate the highest
       // index for which logs can be compacted.
@@ -410,7 +564,7 @@ class ServerStateMachine implements AutoCloseable {
     }
 
     // Immediately clean the unregister entry from the log.
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
 
     return future;
   }
@@ -655,22 +809,8 @@ class ServerStateMachine implements AutoCloseable {
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
-    cleaner.clean(entry.getIndex());
+    state.getLog().clean(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
-  }
-
-  /**
-   * Updates the last completed event version based on a commit at the given index.
-   */
-  private void updateLastCompleted(long index) {
-    long lastCompleted = index;
-    for (ServerSession session : executor.context().sessions().sessions.values()) {
-      lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
-    }
-
-    if (lastCompleted < this.lastCompleted)
-      throw new IllegalStateException("inconsistent session state");
-    this.lastCompleted = lastCompleted;
   }
 
   /**

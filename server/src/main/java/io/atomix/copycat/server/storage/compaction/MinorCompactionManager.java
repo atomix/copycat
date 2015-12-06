@@ -67,7 +67,7 @@ public final class MinorCompactionManager implements CompactionManager {
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
     for (Segment segment : getCompactableSegments(storage, segments)) {
-      tasks.add(new MinorCompactionTask(segments, segment));
+      tasks.add(new MinorCompactionTask(segments, segment, compactor.snapshotIndex()));
     }
     return tasks;
   }

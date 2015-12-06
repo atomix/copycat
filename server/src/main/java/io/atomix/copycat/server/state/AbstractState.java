@@ -52,7 +52,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getAddress(), request);
+    LOGGER.debug("{} - Received {}", context.getCluster().getMember().serverAddress(), request);
     return request;
   }
 
@@ -60,7 +60,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getAddress(), response);
+    LOGGER.debug("{} - Sent {}", context.getCluster().getMember().serverAddress(), response);
     return response;
   }
 
@@ -112,6 +112,16 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Handles a publish request.
    */
   protected abstract CompletableFuture<PublishResponse> publish(PublishRequest request);
+
+  /**
+   * Handles a configure request.
+   */
+  protected abstract CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
+
+  /**
+   * Handles an install request.
+   */
+  protected abstract CompletableFuture<InstallResponse> install(InstallRequest request);
 
   /**
    * Handles a join request.
