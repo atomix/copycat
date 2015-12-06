@@ -15,33 +15,26 @@
  */
 package io.atomix.copycat.client;
 
-import java.time.Duration;
+import io.atomix.catalyst.transport.Address;
+
+import java.util.List;
 
 /**
- * Basic connection strategies.
+ * Strategy for submitting operations to the cluster.
+ * <p>
+ * Submission strategies are responsible for defining the servers to which a client can connect.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public enum ConnectionStrategies implements ConnectionStrategy {
+public interface SubmissionStrategy {
 
   /**
-   * Attempts to connect to the cluster one time and fails.
+   * Returns a list of servers to which the client can submit operations.
+   *
+   * @param leader The current cluster leader.
+   * @param servers The current list of servers.
+   * @return A collection of servers to which the client can connect.
    */
-  ONCE {
-    @Override
-    public void attemptFailed(Attempt attempt) {
-      attempt.fail();
-    }
-  },
-
-  /**
-   * Attempts to connect to the cluster using exponential backoff up to a one minute retry interval.
-   */
-  BACKOFF {
-    @Override
-    public void attemptFailed(Attempt attempt) {
-      attempt.retry(Duration.ofSeconds(Math.min(attempt.attempt() * attempt.attempt(), 60)));
-    }
-  }
+  List<Address> getConnections(Address leader, List<Address> servers);
 
 }
