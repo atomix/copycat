@@ -33,7 +33,7 @@ public enum RecoveryStrategies implements RecoveryStrategy {
    */
   CLOSE {
     @Override
-    public void recover(RaftClient client) {
+    public void recover(CopycatClient client) {
       // Do nothing.
     }
   },
@@ -44,7 +44,7 @@ public enum RecoveryStrategies implements RecoveryStrategy {
    */
   RECOVER {
     @Override
-    public void recover(RaftClient client) {
+    public void recover(CopycatClient client) {
       client.open();
     }
   }

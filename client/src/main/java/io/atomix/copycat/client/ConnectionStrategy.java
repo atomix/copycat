@@ -15,26 +15,51 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.transport.Address;
-
-import java.util.List;
+import java.time.Duration;
 
 /**
- * Strategy for managing client connections.
- * <p>
- * Connection strategies are responsible for defining the servers to which a client can connect.
+ * Connection strategies define how clients should handle initializing connections to the cluster.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public interface ConnectionStrategy {
 
   /**
-   * Returns a list of servers to which the client can connect.
+   * Called when an attempt to connect to the cluster fails.
    *
-   * @param leader The current cluster leader.
-   * @param servers The current list of servers.
-   * @return A collection of servers to which the client can connect.
+   * @param attempt The failed attempt.
    */
-  List<Address> getConnections(Address leader, List<Address> servers);
+  void attemptFailed(Attempt attempt);
+
+  /**
+   * Represents a failed attempt at connecting to the server.
+   */
+  interface Attempt {
+
+    /**
+     * Indicates the number of attempts.
+     *
+     * @return The number of attempts.
+     */
+    int attempt();
+
+    /**
+     * Fails the connection attempt.
+     */
+    void fail();
+
+    /**
+     * Retries connecting to the cluster.
+     */
+    void retry();
+
+    /**
+     * Retries connecting to the cluster after the given duration.
+     *
+     * @param after The duration after which to retry the connect attempt.
+     */
+    void retry(Duration after);
+
+  }
 
 }

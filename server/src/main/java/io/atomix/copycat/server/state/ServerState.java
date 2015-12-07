@@ -29,10 +29,10 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
-import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

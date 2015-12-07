@@ -15,22 +15,26 @@
  */
 package io.atomix.copycat.client;
 
+import io.atomix.catalyst.transport.Address;
+
+import java.util.List;
+
 /**
- * Strategy for recovering client sessions on failures.
+ * Strategy for submitting operations to the cluster.
  * <p>
- * Client recovery strategies are responsible for recovering a crashed client. When clients fail to contact
- * a server for more than their session timeout, the client's session must be closed as linearizability is
- * lost. The recovery strategy has the opportunity to recover the crashed client gracefully.
+ * Submission strategies are responsible for defining the servers to which a client can connect.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface RecoveryStrategy {
+public interface SubmissionStrategy {
 
   /**
-   * Recovers the session.
+   * Returns a list of servers to which the client can submit operations.
    *
-   * @param client The client to recover.
+   * @param leader The current cluster leader.
+   * @param servers The current list of servers.
+   * @return A collection of servers to which the client can connect.
    */
-  void recover(CopycatClient client);
+  List<Address> getConnections(Address leader, List<Address> servers);
 
 }
