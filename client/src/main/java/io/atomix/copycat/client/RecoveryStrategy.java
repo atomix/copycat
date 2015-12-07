@@ -31,6 +31,6 @@ public interface RecoveryStrategy {
    *
    * @param client The client to recover.
    */
-  void recover(RaftClient client);
+  void recover(CopycatClient client);
 
 }

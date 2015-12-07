@@ -98,7 +98,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected void append(int entries, long term) throws Throwable {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
-        entry.setTerm(term).setTombstone(false);
+        entry.setTerm(term);
         serverState.getLog().append(entry);
       }
     }
@@ -133,7 +133,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     List<TestEntry> result = new ArrayList<>();
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
-        result.add(entry.setTerm(term).setTombstone(false));
+        result.add(entry.setTerm(term));
       }
     }
     return result;

@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
  * Unregister entry.
@@ -38,8 +39,8 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   }
 
   @Override
-  public boolean isTombstone() {
-    return true;
+  public Compaction.Mode getCompactionMode() {
+    return Compaction.Mode.FULL_SEQUENTIAL_COMMIT;
   }
 
   /**

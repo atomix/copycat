@@ -31,6 +31,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.SubmissionStrategy;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.request.*;
@@ -87,6 +88,7 @@ public class ClientSession implements Session, Managed<Session> {
   private Set<Address> members;
   private final ThreadContext context;
   private final ConnectionStrategy connectionStrategy;
+  private final SubmissionStrategy submissionStrategy;
   private List<Address> connectMembers;
   private Connection connection;
   private volatile State state = State.CLOSED;
@@ -109,13 +111,14 @@ public class ClientSession implements Session, Managed<Session> {
   private long eventIndex;
   private long completeIndex;
 
-  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy) {
+  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SubmissionStrategy submissionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.client = Assert.notNull(transport, "transport").client();
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+    this.submissionStrategy = Assert.notNull(submissionStrategy, "submissionStrategy");
+    this.connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(members));
   }
 
   @Override
@@ -154,7 +157,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(this.members));
+    this.connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(this.members));
   }
 
   /**
@@ -589,7 +592,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private ClientSession resetMembers() {
     if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = connectionStrategy.getConnections(leader, new ArrayList<>(members));
+      connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(members));
     }
     return this;
   }
@@ -615,7 +618,7 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Registers the session.
    */
-  private CompletableFuture<Void> register() {
+  private CompletableFuture<Void> register(final int attempt) {
     context.checkThread();
 
     CompletableFuture<Void> future = new CompletableFuture<>();
@@ -634,13 +637,40 @@ public class ClientSession implements Session, Managed<Session> {
           setupConnection(connection).whenComplete((setupResult, setupError) -> future.complete(null));
           resetConnection().resetMembers().keepAlive(Duration.ofMillis(Math.round(response.timeout() * KEEP_ALIVE_RATIO)));
         } else {
-          future.completeExceptionally(response.error().createException());
+          registerFailed(attempt, response.error().createException(), future);
         }
       } else {
-        future.completeExceptionally(error);
+        registerFailed(attempt, error, future);
       }
     });
     return future;
+  }
+
+  /**
+   * Handles the failure of a register attempt.
+   */
+  private void registerFailed(int attempt, Throwable failure, CompletableFuture<Void> future) {
+    connectionStrategy.attemptFailed(new ConnectionStrategy.Attempt() {
+      @Override
+      public int attempt() {
+        return attempt;
+      }
+
+      @Override
+      public void fail() {
+        future.completeExceptionally(failure);
+      }
+
+      @Override
+      public void retry() {
+        register(attempt + 1);
+      }
+
+      @Override
+      public void retry(Duration after) {
+        context.schedule(after, () -> register(attempt + 1));
+      }
+    });
   }
 
   /**
@@ -704,7 +734,7 @@ public class ClientSession implements Session, Managed<Session> {
   @Override
   public CompletableFuture<Session> open() {
     CompletableFuture<Session> future = new CompletableFuture<>();
-    context.executor().execute(() -> register().whenComplete((result, error) -> {
+    context.executor().execute(() -> register(1).whenComplete((result, error) -> {
       if (error == null) {
         this.state = State.OPEN;
         future.complete(this);

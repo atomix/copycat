@@ -48,7 +48,7 @@ public class ServerStateTest extends AbstractStateTest<AbstractState> {
     super.beforeMethod();
 
     registry = new LocalServerRegistry();
-    transport = new LocalTransport(registry, serializer);
+    transport = new LocalTransport(registry);
     clientCtx = new SingleThreadContext("test-context", serializer.clone());
 
     server = transport.server();

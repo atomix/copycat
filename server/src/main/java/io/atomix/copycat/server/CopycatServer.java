@@ -280,8 +280,8 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   private final ServerContext context;
-  private CompletableFuture<CopycatServer> openFuture;
-  private CompletableFuture<Void> closeFuture;
+  private volatile CompletableFuture<CopycatServer> openFuture;
+  private volatile CompletableFuture<Void> closeFuture;
   private ServerState state;
   private final Duration electionTimeout;
   private final Duration heartbeatInterval;
