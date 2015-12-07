@@ -46,16 +46,18 @@ class ServerSession implements Session {
   private final long timeout;
   private Connection connection;
   private Address address;
-  private long request;
-  private long sequence;
-  private long version;
+  private long connectIndex;
+  private long keepAliveIndex;
+  private long requestSequence;
+  private long commandSequence;
+  private long lastApplied;
   private long commandLowWaterMark;
-  private long eventVersion;
-  private long eventAckVersion;
+  private long eventIndex;
+  private long completeIndex;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
-  private final Map<Long, List<Runnable>> versionQueries = new HashMap<>();
+  private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, Object> responses = new HashMap<>();
   private final Queue<EventHolder> events = new ArrayDeque<>();
@@ -71,8 +73,8 @@ class ServerSession implements Session {
 
   ServerSession(long id, ServerStateMachineContext context, long timeout) {
     this.id = id;
-    this.eventAckVersion = id;
-    this.version = id - 1;
+    this.completeIndex = id;
+    this.lastApplied = id - 1;
     this.context = context;
     this.timeout = timeout;
   }
@@ -119,12 +121,52 @@ class ServerSession implements Session {
   }
 
   /**
+   * Returns the current session connect index.
+   *
+   * @return The current session connect index.
+   */
+  long getConnectIndex() {
+    return connectIndex;
+  }
+
+  /**
+   * Sets the current session connect index.
+   *
+   * @param connectIndex The current session connect index.
+   * @return The server session.
+   */
+  ServerSession setConnectIndex(long connectIndex) {
+    this.connectIndex = connectIndex;
+    return this;
+  }
+
+  /**
+   * Returns the current session keep alive index.
+   *
+   * @return The current session keep alive index.
+   */
+  long getKeepAliveIndex() {
+    return keepAliveIndex;
+  }
+
+  /**
+   * Sets the current session keep alive index.
+   *
+   * @param keepAliveIndex The current session keep alive index.
+   * @return The server session.
+   */
+  ServerSession setKeepAliveIndex(long keepAliveIndex) {
+    this.keepAliveIndex = keepAliveIndex;
+    return this;
+  }
+
+  /**
    * Returns the session request number.
    *
    * @return The session request number.
    */
-  long getRequest() {
-    return request;
+  long getRequestSequence() {
+    return requestSequence;
   }
 
   /**
@@ -132,8 +174,8 @@ class ServerSession implements Session {
    *
    * @return The next session request number.
    */
-  long nextRequest() {
-    return request + 1;
+  long nextRequestSequence() {
+    return requestSequence + 1;
   }
 
   /**
@@ -142,13 +184,13 @@ class ServerSession implements Session {
    * @param request The session request number.
    * @return The server session.
    */
-  ServerSession setRequest(long request) {
-    if (request > this.request) {
-      this.request = request;
+  ServerSession setRequestSequence(long request) {
+    if (request > this.requestSequence) {
+      this.requestSequence = request;
 
       // When the request sequence number is incremented, get the next queued request callback and call it.
       // This will allow the command request to be evaluated in sequence.
-      Runnable command = this.commands.remove(nextRequest());
+      Runnable command = this.commands.remove(nextRequestSequence());
       if (command != null) {
         command.run();
       }
@@ -161,8 +203,8 @@ class ServerSession implements Session {
    *
    * @return The session operation sequence number.
    */
-  long getSequence() {
-    return sequence;
+  long getCommandSequence() {
+    return commandSequence;
   }
 
   /**
@@ -170,8 +212,8 @@ class ServerSession implements Session {
    *
    * @return The next operation sequence number.
    */
-  long nextSequence() {
-    return sequence + 1;
+  long nextCommandSequence() {
+    return commandSequence + 1;
   }
 
   /**
@@ -180,11 +222,11 @@ class ServerSession implements Session {
    * @param sequence The session operation sequence number.
    * @return The server session.
    */
-  ServerSession setSequence(long sequence) {
+  ServerSession setCommandSequence(long sequence) {
     // For each increment of the sequence number, trigger query callbacks that are dependent on the specific sequence.
-    for (long i = this.sequence + 1; i <= sequence; i++) {
-      this.sequence = i;
-      List<Runnable> queries = this.sequenceQueries.remove(this.sequence);
+    for (long i = this.commandSequence + 1; i <= sequence; i++) {
+      this.commandSequence = i;
+      List<Runnable> queries = this.sequenceQueries.remove(this.commandSequence);
       if (queries != null) {
         for (Runnable query : queries) {
           query.run();
@@ -197,19 +239,19 @@ class ServerSession implements Session {
     // If the request sequence number is less than the applied sequence number, update the request
     // sequence number. This is necessary to ensure that if the local server is a follower that is
     // later elected leader, its sequences are consistent for commands.
-    if (sequence > request) {
+    if (sequence > requestSequence) {
       // Only attempt to trigger command callbacks if any are registered.
       if (!this.commands.isEmpty()) {
         // For each request sequence number, a command callback completing the command submission may exist.
-        for (long i = this.request + 1; i <= request; i++) {
-          this.request = i;
+        for (long i = this.requestSequence + 1; i <= requestSequence; i++) {
+          this.requestSequence = i;
           Runnable command = this.commands.remove(i);
           if (command != null) {
             command.run();
           }
         }
       } else {
-        this.request = sequence;
+        this.requestSequence = sequence;
       }
     }
 
@@ -217,27 +259,27 @@ class ServerSession implements Session {
   }
 
   /**
-   * Returns the session version.
+   * Returns the session index.
    *
-   * @return The session version.
+   * @return The session index.
    */
-  long getVersion() {
-    return version;
+  long getLastApplied() {
+    return lastApplied;
   }
 
   /**
-   * Sets the session version.
+   * Sets the session index.
    *
-   * @param version The session version.
+   * @param index The session index.
    * @return The server session.
    */
-  ServerSession setVersion(long version) {
-    // Query callbacks for this session are added to the versionQueries map to be executed once the required version
-    // for the query is reached. For each increment of the version number, trigger query callbacks that are dependent
-    // on the specific version.
-    for (long i = this.version + 1; i <= version; i++) {
-      this.version = i;
-      List<Runnable> queries = this.versionQueries.remove(this.version);
+  ServerSession setLastApplied(long index) {
+    // Query callbacks for this session are added to the indexQueries map to be executed once the required index
+    // for the query is reached. For each increment of the index, trigger query callbacks that are dependent
+    // on the specific index.
+    for (long i = this.lastApplied + 1; i <= index; i++) {
+      this.lastApplied = i;
+      List<Runnable> queries = this.indexQueries.remove(this.lastApplied);
       if (queries != null) {
         for (Runnable query : queries) {
           query.run();
@@ -280,15 +322,15 @@ class ServerSession implements Session {
   }
 
   /**
-   * Registers a sequential session query.
+   * Registers a session index query.
    *
-   * @param version The state machine version (index) at which to execute the query.
+   * @param index The state machine index at which to execute the query.
    * @param query The query to execute.
    * @return The server session.
    */
-  ServerSession registerVersionQuery(long version, Runnable query) {
-    // Add a query to be run once the session's version number reaches the given version number.
-    List<Runnable> queries = this.versionQueries.computeIfAbsent(version, v -> {
+  ServerSession registerIndexQuery(long index, Runnable query) {
+    // Add a query to be run once the session's index reaches the given index.
+    List<Runnable> queries = this.indexQueries.computeIfAbsent(index, v -> {
       List<Runnable> q = queriesPool.poll();
       return q != null ? q : new ArrayList<>(128);
     });
@@ -315,7 +357,7 @@ class ServerSession implements Session {
   }
 
   /**
-   * Clears command responses up to the given version.
+   * Clears command responses up to the given sequence number.
    * <p>
    * Command output is removed from memory up to the given sequence number. Additionally, since we know the
    * client received a response for all commands up to the given sequence number, command futures are removed
@@ -336,7 +378,7 @@ class ServerSession implements Session {
   }
 
   /**
-   * Returns the session response for the given version.
+   * Returns the session response for the given sequence number.
    *
    * @param sequence The response sequence.
    * @return The response.
@@ -400,15 +442,16 @@ class ServerSession implements Session {
     Assert.stateNot(closed, "session is not open");
     Assert.state(context.consistency() != null, "session events can only be published during command execution");
 
-    // If the client acked a version greater than the current event sequence number since we know the client must have received it from another server.
-    if (eventAckVersion > context.version())
+    // If the client acked an index greater than the current event sequence number since we know the
+    // client must have received it from another server.
+    if (completeIndex > context.index())
       return this;
 
-    // If no event has been published for this version yet, create a new event holder.
-    if (this.event == null || this.event.eventVersion != context.version()) {
-      long previousVersion = eventVersion;
-      eventVersion = context.version();
-      this.event = new EventHolder(eventVersion, previousVersion);
+    // If no event has been published for this index yet, create a new event holder.
+    if (this.event == null || this.event.eventIndex != context.index()) {
+      long previousIndex = eventIndex;
+      eventIndex = context.index();
+      this.event = new EventHolder(eventIndex, previousIndex);
     }
 
     // Add the event to the event holder.
@@ -418,10 +461,10 @@ class ServerSession implements Session {
   }
 
   /**
-   * Commits events for the given version.
+   * Commits events for the given index.
    */
-  CompletableFuture<Void> commit(long version) {
-    if (event != null && event.eventVersion == version) {
+  CompletableFuture<Void> commit(long index) {
+    if (event != null && event.eventIndex == index) {
       events.add(event);
       sendEvent(event);
       return event.future;
@@ -450,29 +493,29 @@ class ServerSession implements Session {
   long getLastCompleted() {
     // If there are any queued events, return the index prior to the first event in the queue.
     EventHolder event = events.peek();
-    if (event != null && event.eventVersion > eventAckVersion) {
-      return event.eventVersion - 1;
+    if (event != null && event.eventIndex > completeIndex) {
+      return event.eventIndex - 1;
     }
     // If no events are queued, return the highest index applied to the session.
-    return version;
+    return lastApplied;
   }
 
   /**
    * Clears events up to the given sequence.
    *
-   * @param version The version to clear.
+   * @param index The index to clear.
    * @return The server session.
    */
-  private ServerSession clearEvents(long version) {
-    if (version > eventAckVersion) {
+  private ServerSession clearEvents(long index) {
+    if (index > completeIndex) {
       EventHolder event = events.peek();
-      while (event != null && event.eventVersion <= version) {
+      while (event != null && event.eventIndex <= index) {
         events.remove();
-        eventAckVersion = event.eventVersion;
+        completeIndex = event.eventIndex;
         event.future.complete(null);
         event = events.peek();
       }
-      eventAckVersion = version;
+      completeIndex = index;
     }
     return this;
   }
@@ -480,12 +523,12 @@ class ServerSession implements Session {
   /**
    * Resends events from the given sequence.
    *
-   * @param version The version from which to resend events.
+   * @param index The index from which to resend events.
    * @return The server session.
    */
-  ServerSession resendEvents(long version) {
-    if (version > eventAckVersion) {
-      clearEvents(version);
+  ServerSession resendEvents(long index) {
+    if (index > completeIndex) {
+      clearEvents(index);
       for (EventHolder event : events) {
         sendSequentialEvent(event);
       }
@@ -531,8 +574,8 @@ class ServerSession implements Session {
   private void sendEvent(EventHolder event, Connection connection) {
     PublishRequest request = PublishRequest.builder()
       .withSession(id())
-      .withEventVersion(event.eventVersion)
-      .withPreviousVersion(Math.max(event.previousVersion, eventAckVersion))
+      .withEventIndex(event.eventIndex)
+      .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
       .withEvents(event.events)
       .build();
 
@@ -540,9 +583,9 @@ class ServerSession implements Session {
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (isOpen() && error == null) {
         if (response.status() == Response.Status.OK) {
-          clearEvents(response.version());
+          clearEvents(response.index());
         } else if (response.error() == null) {
-          resendEvents(response.version());
+          resendEvents(response.index());
         }
       }
     });
@@ -679,14 +722,14 @@ class ServerSession implements Session {
    * Event holder.
    */
   private static class EventHolder {
-    private final long eventVersion;
-    private final long previousVersion;
+    private final long eventIndex;
+    private final long previousIndex;
     private final List<Event<?>> events = new ArrayList<>(8);
     private final CompletableFuture<Void> future = new CompletableFuture<>();
 
-    private EventHolder(long eventVersion, long previousVersion) {
-      this.eventVersion = eventVersion;
-      this.previousVersion = previousVersion;
+    private EventHolder(long eventIndex, long previousIndex) {
+      this.eventIndex = eventIndex;
+      this.previousIndex = previousIndex;
     }
   }
 

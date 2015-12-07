@@ -122,7 +122,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
         .setSession(session.id())
         .setTimestamp(timestamp)
         .setCommandSequence(0)
-        .setEventVersion(0);
+        .setEventIndex(0);
 
       state.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertNull(error);
@@ -173,7 +173,6 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
       .setSession(session.id())
       .setTimestamp(timestamp)
       .setSequence(0)
-      .setVersion(0)
       .setQuery(query);
 
     return apply(entry);

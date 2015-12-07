@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 class ClusterState {
   private final ServerState context;
   private final Member member;
-  private long version = -1;
+  private long index = -1;
   private final Map<Integer, MemberState> membersMap = new HashMap<>();
   private final List<MemberState> members = new ArrayList<>();
   private final Map<CopycatServer.Type, List<MemberState>> memberTypes = new HashMap<>();
@@ -59,12 +59,12 @@ class ClusterState {
   }
 
   /**
-   * Returns the cluster state version.
+   * Returns the cluster state index.
    *
-   * @return The cluster state version.
+   * @return The cluster state index.
    */
   long getVersion() {
-    return version;
+    return index;
   }
 
   /**
@@ -176,17 +176,17 @@ class ClusterState {
   /**
    * Configures the cluster state.
    *
-   * @param version The cluster state version.
+   * @param index The cluster state index.
    * @param members The cluster members.
    * @return The cluster state.
    */
-  ClusterState configure(long version, Collection<Member> members) {
-    if (version <= this.version)
+  ClusterState configure(long index, Collection<Member> members) {
+    if (index <= this.index)
       return this;
 
-    // If the configuration version is less than the currently configured version, ignore it.
+    // If the configuration index is less than the currently configured index, ignore it.
     // Configurations can be persisted and applying old configurations can revert newer configurations.
-    if (version <= this.version)
+    if (index <= this.index)
       return this;
 
     // Iterate through members in the new configuration, add any missing members, and update existing members.
@@ -242,10 +242,10 @@ class ClusterState {
       }
     }
 
-    this.version = version;
+    this.index = index;
 
     // Store the configuration to ensure it can be easily loaded on server restart.
-    context.getMetaStore().storeConfiguration(new Configuration(version, members));
+    context.getMetaStore().storeConfiguration(new Configuration(index, members));
 
     return this;
   }

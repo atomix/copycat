@@ -34,7 +34,7 @@ class ServerStateMachineContext implements StateMachineContext {
   private final ServerClock clock = new ServerClock();
   private final ConnectionManager connections;
   private final ServerSessionManager sessions;
-  private long version;
+  private long index;
   private boolean synchronous;
   private Command.ConsistencyLevel consistency;
 
@@ -47,21 +47,21 @@ class ServerStateMachineContext implements StateMachineContext {
    * Updates the state machine context.
    */
   void update(long index, Instant instant, boolean synchronous, Command.ConsistencyLevel consistency) {
-    version = index;
+    this.index = index;
     clock.set(instant);
     this.synchronous = synchronous;
     this.consistency = consistency;
   }
 
   /**
-   * Commits the state machine version.
+   * Commits the state machine index.
    */
   CompletableFuture<Void> commit() {
-    long version = this.version;
+    long index = this.index;
 
     List<CompletableFuture<Void>> futures = null;
     for (ServerSession session : sessions.sessions.values()) {
-      CompletableFuture<Void> future = session.commit(version);
+      CompletableFuture<Void> future = session.commit(index);
       if (future != null) {
         if (futures == null)
           futures = new ArrayList<>(8);
@@ -87,8 +87,8 @@ class ServerStateMachineContext implements StateMachineContext {
   }
 
   @Override
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   @Override
@@ -110,7 +110,7 @@ class ServerStateMachineContext implements StateMachineContext {
 
   @Override
   public String toString() {
-    return String.format("%s[version=%d, time=%s]", getClass().getSimpleName(), version, clock);
+    return String.format("%s[index=%d, time=%s]", getClass().getSimpleName(), index, clock);
   }
 
 }

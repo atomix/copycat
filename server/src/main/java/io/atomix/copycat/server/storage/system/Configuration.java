@@ -26,21 +26,21 @@ import java.util.Collection;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class Configuration {
-  private final long version;
+  private final long index;
   private final Collection<Member> members;
 
-  public Configuration(long version, Collection<Member> members) {
-    this.version = version;
+  public Configuration(long index, Collection<Member> members) {
+    this.index = index;
     this.members = Assert.notNull(members, "members");
   }
 
   /**
-   * Returns the configuration version.
+   * Returns the configuration index.
    *
-   * @return The configuration version.
+   * @return The configuration index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -54,7 +54,7 @@ public class Configuration {
 
   @Override
   public String toString() {
-    return String.format("%s[version=%d, members=%s]", getClass().getSimpleName(), version, members);
+    return String.format("%s[index=%d, members=%s]", getClass().getSimpleName(), index, members);
   }
 
 }

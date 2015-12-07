@@ -122,7 +122,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
           .setSession(1)
           .setTimestamp(timestamp + 1000)
           .setCommandSequence(0)
-          .setEventVersion(0);
+          .setEventIndex(0);
         index = log.append(entry);
       }
 
@@ -221,7 +221,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
           .setSession(2)
           .setTimestamp(timestamp + 1000)
           .setCommandSequence(0)
-          .setEventVersion(0);
+          .setEventIndex(0);
         index = log.append(entry);
       }
 
@@ -263,7 +263,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
-    assertEquals(session.getSequence(), 0);
+    assertEquals(session.getCommandSequence(), 0);
 
     callerContext.execute(() -> {
 
@@ -286,7 +286,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    assertEquals(session.getSequence(), 1);
+    assertEquals(session.getCommandSequence(), 1);
     assertEquals(session.getTimestamp(), timestamp + 100);
 
     callerContext.execute(() -> {
@@ -329,7 +329,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await(1000, 2);
 
-    assertEquals(session.getSequence(), 3);
+    assertEquals(session.getCommandSequence(), 3);
     assertEquals(session.getTimestamp(), timestamp + 300);
   }
 
@@ -362,7 +362,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
-    assertEquals(session.getSequence(), 0);
+    assertEquals(session.getCommandSequence(), 0);
 
     callerContext.execute(() -> {
 
@@ -372,7 +372,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
           .setSession(1)
           .setTimestamp(timestamp + 200)
           .setSequence(0)
-          .setVersion(0)
+          .setIndex(0)
           .setQuery(new TestQuery());
         index = log.append(entry);
       }
@@ -406,7 +406,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await(1000, 2);
 
-    assertEquals(session.getSequence(), 1);
+    assertEquals(session.getCommandSequence(), 1);
     assertEquals(session.getTimestamp(), timestamp + 100);
   }
 

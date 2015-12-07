@@ -51,7 +51,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
   }
 
   private Buffer buffer;
-  private final long version;
+  private final long index;
   private final long timestamp;
   private boolean locked;
 
@@ -60,19 +60,19 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   public SnapshotDescriptor(Buffer buffer) {
     this.buffer = Assert.notNull(buffer, "buffer");
-    this.version = buffer.readLong();
+    this.index = buffer.readLong();
     this.timestamp = buffer.readLong();
     this.locked = buffer.readBoolean();
     buffer.skip(BYTES - buffer.position());
   }
 
   /**
-   * Returns the snapshot version.
+   * Returns the snapshot index.
    *
-   * @return The snapshot version.
+   * @return The snapshot index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -110,7 +110,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   SnapshotDescriptor copyTo(Buffer buffer) {
     this.buffer = buffer
-      .writeLong(version)
+      .writeLong(index)
       .writeLong(timestamp)
       .writeBoolean(locked)
       .skip(BYTES - buffer.position())
@@ -142,13 +142,13 @@ public final class SnapshotDescriptor implements AutoCloseable {
     }
 
     /**
-     * Sets the segment version.
+     * Sets the segment index.
      *
-     * @param version The segment version.
+     * @param index The segment index.
      * @return The segment descriptor builder.
      */
-    public Builder withVersion(long version) {
-      buffer.writeLong(0, version);
+    public Builder withIndex(long index) {
+      buffer.writeLong(0, index);
       return this;
     }
 

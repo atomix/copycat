@@ -62,26 +62,26 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     return new Builder(request);
   }
 
-  private long eventVersion;
-  private long previousVersion;
+  private long eventIndex;
+  private long previousIndex;
   private List<Event<?>> events = new ArrayList<>(8);
 
   /**
-   * Returns the event version number.
+   * Returns the event index.
    *
-   * @return The event version number.
+   * @return The event index.
    */
-  public long eventVersion() {
-    return eventVersion;
+  public long eventIndex() {
+    return eventIndex;
   }
 
   /**
-   * Returns the previous event version number.
+   * Returns the previous event index.
    *
-   * @return The previous event version number.
+   * @return The previous event index.
    */
-  public long previousVersion() {
-    return previousVersion;
+  public long previousIndex() {
+    return previousIndex;
   }
 
   /**
@@ -96,8 +96,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    eventVersion = buffer.readLong();
-    previousVersion = buffer.readLong();
+    eventIndex = buffer.readLong();
+    previousIndex = buffer.readLong();
 
     events.clear();
     int size = buffer.readUnsignedShort();
@@ -109,8 +109,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(eventVersion);
-    buffer.writeLong(previousVersion);
+    buffer.writeLong(eventIndex);
+    buffer.writeLong(previousIndex);
 
     buffer.writeUnsignedShort(events.size());
     for (Event<?> event : events) {
@@ -120,7 +120,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, eventVersion, previousVersion, events);
+    return Objects.hash(getClass(), session, eventIndex, previousIndex, events);
   }
 
   @Override
@@ -128,8 +128,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     if (object instanceof PublishRequest) {
       PublishRequest request = (PublishRequest) object;
       return request.session == session
-        && request.eventVersion == eventVersion
-        && request.previousVersion == previousVersion
+        && request.eventIndex == eventIndex
+        && request.previousIndex == previousIndex
         && request.events.equals(events);
     }
     return false;
@@ -137,7 +137,7 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, eventVersion=%d, previousVersion=%d, events=%s]", getClass().getSimpleName(), session, eventVersion, previousVersion, events);
+    return String.format("%s[session=%d, eventIndex=%d, previousIndex=%d, events=%s]", getClass().getSimpleName(), session, eventIndex, previousIndex, events);
   }
 
   /**
@@ -149,26 +149,26 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     }
 
     /**
-     * Sets the event version number.
+     * Sets the event index.
      *
-     * @param version The event version number.
+     * @param index The event index.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code version} is less than 1
+     * @throws IllegalArgumentException if {@code index} is less than 1
      */
-    public Builder withEventVersion(long version) {
-      request.eventVersion = Assert.argNot(version, version < 1, "version cannot be less than 1");
+    public Builder withEventIndex(long index) {
+      request.eventIndex = Assert.argNot(index, index < 1, "index cannot be less than 1");
       return this;
     }
 
     /**
-     * Sets the previous event version number.
+     * Sets the previous event index.
      *
-     * @param version The previous event version number.
+     * @param index The previous event index.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code version} is less than 1
+     * @throws IllegalArgumentException if {@code index} is less than 1
      */
-    public Builder withPreviousVersion(long version) {
-      request.previousVersion = Assert.argNot(version, version < 0, "version cannot be less than 0");
+    public Builder withPreviousIndex(long index) {
+      request.previousIndex = Assert.argNot(index, index < 0, "index cannot be less than 0");
       return this;
     }
 
@@ -199,8 +199,8 @@ public class PublishRequest extends SessionRequest<PublishRequest> {
     @Override
     public PublishRequest build() {
       super.build();
-      Assert.stateNot(request.eventVersion < 0, "eventVersion cannot be less than 0");
-      Assert.stateNot(request.previousVersion < -1, "previousVersion cannot be less than -1");
+      Assert.stateNot(request.eventIndex < 0, "eventIndex cannot be less than 0");
+      Assert.stateNot(request.previousIndex < -1, "previousIndex cannot be less than -1");
       Assert.stateNot(request.events == null, "events cannot be null");
       return request;
     }

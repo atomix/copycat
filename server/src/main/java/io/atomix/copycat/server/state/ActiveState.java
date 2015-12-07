@@ -264,22 +264,21 @@ abstract class ActiveState extends PassiveState {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
     QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(context.getCommitIndex())
+      .setIndex(request.index())
       .setTerm(context.getTerm())
       .setTimestamp(System.currentTimeMillis())
       .setSession(request.session())
       .setSequence(request.sequence())
-      .setVersion(request.version())
       .setQuery(request.query());
 
     // For CAUSAL queries, the state machine version is the last index applied to the state machine. For other consistency
     // levels, the state machine may actually wait until those queries are applied to the state machine, so the last applied
     // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
-    final long version;
+    final long index;
     if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      version = context.getStateMachine().getLastApplied();
+      index = context.getStateMachine().getLastApplied();
     } else {
-      version = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+      index = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
     }
 
     context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {
@@ -287,19 +286,19 @@ abstract class ActiveState extends PassiveState {
         if (error == null) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.OK)
-            .withVersion(version)
+            .withIndex(index)
             .withResult(result)
             .build()));
         } else if (error instanceof RaftException) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withVersion(version)
+            .withIndex(index)
             .withError(((RaftException) error).getType())
             .build()));
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withVersion(version)
+            .withIndex(index)
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));
         }

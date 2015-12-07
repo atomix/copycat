@@ -67,16 +67,16 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
     return new Builder(request);
   }
 
-  private long version;
+  private long index;
   private Query query;
 
   /**
-   * Returns the query version.
+   * Returns the query index.
    *
-   * @return The query version.
+   * @return The query index.
    */
-  public long version() {
-    return version;
+  public long index() {
+    return index;
   }
 
   /**
@@ -96,20 +96,20 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    version = buffer.readLong();
+    index = buffer.readLong();
     query = serializer.readObject(buffer);
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(version);
+    buffer.writeLong(index);
     serializer.writeObject(query, buffer);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, version, query);
+    return Objects.hash(getClass(), session, sequence, index, query);
   }
 
   @Override
@@ -125,7 +125,7 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, version=%d, query=%s]", getClass().getSimpleName(), session, sequence, version, query);
+    return String.format("%s[session=%d, sequence=%d, index=%d, query=%s]", getClass().getSimpleName(), session, sequence, index, query);
   }
 
   /**
@@ -137,14 +137,14 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
     }
 
     /**
-     * Sets the request version.
+     * Sets the request index.
      *
-     * @param version The request version.
+     * @param index The request index.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code version} is less than {@code 0}
+     * @throws IllegalArgumentException if {@code index} is less than {@code 0}
      */
-    public Builder withVersion(long version) {
-      request.version = Assert.argNot(version, version < 0, "version cannot be less than 0");
+    public Builder withIndex(long index) {
+      request.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
       return this;
     }
 
@@ -166,7 +166,7 @@ public class QueryRequest extends OperationRequest<QueryRequest> {
     @Override
     public QueryRequest build() {
       super.build();
-      Assert.stateNot(request.version < 0, "version cannot be less than 0");
+      Assert.stateNot(request.index < 0, "index cannot be less than 0");
       Assert.stateNot(request.query == null, "query cannot be null");
       return request;
     }

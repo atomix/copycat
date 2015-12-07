@@ -26,7 +26,7 @@ import io.atomix.copycat.server.storage.Log;
 class MemberState {
   private Member member;
   private long term;
-  private long version;
+  private long index;
   private long snapshotIndex;
   private int snapshotOffset;
   private long matchIndex;
@@ -75,7 +75,7 @@ class MemberState {
    *
    * @return The member term.
    */
-  long getTerm() {
+  long getConfigTerm() {
     return term;
   }
 
@@ -85,28 +85,28 @@ class MemberState {
    * @param term The member term.
    * @return The member state.
    */
-  MemberState setTerm(long term) {
+  MemberState setConfigTerm(long term) {
     this.term = term;
     return this;
   }
 
   /**
-   * Returns the member configuration version.
+   * Returns the member configuration index.
    *
-   * @return The member configuration version.
+   * @return The member configuration index.
    */
-  long getVersion() {
-    return version;
+  long getConfigIndex() {
+    return index;
   }
 
   /**
-   * Sets the member version.
+   * Sets the member index.
    *
-   * @param version The member version.
+   * @param index The member index.
    * @return The member state.
    */
-  MemberState setVersion(long version) {
-    this.version = version;
+  MemberState setConfigIndex(long index) {
+    this.index = index;
     return this;
   }
 

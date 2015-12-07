@@ -97,7 +97,7 @@ public class ServerState {
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
     Configuration configuration = meta.loadConfiguration();
     if (configuration != null) {
-      cluster.configure(configuration.version(), configuration.members());
+      cluster.configure(configuration.index(), configuration.members());
     } else if (members.contains(member.serverAddress())) {
       Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(CopycatServer.Type.ACTIVE, m, null)).collect(Collectors.toSet());
       activeMembers.add(new Member(CopycatServer.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
@@ -554,7 +554,7 @@ public class ServerState {
             LOGGER.info("{} - Successfully joined via {}", cluster.getMember().serverAddress(), member.getMember().serverAddress());
 
             // Configure the cluster with the join response.
-            cluster.configure(response.version(), response.members());
+            cluster.configure(response.index(), response.members());
 
             // Cancel the join timer.
             cancelJoinTimer();
@@ -690,7 +690,7 @@ public class ServerState {
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
-        cluster.configure(response.version(), response.members());
+        cluster.configure(response.index(), response.members());
         transition(CopycatServer.State.INACTIVE);
         future.complete(null);
       }

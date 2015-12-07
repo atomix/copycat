@@ -39,8 +39,8 @@ final class FileSnapshot extends Snapshot {
   }
 
   @Override
-  public long version() {
-    return file.version();
+  public long index() {
+    return file.index();
   }
 
   @Override
@@ -52,7 +52,7 @@ final class FileSnapshot extends Snapshot {
   public synchronized SnapshotWriter writer() {
     checkWriter();
     SnapshotDescriptor descriptor = SnapshotDescriptor.builder()
-      .withVersion(file.version())
+      .withIndex(file.index())
       .withTimestamp(file.timestamp())
       .build();
 
@@ -104,7 +104,7 @@ final class FileSnapshot extends Snapshot {
 
   @Override
   public String toString() {
-    return String.format("%s[version=%d]", getClass().getSimpleName(), version());
+    return String.format("%s[index=%d]", getClass().getSimpleName(), index());
   }
 
 }

@@ -29,7 +29,7 @@ import io.atomix.catalyst.util.ReferenceManager;
 @SerializeWith(id=223)
 public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   private long commandSequence;
-  private long eventVersion;
+  private long eventIndex;
 
   public KeepAliveEntry() {
   }
@@ -59,22 +59,22 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   }
 
   /**
-   * Returns the event version number.
+   * Returns the event index.
    *
-   * @return The event version number.
+   * @return The event index.
    */
-  public long getEventVersion() {
-    return eventVersion;
+  public long getEventIndex() {
+    return eventIndex;
   }
 
   /**
-   * Sets the event version number.
+   * Sets the event index.
    *
-   * @param eventVersion The event version number.
+   * @param eventIndex The event index.
    * @return The keep alive entry.
    */
-  public KeepAliveEntry setEventVersion(long eventVersion) {
-    this.eventVersion = eventVersion;
+  public KeepAliveEntry setEventIndex(long eventIndex) {
+    this.eventIndex = eventIndex;
     return this;
   }
 
@@ -82,19 +82,19 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
-    eventVersion = buffer.readLong();
+    eventIndex = buffer.readLong();
   }
 
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
-    buffer.writeLong(eventVersion);
+    buffer.writeLong(eventIndex);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventSequence=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventVersion(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventIndex=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventIndex(), getTimestamp());
   }
 
 }

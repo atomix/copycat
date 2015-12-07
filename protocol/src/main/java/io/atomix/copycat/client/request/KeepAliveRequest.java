@@ -60,7 +60,7 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
   }
 
   private long commandSequence;
-  private long eventVersion;
+  private long eventIndex;
 
   /**
    * Returns the command sequence number.
@@ -72,26 +72,26 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
   }
 
   /**
-   * Returns the event version number.
+   * Returns the event index.
    *
-   * @return The event version number.
+   * @return The event index.
    */
-  public long eventVersion() {
-    return eventVersion;
+  public long eventIndex() {
+    return eventIndex;
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
-    eventVersion = buffer.readLong();
+    eventIndex = buffer.readLong();
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
-    buffer.writeLong(eventVersion);
+    buffer.writeLong(eventIndex);
   }
 
   @Override
@@ -105,14 +105,14 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
       KeepAliveRequest request = (KeepAliveRequest) object;
       return request.session == session
         && request.commandSequence == commandSequence
-        && request.eventVersion == eventVersion;
+        && request.eventIndex == eventIndex;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventVersion=%d]", getClass().getSimpleName(), session, commandSequence, eventVersion);
+    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
   }
 
   /**
@@ -136,14 +136,14 @@ public class KeepAliveRequest extends SessionRequest<KeepAliveRequest> {
     }
 
     /**
-     * Sets the event version number.
+     * Sets the event index.
      *
-     * @param eventVersion The event version number.
+     * @param eventIndex The event index.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code eventVersion} is less than 0
+     * @throws IllegalArgumentException if {@code eventIndex} is less than 0
      */
-    public Builder withEventVersion(long eventVersion) {
-      request.eventVersion = Assert.argNot(eventVersion, eventVersion < 0, "eventVersion cannot be negative");
+    public Builder withEventIndex(long eventIndex) {
+      request.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
       return this;
     }
 

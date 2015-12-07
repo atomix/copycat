@@ -31,11 +31,11 @@ public abstract class Snapshot implements AutoCloseable {
   }
 
   /**
-   * Returns the snapshot version.
+   * Returns the snapshot index.
    *
-   * @return The snapshot version.
+   * @return The snapshot index.
    */
-  public abstract long version();
+  public abstract long index();
 
   /**
    * Returns the snapshot timestamp.

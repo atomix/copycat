@@ -35,8 +35,8 @@ final class MemorySnapshot extends Snapshot {
   }
 
   @Override
-  public long version() {
-    return descriptor.version();
+  public long index() {
+    return descriptor.index();
   }
 
   @Override
@@ -74,7 +74,7 @@ final class MemorySnapshot extends Snapshot {
 
   @Override
   public String toString() {
-    return String.format("%s[version=%d]", getClass().getSimpleName(), descriptor.version());
+    return String.format("%s[index=%d]", getClass().getSimpleName(), descriptor.index());
   }
 
 }

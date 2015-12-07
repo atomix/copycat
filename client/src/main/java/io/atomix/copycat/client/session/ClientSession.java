@@ -107,9 +107,9 @@ public class ClientSession implements Session, Managed<Session> {
   private long commandResponse;
   private long requestSequence;
   private long responseSequence;
-  private long responseVersion;
-  private long eventVersion;
-  private long completeVersion;
+  private long responseIndex;
+  private long eventIndex;
+  private long completeIndex;
 
   public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SubmissionStrategy submissionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
@@ -246,14 +246,14 @@ public class ClientSession implements Session, Managed<Session> {
         request = QueryRequest.builder()
           .withSession(id)
           .withSequence(commandResponse)
-          .withVersion(responseVersion)
+          .withIndex(responseIndex)
           .withQuery(query)
           .build();
       } else {
         request = QueryRequest.builder()
           .withSession(id)
           .withSequence(commandRequest)
-          .withVersion(responseVersion)
+          .withIndex(responseIndex)
           .withQuery(query)
           .build();
       }
@@ -280,19 +280,19 @@ public class ClientSession implements Session, Managed<Session> {
         // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
         if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
           sequenceResponse(sequence, () -> {
-            responseVersion = Math.max(responseVersion, response.version());
+            responseIndex = Math.max(responseIndex, response.index());
             completeResponse(response, future);
           });
         }
         // If the query consistency level is strong, the query must be executed sequentially. In order to ensure responses
-        // are received in a sequential manner, we compare the response version number with the highest version for which
+        // are received in a sequential manner, we compare the response index number with the highest index for which
         // we've received a response and resubmit queries with output resulting from stale (prior) versions.
         else {
           sequenceResponse(sequence, () -> {
-            if (response.version() > 0 && response.version() < responseVersion) {
+            if (response.index() > 0 && response.index() < responseIndex) {
               submit(request, future);
             } else {
-              responseVersion = Math.max(responseVersion, response.version());
+              responseIndex = Math.max(responseIndex, response.index());
               completeResponse(response, future);
             }
           });
@@ -681,7 +681,7 @@ public class ClientSession implements Session, Managed<Session> {
     KeepAliveRequest request = KeepAliveRequest.builder()
       .withSession(id)
       .withCommandSequence(commandResponse)
-      .withEventVersion(completeVersion)
+      .withEventIndex(completeIndex)
       .build();
 
     this.<KeepAliveRequest, KeepAliveResponse>request(request).whenComplete((response, error) -> {
@@ -724,7 +724,7 @@ public class ClientSession implements Session, Managed<Session> {
   private void onOpen(long sessionId) {
     LOGGER.debug("Registered session: {}", sessionId);
     this.id = sessionId;
-    this.eventVersion = id;
+    this.eventIndex = id;
     this.state = State.OPEN;
     for (Consumer<Session> listener : openListeners) {
       listener.accept(this);
@@ -791,19 +791,19 @@ public class ClientSession implements Session, Managed<Session> {
       return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
     }
 
-    // If the request's previous event version doesn't equal the previous received event version,
-    // respond with an undefined error and the last version received. This will cause the cluster
-    // to resend events starting at eventVersion + 1.
-    if (request.previousVersion() != eventVersion) {
-      LOGGER.debug("{} - Inconsistent event version: {}", id, request.previousVersion());
+    // If the request's previous event index doesn't equal the previous received event index,
+    // respond with an undefined error and the last index received. This will cause the cluster
+    // to resend events starting at eventIndex + 1.
+    if (request.previousIndex() != eventIndex) {
+      LOGGER.debug("{} - Inconsistent event index: {}", id, request.previousIndex());
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withVersion(eventVersion)
+        .withIndex(eventIndex)
         .build());
     }
 
-    // Store the event version. This will be used to verify that events are received in sequential order.
-    eventVersion = request.eventVersion();
+    // Store the event index. This will be used to verify that events are received in sequential order.
+    eventIndex = request.eventIndex();
 
     // For each event in the events batch, call the appropriate event listener and create a CompletableFuture
     // to be called once the event callback is complete. Futures will ensure that an event is not acknowledged
@@ -822,12 +822,12 @@ public class ClientSession implements Session, Managed<Session> {
     // and handled before it has indeed been received and handled.
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
       .handleAsync((result, error) -> {
-        // Store the highest version for which event callbacks have completed.
-        completeVersion = Math.max(completeVersion, request.eventVersion());
+        // Store the highest index for which event callbacks have completed.
+        completeIndex = Math.max(completeIndex, request.eventIndex());
 
         return PublishResponse.builder()
           .withStatus(Response.Status.OK)
-          .withVersion(eventVersion)
+          .withIndex(eventIndex)
           .build();
       }, context.executor());
   }

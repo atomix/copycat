@@ -34,15 +34,15 @@ import java.time.Clock;
 public interface StateMachineContext {
 
   /**
-   * Returns the current state machine version.
+   * Returns the current state machine index.
    * <p>
-   * The state version is indicative of the index of the current {@link Command}
+   * The state index is indicative of the index of the current {@link Command}
    * being applied to the server state machine. If a {@link Query} is being applied,
    * the index of the last command applied will be used.
    *
-   * @return The current state machine version.
+   * @return The current state machine index.
    */
-  long version();
+  long index();
 
   /**
    * Returns the state machine clock.
