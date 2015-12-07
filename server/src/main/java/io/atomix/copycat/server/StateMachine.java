@@ -20,6 +20,7 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 
 import java.lang.reflect.*;
@@ -179,6 +180,9 @@ public abstract class StateMachine implements AutoCloseable {
    */
   public void init(StateMachineExecutor executor) {
     this.executor = Assert.notNull(executor, "executor");
+    if (this instanceof SessionListener) {
+      executor.context().sessions().addListener((SessionListener) this);
+    }
     configure(executor);
   }
 
@@ -223,33 +227,6 @@ public abstract class StateMachine implements AutoCloseable {
    */
   protected Clock clock() {
     return executor.context().clock();
-  }
-
-  /**
-   * Called when a new session is registered.
-   *
-   * @param session The session that was registered.
-   */
-  public void register(Session session) {
-
-  }
-
-  /**
-   * Called when a session is expired.
-   *
-   * @param session The expired session.
-   */
-  public void expire(Session session) {
-
-  }
-
-  /**
-   * Called when a session is closed.
-   *
-   * @param session The session that was closed.
-   */
-  public void close(Session session) {
-
   }
 
   /**

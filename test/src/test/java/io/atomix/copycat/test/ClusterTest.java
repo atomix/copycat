@@ -25,6 +25,7 @@ import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -71,7 +72,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testServerJoinLate() throws Throwable {
     createServers(3);
     CopycatClient client = createClient();
-    submit(client, 0, 10000);
+    submit(client, 0, 1000);
     await(30000);
     CopycatServer joiner = createServer(members, nextMember());
     joiner.open().thenRun(this::resume);
@@ -1016,7 +1017,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
-        .withMaxEntriesPerSegment(128)
+        .withMaxEntriesPerSegment(8)
         .withMinorCompactionInterval(Duration.ofSeconds(3))
         .withMajorCompactionInterval(Duration.ofSeconds(7))
         .build())
@@ -1040,7 +1041,13 @@ public class ClusterTest extends ConcurrentTestCase {
   @BeforeMethod
   @AfterMethod
   public void clearTests() throws Exception {
-    clients.forEach(c -> c.close().join());
+    clients.forEach(c -> {
+      try {
+        c.close().join();
+      } catch (Exception e) {
+      }
+    });
+
     if (servers.size() < count) {
       for (int i = servers.size() + 1; i <= count; i++) {
         Member member = new Member(CopycatServer.Type.INACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
@@ -1049,8 +1056,11 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     servers.forEach(s -> {
-      s.close().join();
-      s.delete().join();
+      try {
+        s.close().join();
+        s.delete().join();
+      } catch (Exception e) {
+      }
     });
 
     registry = new LocalServerRegistry();
@@ -1064,13 +1074,28 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Test state machine.
    */
-  public static class TestStateMachine extends StateMachine {
+  public static class TestStateMachine extends StateMachine implements SessionListener {
     private Commit<TestExpire> expire;
+
+    @Override
+    public void register(Session session) {
+
+    }
+
+    @Override
+    public void unregister(Session session) {
+
+    }
 
     @Override
     public void expire(Session session) {
       if (expire != null)
         expire.session().publish("expired");
+    }
+
+    @Override
+    public void close(Session session) {
+
     }
 
     public String command(Commit<TestCommand> commit) {
@@ -1126,6 +1151,11 @@ public class ClusterTest extends ConcurrentTestCase {
       return consistency;
     }
 
+    @Override
+    public CompactionMode compaction() {
+      return CompactionMode.QUORUM_CLEAN;
+    }
+
     public String value() {
       return value;
     }
@@ -1170,6 +1200,11 @@ public class ClusterTest extends ConcurrentTestCase {
     @Override
     public Command.ConsistencyLevel consistency() {
       return consistency;
+    }
+
+    @Override
+    public CompactionMode compaction() {
+      return CompactionMode.QUORUM_CLEAN;
     }
 
     public String value() {

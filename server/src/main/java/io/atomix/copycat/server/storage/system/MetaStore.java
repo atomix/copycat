@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.system;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
 
 import java.io.File;
-import java.util.Collection;
 
 /**
  * Persists server state via the {@link Storage} module.
@@ -37,7 +37,7 @@ public class MetaStore implements AutoCloseable {
   private final Storage storage;
   private final Buffer buffer;
 
-  MetaStore(String name, Storage storage) {
+  public MetaStore(String name, Storage storage) {
     this.storage = Assert.notNull(storage, "storage");
     if (storage.level() == StorageLevel.MEMORY) {
       buffer = HeapBuffer.allocate(12);
@@ -95,8 +95,8 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public MetaStore storeConfiguration(Configuration configuration) {
-    buffer.position(12).writeLong(configuration.version);
-    storage.serializer().writeObject(configuration.members, buffer);
+    buffer.position(12).writeLong(configuration.version());
+    storage.serializer().writeObject(configuration.members(), buffer);
     return this;
   }
 
@@ -136,42 +136,6 @@ public class MetaStore implements AutoCloseable {
       return String.format("%s[%s]", getClass().getSimpleName(), ((FileBuffer) buffer).file());
     } else {
       return getClass().getSimpleName();
-    }
-  }
-
-  /**
-   * Metastore configuration.
-   */
-  public static class Configuration {
-    private final long version;
-    private final Collection<Member> members;
-
-    public Configuration(long version, Collection<Member> members) {
-      this.version = version;
-      this.members = Assert.notNull(members, "members");
-    }
-
-    /**
-     * Returns the configuration version.
-     *
-     * @return The configuration version.
-     */
-    public long version() {
-      return version;
-    }
-
-    /**
-     * Returns the collection of active members.
-     *
-     * @return The collection of active members.
-     */
-    public Collection<Member> members() {
-      return members;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[members=%s]", getClass().getSimpleName(), members);
     }
   }
 

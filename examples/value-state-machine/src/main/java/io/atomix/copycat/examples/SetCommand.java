@@ -36,4 +36,9 @@ public class SetCommand implements Command<Object> {
     return value;
   }
 
+  @Override
+  public CompactionMode compaction() {
+    return CompactionMode.QUORUM_CLEAN;
+  }
+
 }

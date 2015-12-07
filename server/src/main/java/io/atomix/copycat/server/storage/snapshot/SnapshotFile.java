@@ -11,31 +11,34 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.snapshot;
 
 import io.atomix.catalyst.util.Assert;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
- * Segment file utility.
+ * Snapshot file utility.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class SegmentFile {
+final class SnapshotFile {
+  private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddHHmmss");
   private static final char PART_SEPARATOR = '-';
   private static final char EXTENSION_SEPARATOR = '.';
-  private static final String EXTENSION = "log";
+  private static final String EXTENSION = "snapshot";
   private final File file;
 
   /**
-   * Returns a boolean value indicating whether the given file appears to be a parsable segment file.
-   * 
+   * Returns a boolean value indicating whether the given file appears to be a parsable snapshot file.
+   *
    * @throws NullPointerException if {@code file} is null
    */
-  static boolean isSegmentFile(String name, File file) {
+  static boolean isSnapshotFile(String name, File file) {
     Assert.notNull(name, "name");
     Assert.notNull(file, "file");
     String fileName = file.getName();
@@ -61,39 +64,43 @@ final class SegmentFile {
   }
 
   /**
-   * Creates a segment file for the given directory, log name, segment ID, and segment version.
+   * Creates a snapshot file for the given directory, log name, and snapshot version.
    */
-  static File createSegmentFile(String name, File directory, long id, long version) {
-    return new File(directory, String.format("%s-%d-%d.log", Assert.notNull(name, "name"), id, version));
+  static File createSnapshotFile(String name, File directory, long version, long timestamp) {
+    return new File(directory, String.format("%s-%d-%s.snapshot", Assert.notNull(name, "name"), version, TIMESTAMP_FORMAT.format(new Date(timestamp))));
   }
 
   /**
-   * @throws IllegalArgumentException if {@code file} is not a valid segment file
+   * @throws IllegalArgumentException if {@code file} is not a valid snapshot file
    */
-  SegmentFile(File file) {
+  SnapshotFile(File file) {
     this.file = file;
   }
 
   /**
-   * Returns the segment file.
+   * Returns the snapshot file.
    *
-   * @return The segment file.
+   * @return The snapshot file.
    */
   public File file() {
     return file;
   }
 
   /**
-   * Returns the segment identifier.
+   * Returns the snapshot version.
+   *
+   * @return The snapshot version.
    */
-  public long id() {
+  public long version() {
     return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR, file.getName().lastIndexOf(PART_SEPARATOR) - 1) + 1, file.getName().lastIndexOf(PART_SEPARATOR)));
   }
 
   /**
-   * Returns the segment version.
+   * Returns the snapshot timestamp.
+   *
+   * @return The snapshot timestamp.
    */
-  public long version() {
+  public long timestamp() {
     return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR) + 1, file.getName().lastIndexOf(EXTENSION_SEPARATOR)));
   }
 

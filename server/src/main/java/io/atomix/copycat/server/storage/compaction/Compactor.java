@@ -48,23 +48,32 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class Compactor implements AutoCloseable {
+public class Compactor implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(Compactor.class);
   private final Storage storage;
   private final SegmentManager segments;
   private final ScheduledExecutorService executor;
   private long minorIndex;
   private long majorIndex;
+  private long snapshotIndex;
+  private Compactable compactable = Compactable.NONE;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
   private CompletableFuture<Void> future;
+
+  private enum Compactable {
+    NONE,
+    MINOR,
+    MAJOR,
+    BOTH
+  }
 
   public Compactor(Storage storage, SegmentManager segments, ScheduledExecutorService executor) {
     this.storage = Assert.notNull(storage, "storage");
     this.segments = Assert.notNull(segments, "segments");
     this.executor = Assert.notNull(executor, "executor");
-    minor = executor.scheduleAtFixedRate(() -> compact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
-    major = executor.scheduleAtFixedRate(() -> compact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
+    minor = executor.scheduleAtFixedRate(() -> checkCompact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
+    major = executor.scheduleAtFixedRate(() -> checkCompact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
   }
 
   /**
@@ -74,7 +83,11 @@ public final class Compactor implements AutoCloseable {
    * @return The log compactor.
    */
   public Compactor minorIndex(long index) {
-    this.minorIndex = Math.max(this.minorIndex, index);
+    long minorIndex = Math.max(this.minorIndex, index);
+    if (segments.currentSegment().firstIndex() > this.minorIndex && minorIndex >= segments.currentSegment().firstIndex()) {
+      compactable = Compactable.BOTH;
+    }
+    this.minorIndex = minorIndex;
     return this;
   }
 
@@ -105,6 +118,67 @@ public final class Compactor implements AutoCloseable {
    */
   public long majorIndex() {
     return majorIndex;
+  }
+
+  /**
+   * Sets the snapshot index to indicate commands entries that can be removed during compaction.
+   *
+   * @param index The maximum index up to which snapshotted commands can be removed.
+   * @return The log compactor.
+   */
+  public Compactor snapshotIndex(long index) {
+    this.snapshotIndex = Math.max(this.snapshotIndex, index);
+    return this;
+  }
+
+  /**
+   * Returns the maximum index up to which snapshotted commands can be removed during compaction.
+   *
+   * @return The maximum index up to which snapshotted commands can be removed during compaction.
+   */
+  public long snapshotIndex() {
+    return snapshotIndex;
+  }
+
+  /**
+   * Returns a boolean value indicating whether the log is currently compactable.
+   * <p>
+   * Compactability is determined by the compactor's {@link #minorIndex()}. Each time the minor compaction
+   * index surpasses the boundaries of a log {@link io.atomix.copycat.server.storage.Segment}, the log becomes
+   * considered compactable. Once the log has been compacted thereafter, it will no longer be considered compactable.
+   *
+   * @return Indicates whether the log is currently compactable.
+   */
+  public boolean isCompactable() {
+    return compactable != Compactable.NONE;
+  }
+
+  /**
+   * Checks whether the log should be compacted and compacts it with the given compaction strategy if necessary.
+   */
+  private void checkCompact(Compaction compaction) {
+    switch (compactable) {
+      case MINOR:
+        if (compaction == Compaction.MINOR) {
+          compact(Compaction.MINOR);
+          compactable = Compactable.NONE;
+        }
+        break;
+      case MAJOR:
+        if (compaction == Compaction.MAJOR) {
+          compact(Compaction.MAJOR);
+          compactable = Compactable.NONE;
+        }
+        break;
+      case BOTH:
+        compact(compaction);
+        if (compaction == Compaction.MINOR) {
+          compactable = Compactable.MAJOR;
+        } else {
+          compactable = Compactable.MINOR;
+        }
+        break;
+    }
   }
 
   /**

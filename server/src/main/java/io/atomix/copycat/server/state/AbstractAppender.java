@@ -15,12 +15,18 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.buffer.Buffer;
+import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
+import io.atomix.copycat.server.request.InstallRequest;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.ConfigureResponse;
+import io.atomix.copycat.server.response.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,10 +40,12 @@ import java.util.Set;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 abstract class AbstractAppender implements AutoCloseable {
+  private static final int MAX_BATCH_SIZE = 1024 * 32;
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerState context;
   private final Set<MemberState> appending = new HashSet<>();
   private final Set<MemberState> configuring = new HashSet<>();
+  private final Set<MemberState> installing = new HashSet<>();
   private boolean open = true;
 
   AbstractAppender(ServerState context) {
@@ -77,7 +85,7 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
-   * Sends a commit message.
+   * Sends a configuration message.
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
@@ -89,6 +97,59 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
           member.setTerm(request.term()).setVersion(request.version());
+          appendEntries(member);
+        } else {
+          LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+        }
+      }
+    });
+  }
+
+  /**
+   * Sends a snapshot to the given member.
+   */
+  protected void install(MemberState member) {
+    if (!configuring.contains(member)) {
+      InstallRequest request = buildInstallRequest(member);
+      if (request != null) {
+        sendInstallRequest(member, request);
+      }
+    }
+  }
+
+  /**
+   * Connects to the member and sends a snapshot request.
+   */
+  protected void sendInstallRequest(MemberState member, InstallRequest request) {
+    installing.add(member);
+
+    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      context.checkThread();
+
+      if (open) {
+        if (error == null) {
+          sendInstallRequest(connection, member, request);
+        } else {
+          LOGGER.warn("{} - Failed to replicate snapshot to {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+          installing.remove(member);
+        }
+      }
+    });
+  }
+
+  /**
+   * Sends a snapshot message.
+   */
+  protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
+    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
+    connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
+      context.checkThread();
+      installing.remove(member);
+
+      if (open) {
+        if (error == null) {
+          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+
           appendEntries(member);
         } else {
           LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
@@ -113,6 +174,14 @@ abstract class AbstractAppender implements AutoCloseable {
     if (member.getTerm() < context.getTerm() || member.getVersion() < context.getCluster().getVersion() && !configuring.contains(member)) {
       configure(member);
     }
+    // If the member's next index is less than or equal to the current snapshot index, send the snapshot.
+    else if (context.getSnapshotStore().currentSnapshot() != null && member.getNextIndex() <= context.getSnapshotStore().currentSnapshot().version()) {
+      // If an install request is already being sent, skip the request. This condition is inside of the
+      // outer condition to ensure append requests are not sent concurrently with install requests.
+      if (!installing.contains(member)) {
+        install(member);
+      }
+    }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (!appending.contains(member)) {
       AppendRequest request = buildAppendRequest(member);
@@ -133,6 +202,44 @@ abstract class AbstractAppender implements AutoCloseable {
       .withVersion(context.getCluster().getVersion())
       .withMembers(context.getCluster().getMembers())
       .build();
+  }
+
+  /**
+   * Builds an install request for the given member.
+   */
+  protected InstallRequest buildInstallRequest(MemberState member) {
+    Snapshot snapshot = context.getSnapshotStore().currentSnapshot();
+    if (member.getSnapshotIndex() != snapshot.version()) {
+      member.setSnapshotIndex(snapshot.version()).setSnapshotOffset(0);
+    }
+
+    InstallRequest request;
+    synchronized (snapshot) {
+      // Open a new snapshot reader.
+      try (SnapshotReader reader = snapshot.reader()) {
+        // Skip to the next batch of bytes according to the snapshot chunk size and current offset.
+        reader.skip(member.getSnapshotOffset() * MAX_BATCH_SIZE);
+        Buffer buffer = HeapBuffer.allocate(Math.min(MAX_BATCH_SIZE, reader.remaining()));
+        reader.read(buffer);
+
+        // Create the install request, indicating whether this is the last chunk of data based on the number
+        // of bytes remaining in the buffer.
+        Member leader = context.getLeader();
+        request = InstallRequest.builder()
+          .withTerm(context.getTerm())
+          .withLeader(leader != null ? leader.id() : 0)
+          .withVersion(member.getSnapshotIndex())
+          .withOffset(member.getSnapshotOffset())
+          .withData(buffer.flip())
+          .withComplete(buffer.hasRemaining())
+          .build();
+      }
+    }
+
+    // Update the snapshot offset for the next snapshot request.
+    member.setSnapshotOffset(member.getSnapshotOffset() + 1);
+
+    return request;
   }
 
   /**

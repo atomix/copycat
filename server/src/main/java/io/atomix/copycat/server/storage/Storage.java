@@ -18,6 +18,9 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.buffer.PooledDirectAllocator;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
+import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.system.MetaStore;
 
 import java.io.File;
 import java.time.Duration;
@@ -59,6 +62,8 @@ public class Storage {
   private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
+  private static final int DEFAULT_MAX_SNAPSHOT_SIZE = 1024 * 1024 * 32;
+  private static final boolean DEFAULT_RETAIN_STALE_SNAPSHOTS = false;
   private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
   private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
   private static final Duration DEFAULT_MAJOR_COMPACTION_INTERVAL = Duration.ofHours(1);
@@ -69,6 +74,8 @@ public class Storage {
   private File directory = new File(DEFAULT_DIRECTORY);
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
+  private int maxSnapshotSize = DEFAULT_MAX_SNAPSHOT_SIZE;
+  private boolean retainStaleSnapshots = DEFAULT_RETAIN_STALE_SNAPSHOTS;
   private int compactionThreads = DEFAULT_COMPACTION_THREADS;
   private Duration minorCompactionInterval = DEFAULT_MINOR_COMPACTION_INTERVAL;
   private Duration majorCompactionInterval = DEFAULT_MAJOR_COMPACTION_INTERVAL;
@@ -218,6 +225,31 @@ public class Storage {
   }
 
   /**
+   * Returns the maximum snapshot size.
+   * <p>
+   * The maximum snapshot size dictates the maximum number of bytes allowed to be stored in a single
+   * {@link Snapshot}.
+   *
+   * @return The maximum snapshot size in bytes.
+   */
+  public int maxSnapshotSize() {
+    return maxSnapshotSize;
+  }
+
+  /**
+   * Returns a boolean value indicating whether to retain stale snapshots on disk.
+   * <p>
+   * If this option is enabled, snapshots will be retained on disk even after they no longer contribute
+   * to the state of the system (there's a more recent snapshot). Users may want to disable this option
+   * for backup purposes.
+   *
+   * @return Indicates whether to retain stale snapshots on disk.
+   */
+  public boolean retainStaleSnapshots() {
+    return retainStaleSnapshots;
+  }
+
+  /**
    * Returns the number of log compaction threads.
    * <p>
    * The compaction thread count dictates the parallelism with which the log
@@ -275,6 +307,16 @@ public class Storage {
    */
   public MetaStore openMetaStore(String name) {
     return new MetaStore(name, this);
+  }
+
+  /**
+   * Opens a new {@link SnapshotStore}.
+   *
+   * @param name The snapshot store name.
+   * @return The snapshot store.
+   */
+  public SnapshotStore openSnapshotStore(String name) {
+    return new SnapshotStore(name, this);
   }
 
   /**
@@ -411,9 +453,59 @@ public class Storage {
      * segment
      */
     public Builder withMaxEntriesPerSegment(int maxEntriesPerSegment) {
+      Assert.arg(maxEntriesPerSegment > 0, "max entries per segment must be positive");
       Assert.argNot(maxEntriesPerSegment > DEFAULT_MAX_ENTRIES_PER_SEGMENT,
-          "max entries per segment cannot be greater than " + DEFAULT_MAX_ENTRIES_PER_SEGMENT);
+        "max entries per segment cannot be greater than " + DEFAULT_MAX_ENTRIES_PER_SEGMENT);
       storage.maxEntriesPerSegment = maxEntriesPerSegment;
+      return this;
+    }
+
+    /**
+     * Sets the maximum size of snapshot files on disk, returning the builder for method chaining.
+     * <p>
+     * The maximum snapshot size dictates the size in bytes of a single snapshot file on disk. Reducing the
+     * maximum snapshot file size can help ensure that the system is not bogged down with storing and replicating
+     * snapshots. By default, snapshots are practically unlimited with a 2GB limit, but in practice they should be
+     * fairly small.
+     *
+     * @param maxSnapshotSize The maximum snapshot size in bytes.
+     * @return The storage builder.
+     * @throws IllegalArgumentException if the {@code maxSnapshotSize} is not positive or is less than {@code 64}
+     */
+    public Builder withMaxSnapshotSize(int maxSnapshotSize) {
+      storage.maxSnapshotSize = Assert.arg(maxSnapshotSize, maxSnapshotSize >= 64, "max snapshot size must be positive");
+      return this;
+    }
+
+    /**
+     * Sets whether to retain stale snapshots on disk, returning the builder for method chaining.
+     * <p>
+     * As the system state progresses, periodic snapshots of the state machine's state are taken.
+     * Once a new snapshot of the state machine is taken, all preceding snapshots no longer contribute
+     * to the state of the system and can therefore be removed from disk. By default, snapshots will not
+     * be retained once a new snapshot is stored on disk. Enabling snapshot retention will ensure that
+     * all snapshots will be saved, e.g. for backup purposes.
+     *
+     * @return The storage builder.
+     */
+    public Builder withRetainStaleSnapshots() {
+      return withRetainStaleSnapshots(true);
+    }
+
+    /**
+     * Sets whether to retain stale snapshots on disk, returning the builder for method chaining.
+     * <p>
+     * As the system state progresses, periodic snapshots of the state machine's state are taken.
+     * Once a new snapshot of the state machine is taken, all preceding snapshots no longer contribute
+     * to the state of the system and can therefore be removed from disk. By default, snapshots will not
+     * be retained once a new snapshot is stored on disk. Enabling snapshot retention will ensure that
+     * all snapshots will be saved, e.g. for backup purposes.
+     *
+     * @param retainStaleSnapshots Whether to retain stale snapshots on disk.
+     * @return The storage builder.
+     */
+    public Builder withRetainStaleSnapshots(boolean retainStaleSnapshots) {
+      storage.retainStaleSnapshots = retainStaleSnapshots;
       return this;
     }
 

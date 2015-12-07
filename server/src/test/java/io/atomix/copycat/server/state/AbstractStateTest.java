@@ -28,8 +28,13 @@ import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
-import io.atomix.copycat.server.storage.*;
+import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -49,6 +54,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected Storage storage;
   protected MetaStore meta;
   protected Log log;
+  protected SnapshotStore snapshot;
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
@@ -68,12 +74,13 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
 
     meta = storage.openMetaStore("test");
     log = storage.openLog("test");
+    snapshot = storage.openSnapshotStore("test");
     stateMachine = new TestStateMachine();
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, snapshot, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**
@@ -91,7 +98,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected void append(int entries, long term) throws Throwable {
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
-        entry.setTerm(term).setTombstone(false);
+        entry.setTerm(term);
         serverState.getLog().append(entry);
       }
     }
@@ -126,7 +133,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     List<TestEntry> result = new ArrayList<>();
     for (int i = 0; i < entries; i++) {
       try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
-        result.add(entry.setTerm(term).setTombstone(false));
+        result.add(entry.setTerm(term));
       }
     }
     return result;

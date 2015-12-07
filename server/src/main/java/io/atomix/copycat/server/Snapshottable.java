@@ -11,44 +11,32 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
+package io.atomix.copycat.server;
 
-package io.atomix.copycat.server.state;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 /**
- * State machine time.
+ * Snapshottable state machine interface.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class ServerClock extends Clock {
-  private final ZoneId zoneId = ZoneId.of("UTC");
-  private Instant instant;
+public interface Snapshottable {
 
   /**
-   * Sets the state machine time instant.
+   * Takes a snapshot of the state machine state.
+   *
+   * @param writer The snapshot writer.
    */
-  void set(Instant instant) {
-    this.instant = instant;
-  }
+  void snapshot(SnapshotWriter writer);
 
-  @Override
-  public ZoneId getZone() {
-    return zoneId;
-  }
-
-  @Override
-  public Clock withZone(ZoneId zone) {
-    throw new UnsupportedOperationException("cannot modify state machine time zone");
-  }
-
-  @Override
-  public Instant instant() {
-    return instant;
-  }
+  /**
+   * Installs a snapshot of the state machine state.
+   *
+   * @param reader The snapshot reader.
+   */
+  void install(SnapshotReader reader);
 
 }

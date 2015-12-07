@@ -28,8 +28,8 @@ import java.util.List;
 /**
  * Builds tasks for the {@link Compaction#MINOR} compaction process.
  * <p>
- * Minor compaction works by rewriting individual segments to remove entries where {@link Entry#isTombstone()}
- * is {@code false}. The minor compaction manager is responsible for building a list of {@link MinorCompactionTask}s
+ * Minor compaction works by rewriting individual segments to remove entries that don't have to be removed sequentially
+ * from the log. The minor compaction manager is responsible for building a list of {@link MinorCompactionTask}s
  * to compact segments. In the case of minor compaction, each task is responsible for compacting a single segment.
  * However, in order to ensure segments are not compacted without cause, this compaction manager attempts to
  * prioritize segments for which compaction will result in greater disk space savings.
@@ -67,7 +67,7 @@ public final class MinorCompactionManager implements CompactionManager {
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
     for (Segment segment : getCompactableSegments(storage, segments)) {
-      tasks.add(new MinorCompactionTask(segments, segment));
+      tasks.add(new MinorCompactionTask(segments, segment, compactor.snapshotIndex(), compactor.majorIndex()));
     }
     return tasks;
   }

@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.storage.MetaStore;
+import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -245,7 +245,7 @@ class ClusterState {
     this.version = version;
 
     // Store the configuration to ensure it can be easily loaded on server restart.
-    context.getMetaStore().storeConfiguration(new MetaStore.Configuration(version, members));
+    context.getMetaStore().storeConfiguration(new Configuration(version, members));
 
     return this;
   }
