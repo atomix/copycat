@@ -17,6 +17,7 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
  * No-op entry.
@@ -34,8 +35,8 @@ public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
   }
 
   @Override
-  public boolean isTombstone() {
-    return true;
+  public Compaction.Mode getCompactionMode() {
+    return Compaction.Mode.FULL_CLEAN;
   }
 
   @Override

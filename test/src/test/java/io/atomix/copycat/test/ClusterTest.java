@@ -1151,6 +1151,11 @@ public class ClusterTest extends ConcurrentTestCase {
       return consistency;
     }
 
+    @Override
+    public CompactionMode compaction() {
+      return CompactionMode.QUORUM_CLEAN;
+    }
+
     public String value() {
       return value;
     }
@@ -1195,6 +1200,11 @@ public class ClusterTest extends ConcurrentTestCase {
     @Override
     public Command.ConsistencyLevel consistency() {
       return consistency;
+    }
+
+    @Override
+    public CompactionMode compaction() {
+      return CompactionMode.QUORUM_CLEAN;
     }
 
     public String value() {

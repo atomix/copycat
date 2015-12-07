@@ -23,6 +23,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
  * Command entry.
@@ -41,13 +42,8 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   }
 
   @Override
-  public boolean isTombstone() {
-    return command.compact() == Command.CompactionMode.SEQUENTIAL;
-  }
-
-  @Override
-  public boolean isSnapshotted() {
-    return command.compact() == Command.CompactionMode.SNAPSHOT;
+  public Compaction.Mode getCompactionMode() {
+    return Compaction.Mode.valueOf(command.compaction().name());
   }
 
   @Override

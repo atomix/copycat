@@ -76,9 +76,9 @@ public class MajorCompactionTest extends AbstractLogTest {
       try (TestEntry entry = log.create(TestEntry.class)) {
         entry.setTerm(1);
         if (entry.getIndex() % 2 == 0) {
-          entry.setTombstone(true);
+          entry.setCompactionMode(Compaction.Mode.FULL_SEQUENTIAL_CLEAN);
         } else {
-          entry.setTombstone(false);
+          entry.setCompactionMode(Compaction.Mode.QUORUM_CLEAN);
         }
         log.append(entry);
       }
