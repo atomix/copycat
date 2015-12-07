@@ -235,8 +235,9 @@ final class ServerStateMachine implements AutoCloseable {
 
       AtomicInteger counter = new AtomicInteger();
       for (long i = lastApplied + 1; i <= index; i++) {
-        Entry entry = state.getLog().get(index);
+        Entry entry = state.getLog().get(i);
         if (entry != null) {
+          LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
           apply(entry, false).whenComplete((result, error) -> {
             if (counter.incrementAndGet() == entriesToApply) {
               future.complete(null);
