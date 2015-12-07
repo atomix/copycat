@@ -199,38 +199,80 @@ public final class MajorCompactionTask implements CompactionTask {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, remove the entry from the segment.
       if (entry != null) {
-        // If the entry is a snapshotted entry and its index is less than the snapshot index it can be safely
-        // removed and doesn't have to be explicitly cleaned.
-        if (entry.isSnapshotted() && index <= snapshotIndex) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
-        }
-        // If the entry's index is less than the major compact index then it can be safely removed if cleaned.
-        // If the entry's index is greater than the major compact index, the entry must not be a tombstone.
-        // Tombstones may only be removed from the log if their index is less than the major compact index.
-        else if (!entry.isTombstone() || index <= compactIndex) {
-          // If the entry has been cleaned, skip the entry in the compact segment.
-          // Note that for major compaction this process includes normal and tombstone entries.
-          long offset = segment.offset(index);
-          if (offset == -1 || cleaner.test(offset)) {
-            compactSegment.skip(1);
-            LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
-          }
-          // If the entry hasn't been cleaned, simply transfer it to the new segment.
-          else {
-            compactSegment.append(entry);
-          }
-        }
-        // If the entry doesn't meet the criteria for compaction, transfer it to the new segment.
-        else {
-          compactSegment.append(entry);
-        }
-      }
-      // If the entry has already been compacted, skip the index in the segment.
-      else {
+        compactEntry(index, entry, segment, cleaner, compactSegment);
+      } else {
         compactSegment.skip(1);
       }
     }
+  }
+
+  /**
+   * Cleans a command entry from a segment.
+   */
+  private void compactEntry(long index, Entry entry, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+    // According to the entry's compaction mode, either append the entry to the compact segment
+    // or skip the entry in the compact segment (removing it from the resulting segment).
+    switch (entry.getCompactionMode()) {
+      // Snapshot entries are compacted if a snapshot has been taken at an index greater than the
+      // entry's index.
+      case SNAPSHOT:
+        if (index <= snapshotIndex) {
+          compactSegment.skip(1);
+          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        } else {
+          compactSegment.append(entry);
+        }
+        break;
+      // Quorum committed entries are always compacted since the requirements for compaction of the
+      // segment are that all entries have been stored on a majority of servers.
+      case QUORUM_COMMIT:
+        compactSegment.skip(1);
+        LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        break;
+      // Quorum cleaned entries are compacted if the entry has been marked clean in the segment.
+      case QUORUM_CLEAN:
+        if (isClean(index, segment, cleaner)) {
+          compactSegment.skip(1);
+          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        } else {
+          compactSegment.append(entry);
+        }
+        break;
+      // Full committed entries are compacted once the major compact index is greater than the entry index.
+      case FULL_COMMIT:
+      case FULL_SEQUENTIAL_COMMIT:
+        if (index <= compactIndex) {
+          compactSegment.skip(1);
+          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        } else {
+          compactSegment.append(entry);
+        }
+        break;
+      // Full clean entries are compacted once the major compact index is greater than the entry index
+      // and the entry has been cleaned.
+      case FULL_CLEAN:
+      case FULL_SEQUENTIAL_CLEAN:
+        if (index <= compactIndex && isClean(index, segment, cleaner)) {
+          compactSegment.skip(1);
+          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        } else {
+          compactSegment.append(entry);
+
+          // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.
+          if (isClean(index, segment, cleaner)) {
+            compactSegment.clean(index);
+          }
+        }
+        break;
+    }
+  }
+
+  /**
+   * Returns a boolean value indicating whether the given index is clean.
+   */
+  private boolean isClean(long index, Segment segment, Predicate<Long> cleaner) {
+    long offset = segment.offset(index);
+    return offset == -1 || cleaner.test(offset);
   }
 
   /**

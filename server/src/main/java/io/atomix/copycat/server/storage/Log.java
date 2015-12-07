@@ -103,16 +103,6 @@ import java.util.concurrent.Executors;
  * command is removed from the log before {@code put 1}, a restart and replay of the log will result in the application of
  * {@code put 1} to the state machine, but not {@code remove 1}, thus resulting in an inconsistent state machine state.
  * <p>
- * Copycat handles tombstones by allowing tombstone entries to be flagged with the {@link Entry#isTombstone()} boolean.
- * The minor compaction process plainly ignores tombstone entries and leaves them up to the major compaction process to
- * handle. Major compaction works similarly to minor compaction in that the configured
- * {@link Storage#majorCompactionInterval()} dictates the interval at which the major compaction process runs. During
- * major compaction, the {@link io.atomix.copycat.server.storage.compaction.MajorCompactionManager} iterates through
- * <em>all</em> {@link #commit(long) committed} segments and rewrites them sequentially with all cleaned entries
- * removed, including tombstones. This ensures that earlier segments are compacted before later segments, and so
- * stateful entries that were {@link #clean(long) cleaned} prior to related tombstones are guaranteed to be removed
- * first.
- * <p>
  * As entries are removed from the log during minor and major compaction, log segment files begin to shrink. Copycat
  * does not want to have a thousand file pointers open, so some mechanism is required to combine segments as disk space
  * is freed. To that end, as the major compaction process iterates through the set of committed segments and rewrites
@@ -332,29 +322,43 @@ public class Log implements AutoCloseable {
     // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
     // based on the type of entry and whether it has been cleaned.
     if (entry != null) {
-      // If the entry has not been cleaned by the state machine, return it. Note that the call to isClean()
-      // on the segment will be done in O(1) time since the search was already done in the get() call.
-      if (!segment.isClean(index)) {
-        return entry;
-      }
-      // If the entry index is equal to or greater than the commitIndex, return it. This ensures that the last committed entry
-      // is always exposed so that consistency checks can be done.
-      else if (index >= segments.commitIndex()) {
-        return entry;
-      }
-      // For tombstone entries, if the entry index is greater than the majorIndex, return the entry. This ensures that entries
-      // are replicated until persisted on all available servers.
-      else if (entry.isTombstone()) {
-        if (index > compactor.majorIndex()) {
-          return entry;
-        }
-      }
-      // If the entry is not a tombstone, return the entry if the index is greater than minorIndex. If the entry is less than minorIndex,
-      // that indicates that it has been committed and events have been received for the entry, so we can safely stop replicating it.
-      else {
-        if (index > compactor.minorIndex()) {
-          return entry;
-        }
+      // Return the entry according to the compaction mode.
+      switch (entry.getCompactionMode()) {
+        // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
+        case SNAPSHOT:
+          if (index > compactor.snapshotIndex()) {
+            return entry;
+          }
+          break;
+        // QUORUM_COMMIT entries are returned if the minorIndex is less than the entry index.
+        case QUORUM_COMMIT:
+          if (index > compactor.minorIndex()) {
+            return entry;
+          }
+          break;
+        // QUORUM_CLEAN entries are returned if the minorIndex is less than the entry index or the
+        // entry has not been cleaned.
+        case QUORUM_CLEAN:
+          if (index > compactor.minorIndex() || !segment.isClean(index)) {
+            return entry;
+          }
+          break;
+        // FULL_COMMIT and FULL_SEQUENTIAL_COMMIT entries are returned if the minorIndex or majorIndex is
+        // less than the entry index.
+        case FULL_COMMIT:
+        case FULL_SEQUENTIAL_COMMIT:
+          if (index > compactor.minorIndex() || index > compactor.majorIndex()) {
+            return entry;
+          }
+          break;
+        // FULL_CLEAN and FULL_SEQUENTIAL_CLEAN entries are returned if the minorIndex or majorIndex is less
+        // than the entry index or the entry has not been cleaned.
+        case FULL_CLEAN:
+        case FULL_SEQUENTIAL_CLEAN:
+          if (index > compactor.minorIndex() || index > compactor.majorIndex() || !segment.isClean(index)) {
+            return entry;
+          }
+          break;
       }
     }
     return null;
@@ -490,8 +494,8 @@ public class Log implements AutoCloseable {
   public void close() {
     assertIsOpen();
     flush();
-    segments.close();
     compactor.close();
+    segments.close();
     open = false;
   }
 

@@ -29,10 +29,10 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.JoinResponse;
-import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -520,7 +520,7 @@ public class ServerState {
     // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
     // Note that we don't complete the join future when transitioning to a valid state since we need
     // to ensure that the server's configuration has been updated in the cluster before completing the join.
-    if (cluster.getMember().type() != null) {
+    if (cluster.getMember().type() != CopycatServer.Type.INACTIVE) {
       if (cluster.getMember().type() == CopycatServer.Type.ACTIVE) {
         transition(CopycatServer.State.FOLLOWER);
       } else if (cluster.getMember().type() == CopycatServer.Type.PASSIVE) {

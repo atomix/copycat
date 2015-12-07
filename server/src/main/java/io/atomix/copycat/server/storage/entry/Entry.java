@@ -23,6 +23,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceCounted;
 import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -86,21 +87,12 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   }
 
   /**
-   * Returns a boolean value indicating whether the entry is a tombstone.
+   * Returns the entry compaction mode.
    *
-   * @return Indicates whether the entry is a tombstone.
+   * @return The entry compaction mode.
    */
-  public boolean isTombstone() {
-    return false;
-  }
-
-  /**
-   * Returns a boolean value indicating whether the command can be removed after a snapshot.
-   *
-   * @return Indicates whether the command can be removed after a snapshot.
-   */
-  public boolean isSnapshotted() {
-    return false;
+  public Compaction.Mode getCompactionMode() {
+    return Compaction.Mode.QUORUM_CLEAN;
   }
 
   /**

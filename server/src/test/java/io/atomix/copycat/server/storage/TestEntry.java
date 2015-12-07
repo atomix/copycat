@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
@@ -29,8 +30,8 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 @SerializeWith(id = 1000)
 public class TestEntry extends Entry<TestEntry> {
-  private boolean tombstone;
   /** Padding to vary the stored size of an entry */
+  private Compaction.Mode compaction = Compaction.Mode.QUORUM_CLEAN;
   private int paddingSize;
   private byte[] padding = new byte[0];
 
@@ -44,7 +45,7 @@ public class TestEntry extends Entry<TestEntry> {
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     setTerm(buffer.readLong());
-    tombstone = buffer.readBoolean();
+    compaction = Compaction.Mode.values()[buffer.readByte()];
     paddingSize = buffer.readInt();
     padding = new byte[paddingSize];
     buffer.read(padding);
@@ -52,7 +53,7 @@ public class TestEntry extends Entry<TestEntry> {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(getTerm()).writeBoolean(tombstone).writeInt(paddingSize).write(padding);
+    buffer.writeLong(getTerm()).writeByte(compaction.ordinal()).writeInt(paddingSize).write(padding);
   }
 
   public byte[] getPadding() {
@@ -65,24 +66,18 @@ public class TestEntry extends Entry<TestEntry> {
   }
 
   @Override
-  public boolean isTombstone() {
-    return tombstone;
+  public Compaction.Mode getCompactionMode() {
+    return compaction;
   }
 
-  /**
-   * Sets whether the entry is a tombstone.
-   *
-   * @param tombstone Whether the entry is a tombstone.
-   * @return The test entry.
-   */
-  public TestEntry setTombstone(boolean tombstone) {
-    this.tombstone = tombstone;
+  public TestEntry setCompactionMode(Compaction.Mode mode) {
+    this.compaction = mode;
     return this;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, tombstone=%b]", getClass().getSimpleName(), getIndex(), getTerm(), tombstone);
+    return String.format("%s[index=%d, term=%d, compaction=%s]", getClass().getSimpleName(), getIndex(), getTerm(), compaction);
   }
 
 }

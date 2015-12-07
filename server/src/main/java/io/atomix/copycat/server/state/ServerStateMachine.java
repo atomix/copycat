@@ -247,21 +247,25 @@ final class ServerStateMachine implements AutoCloseable {
    */
   public CompletableFuture<Void> applyAll(long index) {
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
-    if (index > lastApplied) {
-      long entriesToApply = index - lastApplied;
+    long lastIndex = Math.min(index, state.getLog().lastIndex());
+    if (lastIndex > lastApplied) {
+      long entriesToApply = lastIndex - lastApplied;
 
       CompletableFuture<Void> future = new CompletableFuture<>();
 
       AtomicInteger counter = new AtomicInteger();
-      for (long i = lastApplied + 1; i <= index; i++) {
-        Entry entry = state.getLog().get(index);
+      for (long i = lastApplied + 1; i <= lastIndex; i++) {
+        Entry entry = state.getLog().get(i);
         if (entry != null) {
+          LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
           apply(entry, false).whenComplete((result, error) -> {
             if (counter.incrementAndGet() == entriesToApply) {
               future.complete(null);
             }
             entry.release();
           });
+        } else {
+          counter.incrementAndGet();
         }
         setLastApplied(i);
       }
@@ -281,9 +285,17 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once the commit has been applied.
    */
   public CompletableFuture<?> apply(long index) {
+    if (index > lastApplied + 1) {
+      applyAll(index - 1);
+    }
+
     Entry entry = state.getLog().get(index);
     if (entry != null) {
-      return apply(entry).whenComplete((result, error) -> entry.release());
+      try {
+        return apply(entry).whenComplete((result, error) -> entry.release());
+      } finally {
+        setLastApplied(index);
+      }
     } else {
       setLastApplied(index);
       return CompletableFuture.completedFuture(null);

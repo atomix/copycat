@@ -24,6 +24,7 @@ import static org.testng.Assert.assertTrue;
 import java.io.File;
 import java.util.List;
 
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import org.testng.annotations.Test;
 
 import io.atomix.catalyst.serializer.Serializer;
@@ -128,14 +129,14 @@ public abstract class LogTest extends AbstractLogTest {
    * Asserts that {@link Log#clean(long)} prevents tombstone entries from being read if the globalIndex is greater than the tombstone index.
    */
   public void testCleanGetTombstones() {
-    appendEntries(entriesPerSegment * 3, true);
+    appendEntries(entriesPerSegment * 3, Compaction.Mode.FULL_SEQUENTIAL_CLEAN);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
       log.clean(i);
       assertTrue(log.segments.segment(i).isClean(i));
       assertNotNull(log.get(i));
     }
-    log.commit(entriesPerSegment * 2).compactor().majorIndex(entriesPerSegment * 2);
+    log.commit(entriesPerSegment * 2).compactor().minorIndex(entriesPerSegment * 2).majorIndex(entriesPerSegment * 2);
     for (int i = entriesPerSegment; i < entriesPerSegment * 2; i++) {
       assertNull(log.get(i));
     }
