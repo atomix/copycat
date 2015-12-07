@@ -72,7 +72,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testServerJoinLate() throws Throwable {
     createServers(3);
     CopycatClient client = createClient();
-    submit(client, 0, 10000);
+    submit(client, 0, 1000);
     await(30000);
     CopycatServer joiner = createServer(members, nextMember());
     joiner.open().thenRun(this::resume);
