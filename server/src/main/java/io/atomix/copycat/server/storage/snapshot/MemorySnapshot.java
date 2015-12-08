@@ -64,6 +64,7 @@ final class MemorySnapshot extends Snapshot {
   @Override
   public Snapshot complete() {
     descriptor.lock();
+    buffer.flip();
     return super.complete();
   }
 

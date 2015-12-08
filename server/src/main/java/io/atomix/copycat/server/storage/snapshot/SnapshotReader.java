@@ -76,7 +76,7 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
 
   @Override
   public SnapshotReader read(Buffer buffer) {
-    buffer.read(buffer);
+    this.buffer.read(buffer);
     return this;
   }
 
