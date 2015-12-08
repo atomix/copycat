@@ -60,7 +60,7 @@ public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
 
   @Override
   public SnapshotWriter write(Buffer buffer) {
-    buffer.write(buffer);
+    this.buffer.write(buffer);
     return this;
   }
 
