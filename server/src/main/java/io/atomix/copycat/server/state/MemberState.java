@@ -26,9 +26,10 @@ import io.atomix.copycat.server.storage.Log;
 class MemberState {
   private Member member;
   private long term;
-  private long index;
+  private long configIndex;
   private long snapshotIndex;
-  private int snapshotOffset;
+  private long nextSnapshotIndex;
+  private int nextSnapshotOffset;
   private long matchIndex;
   private long nextIndex;
   private long commitTime;
@@ -43,6 +44,8 @@ class MemberState {
    * Resets the member state.
    */
   void resetState(Log log) {
+    nextSnapshotIndex = 0;
+    nextSnapshotOffset = 0;
     matchIndex = 0;
     nextIndex = log.lastIndex() + 1;
     commitTime = 0;
@@ -96,17 +99,17 @@ class MemberState {
    * @return The member configuration index.
    */
   long getConfigIndex() {
-    return index;
+    return configIndex;
   }
 
   /**
-   * Sets the member index.
+   * Sets the member configuration index.
    *
-   * @param index The member index.
+   * @param configIndex The member configuration index.
    * @return The member state.
    */
-  MemberState setConfigIndex(long index) {
-    this.index = index;
+  MemberState setConfigIndex(long configIndex) {
+    this.configIndex = configIndex;
     return this;
   }
 
@@ -131,22 +134,42 @@ class MemberState {
   }
 
   /**
+   * Returns the member's next snapshot index.
+   *
+   * @return The member's next snapshot index.
+   */
+  long getNextSnapshotIndex() {
+    return nextSnapshotIndex;
+  }
+
+  /**
+   * Sets the member's next snapshot index.
+   *
+   * @param nextSnapshotIndex The member's next snapshot index.
+   * @return The member state.
+   */
+  MemberState setNextSnapshotIndex(long nextSnapshotIndex) {
+    this.nextSnapshotIndex = nextSnapshotIndex;
+    return this;
+  }
+
+  /**
    * Returns the member's snapshot offset.
    *
    * @return The member's snapshot offset.
    */
-  int getSnapshotOffset() {
-    return snapshotOffset;
+  int getNextSnapshotOffset() {
+    return nextSnapshotOffset;
   }
 
   /**
    * Sets the member's snapshot offset.
    *
-   * @param snapshotOffset The member's snapshot offset.
+   * @param nextSnapshotOffset The member's snapshot offset.
    * @return The member state.
    */
-  MemberState setSnapshotOffset(int snapshotOffset) {
-    this.snapshotOffset = snapshotOffset;
+  MemberState setNextSnapshotOffset(int nextSnapshotOffset) {
+    this.nextSnapshotOffset = nextSnapshotOffset;
     return this;
   }
 

@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.request.InstallRequest;
@@ -148,11 +149,28 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+          if (response.status() == Response.Status.OK) {
+            LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
 
-          appendEntries(member);
+            // If the install request was completed successfully, set the member's sapshotIndex.
+            if (request.complete()) {
+              member.setSnapshotIndex(request.index());
+              member.setNextSnapshotIndex(0);
+              member.setNextSnapshotOffset(0);
+            } else {
+              member.setNextSnapshotOffset(member.getNextSnapshotOffset() + 1);
+            }
+
+            appendEntries(member);
+          } else {
+            LOGGER.warn("{} - Failed to install {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+            member.setNextSnapshotIndex(0);
+            member.setNextSnapshotOffset(0);
+          }
         } else {
-          LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+          LOGGER.warn("{} - Failed to install {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+          member.setNextSnapshotIndex(0);
+          member.setNextSnapshotOffset(0);
         }
       }
     });
@@ -174,8 +192,11 @@ abstract class AbstractAppender implements AutoCloseable {
     if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion()) {
       configure(member);
     }
-    // If the member's next index is less than or equal to the current snapshot index, send the snapshot.
-    else if (context.getSnapshotStore().currentSnapshot() != null && member.getNextIndex() <= context.getSnapshotStore().currentSnapshot().index()) {
+    // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
+    // is less than the nextIndex, send a snapshot request.
+    else if (context.getSnapshotStore().currentSnapshot() != null
+      && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
+      && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       install(member);
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
@@ -205,8 +226,8 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected InstallRequest buildInstallRequest(MemberState member) {
     Snapshot snapshot = context.getSnapshotStore().currentSnapshot();
-    if (member.getSnapshotIndex() != snapshot.index()) {
-      member.setSnapshotIndex(snapshot.index()).setSnapshotOffset(0);
+    if (member.getNextSnapshotIndex() != snapshot.index()) {
+      member.setNextSnapshotIndex(snapshot.index()).setNextSnapshotOffset(0);
     }
 
     InstallRequest request;
@@ -214,7 +235,7 @@ abstract class AbstractAppender implements AutoCloseable {
       // Open a new snapshot reader.
       try (SnapshotReader reader = snapshot.reader()) {
         // Skip to the next batch of bytes according to the snapshot chunk size and current offset.
-        reader.skip(member.getSnapshotOffset() * MAX_BATCH_SIZE);
+        reader.skip(member.getNextSnapshotOffset() * MAX_BATCH_SIZE);
         Buffer buffer = HeapBuffer.allocate(Math.min(MAX_BATCH_SIZE, reader.remaining()));
         reader.read(buffer);
 
@@ -224,16 +245,13 @@ abstract class AbstractAppender implements AutoCloseable {
         request = InstallRequest.builder()
           .withTerm(context.getTerm())
           .withLeader(leader != null ? leader.id() : 0)
-          .withIndex(member.getSnapshotIndex())
-          .withOffset(member.getSnapshotOffset())
+          .withIndex(member.getNextSnapshotIndex())
+          .withOffset(member.getNextSnapshotOffset())
           .withData(buffer.flip())
           .withComplete(!reader.hasRemaining())
           .build();
       }
     }
-
-    // Update the snapshot offset for the next snapshot request.
-    member.setSnapshotOffset(member.getSnapshotOffset() + 1);
 
     return request;
   }
