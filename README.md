@@ -12,10 +12,11 @@ and includes:
 * Session-based linearizable writes (§[6.3][dissertation])
 * Lease-based fast linearizable reads from leaders (§[6.4.1][dissertation])
 * Fast sequential reads from followers (§[6.4.1][dissertation])
-* Sequential consistency for concurrent/asynchronous operations from a single client
-* Session-based state machine events (§[6.3][dissertation])
+* FIFO consistency for concurrent/asynchronous operations
+* Session-based sequential/linearizable state machine events (§[6.3][dissertation])
 * Membership changes (§[4.3][dissertation])
-* Log compaction via cleaning (§[5.3][dissertation])
+* Snapshots (§[5.1][dissertation])
+* Log cleaning (§[5.3][dissertation])
 
 Additionally, this implementation has undergone extensive [Jepsen testing](http://github.com/jhalterman/copycat-jepsen)
 to verify it maintains linearizability in a number of different failure scenarios.
