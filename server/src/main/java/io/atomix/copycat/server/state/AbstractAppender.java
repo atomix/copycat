@@ -109,7 +109,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a snapshot to the given member.
    */
   protected void install(MemberState member) {
-    if (!configuring.contains(member)) {
+    if (!installing.contains(member)) {
       InstallRequest request = buildInstallRequest(member);
       if (request != null) {
         sendInstallRequest(member, request);
@@ -171,16 +171,12 @@ abstract class AbstractAppender implements AutoCloseable {
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion() && !configuring.contains(member)) {
+    if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion()) {
       configure(member);
     }
     // If the member's next index is less than or equal to the current snapshot index, send the snapshot.
     else if (context.getSnapshotStore().currentSnapshot() != null && member.getNextIndex() <= context.getSnapshotStore().currentSnapshot().index()) {
-      // If an install request is already being sent, skip the request. This condition is inside of the
-      // outer condition to ensure append requests are not sent concurrently with install requests.
-      if (!installing.contains(member)) {
-        install(member);
-      }
+      install(member);
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (!appending.contains(member)) {
