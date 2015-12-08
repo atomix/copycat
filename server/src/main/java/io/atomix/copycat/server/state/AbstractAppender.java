@@ -231,7 +231,7 @@ abstract class AbstractAppender implements AutoCloseable {
           .withIndex(member.getSnapshotIndex())
           .withOffset(member.getSnapshotOffset())
           .withData(buffer.flip())
-          .withComplete(buffer.hasRemaining())
+          .withComplete(reader.hasRemaining())
           .build();
       }
     }
