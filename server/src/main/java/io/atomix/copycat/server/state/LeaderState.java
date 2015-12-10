@@ -554,7 +554,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
-    // indexs will be the last applied index.
+    // indexes will be the last applied index.
     final long index = context.getStateMachine().getLastApplied();
     context.getStateMachine().apply(entry).whenComplete((result, error) -> {
       if (isOpen()) {

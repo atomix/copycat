@@ -19,6 +19,7 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
@@ -58,6 +59,81 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
   private int count;
+
+  /**
+   * Tests setting many keys in a map.
+   */
+  public void testMany() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+    CopycatClient client = createClient();
+
+    // Put a thousand values in the map.
+    for (int i = 0; i < 1000; i++) {
+      String value = "" + i;
+      client.submit(new TestCommand(value, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, value);
+        resume();
+      });
+    }
+    await(10000, 1000);
+
+    // Sleep for 10 seconds to allow log compaction to take place.
+    Thread.sleep(10000);
+
+    // Verify that all values are present.
+    for (int i = 0; i < 1000; i++) {
+      String value = "" + i;
+      client.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, value);
+        resume();
+      });
+    }
+    await(10000, 1000);
+
+    // Create and join additional servers to the cluster.
+    Member m1 = nextMember();
+    CopycatServer s1 = createServer(members, m1).open().get();
+    Member m2 = nextMember();
+    CopycatServer s2 = createServer(members, m2).open().get();
+    Member m3 = nextMember();
+    CopycatServer s3 = createServer(members, m3).open().get();
+
+    // Iterate through the old servers and shut them down one by one.
+    for (CopycatServer server : servers) {
+      server.close().join();
+
+      // Create a new client each time a server is removed and verify that all values are present.
+      CopycatClient client2 = CopycatClient.builder(m1.clientAddress(), m2.clientAddress(), m3.clientAddress())
+        .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+        .withTransport(new LocalTransport(registry))
+        .build();
+      client2.open().thenRun(this::resume);
+      await(15000);
+
+      for (int i = 0; i < 1000; i++) {
+        String value = "" + i;
+        client2.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+          threadAssertEquals(result, value);
+          resume();
+        });
+      }
+      await(10000, 1000);
+    }
+
+    // Verify that all values are present with the original client.
+    for (int i = 0; i < 100; i++) {
+      String value = "" + i;
+      client.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, value);
+        resume();
+      });
+    }
+    await(10000, 100);
+
+    s1.close().join();
+    s2.close().join();
+    s3.close().join();
+  }
 
   /**
    * Tests joining a server to an existing cluster.
@@ -1078,6 +1154,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test state machine.
    */
   public static class TestStateMachine extends StateMachine implements SessionListener, Snapshottable {
+    private Commit<TestCommand> last;
     private Commit<TestExpire> expire;
 
     @Override
@@ -1115,7 +1192,9 @@ public class ClusterTest extends ConcurrentTestCase {
       try {
         return commit.operation().value();
       } finally {
-        commit.clean();
+        if (last != null)
+          last.clean();
+        last = commit;
       }
     }
 
