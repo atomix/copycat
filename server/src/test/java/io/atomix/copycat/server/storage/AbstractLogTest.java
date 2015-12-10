@@ -52,7 +52,7 @@ public abstract class AbstractLogTest {
    */
   protected Object[] testsFor(Class<? extends LogTest> testClass) throws Throwable {
     List<Object> tests = new ArrayList<>();
-    for (int i = 1; i < 30; i++) {
+    for (int i = 1; i < 10; i++) {
       LogTest test = testClass.newInstance();
       test.entriesPerSegment = i;
       test.entryPadding = i / 3;
