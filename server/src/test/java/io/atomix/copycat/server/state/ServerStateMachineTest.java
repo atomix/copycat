@@ -366,22 +366,18 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      long index;
-      try (QueryEntry entry = log.create(QueryEntry.class)) {
-        entry.setTerm(1)
+      QueryEntry entry = log.create(QueryEntry.class);
+        entry.setIndex(1)
+          .setTerm(1)
           .setSession(1)
           .setTimestamp(timestamp + 200)
           .setSequence(0)
-          .setIndex(0)
           .setQuery(new TestQuery());
-        index = log.append(entry);
-      }
 
-      state.getStateMachine().apply(index).whenComplete((result, error) -> {
+      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
         threadAssertEquals(result, 1L);
         resume();
       });
-
     });
 
     callerContext.execute(() -> {
