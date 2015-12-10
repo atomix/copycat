@@ -291,7 +291,7 @@ public final class MajorCompactionTask implements CompactionTask {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
       long offset = segment.offset(i);
       if (offset != -1 && cleaner.test(offset)) {
-        compactSegment.clean(offset);
+        compactSegment.clean(i);
       }
     }
   }
