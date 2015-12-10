@@ -137,7 +137,7 @@ public class InstallRequest extends AbstractRequest<InstallRequest> {
     index = buffer.readLong();
     offset = buffer.readInt();
     complete = buffer.readBoolean();
-    data = serializer.readObject(buffer);
+    data = serializer.<Buffer>readObject(buffer).flip();
   }
 
   @Override
