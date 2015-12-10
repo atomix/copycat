@@ -466,6 +466,7 @@ public class ServerState {
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
     connection.handler(PublishRequest.class, request -> state.publish(request));
     connection.handler(ConfigureRequest.class, request -> state.configure(request));
+    connection.handler(InstallRequest.class, request -> state.install(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
     connection.handler(AppendRequest.class, request -> state.append(request));
