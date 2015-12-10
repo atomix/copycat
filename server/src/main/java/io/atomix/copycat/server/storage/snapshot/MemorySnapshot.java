@@ -31,6 +31,7 @@ final class MemorySnapshot extends Snapshot {
     super(store);
     buffer.mark();
     this.buffer = Assert.notNull(buffer, "buffer");
+    this.buffer.position(SnapshotDescriptor.BYTES).mark();
     this.descriptor = Assert.notNull(descriptor, "descriptor");
   }
 
@@ -47,24 +48,24 @@ final class MemorySnapshot extends Snapshot {
   @Override
   public SnapshotWriter writer() {
     checkWriter();
-    return new SnapshotWriter(buffer.position(SnapshotDescriptor.BYTES).slice(), this);
+    return new SnapshotWriter(buffer.reset().slice(), this);
   }
 
   @Override
   protected void closeWriter(SnapshotWriter writer) {
-    writer.buffer.capacity(writer.buffer.position()).limit(writer.buffer.position());
+    buffer.skip(writer.buffer.position()).mark();
     super.closeWriter(writer);
   }
 
   @Override
   public synchronized SnapshotReader reader() {
-    return openReader(new SnapshotReader(buffer.position(SnapshotDescriptor.BYTES).slice(), this), descriptor);
+    return openReader(new SnapshotReader(buffer.reset().slice(), this), descriptor);
   }
 
   @Override
   public Snapshot complete() {
     descriptor.lock();
-    buffer.flip();
+    buffer.flip().position(SnapshotDescriptor.BYTES).mark();
     return super.complete();
   }
 
