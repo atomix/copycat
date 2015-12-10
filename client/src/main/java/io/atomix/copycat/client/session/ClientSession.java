@@ -180,6 +180,10 @@ public class ClientSession implements Session, Managed<Session> {
 
     CompletableFuture<T> future = new CompletableFuture<>();
     context.executor().execute(() -> {
+      if (!isOpen()) {
+        future.completeExceptionally(new IllegalStateException("session not open"));
+        return;
+      }
 
       CommandRequest request;
       if (command.consistency() == Command.ConsistencyLevel.NONE) {
@@ -240,6 +244,10 @@ public class ClientSession implements Session, Managed<Session> {
 
     CompletableFuture<T> future = new CompletableFuture<>();
     context.executor().execute(() -> {
+      if (!isOpen()) {
+        future.completeExceptionally(new IllegalStateException("session not open"));
+        return;
+      }
 
       QueryRequest request;
       if (query.consistency() == Query.ConsistencyLevel.CAUSAL) {
