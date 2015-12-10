@@ -618,10 +618,15 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Registers the session.
    */
-  private CompletableFuture<Void> register(final int attempt) {
-    context.checkThread();
+  private CompletableFuture<Void> register() {
+    return register(1, new CompletableFuture<>());
+  }
 
-    CompletableFuture<Void> future = new CompletableFuture<>();
+  /**
+   * Registers the session.
+   */
+  private CompletableFuture<Void> register(final int attempt, final CompletableFuture<Void> future) {
+    context.checkThread();
 
     RegisterRequest request = RegisterRequest.builder()
       .withClient(clientId)
@@ -663,12 +668,13 @@ public class ClientSession implements Session, Managed<Session> {
 
       @Override
       public void retry() {
-        register(attempt + 1);
+        resetConnection().resetMembers().register(attempt + 1, future);
       }
 
       @Override
       public void retry(Duration after) {
-        context.schedule(after, () -> register(attempt + 1));
+        resetConnection().resetMembers();
+        context.schedule(after, () -> register(attempt + 1, future));
       }
     });
   }
@@ -734,7 +740,7 @@ public class ClientSession implements Session, Managed<Session> {
   @Override
   public CompletableFuture<Session> open() {
     CompletableFuture<Session> future = new CompletableFuture<>();
-    context.executor().execute(() -> register(1).whenComplete((result, error) -> {
+    context.executor().execute(() -> register().whenComplete((result, error) -> {
       if (error == null) {
         this.state = State.OPEN;
         future.complete(this);
