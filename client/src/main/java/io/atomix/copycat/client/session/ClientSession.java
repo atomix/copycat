@@ -552,19 +552,23 @@ public class ClientSession implements Session, Managed<Session> {
             resetFailureTime();
 
             // Register the connection to the server.
-            setupConnection(connection).whenComplete((setupResult, setupError) -> {
+            setupConnection(connection, recordFailures).whenComplete((setupResult, setupError) -> {
               if (!checkOpen || isOpen()) {
                 CompletableFuture<Connection> connectFuture = this.connectFuture;
                 this.connectFuture = null;
 
                 // If the connection was successfully registered, complete the connection.
                 if (setupError == null) {
+                  resetFailureTime();
                   connectFuture.complete(connection);
                 }
                 // If the client failed to register the connection, reset the connection and
                 // complete the attempt exceptionally.
                 else {
                   LOGGER.debug("Failed to setup connection to {}", member.socketAddress());
+                  if (recordFailures) {
+                    setFailureTime();
+                  }
                   resetConnection();
                   connectFuture.completeExceptionally(setupError);
                 }
@@ -627,7 +631,7 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Sets up the given connection.
    */
-  private CompletableFuture<Connection> setupConnection(Connection connection) {
+  private CompletableFuture<Connection> setupConnection(Connection connection, boolean recordFailures) {
     this.connection = connection;
     connection.closeListener(c -> {
       if (c.equals(this.connection)) {
@@ -654,9 +658,6 @@ public class ClientSession implements Session, Managed<Session> {
       connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((connectResponse, connectError) -> {
         if (isOpen()) {
           if (connectError == null) {
-            // Reset the failure time upon a successful request.
-            resetFailureTime();
-
             // If the connection was successfully created, immediately send a keep-alive request
             // to the server to ensure we maintain our session and get an updated list of server addresses.
             if (connectResponse.status() == Response.Status.OK) {
@@ -667,7 +668,6 @@ public class ClientSession implements Session, Managed<Session> {
               future.completeExceptionally(connectResponse.error().createException());
             }
           } else {
-            setFailureTime();
             future.completeExceptionally(connectError);
           }
         }
@@ -770,6 +770,7 @@ public class ClientSession implements Session, Managed<Session> {
       .withEventIndex(completeIndex)
       .build();
 
+    boolean recordFailures = this.recordFailures;
     this.<KeepAliveRequest, KeepAliveResponse>request(request).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
@@ -778,12 +779,18 @@ public class ClientSession implements Session, Managed<Session> {
           resetMembers();
           future.complete(null);
         } else if (isOpen()) {
+          if (recordFailures) {
+            setFailureTime();
+          }
           if (setLeader(response.leader())) {
             resetMembers();
           }
           future.complete(null);
         }
       } else if (isOpen()) {
+        if (recordFailures) {
+          setFailureTime();
+        }
         future.completeExceptionally(error);
       }
     });
