@@ -139,9 +139,7 @@ final class LeaderState extends ActiveState {
   private void appendMembers() {
     context.checkThread();
     if (isOpen()) {
-      appender.appendEntries().whenComplete((result, error) -> {
-        context.getLog().compactor().minorIndex(context.getStateMachine().getLastCompleted());
-      });
+      appender.appendEntries();
     }
   }
 

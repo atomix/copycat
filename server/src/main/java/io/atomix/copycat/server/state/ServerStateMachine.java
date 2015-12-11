@@ -431,6 +431,9 @@ final class ServerStateMachine implements AutoCloseable {
       }
       session.open();
 
+      // Update the highest index completed for all sessions to allow log compaction to progress.
+      context.executor().execute(() -> updateLastCompleted(index));
+
       // Once register callbacks have been completed, ensure that events published during the callbacks are
       // received by clients. The state machine context will generate an event future for all published events
       // to all sessions.
@@ -443,9 +446,6 @@ final class ServerStateMachine implements AutoCloseable {
         context.executor().execute(() -> future.complete(index));
       }
     });
-
-    // Update the highest index completed for all sessions to allow log compaction to progress.
-    updateLastCompleted(index);
 
     return future;
   }
@@ -500,6 +500,8 @@ final class ServerStateMachine implements AutoCloseable {
     else {
       ThreadContext context = ThreadContext.currentContextOrThrow();
 
+      long index = entry.getIndex();
+
       // Store the index of the previous keep alive request.
       long previousIndex = session.getKeepAliveIndex();
 
@@ -514,14 +516,19 @@ final class ServerStateMachine implements AutoCloseable {
       long commandSequence = entry.getCommandSequence();
       long eventIndex = entry.getEventIndex();
 
+      future = new CompletableFuture<>();
+
       // The keep-alive entry also serves to clear cached command responses and events from memory.
       // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
-      executor.executor().execute(() -> session.clearResponses(commandSequence).resendEvents(eventIndex));
+      executor.executor().execute(() -> {
+        session.clearResponses(commandSequence).resendEvents(eventIndex);
 
-      // Since the index of acked events in the session changed, update the highest index completed for all
-      // sessions to allow log compaction to progress. This is only done during session operations and not
-      // within sessions themselves.
-      updateLastCompleted(entry.getIndex());
+        // Update the highest index completed for all sessions to allow log compaction to progress.
+        context.executor().execute(() -> {
+          updateLastCompleted(index);
+          future.complete(null);
+        });
+      });
 
       // Update the session keep alive index for log cleaning.
       session.setKeepAliveIndex(entry.getIndex());
@@ -530,9 +537,6 @@ final class ServerStateMachine implements AutoCloseable {
       if (previousIndex > 0) {
         state.getLog().clean(previousIndex);
       }
-
-      future = new CompletableFuture<>();
-      context.executor().execute(() -> future.complete(null));
     }
 
     return future;
@@ -601,6 +605,9 @@ final class ServerStateMachine implements AutoCloseable {
             listener.close(session);
           }
 
+          // Update the highest index completed for all sessions to allow log compaction to progress.
+          context.executor().execute(() -> updateLastCompleted(index));
+
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
           // to all sessions. If the event future is non-null, that indicates events are pending which were published
@@ -632,6 +639,9 @@ final class ServerStateMachine implements AutoCloseable {
             listener.close(session);
           }
 
+          // Update the highest index completed for all sessions to allow log compaction to progress.
+          context.executor().execute(() -> updateLastCompleted(index));
+
           // Once close callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
           // to all sessions. If the event future is non-null, that indicates events are pending which were published
@@ -655,10 +665,6 @@ final class ServerStateMachine implements AutoCloseable {
       if (keepAliveIndex > 0) {
         state.getLog().clean(keepAliveIndex);
       }
-
-      // Update the highest index completed for all sessions. This will be used to indicate the highest
-      // index for which logs can be compacted.
-      updateLastCompleted(entry.getIndex());
     }
 
     // Immediately clean the unregister entry from the log.
