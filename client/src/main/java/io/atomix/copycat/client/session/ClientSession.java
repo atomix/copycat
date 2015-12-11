@@ -419,7 +419,8 @@ public class ClientSession implements Session, Managed<Session> {
           // If the session timeout has not expired, attempt to maintain the client's session by retrying
           // after a short amount of time.
           else {
-            retry = context.schedule(Duration.ofMillis(200), ClientSession.this::retryRequests);
+            if (retry == null)
+              retry = context.schedule(Duration.ofMillis(200), ClientSession.this::retryRequests);
             retries.add(() -> {
               LOGGER.debug("Retrying {}", request);
               request(request, attempt, future, checkOpen);
