@@ -302,13 +302,14 @@ public final class MajorCompactionTask implements CompactionTask {
   private void deleteGroup(List<Segment> group) {
     // Delete the old segments.
     for (Segment oldSegment : group) {
+      oldSegment.close();
       oldSegment.delete();
     }
   }
 
   @Override
   public String toString() {
-    return String.format("%s[segments=%s]", getClass().getSimpleName(), groups);
+    return getClass().getSimpleName();
   }
 
 }

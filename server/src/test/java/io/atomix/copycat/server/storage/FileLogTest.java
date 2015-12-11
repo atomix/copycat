@@ -100,13 +100,13 @@ public class FileLogTest extends LogTest {
   public void testRecoverInconsistentDisk() throws Throwable {
     appendEntries(entriesPerSegment * 2);
     Segment firstSegment = log.segments.firstSegment();
-    Segment newSegment = log.segments.createSegment(SegmentDescriptor.builder()
+    log.segments.createSegment(SegmentDescriptor.builder()
       .withId(firstSegment.descriptor().id())
       .withIndex(firstSegment.descriptor().index())
       .withVersion(firstSegment.descriptor().version() + 1)
       .withMaxSegmentSize(firstSegment.descriptor().maxSegmentSize())
       .withMaxEntries(firstSegment.descriptor().maxEntries())
-      .build());
+      .build()).close();
 
     log.close();
 

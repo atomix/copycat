@@ -477,7 +477,6 @@ public class SegmentManager implements AutoCloseable {
       LOGGER.debug("Closing segment: {}", s.descriptor().id());
       s.close();
     });
-    segments.clear();
     currentSegment = null;
   }
 
@@ -485,9 +484,8 @@ public class SegmentManager implements AutoCloseable {
    * Deletes all segments.
    */
   public void delete() {
-    loadSegments().forEach(s -> {
+    segments.values().forEach(s -> {
       LOGGER.debug("Deleting segment: {}", s.descriptor().id());
-      s.close();
       s.delete();
     });
   }

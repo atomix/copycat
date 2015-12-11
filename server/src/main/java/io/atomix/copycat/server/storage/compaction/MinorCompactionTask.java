@@ -81,6 +81,7 @@ public final class MinorCompactionTask implements CompactionTask {
     manager.replaceSegments(Collections.singletonList(segment), compactSegment);
 
     // Delete the old segment.
+    segment.close();
     segment.delete();
   }
 
@@ -191,7 +192,7 @@ public final class MinorCompactionTask implements CompactionTask {
 
   @Override
   public String toString() {
-    return String.format("%s[segment=%s]", getClass().getSimpleName(), segment);
+    return getClass().getSimpleName();
   }
 
 }
