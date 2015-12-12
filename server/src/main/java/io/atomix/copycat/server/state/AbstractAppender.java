@@ -78,7 +78,6 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendConfigureRequest(connection, member, request);
         } else {
-          LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
           configuring.remove(member);
         }
       }
@@ -131,7 +130,6 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendInstallRequest(connection, member, request);
         } else {
-          LOGGER.warn("{} - Failed to replicate snapshot to {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
           installing.remove(member);
         }
       }
