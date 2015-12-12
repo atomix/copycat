@@ -963,7 +963,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(30000, 2);
+      await(10000, 2);
     }
   }
 
@@ -1121,7 +1121,10 @@ public class ClusterTest extends ConcurrentTestCase {
    * Creates a Copycat client.
    */
   private CopycatClient createClient() throws Throwable {
-    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList())).withTransport(new LocalTransport(registry)).build();
+    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
+      .withTransport(new LocalTransport(registry))
+      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .build();
     client.open().thenRun(this::resume);
     await(10000);
     clients.add(client);
