@@ -65,7 +65,12 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testMany() throws Throwable {
     List<CopycatServer> servers = createServers(3);
-    CopycatClient client = createClient();
+
+    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
+      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withTransport(new LocalTransport(registry))
+      .build();
+    client.open().join();
 
     // Put a thousand values in the map.
     for (int i = 0; i < 1000; i++) {
@@ -78,7 +83,7 @@ public class ClusterTest extends ConcurrentTestCase {
     await(10000, 1000);
 
     // Sleep for 10 seconds to allow log compaction to take place.
-    Thread.sleep(10000);
+    Thread.sleep(5000);
 
     // Verify that all values are present.
     for (int i = 0; i < 1000; i++) {
@@ -121,14 +126,14 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     // Verify that all values are present with the original client.
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1000; i++) {
       String value = "" + i;
       client.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
         threadAssertEquals(result, value);
         resume();
       });
     }
-    await(10000, 100);
+    await(10000, 1000);
 
     s1.close().join();
     s2.close().join();
@@ -202,7 +207,13 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testReplace() throws Throwable {
     List<CopycatServer> servers = createServers(3);
-    CopycatClient client = createClient();
+
+    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
+      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withTransport(new LocalTransport(registry))
+      .build();
+    client.open().get();
+
     CopycatServer s1 = createServer(members, nextMember()).open().get();
     CopycatServer s2 = createServer(members, nextMember()).open().get();
     CopycatServer s3 = createServer(members, nextMember()).open().get();
@@ -216,7 +227,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(30000);
+      await(10000);
     }
 
     s1.close().join();
