@@ -229,6 +229,14 @@ abstract class ActiveState extends PassiveState {
     if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL
       || request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
 
+      // If this server has not yet applied entries up to the client's session ID, forward the
+      // query to the leader. This ensures that a follower does not tell the client its session
+      // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
+      if (context.getStateMachine().getLastApplied() < request.session()) {
+        LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
+        return queryForward(request);
+      }
+
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
       if (context.getLog().lastIndex() < context.getCommitIndex()) {
