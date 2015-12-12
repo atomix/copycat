@@ -217,21 +217,25 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Updates the last completed event index based on a commit at the given index.
+   * Calculates the last completed session event index.
    */
-  private void updateLastCompleted(long index) {
+  private long calculateLastCompleted(long index) {
     // Calculate the last completed index as the lowest index acknowledged by all clients.
     long lastCompleted = index;
     for (ServerSession session : executor.context().sessions().sessions.values()) {
       lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
     }
+    return lastCompleted;
+  }
 
-    if (lastCompleted < this.lastCompleted)
-      throw new IllegalStateException("inconsistent session state");
-    this.lastCompleted = lastCompleted;
+  /**
+   * Updates the last completed event index based on a commit at the given index.
+   */
+  private void setLastCompleted(long lastCompleted) {
+    this.lastCompleted = Math.max(this.lastCompleted, lastCompleted);
 
     // Update the log compaction minor index.
-    state.getLog().compactor().minorIndex(lastCompleted);
+    state.getLog().compactor().minorIndex(this.lastCompleted);
 
     completeSnapshot();
   }
@@ -431,8 +435,11 @@ final class ServerStateMachine implements AutoCloseable {
       }
       session.open();
 
+      // Calculate the last completed index.
+      long lastCompleted = calculateLastCompleted(index);
+
       // Update the highest index completed for all sessions to allow log compaction to progress.
-      context.executor().execute(() -> updateLastCompleted(index));
+      context.executor().execute(() -> setLastCompleted(lastCompleted));
 
       // Once register callbacks have been completed, ensure that events published during the callbacks are
       // received by clients. The state machine context will generate an event future for all published events
@@ -523,9 +530,12 @@ final class ServerStateMachine implements AutoCloseable {
       executor.executor().execute(() -> {
         session.clearResponses(commandSequence).resendEvents(eventIndex);
 
+        // Calculate the last completed index.
+        long lastCompleted = calculateLastCompleted(index);
+
         // Update the highest index completed for all sessions to allow log compaction to progress.
         context.executor().execute(() -> {
-          updateLastCompleted(index);
+          setLastCompleted(lastCompleted);
           future.complete(null);
         });
       });
@@ -605,8 +615,11 @@ final class ServerStateMachine implements AutoCloseable {
             listener.close(session);
           }
 
+          // Calculate the last completed index.
+          long lastCompleted = calculateLastCompleted(index);
+
           // Update the highest index completed for all sessions to allow log compaction to progress.
-          context.executor().execute(() -> updateLastCompleted(index));
+          context.executor().execute(() -> setLastCompleted(lastCompleted));
 
           // Once expiration callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
@@ -639,8 +652,11 @@ final class ServerStateMachine implements AutoCloseable {
             listener.close(session);
           }
 
+          // Calculate the last completed index.
+          long lastCompleted = calculateLastCompleted(index);
+
           // Update the highest index completed for all sessions to allow log compaction to progress.
-          context.executor().execute(() -> updateLastCompleted(index));
+          context.executor().execute(() -> setLastCompleted(lastCompleted));
 
           // Once close callbacks have been completed, ensure that events published during the callbacks
           // are published in batch. The state machine context will generate an event future for all published events
