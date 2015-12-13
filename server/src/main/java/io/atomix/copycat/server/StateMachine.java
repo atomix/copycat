@@ -93,7 +93,7 @@ import java.util.function.Function;
  * The {@link StateMachineExecutor} is responsible for executing state machine operations sequentially and provides an
  * interface similar to that of {@link java.util.concurrent.ScheduledExecutorService} to allow state machines to schedule
  * time-based callbacks. Because of the determinism requirement, scheduled callbacks are guaranteed to be executed
- * deterministically as well. The executor can be accessed via the {@link #executor()} accessor method.
+ * deterministically as well. The executor can be accessed via the {@link #executor} field.
  * See the {@link StateMachineExecutor} documentation for more information.
  * <pre>
  *   {@code
@@ -167,7 +167,10 @@ import java.util.function.Function;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class StateMachine implements AutoCloseable {
-  private StateMachineExecutor executor;
+  protected StateMachineExecutor executor;
+  protected StateMachineContext context;
+  protected Clock clock;
+  protected Sessions sessions;
 
   protected StateMachine() {
   }
@@ -180,6 +183,9 @@ public abstract class StateMachine implements AutoCloseable {
    */
   public void init(StateMachineExecutor executor) {
     this.executor = Assert.notNull(executor, "executor");
+    this.context = executor.context();
+    this.clock = context.clock();
+    this.sessions = context.sessions();
     if (this instanceof SessionListener) {
       executor.context().sessions().addListener((SessionListener) this);
     }
@@ -197,36 +203,6 @@ public abstract class StateMachine implements AutoCloseable {
    */
   protected void configure(StateMachineExecutor executor) {
     registerOperations();
-  }
-
-  /**
-   * Returns the state machine executor.
-   * <p>
-   * The executor can be used to register state machine {@link Operation operations} or to schedule
-   * time-based callbacks.
-   *
-   * @return The state machine executor.
-   */
-  protected StateMachineExecutor executor() {
-    return executor;
-  }
-
-  /**
-   * Returns the state machine sessions.
-   *
-   * @return The state machine sessions.
-   */
-  protected Sessions sessions() {
-    return executor.context().sessions();
-  }
-
-  /**
-   * Returns the state machine's deterministic clock.
-   *
-   * @return The state machine's deterministic clock.
-   */
-  protected Clock clock() {
-    return executor.context().clock();
   }
 
   /**

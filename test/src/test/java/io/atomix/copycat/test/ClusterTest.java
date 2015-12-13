@@ -1225,7 +1225,7 @@ public class ClusterTest extends ConcurrentTestCase {
         if (commit.operation().own()) {
           commit.session().publish("test", commit.operation().value());
         } else {
-          for (Session session : sessions()) {
+          for (Session session : sessions) {
             session.publish("test", commit.operation().value());
           }
         }
