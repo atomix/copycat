@@ -15,14 +15,14 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.TypedCommand;
 
 /**
  * Value set command.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class SetCommand implements Command<Object> {
+public class SetCommand implements TypedCommand<Object> {
   private final Object value;
 
   public SetCommand(Object value) {
