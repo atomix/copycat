@@ -1207,7 +1207,7 @@ public class ClusterTest extends ConcurrentTestCase {
         return commit.operation().value();
       } finally {
         if (last != null)
-          last.clean();
+          last.close();
         last = commit;
       }
     }
@@ -1231,7 +1231,7 @@ public class ClusterTest extends ConcurrentTestCase {
         }
         return commit.operation().value();
       } finally {
-        commit.clean();
+        commit.close();
       }
     }
 

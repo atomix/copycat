@@ -98,17 +98,12 @@ final class ServerCommit implements Commit<Operation<?>> {
   }
 
   @Override
-  public void clean() {
-    checkOpen();
-    if (operation instanceof Command) {
-      log.clean(index);
-    }
-    close();
-  }
-
-  @Override
   public void close() {
     if (open) {
+      if (operation instanceof Command) {
+        log.clean(index);
+      }
+
       index = 0;
       session = null;
       instant = null;
