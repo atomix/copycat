@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage.snapshot;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.Bytes;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 /**
@@ -28,10 +29,12 @@ import io.atomix.catalyst.util.Assert;
 public class SnapshotReader implements BufferInput<SnapshotReader> {
   private final Buffer buffer;
   private final Snapshot snapshot;
+  private final Serializer serializer;
 
-  SnapshotReader(Buffer buffer, Snapshot snapshot) {
+  SnapshotReader(Buffer buffer, Snapshot snapshot, Serializer serializer) {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
+    this.serializer = Assert.notNull(serializer, "serializer");
   }
 
   @Override
@@ -48,6 +51,16 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   public SnapshotReader skip(long bytes) {
     buffer.skip(bytes);
     return this;
+  }
+
+  /**
+   * Reads an object from the buffer.
+   *
+   * @param <T> The type of the object to read.
+   * @return The read object.
+   */
+  public <T> T readObject() {
+    return serializer.readObject(buffer);
   }
 
   @Override

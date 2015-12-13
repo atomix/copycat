@@ -26,6 +26,7 @@ import io.atomix.catalyst.util.Assert;
 final class MemorySnapshot extends Snapshot {
   private final HeapBuffer buffer;
   private final SnapshotDescriptor descriptor;
+  private final SnapshotStore store;
 
   MemorySnapshot(HeapBuffer buffer, SnapshotDescriptor descriptor, SnapshotStore store) {
     super(store);
@@ -33,6 +34,7 @@ final class MemorySnapshot extends Snapshot {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.buffer.position(SnapshotDescriptor.BYTES).mark();
     this.descriptor = Assert.notNull(descriptor, "descriptor");
+    this.store = Assert.notNull(store, "store");
   }
 
   @Override
@@ -48,7 +50,7 @@ final class MemorySnapshot extends Snapshot {
   @Override
   public SnapshotWriter writer() {
     checkWriter();
-    return new SnapshotWriter(buffer.reset().slice(), this);
+    return new SnapshotWriter(buffer.reset().slice(), this, store.storage.serializer());
   }
 
   @Override
@@ -59,7 +61,7 @@ final class MemorySnapshot extends Snapshot {
 
   @Override
   public synchronized SnapshotReader reader() {
-    return openReader(new SnapshotReader(buffer.reset().slice(), this), descriptor);
+    return openReader(new SnapshotReader(buffer.reset().slice(), this, store.storage.serializer()), descriptor);
   }
 
   @Override
