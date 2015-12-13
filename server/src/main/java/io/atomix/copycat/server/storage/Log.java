@@ -330,31 +330,19 @@ public class Log implements AutoCloseable {
             return entry;
           }
           break;
-        // QUORUM_COMMIT entries are returned if the minorIndex is less than the entry index.
-        case QUORUM_COMMIT:
-          if (index > compactor.minorIndex()) {
-            return entry;
-          }
-          break;
-        // QUORUM_CLEAN entries are returned if the minorIndex is less than the entry index or the
+        // QUORUM entries are returned if the minorIndex is less than the entry index or the
         // entry has not been cleaned.
-        case QUORUM_CLEAN:
+        case QUORUM:
           if (index > compactor.minorIndex() || !segment.isClean(index)) {
             return entry;
           }
           break;
-        // FULL_COMMIT and FULL_SEQUENTIAL_COMMIT entries are returned if the minorIndex or majorIndex is
-        // less than the entry index.
-        case FULL_COMMIT:
-        case FULL_SEQUENTIAL_COMMIT:
-          if (index > compactor.minorIndex() || index > compactor.majorIndex()) {
-            return entry;
-          }
-          break;
-        // FULL_CLEAN and FULL_SEQUENTIAL_CLEAN entries are returned if the minorIndex or majorIndex is less
-        // than the entry index or the entry has not been cleaned.
-        case FULL_CLEAN:
-        case FULL_SEQUENTIAL_CLEAN:
+        // FULL entries are returned if the minorIndex or majorIndex is less than the entry index or
+        // if the entry hasn't been cleaned.
+        // SEQUENTIAL entries are returned if the minorIndex or majorIndex is less than the entry index or
+        // if the entry hasn't been cleaned.
+        case FULL:
+        case SEQUENTIAL:
           if (index > compactor.minorIndex() || index > compactor.majorIndex() || !segment.isClean(index)) {
             return entry;
           }

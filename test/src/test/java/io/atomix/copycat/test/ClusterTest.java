@@ -1258,8 +1258,8 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     @Override
-    public CompactionMode compaction() {
-      return CompactionMode.QUORUM_CLEAN;
+    public Type type() {
+      return Type.UPDATE;
     }
 
     public String value() {
@@ -1309,8 +1309,8 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     @Override
-    public CompactionMode compaction() {
-      return CompactionMode.QUORUM_CLEAN;
+    public Type type() {
+      return Type.EVENT;
     }
 
     public String value() {

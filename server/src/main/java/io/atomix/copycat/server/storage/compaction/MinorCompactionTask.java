@@ -49,12 +49,14 @@ public final class MinorCompactionTask implements CompactionTask {
   private final Segment segment;
   private final long snapshotIndex;
   private final long compactIndex;
+  private final Compaction.Mode defaultCompactionMode;
 
-  MinorCompactionTask(SegmentManager manager, Segment segment, long snapshotIndex, long compactIndex) {
+  MinorCompactionTask(SegmentManager manager, Segment segment, long snapshotIndex, long compactIndex, Compaction.Mode defaultCompactionMode) {
     this.manager = Assert.notNull(manager, "manager");
     this.segment = Assert.notNull(segment, "segment");
     this.snapshotIndex = snapshotIndex;
     this.compactIndex = compactIndex;
+    this.defaultCompactionMode = Assert.notNull(defaultCompactionMode, "defaultCompactionMode");
   }
 
   @Override
@@ -120,10 +122,17 @@ public final class MinorCompactionTask implements CompactionTask {
    * Cleans a command entry from a segment.
    */
   private void compactEntry(long index, Entry entry, Segment segment, Segment compactSegment) {
+    // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
+    // mode to the entry.
+    Compaction.Mode mode = entry.getCompactionMode();
+    if (mode == Compaction.Mode.DEFAULT) {
+      mode = defaultCompactionMode;
+    }
+
     // According to the entry's compaction mode, either append the entry to the compact segment
     // or skip the entry in the compact segment (removing it from the resulting segment).
-    switch (entry.getCompactionMode()) {
-      // Snapshot entries are compacted if a snapshot has been taken at an index greater than the
+    switch (mode) {
+      // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
         if (index <= snapshotIndex) {
@@ -133,14 +142,8 @@ public final class MinorCompactionTask implements CompactionTask {
           compactSegment.append(entry);
         }
         break;
-      // Quorum committed entries are always compacted since the requirements for compaction of the
-      // segment are that all entries have been stored on a majority of servers.
-      case QUORUM_COMMIT:
-        compactSegment.skip(1);
-        LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
-        break;
-      // Quorum cleaned entries are compacted if the entry has been marked clean in the segment.
-      case QUORUM_CLEAN:
+      // QUORUM entries are compacted if the entry has been marked clean in the segment.
+      case QUORUM:
         if (segment.isClean(index)) {
           compactSegment.skip(1);
           LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
@@ -148,23 +151,9 @@ public final class MinorCompactionTask implements CompactionTask {
           compactSegment.append(entry);
         }
         break;
-      // Full committed entries are compacted once the major compact index is greater than the entry index.
-      case FULL_COMMIT:
-        if (index <= compactIndex) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
-        } else {
-          compactSegment.append(entry);
-
-          // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.
-          if (segment.isClean(index)) {
-            compactSegment.clean(index);
-          }
-        }
-        break;
-      // Full clean entries are compacted once the major compact index is greater than the entry index
+      // FULL entries are compacted if the major compact index is greater than the entry index
       // and the entry has been cleaned.
-      case FULL_CLEAN:
+      case FULL:
         if (index <= compactIndex && segment.isClean(index)) {
           compactSegment.skip(1);
           LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
@@ -177,9 +166,8 @@ public final class MinorCompactionTask implements CompactionTask {
           }
         }
         break;
-      // Sequentially compacted entries can only be compacted during major compaction.
-      case FULL_SEQUENTIAL_COMMIT:
-      case FULL_SEQUENTIAL_CLEAN:
+      // SEQUENTIAL entries can only be compacted during major compaction.
+      case SEQUENTIAL:
         compactSegment.append(entry);
 
         // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.

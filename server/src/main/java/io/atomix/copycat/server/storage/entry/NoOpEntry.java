@@ -36,7 +36,7 @@ public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
 
   @Override
   public Compaction.Mode getCompactionMode() {
-    return Compaction.Mode.FULL_CLEAN;
+    return Compaction.Mode.FULL;
   }
 
   @Override

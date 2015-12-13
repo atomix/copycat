@@ -75,6 +75,12 @@ public enum Compaction {
   public enum Mode {
 
     /**
+     * The {@code DEFAULT} compaction mode is a special compaction mode which indicates that the configured
+     * default compaction mode should be applied to the command.
+     */
+    DEFAULT,
+
+    /**
      * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
      * snapshots. Snapshot commands will be stored in the Raft log only until a snapshot of the state machine state has
      * been written to disk, at which time they'll be removed from the log. Note that snapshot commands can still safely
@@ -84,44 +90,26 @@ public enum Compaction {
     SNAPSHOT,
 
     /**
-     * The {@code QUORUM_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * a majority of servers in the cluster. Once stored on a majority of servers, it will be applied to the
-     * state machines to trigger related session events. Once session events have been received by clients,
-     * the command will be removed from the log.
+     * The {@code QUORUM} compaction mode retains the command in the log until it has been stored and applied
+     * on a majority of servers in the cluster. Once the commit has been applied to the state machine and
+     * closed, it may be removed during minor or major compaction.
      */
-    QUORUM_COMMIT,
+    QUORUM,
 
     /**
-     * The {@code QUORUM_CLEAN} compaction mode retains the command in the log until it has been stored on
-     * a majority of servers in the cluster and the state machine explicitly cleans the commit from the log.
+     * The {@code FULL} compaction mode retains the command in the log until it has been stored and applied
+     * on all servers in the cluster. Once the commit has been applied to a state machine and closed it may
+     * be removed from the log during minor or major compaction.
      */
-    QUORUM_CLEAN,
+    FULL,
 
     /**
-     * The {@code FULL_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster. Once stored on all servers, it will be applied to the leader's state machine
-     * and then cleaned from all logs.
+     * The {@code SEQUENTIAL} compaction mode retains the command in the log until it has been stored and
+     * applied on all servers in the cluster. Once the commit has been appleid to a state machine and closed,
+     * it may be removed from the log <em>only during major compaction</em> to ensure that all prior completed
+     * commits are removed first.
      */
-    FULL_COMMIT,
-
-    /**
-     * The {@code FULL_CLEAN} compaction mode retains the command in the log until it has been stored on all servers
-     * in the cluster and the state machine explicitly cleans the commit from the log.
-     */
-    FULL_CLEAN,
-
-    /**
-     * The {@code FULL_SEQUENTIAL_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster. Once stored on all servers, it will be applied to the leader's state machine and
-     * cleaned from the log in a manner that ensures all prior cleaned entries are removed first.
-     */
-    FULL_SEQUENTIAL_COMMIT,
-
-    /**
-     * The {@code FULL_SEQUENTIAL_CLEAN} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster and the state machine on each server explicitly cleans the command from the log.
-     */
-    FULL_SEQUENTIAL_CLEAN
+    SEQUENTIAL,
 
   }
 

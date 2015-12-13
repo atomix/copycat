@@ -114,13 +114,91 @@ public interface Command<T> extends Operation<T> {
   }
 
   /**
-   * Constants for specifying Raft command compaction modes.
+   * Constants for specifying the command type.
+   *
+   * @see #type()
+   */
+  enum Type {
+
+    /**
+     * The {@code DEFAULT} command type is a special command type that covers all use cases according
+     * to the system type.
+     */
+    DEFAULT {
+      @Override
+      public CompactionMode compaction() {
+        return CompactionMode.DEFAULT;
+      }
+    },
+
+    /**
+     * The {@code UPDATE} command type indicates that the command is used to update system state and may
+     * be retained in the state machine for an arbitrary amount of time.
+     */
+    UPDATE {
+      @Override
+      public CompactionMode compaction() {
+        return CompactionMode.QUORUM;
+      }
+    },
+
+    /**
+     * The {@code EXPIRING} command type indicates that the command is used to update system state but may
+     * ultimately expire after some arbitrary amount of time after which it will no longer contribute to
+     * the system's state.
+     */
+    EXPIRING {
+      @Override
+      public CompactionMode compaction() {
+        return CompactionMode.SEQUENTIAL;
+      }
+    },
+
+    /**
+     * The {@code DELETE} command type indicates that the command is used to delete system state.
+     */
+    DELETE {
+      @Override
+      public CompactionMode compaction() {
+        return CompactionMode.SEQUENTIAL;
+      }
+    },
+
+    /**
+     * The {@code EVENT} command type is a special type used to indicate that the command triggers the
+     * publishing of events but does not itself contribute to the system's state.
+     */
+    EVENT {
+      @Override
+      public CompactionMode compaction() {
+        return CompactionMode.QUORUM;
+      }
+    };
+
+    /**
+     * Returns the compaction mode associated with this command type.
+     *
+     * @return The compaction mode associated with this command type.
+     */
+    public abstract CompactionMode compaction();
+
+  }
+
+  /**
+   * Constants for specifying command compaction modes.
    *
    * @see #compaction()
    *
    * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
    */
   enum CompactionMode {
+
+    /**
+     * The {@code DEFAULT} compaction mode is a special compaction mode which is dictated by the type of
+     * system to which the command is being submitted. If the system's state machine supports snapshotting,
+     * the command will be compacted via snapshots.
+     */
+    DEFAULT,
 
     /**
      * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
@@ -132,44 +210,22 @@ public interface Command<T> extends Operation<T> {
     SNAPSHOT,
 
     /**
-     * The {@code QUORUM_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * a majority of servers in the cluster. Once stored on a majority of servers, it will be applied to the
-     * state machines to trigger related session events. Once session events have been received by clients,
-     * the command will be removed from the log.
+     * The {@code QUORUM} compaction mode retains the command in the log until it has been stored on a majority
+     * of servers in the cluster and has been applied to the state machine.
      */
-    QUORUM_COMMIT,
+    QUORUM,
 
     /**
-     * The {@code QUORUM_CLEAN} compaction mode retains the command in the log until it has been stored on
-     * a majority of servers in the cluster and the state machine explicitly cleans the commit from the log.
+     * The {@code FULL} compaction mode retains the command in the log until it has been stored and applied on
+     * all servers in the cluster.
      */
-    QUORUM_CLEAN,
+    FULL,
 
     /**
-     * The {@code FULL_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster. Once stored on all servers, it will be applied to the leader's state machine
-     * and then cleaned from all logs.
+     * The sequential compaction mode retains the command in the log until it has been stored and applied on
+     * all servers and until all prior commands have been compacted from the log.
      */
-    FULL_COMMIT,
-
-    /**
-     * The {@code FULL_CLEAN} compaction mode retains the command in the log until it has been stored on all servers
-     * in the cluster and the state machine explicitly cleans the commit from the log.
-     */
-    FULL_CLEAN,
-
-    /**
-     * The {@code FULL_SEQUENTIAL_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster. Once stored on all servers, it will be applied to the leader's state machine and
-     * cleaned from the log in a manner that ensures all prior cleaned entries are removed first.
-     */
-    FULL_SEQUENTIAL_COMMIT,
-
-    /**
-     * The {@code FULL_SEQUENTIAL_CLEAN} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster and the state machine on each server explicitly cleans the command from the log.
-     */
-    FULL_SEQUENTIAL_CLEAN
+    SEQUENTIAL,
 
   }
 
@@ -192,6 +248,18 @@ public interface Command<T> extends Operation<T> {
   }
 
   /**
+   * Returns the command type.
+   * <p>
+   * The command type indicates how servers should handle persistence and replication of the command. Different
+   * types of commands can be optimized based on the way they modify system state.
+   *
+   * @return The command type.
+   */
+  default Type type() {
+    return Type.DEFAULT;
+  }
+
+  /**
    * Returns the command compaction mode.
    * <p>
    * The compaction mode will dictate how long the command is persisted in the Raft log before it can be compacted.
@@ -201,7 +269,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command compaction mode.
    */
   default CompactionMode compaction() {
-    return CompactionMode.SNAPSHOT;
+    return type().compaction();
   }
 
 }

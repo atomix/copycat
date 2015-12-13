@@ -56,6 +56,7 @@ public class Compactor implements AutoCloseable {
   private long minorIndex;
   private long majorIndex;
   private long snapshotIndex;
+  Compaction.Mode defaultCompactionMode = Compaction.Mode.SEQUENTIAL;
   private Compactable compactable = Compactable.NONE;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
@@ -74,6 +75,21 @@ public class Compactor implements AutoCloseable {
     this.executor = Assert.notNull(executor, "executor");
     minor = executor.scheduleAtFixedRate(() -> checkCompact(Compaction.MINOR), storage.minorCompactionInterval().toMillis(), storage.minorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
     major = executor.scheduleAtFixedRate(() -> checkCompact(Compaction.MAJOR), storage.majorCompactionInterval().toMillis(), storage.majorCompactionInterval().toMillis(), TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Sets the default compaction mode.
+   *
+   * @param mode The default compaction mode.
+   * @return The compactor.
+   * @throws NullPointerException if the compaction mode is {@code null}
+   * @throws IllegalArgumentException if the compaction mode is {@link Compaction.Mode#DEFAULT}
+   */
+  public Compactor withDefaultCompactionMode(Compaction.Mode mode) {
+    Assert.notNull(mode, "mode");
+    Assert.argNot(mode, mode == Compaction.Mode.DEFAULT, "DEFAULT cannot be the default compaction mode");
+    this.defaultCompactionMode = mode;
+    return this;
   }
 
   /**

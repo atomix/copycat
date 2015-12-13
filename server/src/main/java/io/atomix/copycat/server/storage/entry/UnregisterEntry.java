@@ -40,7 +40,7 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
 
   @Override
   public Compaction.Mode getCompactionMode() {
-    return Compaction.Mode.FULL_SEQUENTIAL_COMMIT;
+    return Compaction.Mode.SEQUENTIAL;
   }
 
   /**
