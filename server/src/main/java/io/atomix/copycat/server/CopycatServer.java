@@ -490,7 +490,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * Returns a boolean value indicating whether the server is running.
    * <p>
    * Once {@link #open()} is called and the returned {@link CompletableFuture} is completed (meaning this server found
-   * a cluster leader), this method will return {@code true} until {@link #close() closed}.
+   * a cluster leader), this method will return {@code true} until closed.
    *
    * @return Indicates whether the server is running.
    */

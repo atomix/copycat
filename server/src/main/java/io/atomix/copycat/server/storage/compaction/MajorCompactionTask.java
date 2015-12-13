@@ -64,7 +64,7 @@ import java.util.function.Predicate;
  * major compaction. The major compaction task assumes that state machines will always clean <em>related</em> entries
  * in monotonically increasing order. That is, if a state machines receives a {@link io.atomix.copycat.server.Commit}
  * {@code remove 1} that deletes the state of a prior {@code Commit} {@code set 1}, the state machine will call
- * {@link Commit#clean()} on the {@code set 1} commit before cleaning the {@code remove 1} commit. But even if applications
+ * {@link Commit#close()} on the {@code set 1} commit before cleaning the {@code remove 1} commit. But even if applications
  * clean entries from the log in monotonic order, and the major compaction task compacts segments in sequential order,
  * inconsistencies can still arise. Consider the following history:
  * <ul>

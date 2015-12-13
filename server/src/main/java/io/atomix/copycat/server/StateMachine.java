@@ -144,20 +144,20 @@ import java.util.function.Function;
  * {@link io.atomix.copycat.server.storage.Log} grows. Without freeing unnecessary commits from the log it would eventually
  * consume all available disk or memory. Copycat uses a log cleaning algorithm to remove {@link Commit}s that no longer
  * contribute to the state machine's state from the log. To aid in this process, it's the responsibility of state machine
- * implementations to indicate when each commit is no longer needed by calling {@link Commit#clean()}.
+ * implementations to indicate when each commit is no longer needed by calling {@link Commit#close()}.
  * <p>
  * State machines should hold on to the {@link Commit} object passed to operation callbacks for as long as the commit
- * contributes to the state machine's state. Once a commit is no longer needed, {@link Query} commits should be
- * {@link Commit#close() closed} and {@link Command} commits should be {@link Commit#clean() cleaned}. Cleaning notifies
- * the log compaction algorithm that it's safe to remove the commit from the internal commit log. Copycat will guarantee
- * that {@link Commit}s are persisted in the underlying {@link io.atomix.copycat.server.storage.Log} as long as is
- * necessary (even after a commit is cleaned) to ensure all operations are applied to a majority of servers and to
- * guarantee delivery of {@link Session#publish(String, Object) session events} published as a result of specific
- * operations. State machines only need to specify when it's safe to remove each commit from the log.
+ * contributes to the state machine's state. Once a commit is no longer needed, commits should be {@link Commit#close() closed}.
+ * Closing a commit notifies the log compaction algorithm that it's safe to remove the commit from the internal
+ * commit log. Copycat will guarantee that {@link Commit}s are persisted in the underlying
+ * {@link io.atomix.copycat.server.storage.Log} as long as is necessary (even after a commit is cleaned) to
+ * ensure all operations are applied to a majority of servers and to guarantee delivery of
+ * {@link Session#publish(String, Object) session events} published as a result of specific operations.
+ * State machines only need to specify when it's safe to remove each commit from the log.
  * <p>
  * Note that if commits are not properly cleaned from the log and are instead garbage collected, a warning will be logged.
- * Failure to {@link Commit#clean()} a {@link Command} commit from the log should be considered a critical bug since
- * instances of the command can eventually fill up disk.
+ * Failure to {@link Commit#close() close} a command commit should be considered a critical bug since instances of the
+ * command can eventually fill up disk.
  *
  * @see Commit
  * @see Command
