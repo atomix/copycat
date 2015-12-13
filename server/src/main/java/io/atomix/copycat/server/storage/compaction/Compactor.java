@@ -56,7 +56,7 @@ public class Compactor implements AutoCloseable {
   private long minorIndex;
   private long majorIndex;
   private long snapshotIndex;
-  Compaction.Mode defaultCompactionMode = Compaction.Mode.SEQUENTIAL;
+  private Compaction.Mode defaultCompactionMode = Compaction.Mode.SEQUENTIAL;
   private Compactable compactable = Compactable.NONE;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
@@ -90,6 +90,15 @@ public class Compactor implements AutoCloseable {
     Assert.argNot(mode, mode == Compaction.Mode.DEFAULT, "DEFAULT cannot be the default compaction mode");
     this.defaultCompactionMode = mode;
     return this;
+  }
+
+  /**
+   * Returns the default compaction mode.
+   *
+   * @return The default compaction mode.
+   */
+  public Compaction.Mode getDefaultCompactionMode() {
+    return defaultCompactionMode;
   }
 
   /**

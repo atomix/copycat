@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.TypedEntryPool;
@@ -322,8 +323,13 @@ public class Log implements AutoCloseable {
     // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
     // based on the type of entry and whether it has been cleaned.
     if (entry != null) {
+      Compaction.Mode mode = entry.getCompactionMode();
+      if (mode == Compaction.Mode.DEFAULT) {
+        mode = compactor.getDefaultCompactionMode();
+      }
+
       // Return the entry according to the compaction mode.
-      switch (entry.getCompactionMode()) {
+      switch (mode) {
         // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
         case SNAPSHOT:
           if (index > compactor.snapshotIndex()) {
