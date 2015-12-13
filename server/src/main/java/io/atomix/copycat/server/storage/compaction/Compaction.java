@@ -81,6 +81,12 @@ public enum Compaction {
     DEFAULT,
 
     /**
+     * The {@code UNKNOWN} compaction mode is a special compaction mode which retains entries beyond the
+     * snapshot index, requires that entries be stored on all servers, and removes entries from the log sequentially.
+     */
+    UNKNOWN,
+
+    /**
      * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
      * snapshots. Snapshot commands will be stored in the Raft log only until a snapshot of the state machine state has
      * been written to disk, at which time they'll be removed from the log. Note that snapshot commands can still safely

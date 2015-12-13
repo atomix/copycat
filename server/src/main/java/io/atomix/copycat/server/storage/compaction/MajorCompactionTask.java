@@ -186,7 +186,7 @@ public final class MajorCompactionTask implements CompactionTask {
    */
   private void compactSegment(Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      compactEntry(i, segment, cleaner, compactSegment);
+      checkEntry(i, segment, cleaner, compactSegment);
     }
   }
 
@@ -197,11 +197,11 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segment The segment to compact.
    * @param compactSegment The segment to which to write the cleaned segment.
    */
-  private void compactEntry(long index, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void checkEntry(long index, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, remove the entry from the segment.
       if (entry != null) {
-        compactEntry(index, entry, segment, cleaner, compactSegment);
+        checkEntry(index, entry, segment, cleaner, compactSegment);
       } else {
         compactSegment.skip(1);
       }
@@ -209,9 +209,9 @@ public final class MajorCompactionTask implements CompactionTask {
   }
 
   /**
-   * Cleans a command entry from a segment.
+   * Compacts a command entry from a segment.
    */
-  private void compactEntry(long index, Entry entry, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void checkEntry(long index, Entry entry, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
     // mode to the entry.
     Compaction.Mode mode = entry.getCompactionMode();
@@ -225,20 +225,18 @@ public final class MajorCompactionTask implements CompactionTask {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (index <= snapshotIndex) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        if (index <= snapshotIndex && isClean(index, segment, cleaner)) {
+          compactEntry(index, segment, compactSegment);
         } else {
-          compactSegment.append(entry);
+          transferEntry(entry, compactSegment);
         }
         break;
       // QUORUM entries are compacted if the entry has been cleaned from the segment.
       case QUORUM:
         if (isClean(index, segment, cleaner)) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+          compactEntry(index, segment, compactSegment);
         } else {
-          compactSegment.append(entry);
+          transferEntry(entry, compactSegment);
         }
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index and
@@ -248,18 +246,36 @@ public final class MajorCompactionTask implements CompactionTask {
       case FULL:
       case SEQUENTIAL:
         if (index <= compactIndex && isClean(index, segment, cleaner)) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+          compactEntry(index, segment, compactSegment);
         } else {
-          compactSegment.append(entry);
-
-          // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.
-          if (isClean(index, segment, cleaner)) {
-            compactSegment.clean(index);
-          }
+          transferEntry(entry, compactSegment);
+        }
+        break;
+      // UNKNOWN entries are compacted if the index is less than both the snapshot and major
+      // compaction indexes and the entry has been cleaned.
+      case UNKNOWN:
+        if (index <= snapshotIndex && index <= compactIndex && isClean(index, segment, cleaner)) {
+          compactEntry(index, segment, compactSegment);
+        } else {
+          transferEntry(entry, compactSegment);
         }
         break;
     }
+  }
+
+  /**
+   * Compacts an entry from the given segment.
+   */
+  private void compactEntry(long index, Segment segment, Segment compactSegment) {
+    compactSegment.skip(1);
+    LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+  }
+
+  /**
+   * Transfers an entry to the given segment.
+   */
+  private void transferEntry(Entry entry, Segment compactSegment) {
+    compactSegment.append(entry);
   }
 
   /**

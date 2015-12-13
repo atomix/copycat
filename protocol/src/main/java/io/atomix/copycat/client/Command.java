@@ -121,13 +121,24 @@ public interface Command<T> extends Operation<T> {
   enum Type {
 
     /**
-     * The {@code DEFAULT} command type is a special command type that covers all use cases according
-     * to the system type.
+     * The {@code DEFAULT} command type is a special command type that behaves differently according
+     * to whether the system supports snapshots.
      */
     DEFAULT {
       @Override
       public CompactionMode compaction() {
         return CompactionMode.DEFAULT;
+      }
+    },
+
+    /**
+     * The {@code UNKNOWN} command type is a special command type that covers all use cases for all
+     * state machines but may result in inefficient log compaction.
+     */
+    UNKNOWN {
+      @Override
+      public CompactionMode compaction() {
+        return CompactionMode.UNKNOWN;
       }
     },
 
@@ -199,6 +210,12 @@ public interface Command<T> extends Operation<T> {
      * the command will be compacted via snapshots.
      */
     DEFAULT,
+
+    /**
+     * The {@code UNKNOWN} compaction mode is a special compaction mode that behaves consistently for all
+     * system types.
+     */
+    UNKNOWN,
 
     /**
      * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
