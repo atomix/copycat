@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage.snapshot;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.buffer.Bytes;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 /**
@@ -28,10 +29,23 @@ import io.atomix.catalyst.util.Assert;
 public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
   final Buffer buffer;
   private final Snapshot snapshot;
+  private final Serializer serializer;
 
-  SnapshotWriter(Buffer buffer, Snapshot snapshot) {
+  SnapshotWriter(Buffer buffer, Snapshot snapshot, Serializer serializer) {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
+    this.serializer = Assert.notNull(serializer, "serializer");
+  }
+
+  /**
+   * Writes an object to the snapshot.
+   *
+   * @param object The object to write.
+   * @return The snapshot writer.
+   */
+  public SnapshotWriter writeObject(Object object) {
+    serializer.writeObject(object, buffer);
+    return this;
   }
 
   @Override
