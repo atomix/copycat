@@ -505,11 +505,17 @@ public class CopycatServer implements Managed<CopycatServer> {
           if (openFuture == null) {
             closeFuture = state.leave()
               .thenCompose(v -> context.close())
-              .whenComplete((result, error) -> state = null);
+              .whenComplete((result, error) -> {
+                state = null;
+                open = false;
+              });
           } else {
             closeFuture = openFuture.thenCompose(c -> state.leave()
               .thenCompose(v -> context.close()))
-              .whenComplete((result, error) -> state = null);
+              .whenComplete((result, error) -> {
+                state = null;
+                open = false;
+              });
           }
         }
       }
@@ -523,7 +529,19 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
-   * Deletes the Raft server and its logs.
+   * Kills the server without leaving the cluster.
+   *
+   * @return A completable future to be completed once the server has been killed.
+   */
+  public CompletableFuture<Void> kill() {
+    return context.close().whenComplete((result, error) -> {
+      state = null;
+      open = false;
+    });
+  }
+
+  /**
+   * Deletes the server and its logs.
    *
    * @return A completable future to be completed once the server has been deleted.
    */
