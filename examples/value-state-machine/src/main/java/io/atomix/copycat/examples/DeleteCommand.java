@@ -15,18 +15,16 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.copycat.client.TypedCommand;
+import io.atomix.copycat.client.Command;
 
 /**
  * Value delete command.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class DeleteCommand implements TypedCommand<Void> {
-
+public class DeleteCommand implements Command<Void> {
   @Override
-  public Type type() {
-    return Type.DELETE;
+  public CompactionMode compaction() {
+    return CompactionMode.SEQUENTIAL;
   }
-
 }

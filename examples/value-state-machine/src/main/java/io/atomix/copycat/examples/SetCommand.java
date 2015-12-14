@@ -15,14 +15,14 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.copycat.client.TypedCommand;
+import io.atomix.copycat.client.Command;
 
 /**
  * Value set command.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class SetCommand implements TypedCommand<Object> {
+public class SetCommand implements Command<Object> {
   private final Object value;
 
   public SetCommand(Object value) {
@@ -37,8 +37,8 @@ public class SetCommand implements TypedCommand<Object> {
   }
 
   @Override
-  public Type type() {
-    return Type.UPDATE;
+  public CompactionMode compaction() {
+    return CompactionMode.QUORUM;
   }
 
 }

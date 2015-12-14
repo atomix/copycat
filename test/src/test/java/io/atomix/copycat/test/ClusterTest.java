@@ -18,7 +18,10 @@ package io.atomix.copycat.test;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.copycat.client.*;
+import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.ConnectionStrategies;
+import io.atomix.copycat.client.CopycatClient;
+import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
@@ -1357,7 +1360,7 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Test command.
    */
-  public static class TestCommand implements TypedCommand<String> {
+  public static class TestCommand implements Command<String> {
     private String value;
     private ConsistencyLevel consistency;
 
@@ -1372,8 +1375,8 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     @Override
-    public Type type() {
-      return Type.UPDATE;
+    public CompactionMode compaction() {
+      return CompactionMode.QUORUM;
     }
 
     public String value() {
@@ -1406,7 +1409,7 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Test event.
    */
-  public static class TestEvent implements TypedCommand<String> {
+  public static class TestEvent implements Command<String> {
     private String value;
     private boolean own;
     private ConsistencyLevel consistency;
@@ -1423,8 +1426,8 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     @Override
-    public Type type() {
-      return Type.EVENT;
+    public CompactionMode compaction() {
+      return CompactionMode.QUORUM;
     }
 
     public String value() {
