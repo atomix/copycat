@@ -111,7 +111,8 @@ public class SnapshotStore implements AutoCloseable {
         // Valid segments will have been locked. Segments that resulting from failures during log cleaning will be
         // unlocked and should ultimately be deleted from disk.
         if (descriptor.locked()) {
-          snapshots.add(loadSnapshot(snapshotFile.index(), snapshotFile.timestamp()));
+          LOGGER.debug("Loaded disk snapshot: {} ({})", snapshotFile.index(), snapshotFile.file().getName());
+          snapshots.add(new FileSnapshot(snapshotFile, this));
           descriptor.close();
         }
         // If the segment descriptor wasn't locked, close and delete the descriptor.
@@ -124,19 +125,6 @@ public class SnapshotStore implements AutoCloseable {
     }
 
     return snapshots;
-  }
-
-  /**
-   * Loads a specific snapshot.
-   *
-   * @param index The snapshot index.
-   * @param timestamp The snapshot timestamp.
-   * @return The snapshot.
-   */
-  private Snapshot loadSnapshot(long index, long timestamp) {
-    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), index, timestamp));
-    LOGGER.debug("Loaded disk snapshot: {} ({})", index, file.file().getName());
-    return new FileSnapshot(file, this);
   }
 
   /**
@@ -200,7 +188,7 @@ public class SnapshotStore implements AutoCloseable {
       Iterator<Map.Entry<Long, Snapshot>> iterator = snapshots.entrySet().iterator();
       while (iterator.hasNext()) {
         Snapshot oldSnapshot = iterator.next().getValue();
-        if (oldSnapshot.index() < snapshot.index()) {
+        if (oldSnapshot.index() < currentSnapshot.index()) {
           iterator.remove();
           oldSnapshot.close();
           oldSnapshot.delete();

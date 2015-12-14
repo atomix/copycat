@@ -89,7 +89,7 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
       // of a snapshot is predicated on session events being received by clients up to the snapshot index.
-      LOGGER.debug("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.index());
+      LOGGER.info("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.index());
       synchronized (pendingSnapshot) {
         try (SnapshotWriter writer = pendingSnapshot.writer()) {
           ((Snapshottable) stateMachine).snapshot(writer);
@@ -115,7 +115,7 @@ final class ServerStateMachine implements AutoCloseable {
       // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
       // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
       // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
-      LOGGER.debug("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.index());
+      LOGGER.info("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.index());
       executor.executor().execute(() -> {
         synchronized (currentSnapshot) {
           try (SnapshotReader reader = currentSnapshot.reader()) {
