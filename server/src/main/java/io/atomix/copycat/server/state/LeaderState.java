@@ -86,7 +86,7 @@ final class LeaderState extends ActiveState {
     final long term = context.getTerm();
 
     // Append a no-op entry to reset session timeouts and commit entries from prior terms.
-    try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
+    try (InitializeEntry entry = context.getLog().create(InitializeEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(appender.time());
       assert context.getLog().append(entry) == appender.index();

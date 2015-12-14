@@ -168,7 +168,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (NoOpEntry entry = log.create(NoOpEntry.class)) {
+      try (InitializeEntry entry = log.create(InitializeEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp + 100);
         index = log.append(entry);

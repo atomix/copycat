@@ -35,7 +35,7 @@ io.atomix.copycat.server.response.VoteResponse
 io.atomix.copycat.server.storage.entry.CommandEntry
 io.atomix.copycat.server.storage.entry.ConfigurationEntry
 io.atomix.copycat.server.storage.entry.KeepAliveEntry
-io.atomix.copycat.server.storage.entry.NoOpEntry
+io.atomix.copycat.server.storage.entry.InitializeEntry
 io.atomix.copycat.server.storage.entry.QueryEntry
 io.atomix.copycat.server.storage.entry.RegisterEntry
 io.atomix.copycat.server.storage.entry.ConnectEntry
