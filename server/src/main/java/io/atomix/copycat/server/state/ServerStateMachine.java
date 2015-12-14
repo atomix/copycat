@@ -250,6 +250,9 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once all commits have been applied.
    */
   public CompletableFuture<Void> applyAll(long index) {
+    if (!state.getLog().isOpen())
+      return CompletableFuture.completedFuture(null);
+
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
     long lastIndex = Math.min(index, state.getLog().lastIndex());
     if (lastIndex > lastApplied) {
