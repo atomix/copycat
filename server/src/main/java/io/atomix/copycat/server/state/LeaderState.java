@@ -59,10 +59,8 @@ final class LeaderState extends ActiveState {
     // Append initial entries to the log, including an initial no-op entry and the server's configuration.
     appendInitialEntries();
 
-    // Schedule the initial entries commit to occur after the state is opened. Attempting any communication
-    // within the open() method will result in a deadlock since RaftProtocol calls this method synchronously.
-    // What is critical about this logic is that the heartbeat timer not be started until a no-op entry has been committed.
-    context.getThreadContext().execute(this::commitInitialEntries).whenComplete((result, error) -> {
+    // Commit the initial leader entries and then schedule the append timer.
+    commitInitialEntries().whenComplete((result, error) -> {
       if (isOpen() && error == null) {
         startAppendTimer();
       }
@@ -88,10 +86,11 @@ final class LeaderState extends ActiveState {
     final long term = context.getTerm();
 
     // Append a no-op entry to reset session timeouts and commit entries from prior terms.
-    try (NoOpEntry entry = context.getLog().create(NoOpEntry.class)) {
+    try (InitializeEntry entry = context.getLog().create(InitializeEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(appender.time());
       assert context.getLog().append(entry) == appender.index();
+      LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.

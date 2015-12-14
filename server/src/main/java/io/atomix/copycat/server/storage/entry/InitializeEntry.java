@@ -20,17 +20,17 @@ import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
- * No-op entry.
+ * Initialize entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=224)
-public class NoOpEntry extends TimestampedEntry<NoOpEntry> {
+public class InitializeEntry extends TimestampedEntry<InitializeEntry> {
 
-  public NoOpEntry() {
+  public InitializeEntry() {
   }
 
-  public NoOpEntry(ReferenceManager<Entry<?>> referenceManager) {
+  public InitializeEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
   }
 

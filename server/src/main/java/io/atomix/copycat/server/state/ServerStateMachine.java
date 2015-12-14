@@ -344,8 +344,8 @@ final class ServerStateMachine implements AutoCloseable {
       return apply((KeepAliveEntry) entry);
     } else if (entry instanceof UnregisterEntry) {
       return apply((UnregisterEntry) entry, expectResult);
-    } else if (entry instanceof NoOpEntry) {
-      return apply((NoOpEntry) entry);
+    } else if (entry instanceof InitializeEntry) {
+      return apply((InitializeEntry) entry);
     } else if (entry instanceof ConnectEntry) {
       return apply((ConnectEntry) entry);
     } else if (entry instanceof ConfigurationEntry) {
@@ -950,15 +950,15 @@ final class ServerStateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies a no-op entry to the state machine.
+   * Applies an initialize entry to the state machine.
    * <p>
-   * No-op entries are committed by leaders at the start of their term. Typically, no-op entries
+   * Initialize entries are committed by leaders at the start of their term. Typically, no-op entries
    * serve as a mechanism to allow leaders to commit entries from prior terms. However, we extend
    * the functionality of the no-op entry to use it as an indicator that a leadership change occurred.
    * In order to ensure timeouts do not expire during lengthy leadership changes, we use no-op entries
    * to reset timeouts for client sessions and server heartbeats.
    */
-  private CompletableFuture<Long> apply(NoOpEntry entry) {
+  private CompletableFuture<Long> apply(InitializeEntry entry) {
     // Iterate through all the server sessions and reset timestamps. This ensures that sessions do not
     // timeout during leadership changes or shortly thereafter.
     long timestamp = executor.tick(entry.getTimestamp());
