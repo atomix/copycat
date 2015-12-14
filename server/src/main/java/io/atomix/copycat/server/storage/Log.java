@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.TypedEntryPool;
@@ -322,39 +323,32 @@ public class Log implements AutoCloseable {
     // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
     // based on the type of entry and whether it has been cleaned.
     if (entry != null) {
+      Compaction.Mode mode = entry.getCompactionMode();
+      if (mode == Compaction.Mode.DEFAULT) {
+        mode = compactor.getDefaultCompactionMode();
+      }
+
       // Return the entry according to the compaction mode.
-      switch (entry.getCompactionMode()) {
+      switch (mode) {
         // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
         case SNAPSHOT:
           if (index > compactor.snapshotIndex()) {
             return entry;
           }
           break;
-        // QUORUM_COMMIT entries are returned if the minorIndex is less than the entry index.
-        case QUORUM_COMMIT:
-          if (index > compactor.minorIndex()) {
-            return entry;
-          }
-          break;
-        // QUORUM_CLEAN entries are returned if the minorIndex is less than the entry index or the
+        // QUORUM entries are returned if the minorIndex is less than the entry index or the
         // entry has not been cleaned.
-        case QUORUM_CLEAN:
+        case QUORUM:
           if (index > compactor.minorIndex() || !segment.isClean(index)) {
             return entry;
           }
           break;
-        // FULL_COMMIT and FULL_SEQUENTIAL_COMMIT entries are returned if the minorIndex or majorIndex is
-        // less than the entry index.
-        case FULL_COMMIT:
-        case FULL_SEQUENTIAL_COMMIT:
-          if (index > compactor.minorIndex() || index > compactor.majorIndex()) {
-            return entry;
-          }
-          break;
-        // FULL_CLEAN and FULL_SEQUENTIAL_CLEAN entries are returned if the minorIndex or majorIndex is less
-        // than the entry index or the entry has not been cleaned.
-        case FULL_CLEAN:
-        case FULL_SEQUENTIAL_CLEAN:
+        // FULL entries are returned if the minorIndex or majorIndex is less than the entry index or
+        // if the entry hasn't been cleaned.
+        // SEQUENTIAL entries are returned if the minorIndex or majorIndex is less than the entry index or
+        // if the entry hasn't been cleaned.
+        case FULL:
+        case SEQUENTIAL:
           if (index > compactor.minorIndex() || index > compactor.majorIndex() || !segment.isClean(index)) {
             return entry;
           }

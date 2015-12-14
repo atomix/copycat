@@ -26,9 +26,11 @@ import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
@@ -81,6 +83,14 @@ public class ServerContext implements Managed<ServerState> {
 
       // Open the log.
       Log log = storage.openLog("copycat");
+
+      // Configure the log compaction mode. If the state machine supports snapshotting, the default
+      // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
+      if (userStateMachine instanceof Snapshottable) {
+        log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
+      } else {
+        log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
+      }
 
       // Open the snapshot store.
       SnapshotStore snapshot = storage.openSnapshotStore("copycat");

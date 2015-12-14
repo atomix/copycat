@@ -58,7 +58,6 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile List<Member> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
-  private int count;
 
   /**
    * Tests setting many keys in a map.
@@ -968,6 +967,132 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests submitting sequential events.
+   */
+  public void testThreeNodesSequentialEventsAfterFollowerKill() throws Throwable {
+    testSequentialEventsAfterFollowerKill(3);
+  }
+
+  /**
+   * Tests submitting sequential events.
+   */
+  public void testFiveNodesSequentialEventsAfterFollowerKill() throws Throwable {
+    testSequentialEventsAfterFollowerKill(5);
+  }
+
+  /**
+   * Tests submitting a sequential event that publishes to all sessions.
+   */
+  private void testSequentialEventsAfterFollowerKill(int nodes) throws Throwable {
+    List<CopycatServer> servers = createServers(nodes);
+
+    AtomicReference<String> value = new AtomicReference<>();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    for (int i = 0 ; i < 100; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(30000, 2);
+    }
+
+    String singleEvent = UUID.randomUUID().toString();
+    value.set(singleEvent);
+    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      threadAssertEquals(result, singleEvent);
+      resume();
+    });
+
+    CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.FOLLOWER).findFirst().get();
+    leader.kill().join();
+
+    await(30000, 2);
+
+    for (int i = 0 ; i < 100; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(10000, 2);
+    }
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testThreeNodesLinearizableEventsAfterLeaderKill() throws Throwable {
+    testLinearizableEventsAfterLeaderKill(3);
+  }
+
+  /**
+   * Tests submitting linearizable events.
+   */
+  public void testFiveNodesLinearizableEventsAfterLeaderKill() throws Throwable {
+    testLinearizableEventsAfterLeaderKill(5);
+  }
+
+  /**
+   * Tests submitting a linearizable event that publishes to all sessions.
+   */
+  private void testLinearizableEventsAfterLeaderKill(int nodes) throws Throwable {
+    List<CopycatServer> servers = createServers(nodes);
+
+    AtomicReference<String> value = new AtomicReference<>();
+
+    CopycatClient client = createClient();
+    client.session().onEvent("test", message -> {
+      threadAssertEquals(message, value.get());
+      resume();
+    });
+
+    for (int i = 0 ; i < 100; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(30000, 2);
+    }
+
+    String singleEvent = UUID.randomUUID().toString();
+    value.set(singleEvent);
+    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      threadAssertEquals(result, singleEvent);
+      resume();
+    });
+
+    CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
+    leader.kill().join();
+
+    await(30000, 2);
+
+    for (int i = 0 ; i < 100; i++) {
+      String event = UUID.randomUUID().toString();
+      value.set(event);
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+        threadAssertEquals(result, event);
+        resume();
+      });
+
+      await(10000, 2);
+    }
+  }
+
+  /**
    * Tests submitting linearizable events.
    */
   public void testFiveNodeManySessionsManyEvents() throws Throwable {
@@ -1071,7 +1196,6 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     await(10000, nodes);
-    count = nodes;
 
     return servers;
   }
@@ -1093,7 +1217,6 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     await(10000, live);
-    count = total;
 
     return servers;
   }
@@ -1141,17 +1264,12 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     });
 
-    if (servers.size() < count) {
-      for (int i = servers.size() + 1; i <= count; i++) {
-        Member member = new Member(CopycatServer.Type.INACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i));
-        createServer(members, member).open().join();
-      }
-    }
-
     servers.forEach(s -> {
       try {
-        s.close().join();
-        s.delete().join();
+        if (s.isOpen()) {
+          s.kill().join();
+          s.delete().join();
+        }
       } catch (Exception e) {
       }
     });
@@ -1159,7 +1277,6 @@ public class ClusterTest extends ConcurrentTestCase {
     registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
-    count = 0;
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }
@@ -1207,7 +1324,7 @@ public class ClusterTest extends ConcurrentTestCase {
         return commit.operation().value();
       } finally {
         if (last != null)
-          last.clean();
+          last.close();
         last = commit;
       }
     }
@@ -1225,13 +1342,13 @@ public class ClusterTest extends ConcurrentTestCase {
         if (commit.operation().own()) {
           commit.session().publish("test", commit.operation().value());
         } else {
-          for (Session session : sessions()) {
+          for (Session session : sessions) {
             session.publish("test", commit.operation().value());
           }
         }
         return commit.operation().value();
       } finally {
-        commit.clean();
+        commit.close();
       }
     }
 
@@ -1259,7 +1376,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public CompactionMode compaction() {
-      return CompactionMode.QUORUM_CLEAN;
+      return CompactionMode.QUORUM;
     }
 
     public String value() {
@@ -1310,7 +1427,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public CompactionMode compaction() {
-      return CompactionMode.QUORUM_CLEAN;
+      return CompactionMode.QUORUM;
     }
 
     public String value() {

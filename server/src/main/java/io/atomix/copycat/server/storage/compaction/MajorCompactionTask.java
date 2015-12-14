@@ -64,7 +64,7 @@ import java.util.function.Predicate;
  * major compaction. The major compaction task assumes that state machines will always clean <em>related</em> entries
  * in monotonically increasing order. That is, if a state machines receives a {@link io.atomix.copycat.server.Commit}
  * {@code remove 1} that deletes the state of a prior {@code Commit} {@code set 1}, the state machine will call
- * {@link Commit#clean()} on the {@code set 1} commit before cleaning the {@code remove 1} commit. But even if applications
+ * {@link Commit#close()} on the {@code set 1} commit before cleaning the {@code remove 1} commit. But even if applications
  * clean entries from the log in monotonic order, and the major compaction task compacts segments in sequential order,
  * inconsistencies can still arise. Consider the following history:
  * <ul>
@@ -97,12 +97,14 @@ public final class MajorCompactionTask implements CompactionTask {
   private List<List<Predicate<Long>>> cleaners;
   private final long snapshotIndex;
   private final long compactIndex;
+  private final Compaction.Mode defaultCompactionMode;
 
-  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups, long snapshotIndex, long compactIndex) {
+  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups, long snapshotIndex, long compactIndex, Compaction.Mode defaultCompactionMode) {
     this.manager = Assert.notNull(manager, "manager");
     this.groups = Assert.notNull(groups, "segments");
     this.snapshotIndex = snapshotIndex;
     this.compactIndex = compactIndex;
+    this.defaultCompactionMode = Assert.notNull(defaultCompactionMode, "defaultCompactionMode");
   }
 
   @Override
@@ -184,7 +186,7 @@ public final class MajorCompactionTask implements CompactionTask {
    */
   private void compactSegment(Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      compactEntry(i, segment, cleaner, compactSegment);
+      checkEntry(i, segment, cleaner, compactSegment);
     }
   }
 
@@ -195,11 +197,11 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segment The segment to compact.
    * @param compactSegment The segment to which to write the cleaned segment.
    */
-  private void compactEntry(long index, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void checkEntry(long index, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, remove the entry from the segment.
       if (entry != null) {
-        compactEntry(index, entry, segment, cleaner, compactSegment);
+        checkEntry(index, entry, segment, cleaner, compactSegment);
       } else {
         compactSegment.skip(1);
       }
@@ -207,64 +209,73 @@ public final class MajorCompactionTask implements CompactionTask {
   }
 
   /**
-   * Cleans a command entry from a segment.
+   * Compacts a command entry from a segment.
    */
-  private void compactEntry(long index, Entry entry, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void checkEntry(long index, Entry entry, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+    // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
+    // mode to the entry.
+    Compaction.Mode mode = entry.getCompactionMode();
+    if (mode == Compaction.Mode.DEFAULT) {
+      mode = defaultCompactionMode;
+    }
+
     // According to the entry's compaction mode, either append the entry to the compact segment
     // or skip the entry in the compact segment (removing it from the resulting segment).
-    switch (entry.getCompactionMode()) {
-      // Snapshot entries are compacted if a snapshot has been taken at an index greater than the
+    switch (mode) {
+      // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (index <= snapshotIndex) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+        if (index <= snapshotIndex && isClean(index, segment, cleaner)) {
+          compactEntry(index, segment, compactSegment);
         } else {
-          compactSegment.append(entry);
+          transferEntry(entry, compactSegment);
         }
         break;
-      // Quorum committed entries are always compacted since the requirements for compaction of the
-      // segment are that all entries have been stored on a majority of servers.
-      case QUORUM_COMMIT:
-        compactSegment.skip(1);
-        LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
-        break;
-      // Quorum cleaned entries are compacted if the entry has been marked clean in the segment.
-      case QUORUM_CLEAN:
+      // QUORUM entries are compacted if the entry has been cleaned from the segment.
+      case QUORUM:
         if (isClean(index, segment, cleaner)) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+          compactEntry(index, segment, compactSegment);
         } else {
-          compactSegment.append(entry);
+          transferEntry(entry, compactSegment);
         }
         break;
-      // Full committed entries are compacted once the major compact index is greater than the entry index.
-      case FULL_COMMIT:
-      case FULL_SEQUENTIAL_COMMIT:
-        if (index <= compactIndex) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
-        } else {
-          compactSegment.append(entry);
-        }
-        break;
-      // Full clean entries are compacted once the major compact index is greater than the entry index
+      // FULL entries are compacted if the major compact index is greater than the entry index and
+      // the entry has been cleaned.
+      // SEQUENTIAL entries are compacted if the major compact index is greater than the entry index
       // and the entry has been cleaned.
-      case FULL_CLEAN:
-      case FULL_SEQUENTIAL_CLEAN:
+      case FULL:
+      case SEQUENTIAL:
         if (index <= compactIndex && isClean(index, segment, cleaner)) {
-          compactSegment.skip(1);
-          LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+          compactEntry(index, segment, compactSegment);
         } else {
-          compactSegment.append(entry);
-
-          // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.
-          if (isClean(index, segment, cleaner)) {
-            compactSegment.clean(index);
-          }
+          transferEntry(entry, compactSegment);
+        }
+        break;
+      // UNKNOWN entries are compacted if the index is less than both the snapshot and major
+      // compaction indexes and the entry has been cleaned.
+      case UNKNOWN:
+        if (index <= snapshotIndex && index <= compactIndex && isClean(index, segment, cleaner)) {
+          compactEntry(index, segment, compactSegment);
+        } else {
+          transferEntry(entry, compactSegment);
         }
         break;
     }
+  }
+
+  /**
+   * Compacts an entry from the given segment.
+   */
+  private void compactEntry(long index, Segment segment, Segment compactSegment) {
+    compactSegment.skip(1);
+    LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+  }
+
+  /**
+   * Transfers an entry to the given segment.
+   */
+  private void transferEntry(Entry entry, Segment compactSegment) {
+    compactSegment.append(entry);
   }
 
   /**

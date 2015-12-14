@@ -92,7 +92,7 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
    * @return The entry compaction mode.
    */
   public Compaction.Mode getCompactionMode() {
-    return Compaction.Mode.QUORUM_CLEAN;
+    return Compaction.Mode.QUORUM;
   }
 
   /**

@@ -130,7 +130,7 @@ public abstract class AbstractLogTest {
    * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log.
    */
   protected List<Long> appendEntries(int numEntries) {
-    return appendEntries(numEntries, (int) log.length() + 1, Compaction.Mode.QUORUM_CLEAN);
+    return appendEntries(numEntries, (int) log.length() + 1, Compaction.Mode.QUORUM);
   }
 
   /**

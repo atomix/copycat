@@ -26,7 +26,7 @@ import java.util.Objects;
 /**
  * Base client operation response.
  * <p>
- * All operation responses are sent with a {@link #result()} and the {@link #version()} (or index) of the state
+ * All operation responses are sent with a {@link #result()} and the {@link #index()} (or index) of the state
  * machine at the point at which the operation was evaluated. The version allows clients to ensure state progresses
  * monotonically when switching servers by providing the state machine version in future operation requests.
  *

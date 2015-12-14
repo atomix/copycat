@@ -31,7 +31,7 @@ import io.atomix.copycat.server.storage.entry.Entry;
 @SerializeWith(id = 1000)
 public class TestEntry extends Entry<TestEntry> {
   /** Padding to vary the stored size of an entry */
-  private Compaction.Mode compaction = Compaction.Mode.QUORUM_CLEAN;
+  private Compaction.Mode compaction = Compaction.Mode.QUORUM;
   private int paddingSize;
   private byte[] padding = new byte[0];
 

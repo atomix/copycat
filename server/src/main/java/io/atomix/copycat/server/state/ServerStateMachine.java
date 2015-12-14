@@ -232,6 +232,9 @@ final class ServerStateMachine implements AutoCloseable {
    * Updates the last completed event index based on a commit at the given index.
    */
   private void setLastCompleted(long lastCompleted) {
+    if (!state.getLog().isOpen())
+      return;
+
     this.lastCompleted = Math.max(this.lastCompleted, lastCompleted);
 
     // Update the log compaction minor index.
@@ -250,6 +253,9 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once all commits have been applied.
    */
   public CompletableFuture<Void> applyAll(long index) {
+    if (!state.getLog().isOpen())
+      return CompletableFuture.completedFuture(null);
+
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
     long lastIndex = Math.min(index, state.getLog().lastIndex());
     if (lastIndex > lastApplied) {

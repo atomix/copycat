@@ -114,13 +114,26 @@ public interface Command<T> extends Operation<T> {
   }
 
   /**
-   * Constants for specifying Raft command compaction modes.
+   * Constants for specifying command compaction modes.
    *
    * @see #compaction()
    *
    * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
    */
   enum CompactionMode {
+
+    /**
+     * The {@code DEFAULT} compaction mode is a special compaction mode which is dictated by the type of
+     * system to which the command is being submitted. If the system's state machine supports snapshotting,
+     * the command will be compacted via snapshots.
+     */
+    DEFAULT,
+
+    /**
+     * The {@code UNKNOWN} compaction mode is a special compaction mode that behaves consistently for all
+     * system types.
+     */
+    UNKNOWN,
 
     /**
      * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
@@ -132,44 +145,22 @@ public interface Command<T> extends Operation<T> {
     SNAPSHOT,
 
     /**
-     * The {@code QUORUM_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * a majority of servers in the cluster. Once stored on a majority of servers, it will be applied to the
-     * state machines to trigger related session events. Once session events have been received by clients,
-     * the command will be removed from the log.
+     * The {@code QUORUM} compaction mode retains the command in the log until it has been stored on a majority
+     * of servers in the cluster and has been applied to the state machine.
      */
-    QUORUM_COMMIT,
+    QUORUM,
 
     /**
-     * The {@code QUORUM_CLEAN} compaction mode retains the command in the log until it has been stored on
-     * a majority of servers in the cluster and the state machine explicitly cleans the commit from the log.
+     * The {@code FULL} compaction mode retains the command in the log until it has been stored and applied on
+     * all servers in the cluster.
      */
-    QUORUM_CLEAN,
+    FULL,
 
     /**
-     * The {@code FULL_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster. Once stored on all servers, it will be applied to the leader's state machine
-     * and then cleaned from all logs.
+     * The sequential compaction mode retains the command in the log until it has been stored and applied on
+     * all servers and until all prior commands have been compacted from the log.
      */
-    FULL_COMMIT,
-
-    /**
-     * The {@code FULL_CLEAN} compaction mode retains the command in the log until it has been stored on all servers
-     * in the cluster and the state machine explicitly cleans the commit from the log.
-     */
-    FULL_CLEAN,
-
-    /**
-     * The {@code FULL_SEQUENTIAL_COMMIT} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster. Once stored on all servers, it will be applied to the leader's state machine and
-     * cleaned from the log in a manner that ensures all prior cleaned entries are removed first.
-     */
-    FULL_SEQUENTIAL_COMMIT,
-
-    /**
-     * The {@code FULL_SEQUENTIAL_CLEAN} compaction mode retains the command in the log until it has been stored on
-     * all servers in the cluster and the state machine on each server explicitly cleans the command from the log.
-     */
-    FULL_SEQUENTIAL_CLEAN
+    SEQUENTIAL,
 
   }
 
@@ -201,7 +192,7 @@ public interface Command<T> extends Operation<T> {
    * @return The command compaction mode.
    */
   default CompactionMode compaction() {
-    return CompactionMode.SNAPSHOT;
+    return CompactionMode.DEFAULT;
   }
 
 }

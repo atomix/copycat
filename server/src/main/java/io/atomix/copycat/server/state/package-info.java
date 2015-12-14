@@ -15,7 +15,7 @@
  */
 
 /**
- * Internal classes that manage {@link io.atomix.copycat.server.RaftServer} state.
+ * Internal classes that manage {@link io.atomix.copycat.server.CopycatServer} state.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

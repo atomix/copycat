@@ -31,7 +31,7 @@ import java.util.Objects;
  * keep alive requests to the cluster at a rate less than the provided {@link io.atomix.copycat.client.response.RegisterResponse#timeout()}.
  * Keep alive requests also server to acknowledge the receipt of responses and events by the client.
  * The {@link #commandSequence()} number indicates the highest command sequence number for which the client
- * has received a response, and the {@link #eventVersion()} number indicates the highest index for which the
+ * has received a response, and the {@link #eventIndex()} number indicates the highest index for which the
  * client has received an event in proper sequence.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>

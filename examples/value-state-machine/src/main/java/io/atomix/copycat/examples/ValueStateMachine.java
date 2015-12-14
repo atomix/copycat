@@ -43,12 +43,12 @@ public class ValueStateMachine extends StateMachine {
       value = commit;
       if (previous != null) {
         Object result = previous.operation().value();
-        previous.clean();
+        previous.close();
         return result;
       }
       return null;
     } catch (Exception e) {
-      commit.clean();
+      commit.close();
       throw e;
     }
   }
@@ -70,11 +70,11 @@ public class ValueStateMachine extends StateMachine {
   private void delete(Commit<DeleteCommand> commit) {
     try {
       if (value != null) {
-        value.clean();
+        value.close();
         value = null;
       }
     } finally {
-      commit.clean();
+      commit.close();
     }
   }
 

@@ -30,7 +30,7 @@ import java.time.Instant;
  * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link Session} that
  * submitted the operation to the cluster.
  * <p>
- * When state machines are done using a commit object, users should always call either {@link #clean()} or {@link #close()}.
+ * When state machines are done using a commit object, users should always call {@link #close()}.
  * Failing to call either method is a bug, and Copycat will log a warning message in such cases.
  *
  * @see Command
@@ -54,7 +54,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * to have unique indexes.
    *
    * @return The commit index.
-   * @throws IllegalStateException If the commit is {@link #close() closed} or was {@link #clean() cleaned}
+   * @throws IllegalStateException If the commit is {@link #close() closed}
    */
   long index();
 
@@ -66,7 +66,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * event messages to the client.
    *
    * @return The session that created the commit.
-   * @throws IllegalStateException If the commit is {@link #close() closed} or was {@link #clean() cleaned}
+   * @throws IllegalStateException If the commit is {@link #close() closed}
    */
   Session session();
 
@@ -82,7 +82,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * upon {@link Commit} times or use the {@link StateMachineExecutor} for time-based controls.
    *
    * @return The commit time.
-   * @throws IllegalStateException If the commit is {@link #close() closed} or was {@link #clean() cleaned}
+   * @throws IllegalStateException If the commit is {@link #close() closed}
    */
   Instant time();
 
@@ -92,7 +92,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * This is the {@link java.lang.Class} returned by the committed operation's {@link Object#getClass()} method.
    *
    * @return The commit type.
-   * @throws IllegalStateException If the commit is {@link #close() closed} or was {@link #clean() cleaned}
+   * @throws IllegalStateException If the commit is {@link #close() closed}
    */
   Class<T> type();
 
@@ -100,22 +100,14 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * Returns the operation submitted by the user.
    *
    * @return The operation submitted by the user.
-   * @throws IllegalStateException If the commit is {@link #close() closed} or was {@link #clean() cleaned}
+   * @throws IllegalStateException If the commit is {@link #close() closed}
    */
   T operation();
 
   /**
-   * Cleans the commit from the underlying log.
-   * <p>
-   * When the commit is cleaned, it will be removed from the log and may be removed permanently from disk at some
-   * arbitrary point in the future. Cleaning the commit effectively closes it, so once this method is called there
-   * is no need to call {@link #close()}.
-   */
-  void clean();
-
-  /**
    * Closes the commit.
    * <p>
+   * Closing a commit will make it available for compaction from the replicated log.
    * Once the commit is closed, it may be recycled and should no longer be accessed by the closer.
    */
   @Override

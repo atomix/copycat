@@ -23,10 +23,8 @@ import io.atomix.copycat.client.Command;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class DeleteCommand implements Command<Void> {
-
   @Override
   public CompactionMode compaction() {
-    return CompactionMode.FULL_SEQUENTIAL_CLEAN;
+    return CompactionMode.SEQUENTIAL;
   }
-
 }
