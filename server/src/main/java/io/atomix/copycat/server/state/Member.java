@@ -142,16 +142,16 @@ public class Member implements CatalystSerializable {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    serializer.writeObject(type, buffer);
-    serializer.writeObject(status, buffer);
+    buffer.writeByte(type.ordinal());
+    buffer.writeByte(status.ordinal());
     serializer.writeObject(serverAddress, buffer);
     serializer.writeObject(clientAddress, buffer);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    type = serializer.readObject(buffer);
-    status = serializer.readObject(buffer);
+    type = CopycatServer.Type.values()[buffer.readByte()];
+    status = Status.values()[buffer.readByte()];
     serverAddress = serializer.readObject(buffer);
     clientAddress = serializer.readObject(buffer);
   }
