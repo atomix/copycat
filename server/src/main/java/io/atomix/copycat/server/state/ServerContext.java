@@ -152,7 +152,6 @@ public class ServerContext implements Managed<ServerState> {
             } else {
               future.complete(null);
             }
-            context.close();
           }, context.executor());
         }, context.executor());
       } else {
@@ -162,11 +161,15 @@ public class ServerContext implements Managed<ServerState> {
           } else {
             future.complete(null);
           }
-          context.close();
         }, context.executor());
       }
 
       this.state.transition(CopycatServer.State.INACTIVE);
+    });
+
+    return future.whenCompleteAsync((result, error) -> {
+      context.close();
+
       try {
         this.state.getLog().close();
       } catch (Exception e) {
@@ -174,7 +177,6 @@ public class ServerContext implements Managed<ServerState> {
       this.state.getStateMachine().close();
       this.state = null;
     });
-    return future;
   }
 
   @Override

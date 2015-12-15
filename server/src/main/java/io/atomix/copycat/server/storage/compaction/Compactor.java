@@ -273,7 +273,12 @@ public class Compactor implements AutoCloseable {
       minor.cancel(false);
     if (major != null)
       major.cancel(false);
+
     executor.shutdown();
+    try {
+      executor.awaitTermination(30, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+    }
   }
 
 }

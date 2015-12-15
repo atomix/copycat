@@ -963,8 +963,8 @@ public class ClientSession implements Session, Managed<Session> {
       if (connection != null)
         connection.close();
       client.close();
-      context.close();
       closeListeners.forEach(l -> l.accept(this));
+      CompletableFuture.runAsync(context::close);
     }
   }
 
