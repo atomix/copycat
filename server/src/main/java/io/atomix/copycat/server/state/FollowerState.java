@@ -268,20 +268,23 @@ final class FollowerState extends ActiveState {
 
   @Override
   protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+    CompletableFuture<InstallResponse> future = super.install(request);
     resetHeartbeatTimeout();
-    return super.install(request);
+    return future;
   }
 
   @Override
   protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+    CompletableFuture<ConfigureResponse> future = super.configure(request);
     resetHeartbeatTimeout();
-    return super.configure(request);
+    return future;
   }
 
   @Override
   public CompletableFuture<AppendResponse> append(AppendRequest request) {
+    CompletableFuture<AppendResponse> future = super.append(request);
     resetHeartbeatTimeout();
-    return super.append(request);
+    return future;
   }
 
   @Override
