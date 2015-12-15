@@ -159,7 +159,6 @@ final class FollowerState extends ActiveState {
 
     // If a timer is already set, cancel the timer.
     if (heartbeatTimer != null) {
-      LOGGER.debug("{} - Reset heartbeat timeout", context.getCluster().getMember().serverAddress());
       heartbeatTimer.cancel();
     }
 
