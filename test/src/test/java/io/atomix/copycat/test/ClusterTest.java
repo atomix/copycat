@@ -79,7 +79,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
     }
-    await(10000, 1000);
+    await(30000, 1000);
 
     // Sleep for 10 seconds to allow log compaction to take place.
     Thread.sleep(5000);
@@ -92,7 +92,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
     }
-    await(10000, 1000);
+    await(30000, 1000);
 
     // Create and join additional servers to the cluster.
     Member m1 = nextMember();
@@ -121,7 +121,7 @@ public class ClusterTest extends ConcurrentTestCase {
           resume();
         });
       }
-      await(10000, 1000);
+      await(30000, 1000);
     }
 
     // Verify that all values are present with the original client.
@@ -132,7 +132,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
     }
-    await(10000, 1000);
+    await(30000, 1000);
 
     s1.close().join();
     s2.close().join();
@@ -146,7 +146,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatServer joiner = createServer(members, nextMember());
     joiner.open().thenRun(this::resume);
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -188,7 +188,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.get(0);
     server.close().thenRun(this::resume);
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -198,7 +198,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -226,7 +226,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000);
+      await(30000);
     }
 
     s1.close().join();
@@ -361,7 +361,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -439,7 +439,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -594,7 +594,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000);
+    await(30000);
   }
 
   /**
@@ -649,7 +649,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000, 2);
+    await(30000, 2);
   }
 
   /**
@@ -712,7 +712,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000, 4);
+    await(30000, 4);
   }
 
   /**
@@ -771,7 +771,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000, 2);
+    await(30000, 2);
   }
 
   /**
@@ -840,7 +840,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000, 4);
+    await(30000, 4);
   }
 
   /**
@@ -876,7 +876,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    await(10000, 3);
+    await(30000, 3);
   }
 
   /**
@@ -962,7 +962,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
   }
 
@@ -1025,7 +1025,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
   }
 
@@ -1088,7 +1088,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(10000, 2);
+      await(30000, 2);
     }
   }
 
@@ -1195,7 +1195,7 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(10000 * nodes, nodes);
+    await(30000 * nodes, nodes);
 
     return servers;
   }
@@ -1216,7 +1216,7 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(10000 * live, live);
+    await(30000 * live, live);
 
     return servers;
   }
@@ -1230,9 +1230,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
-        .withMaxEntriesPerSegment(8)
-        .withMinorCompactionInterval(Duration.ofSeconds(3))
-        .withMajorCompactionInterval(Duration.ofSeconds(7))
+        .withCompactionThreads(1)
         .build())
       .withStateMachine(new TestStateMachine())
       .build();
