@@ -80,11 +80,12 @@ final class ServerStateMachine implements AutoCloseable {
   private void takeSnapshot() {
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
     // index has met the snapshot index. Note that this will be executed in the state machine thread.
-    // Snapshots are only taken of the state machine when the log becomes compactable. If the log can
-    // be compacted, the lastApplied index must be greater than the last snapshot index.
+    // Snapshots are only taken of the state machine when the log becomes compactable. If the log compactor's
+    // compactIndex is greater than the last snapshot index and the lastApplied index is greater than the
+    // last snapshot index, take the snapshot.
     Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
-    if (pendingSnapshot == null && stateMachine instanceof Snapshottable && state.getLog().compactor().isCompactable()
-      && (currentSnapshot == null || lastApplied > currentSnapshot.index())) {
+    if (pendingSnapshot == null && stateMachine instanceof Snapshottable
+      && (currentSnapshot == null || (state.getLog().compactor().compactIndex() > currentSnapshot.index() && lastApplied > currentSnapshot.index()))) {
       pendingSnapshot = state.getSnapshotStore().createSnapshot(lastApplied);
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
@@ -151,6 +152,7 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Once the snapshot has been completed, snapshot dependent entries can be cleaned from the log.
       state.getLog().compactor().snapshotIndex(snapshotIndex);
+      state.getLog().compactor().compact();
     }
   }
 
