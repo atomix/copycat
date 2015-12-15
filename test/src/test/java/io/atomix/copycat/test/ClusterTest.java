@@ -1195,7 +1195,7 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(10000, nodes);
+    await(10000 * nodes, nodes);
 
     return servers;
   }
@@ -1216,7 +1216,7 @@ public class ClusterTest extends ConcurrentTestCase {
       servers.add(server);
     }
 
-    await(10000, live);
+    await(10000 * live, live);
 
     return servers;
   }
@@ -1249,7 +1249,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withConnectionStrategy(ConnectionStrategies.BACKOFF)
       .build();
     client.open().thenRun(this::resume);
-    await(10000);
+    await(30000);
     clients.add(client);
     return client;
   }
