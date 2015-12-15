@@ -181,7 +181,7 @@ final class LeaderAppender extends AbstractAppender {
       return;
     }
 
-    if (error != null && member.getCommitStartTime() == this.commitTime) {
+    if (error != null && member.getCommitStartTime() == commitTime) {
       int votingMemberSize = context.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).size() + (context.getCluster().getMember().type() == CopycatServer.Type.ACTIVE ? 1 : 0);
       int quorumSize = context.getCluster().getQuorum();
       // If a quorum of successful responses cannot be achieved, fail this commit.
@@ -195,7 +195,7 @@ final class LeaderAppender extends AbstractAppender {
       // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
       // was contacted. If the current commitFuture's time is less than the commit time then trigger the
       // commit future and reset it to the next commit future.
-      if (this.commitTime <= commitTime()) {
+      if (commitTime <= commitTime()) {
         commitFuture.complete(null);
         completeCommit();
       }
@@ -211,7 +211,7 @@ final class LeaderAppender extends AbstractAppender {
     commitFuture = nextCommitFuture;
     nextCommitFuture = null;
     if (commitFuture != null) {
-      this.commitTime = System.currentTimeMillis();
+      commitTime = System.currentTimeMillis();
       for (MemberState replica : context.getCluster().getRemoteMemberStates()) {
         appendEntries(replica);
       }
