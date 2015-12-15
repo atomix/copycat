@@ -344,7 +344,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Returns a boolean value indicating whether there are more entries to send.
    */
   protected boolean hasMoreEntries(MemberState member) {
-    return member.getNextIndex() < context.getLog().lastIndex();
+    return member.getNextIndex() <= context.getLog().lastIndex();
   }
 
   /**
