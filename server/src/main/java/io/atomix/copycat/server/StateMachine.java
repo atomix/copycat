@@ -305,7 +305,7 @@ public abstract class StateMachine implements AutoCloseable {
       try {
         method.invoke(this, c);
       } catch (IllegalAccessException | InvocationTargetException e) {
-        throw new AssertionError();
+        throw new AssertionError(e);
       }
     };
   }
@@ -326,7 +326,7 @@ public abstract class StateMachine implements AutoCloseable {
       try {
         return method.invoke(this, c);
       } catch (IllegalAccessException | InvocationTargetException e) {
-        throw new AssertionError();
+        throw new AssertionError(e);
       }
     };
   }
