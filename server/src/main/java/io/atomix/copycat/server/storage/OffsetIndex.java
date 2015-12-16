@@ -87,7 +87,7 @@ final class OffsetIndex implements AutoCloseable {
    * @throws IllegalArgumentException if the {@code offset} is less than or equal to the last offset in the index, 
    * or {@code position} is greater than MAX_POSITION
    */
-  public void index(long offset, long position) {
+  public synchronized void index(long offset, long position) {
     Assert.argNot(offset, lastOffset > -1 && offset <= lastOffset,
       "offset cannot be less than or equal to the last offset in the index");
     Assert.argNot(position > MAX_POSITION, "position cannot be greater than " + MAX_POSITION);
@@ -134,7 +134,7 @@ final class OffsetIndex implements AutoCloseable {
    * @param offset The offset to look up.
    * @return The starting position of the given offset.
    */
-  public long position(long offset) {
+  public synchronized long position(long offset) {
     long relativeOffset = find(offset);
     return relativeOffset != -1 ? buffer.readUnsignedInt(relativeOffset * ENTRY_SIZE + OFFSET_SIZE) : -1;
   }
@@ -142,7 +142,7 @@ final class OffsetIndex implements AutoCloseable {
   /**
    * Finds the real offset for the given relative offset.
    */
-  public long find(long offset) {
+  public synchronized long find(long offset) {
     if (size == 0) {
       return -1;
     }
