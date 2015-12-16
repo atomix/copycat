@@ -97,6 +97,7 @@ public class ServerState {
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
     Configuration configuration = meta.loadConfiguration();
     if (configuration != null) {
+      LOGGER.info("{} - Loaded {}", cluster.getMember().serverAddress(), configuration);
       cluster.configure(configuration.index(), configuration.members());
     } else if (members.contains(member.serverAddress())) {
       Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new Member(CopycatServer.Type.ACTIVE, m, null)).collect(Collectors.toSet());

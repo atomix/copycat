@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ConnectionManager {
+final class ConnectionManager {
   private final Client client;
   private final Map<Address, Connection> connections = new HashMap<>();
 
@@ -48,6 +48,18 @@ class ConnectionManager {
   }
 
   /**
+   * Resets the connection to the given address.
+   *
+   * @param address The address for which to reset the connection.
+   */
+  public void resetConnection(Address address) {
+    Connection connection = connections.remove(address);
+    if (connection != null) {
+      connection.close();
+    }
+  }
+
+  /**
    * Creates a connection for the given member.
    *
    * @param address The member for which to create the connection.
@@ -55,7 +67,11 @@ class ConnectionManager {
    */
   private CompletableFuture<Connection> createConnection(Address address) {
     return client.connect(address).thenApply(connection -> {
-      connection.closeListener(c -> connections.remove(address));
+      connection.closeListener(c -> {
+        if (connections.get(address) == c) {
+          connections.remove(address);
+        }
+      });
       connections.put(address, connection);
       return connection;
     });

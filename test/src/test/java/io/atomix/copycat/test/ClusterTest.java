@@ -182,6 +182,22 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests joining a server to an existing cluster.
+   */
+  public void testCrashRecover() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+    CopycatClient client = createClient();
+    submit(client, 0, 1000);
+    await(30000);
+    servers.get(0).kill().join();
+    CopycatServer server = createServer(members, members.get(0));
+    server.open().thenRun(this::resume);
+    await(30000);
+    submit(client, 0, 1000);
+    await(30000);
+  }
+
+  /**
    * Tests leaving a sever from a cluster.
    */
   public void testServerLeave() throws Throwable {

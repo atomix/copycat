@@ -78,6 +78,7 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendConfigureRequest(connection, member, request);
         } else {
+          context.getConnections().resetConnection(member.getMember().serverAddress());
           configuring.remove(member);
         }
       }
@@ -99,6 +100,7 @@ abstract class AbstractAppender implements AutoCloseable {
           member.setConfigTerm(request.term()).setConfigIndex(request.index());
           appendEntries(member);
         } else {
+          context.getConnections().resetConnection(member.getMember().serverAddress());
           LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
         }
       }
@@ -130,6 +132,7 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendInstallRequest(connection, member, request);
         } else {
+          context.getConnections().resetConnection(member.getMember().serverAddress());
           installing.remove(member);
         }
       }
@@ -166,6 +169,7 @@ abstract class AbstractAppender implements AutoCloseable {
             member.setNextSnapshotOffset(0);
           }
         } else {
+          context.getConnections().resetConnection(member.getMember().serverAddress());
           LOGGER.warn("{} - Failed to install {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
           member.setNextSnapshotIndex(0);
           member.setNextSnapshotOffset(0);
@@ -304,6 +308,7 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendAppendRequest(connection, member, request);
         } else {
+          context.getConnections().resetConnection(member.getMember().serverAddress());
           endAppendRequest(member, request, error);
           handleAppendError(member, request, error);
         }
