@@ -46,6 +46,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class ServerContext implements Managed<ServerState> {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
+  private final String name;
   private final Address clientAddress;
   private final Address serverAddress;
   private final Collection<Address> members;
@@ -59,7 +60,8 @@ public class ServerContext implements Managed<ServerState> {
   private ServerState state;
   private volatile boolean open;
 
-  public ServerContext(Address clientAddress, Transport clientTransport, Address serverAddress, Transport serverTransport, Collection<Address> members, StateMachine stateMachine, Storage storage, Serializer serializer) {
+  public ServerContext(String name, Address clientAddress, Transport clientTransport, Address serverAddress, Transport serverTransport, Collection<Address> members, StateMachine stateMachine, Storage storage, Serializer serializer) {
+    this.name = Assert.notNull(name, "name");
     this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientTransport = Assert.notNull(clientTransport, "clientTransport");
@@ -79,10 +81,10 @@ public class ServerContext implements Managed<ServerState> {
     context.executor().execute(() -> {
 
       // Open the meta store.
-      MetaStore meta = storage.openMetaStore("copycat");
+      MetaStore meta = storage.openMetaStore(name);
 
       // Open the log.
-      Log log = storage.openLog("copycat");
+      Log log = storage.openLog(name);
 
       // Configure the log compaction mode. If the state machine supports snapshotting, the default
       // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
@@ -93,7 +95,7 @@ public class ServerContext implements Managed<ServerState> {
       }
 
       // Open the snapshot store.
-      SnapshotStore snapshot = storage.openSnapshotStore("copycat");
+      SnapshotStore snapshot = storage.openSnapshotStore(name);
 
       // Setup the server and connection manager.
       internalServer = serverTransport.server();
@@ -192,12 +194,12 @@ public class ServerContext implements Managed<ServerState> {
       return Futures.exceptionalFuture(new IllegalStateException("cannot delete open context"));
 
     // Delete the metadata store.
-    MetaStore meta = storage.openMetaStore("copycat");
+    MetaStore meta = storage.openMetaStore(name);
     meta.close();
     meta.delete();
 
     // Delete the log.
-    Log log = storage.openLog("copycat");
+    Log log = storage.openLog(name);
     log.close();
     log.delete();
 

@@ -553,10 +553,12 @@ public class CopycatServer implements Managed<CopycatServer> {
    * Raft server builder.
    */
   public static class Builder extends io.atomix.catalyst.util.Builder<CopycatServer> {
+    private static final String DEFAULT_NAME = "copycat";
     private static final Duration DEFAULT_ELECTION_TIMEOUT = Duration.ofMillis(750);
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(250);
     private static final Duration DEFAULT_SESSION_TIMEOUT = Duration.ofMillis(5000);
 
+    private String name = DEFAULT_NAME;
     private Transport clientTransport;
     private Transport serverTransport;
     private Storage storage;
@@ -573,6 +575,19 @@ public class CopycatServer implements Managed<CopycatServer> {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
       this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
       this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
+    }
+
+    /**
+     * Sets the server name.
+     * <p>
+     * The server name is used to
+     *
+     * @param name The server name.
+     * @return The server builder.
+     */
+    public Builder withName(String name) {
+      this.name = Assert.notNull(name, "name");
+      return this;
     }
 
     /**
@@ -731,7 +746,7 @@ public class CopycatServer implements Managed<CopycatServer> {
           .build();
       }
 
-      ServerContext context = new ServerContext(clientAddress, clientTransport, serverAddress, serverTransport, cluster, stateMachine, storage, serializer);
+      ServerContext context = new ServerContext(name, clientAddress, clientTransport, serverAddress, serverTransport, cluster, stateMachine, storage, serializer);
       return new CopycatServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
     }
   }
