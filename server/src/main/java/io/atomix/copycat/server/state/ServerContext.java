@@ -203,6 +203,11 @@ public class ServerContext implements Managed<ServerState> {
     log.close();
     log.delete();
 
+    // Delete the snapshot store.
+    SnapshotStore snapshot = storage.openSnapshotStore(name);
+    snapshot.close();
+    snapshot.delete();
+
     return CompletableFuture.completedFuture(null);
   }
 
