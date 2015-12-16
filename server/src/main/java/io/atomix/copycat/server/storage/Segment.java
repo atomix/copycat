@@ -457,6 +457,7 @@ public class Segment implements AutoCloseable {
   public void close() {
     buffer.close();
     offsetIndex.close();
+    cleaner.close();
     descriptor.close();
     open = false;
   }
