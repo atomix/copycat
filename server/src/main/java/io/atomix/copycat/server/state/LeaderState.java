@@ -56,18 +56,17 @@ final class LeaderState extends ActiveState {
 
   @Override
   public synchronized CompletableFuture<AbstractState> open() {
+    // Reset state for the leader.
+    takeLeadership();
+
     // Append initial entries to the log, including an initial no-op entry and the server's configuration.
     appendInitialEntries();
 
-    // Commit the initial leader entries and then schedule the append timer.
-    commitInitialEntries().whenComplete((result, error) -> {
-      if (isOpen() && error == null) {
-        startAppendTimer();
-      }
-    });
+    // Commit the initial leader entries.
+    commitInitialEntries();
 
     return super.open()
-      .thenRun(this::takeLeadership)
+      .thenRun(this::startAppendTimer)
       .thenApply(v -> this);
   }
 
