@@ -434,7 +434,7 @@ final class ServerStateMachine implements AutoCloseable {
       // within the register method will be properly associated with the unregister entry's index. All events
       // published during registration of a session are linearizable to ensure that clients receive related events
       // before the registration is completed.
-      executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+      executor.init(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
 
       // Register the session and then open it. This ensures that state machines cannot publish events to this
       // session before the client has learned of the session ID.
@@ -452,7 +452,7 @@ final class ServerStateMachine implements AutoCloseable {
       // Once register callbacks have been completed, ensure that events published during the callbacks are
       // received by clients. The state machine context will generate an event future for all published events
       // to all sessions.
-      CompletableFuture<Void> sessionFuture = executor.context().commit();
+      CompletableFuture<Void> sessionFuture = executor.commit();
       if (sessionFuture != null) {
         sessionFuture.whenComplete((result, error) -> {
           context.executor().execute(() -> future.complete(index));
@@ -614,7 +614,7 @@ final class ServerStateMachine implements AutoCloseable {
           // within the expire or close methods will be properly associated with the unregister entry's index.
           // All events published during expiration or closing of a session are linearizable to ensure that clients
           // receive related events before the expiration is completed.
-          executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+          executor.init(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
 
           // Expire the session and call state machine callbacks.
           session.expire();
@@ -633,7 +633,7 @@ final class ServerStateMachine implements AutoCloseable {
           // are published in batch. The state machine context will generate an event future for all published events
           // to all sessions. If the event future is non-null, that indicates events are pending which were published
           // during the call to expire(). Wait for the events to be received by the client before completing the future.
-          CompletableFuture<Void> sessionFuture = executor.context().commit();
+          CompletableFuture<Void> sessionFuture = executor.commit();
           if (sessionFuture != null) {
             sessionFuture.whenComplete((result, error) -> {
               context.executor().execute(() -> future.complete(null));
@@ -651,7 +651,7 @@ final class ServerStateMachine implements AutoCloseable {
           // within the close method will be properly associated with the unregister entry's index. All events published
           // during expiration or closing of a session are linearizable to ensure that clients receive related events
           // before the expiration is completed.
-          executor.context().update(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+          executor.init(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
 
           // Close the session and call state machine callbacks.
           session.close();
@@ -670,7 +670,7 @@ final class ServerStateMachine implements AutoCloseable {
           // are published in batch. The state machine context will generate an event future for all published events
           // to all sessions. If the event future is non-null, that indicates events are pending which were published
           // during the call to expire(). Wait for the events to be received by the client before completing the future.
-          CompletableFuture<Void> sessionFuture = executor.context().commit();
+          CompletableFuture<Void> sessionFuture = executor.commit();
           if (sessionFuture != null) {
             sessionFuture.whenComplete((result, error) -> {
               context.executor().execute(() -> future.complete(null));
@@ -818,7 +818,7 @@ final class ServerStateMachine implements AutoCloseable {
       // Update the state machine context with the commit index and local server context. The synchronous flag
       // indicates whether the server expects linearizable completion of published events. Events will be published
       // based on the configured consistency level for the context.
-      executor.context().update(commit.index(), commit.time(), synchronous, consistency != null ? consistency : Command.ConsistencyLevel.LINEARIZABLE);
+      executor.init(commit.index(), commit.time(), synchronous, consistency != null ? consistency : Command.ConsistencyLevel.LINEARIZABLE);
 
       try {
         // Execute the state machine operation and get the result.
@@ -826,7 +826,7 @@ final class ServerStateMachine implements AutoCloseable {
 
         // Once the operation has been applied to the state machine, commit events published by the command.
         // The state machine context will build a composite future for events published to all sessions.
-        CompletableFuture<Void> sessionFuture = executor.context().commit();
+        CompletableFuture<Void> sessionFuture = executor.commit();
 
         // If the command consistency level is not LINEARIZABLE or null, register the response and complete the
         // command immediately in the state machine thread. Note that we don't store the event future since
@@ -940,7 +940,7 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private CompletableFuture<Object> executeQuery(ServerCommit commit, CompletableFuture<Object> future, ThreadContext context) {
     executor.executor().execute(() -> {
-      executor.context().update(commit.index(), commit.time(), true, null);
+      executor.init(commit.index(), commit.time(), true, null);
       try {
         Object result = executor.executeOperation(commit);
         context.executor().execute(() -> future.complete(result));
