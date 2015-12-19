@@ -34,7 +34,7 @@ public enum RecoveryStrategies implements RecoveryStrategy {
   CLOSE {
     @Override
     public void recover(CopycatClient client) {
-      // Do nothing.
+      client.close();
     }
   },
 

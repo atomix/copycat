@@ -941,31 +941,40 @@ public class ClientSession implements Session, Managed<Session> {
 
   @Override
   public CompletableFuture<Void> close() {
-    return CompletableFuture.runAsync(() -> {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    context.executor().execute(() -> {
       if (keepAliveFuture != null) {
         keepAliveFuture.cancel();
       }
       if (retry != null) {
         retry.cancel();
       }
-      onClose();
-    }, context.executor());
-  }
 
-  /**
-   * Handles closing the session.
-   */
-  private void onClose() {
-    if (isOpen()) {
-      LOGGER.debug("Closed session: {}", id);
-      this.id = 0;
-      this.state = State.CLOSED;
-      if (connection != null)
-        connection.close();
-      client.close();
-      closeListeners.forEach(l -> l.accept(this));
-      CompletableFuture.runAsync(context::close);
-    }
+      CompletableFuture<Void> clientCloseFuture;
+      try {
+        clientCloseFuture = client.close();
+      } catch (Exception e) {
+        clientCloseFuture = CompletableFuture.completedFuture(null);
+      }
+
+      clientCloseFuture.whenComplete((result, error) -> {
+        connection = null;
+        if (isOpen()) {
+          this.id = 0;
+          this.state = State.CLOSED;
+          closeListeners.forEach(l -> l.accept(this));
+        }
+
+        CompletableFuture.runAsync(() -> {
+          try {
+            context.close();
+          } catch (Exception e) {
+          }
+          future.complete(null);
+        });
+      });
+    });
+    return future;
   }
 
   @Override

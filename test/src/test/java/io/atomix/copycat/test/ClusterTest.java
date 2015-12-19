@@ -1026,20 +1026,20 @@ public class ClusterTest extends ConcurrentTestCase {
 
     String singleEvent = UUID.randomUUID().toString();
     value.set(singleEvent);
-    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
       threadAssertEquals(result, singleEvent);
       resume();
     });
 
-    CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.FOLLOWER).findFirst().get();
-    leader.kill().join();
+    CopycatServer follower = servers.stream().filter(s -> s.state() == CopycatServer.State.FOLLOWER).findFirst().get();
+    follower.kill().join();
 
     await(30000, 2);
 
     for (int i = 0 ; i < 100; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
