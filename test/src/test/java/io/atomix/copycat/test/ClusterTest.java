@@ -62,7 +62,7 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests setting many keys in a map.
    */
-  public void testMany() throws Throwable {
+  public void testReplaceOperations() throws Throwable {
     List<CopycatServer> servers = createServers(3);
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
@@ -97,11 +97,11 @@ public class ClusterTest extends ConcurrentTestCase {
 
     // Create and join additional servers to the cluster.
     Member m1 = nextMember();
-    CopycatServer s1 = createServer(members, m1).open().get();
+    createServer(members, m1).open().get();
     Member m2 = nextMember();
-    CopycatServer s2 = createServer(members, m2).open().get();
+    createServer(members, m2).open().get();
     Member m3 = nextMember();
-    CopycatServer s3 = createServer(members, m3).open().get();
+    createServer(members, m3).open().get();
 
     // Iterate through the old servers and shut them down one by one.
     for (CopycatServer server : servers) {
@@ -135,10 +135,6 @@ public class ClusterTest extends ConcurrentTestCase {
       });
     }
     await(30000, 1000);
-
-    s1.close().join();
-    s2.close().join();
-    s3.close().join();
   }
 
   /**
