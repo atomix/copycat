@@ -69,6 +69,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withConnectionStrategy(ConnectionStrategies.BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
+    clients.add(client);
     client.open().join();
 
     // Put a thousand values in the map.
@@ -111,6 +112,7 @@ public class ClusterTest extends ConcurrentTestCase {
         .withConnectionStrategy(ConnectionStrategies.BACKOFF)
         .withTransport(new LocalTransport(registry))
         .build();
+      clients.add(client2);
       client2.open().thenRun(this::resume);
       await(15000);
 
@@ -227,6 +229,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withConnectionStrategy(ConnectionStrategies.BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
+    clients.add(client);
     client.open().get();
 
     CopycatServer s1 = createServer(members, nextMember()).open().get();
