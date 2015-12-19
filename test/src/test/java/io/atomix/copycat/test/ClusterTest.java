@@ -82,7 +82,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
     await(30000, 1000);
 
-    // Sleep for 10 seconds to allow log compaction to take place.
+    // Sleep for 5 seconds to allow log compaction to take place.
     Thread.sleep(5000);
 
     // Verify that all values are present.
@@ -102,6 +102,9 @@ public class ClusterTest extends ConcurrentTestCase {
     createServer(members, m2).open().get();
     Member m3 = nextMember();
     createServer(members, m3).open().get();
+
+    // Sleep for 5 seconds to allow clients to locate the new servers.
+    Thread.sleep(5000);
 
     // Iterate through the old servers and shut them down one by one.
     for (CopycatServer server : servers) {
