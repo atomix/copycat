@@ -62,7 +62,7 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests setting many keys in a map.
    */
-  public void testMany() throws Throwable {
+  public void testReplaceOperations() throws Throwable {
     List<CopycatServer> servers = createServers(3);
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
@@ -82,7 +82,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
     await(30000, 1000);
 
-    // Sleep for 10 seconds to allow log compaction to take place.
+    // Sleep for 5 seconds to allow log compaction to take place.
     Thread.sleep(5000);
 
     // Verify that all values are present.
@@ -97,11 +97,14 @@ public class ClusterTest extends ConcurrentTestCase {
 
     // Create and join additional servers to the cluster.
     Member m1 = nextMember();
-    CopycatServer s1 = createServer(members, m1).open().get();
+    createServer(members, m1).open().get();
     Member m2 = nextMember();
-    CopycatServer s2 = createServer(members, m2).open().get();
+    createServer(members, m2).open().get();
     Member m3 = nextMember();
-    CopycatServer s3 = createServer(members, m3).open().get();
+    createServer(members, m3).open().get();
+
+    // Sleep for 5 seconds to allow clients to locate the new servers.
+    Thread.sleep(5000);
 
     // Iterate through the old servers and shut them down one by one.
     for (CopycatServer server : servers) {
@@ -135,10 +138,6 @@ public class ClusterTest extends ConcurrentTestCase {
       });
     }
     await(30000, 1000);
-
-    s1.close().join();
-    s2.close().join();
-    s3.close().join();
   }
 
   /**
@@ -919,7 +918,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 1000; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -959,7 +958,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -973,7 +972,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     leader.close().join();
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -1013,7 +1012,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
@@ -1026,20 +1025,20 @@ public class ClusterTest extends ConcurrentTestCase {
 
     String singleEvent = UUID.randomUUID().toString();
     value.set(singleEvent);
-    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
       threadAssertEquals(result, singleEvent);
       resume();
     });
 
-    CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.FOLLOWER).findFirst().get();
-    leader.kill().join();
+    CopycatServer follower = servers.stream().filter(s -> s.state() == CopycatServer.State.FOLLOWER).findFirst().get();
+    follower.kill().join();
 
     await(30000, 2);
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1076,7 +1075,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -1099,7 +1098,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     await(30000, 2);
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -1142,7 +1141,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
