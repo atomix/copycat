@@ -918,7 +918,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 1000; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -958,7 +958,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -972,7 +972,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     leader.close().join();
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -1012,7 +1012,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
@@ -1035,7 +1035,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     await(30000, 2);
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
@@ -1075,7 +1075,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -1098,7 +1098,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     await(30000, 2);
 
-    for (int i = 0 ; i < 100; i++) {
+    for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
@@ -1141,7 +1141,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
       client.submit(new TestEvent(event, false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
