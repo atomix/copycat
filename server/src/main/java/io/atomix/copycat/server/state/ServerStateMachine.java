@@ -20,6 +20,7 @@ import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.NoOpCommand;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.server.Snapshottable;
@@ -730,6 +731,10 @@ final class ServerStateMachine implements AutoCloseable {
     if (session == null) {
       LOGGER.warn("Unknown session: " + entry.getSession());
       future.completeExceptionally(new UnknownSessionException("unknown session: " + entry.getSession()));
+    }
+    // If the command is a no-op command, return a null value immediately.
+    else if (entry.getCommand() instanceof NoOpCommand) {
+      future.complete(null);
     }
     // If the command's sequence number is less than the next session sequence number then that indicates that
     // we've received a command that was previously applied to the state machine. Ensure linearizability by
