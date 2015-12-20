@@ -98,7 +98,7 @@ public class ClientSession implements Session, Managed<Session> {
   private long failureTime;
   private CompletableFuture<Connection> connectFuture;
   private Scheduled retry;
-  private final List<Runnable> retries = new ArrayList<>();
+  private final List<Consumer<Throwable>> retries = new ArrayList<>();
   private Scheduled keepAliveFuture;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
   private final Set<Consumer<Session>> openListeners = new CopyOnWriteArraySet<>();
@@ -421,18 +421,26 @@ public class ClientSession implements Session, Managed<Session> {
           else {
             if (retry == null)
               retry = context.schedule(Duration.ofMillis(200), ClientSession.this::retryRequests);
-            retries.add(() -> {
-              LOGGER.debug("Retrying {}", request);
-              request(request, attempt, future, checkOpen);
+            retries.add(e -> {
+              if (e == null) {
+                LOGGER.debug("Retrying {}", request);
+                request(request, attempt, future, checkOpen);
+              } else {
+                future.completeExceptionally(e);
+              }
             });
           }
         }
         // If no session is registered for the client, use the connection strategy to perform retries.
         else {
           if (retry != null) {
-            retries.add(() -> {
-              LOGGER.debug("Retrying {}", request);
-              request(request, attempt + 1, future, checkOpen);
+            retries.add(e -> {
+              if (e == null) {
+                LOGGER.debug("Retrying {}", request);
+                request(request, attempt + 1, future, checkOpen);
+              } else {
+                future.completeExceptionally(e);
+              }
             });
           } else {
             fail(request, attempt, future, checkOpen);
@@ -443,9 +451,13 @@ public class ClientSession implements Session, Managed<Session> {
       // strategy to determine what to do.
       else {
         if (retry != null) {
-          retries.add(() -> {
-            LOGGER.debug("Retrying {}", request);
-            request(request, attempt + 1, future, checkOpen);
+          retries.add(e -> {
+            if (e == null) {
+              LOGGER.debug("Retrying {}", request);
+              request(request, attempt + 1, future, checkOpen);
+            } else {
+              future.completeExceptionally(e);
+            }
           });
         } else {
           fail(request, attempt, future, checkOpen);
@@ -621,9 +633,13 @@ public class ClientSession implements Session, Managed<Session> {
       public void retry(Duration after) {
         if (retry == null)
           retry = context.schedule(after, ClientSession.this::retryRequests);
-        retries.add(() -> {
-          LOGGER.debug("Retrying {}", request);
-          request(request, attempt + 1, future, checkOpen);
+        retries.add(e -> {
+          if (e == null) {
+            LOGGER.debug("Retrying {}", request);
+            request(request, attempt + 1, future, checkOpen);
+          } else {
+            future.completeExceptionally(e);
+          }
         });
       }
     });
@@ -681,13 +697,13 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Retries sending requests.
    */
-  protected void retryRequests() {
+  protected synchronized void retryRequests() {
     retry = null;
-    List<Runnable> retries = new ArrayList<>(this.retries);
+    List<Consumer<Throwable>> retries = new ArrayList<>(this.retries);
     this.retries.clear();
     resetMembers();
-    for (Runnable retry : retries) {
-      retry.run();
+    for (Consumer<Throwable> retry : retries) {
+      retry.accept(null);
     }
   }
 
@@ -949,6 +965,7 @@ public class ClientSession implements Session, Managed<Session> {
       if (retry != null) {
         retry.cancel();
       }
+      failRetries();
 
       CompletableFuture<Void> clientCloseFuture;
       try {
@@ -975,6 +992,17 @@ public class ClientSession implements Session, Managed<Session> {
       });
     });
     return future;
+  }
+
+  /**
+   * Fails retries remaining in the client.
+   */
+  private synchronized void failRetries() {
+    Throwable e = new IllegalStateException("session closed");
+    for (Consumer<Throwable> retry : retries) {
+      retry.accept(e);
+    }
+    retries.clear();
   }
 
   @Override
