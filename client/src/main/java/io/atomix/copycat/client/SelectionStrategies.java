@@ -17,9 +17,9 @@ package io.atomix.copycat.client;
 
 import io.atomix.catalyst.transport.Address;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Strategies for managing how clients connect to and communicate with the cluster.
@@ -41,7 +41,8 @@ public enum SelectionStrategies implements SelectionStrategy {
    */
   ANY {
     @Override
-    public List<Address> getConnections(Address leader, List<Address> servers) {
+    public List<Address> selectConnections(Address leader, List<Address> servers) {
+      Collections.shuffle(servers);
       return servers;
     }
   },
@@ -57,8 +58,19 @@ public enum SelectionStrategies implements SelectionStrategy {
    */
   LEADER {
     @Override
-    public List<Address> getConnections(Address leader, List<Address> servers) {
-      return leader != null ? Collections.singletonList(leader) : servers;
+    public List<Address> selectConnections(Address leader, List<Address> servers) {
+      Collections.shuffle(servers);
+      if (leader != null) {
+        List<Address> results = new ArrayList<>(servers.size());
+        results.add(leader);
+        for (Address address : servers) {
+          if (!address.equals(leader)) {
+            results.add(address);
+          }
+        }
+        return results;
+      }
+      return servers;
     }
   },
 
@@ -71,8 +83,19 @@ public enum SelectionStrategies implements SelectionStrategy {
    */
   FOLLOWERS {
     @Override
-    public List<Address> getConnections(Address leader, List<Address> servers) {
-      return servers.size() > 1 ? servers.stream().filter(a -> !a.equals(leader)).collect(Collectors.toList()) : servers;
+    public List<Address> selectConnections(Address leader, List<Address> servers) {
+      Collections.shuffle(servers);
+      if (leader != null) {
+        List<Address> results = new ArrayList<>(servers.size());
+        for (Address address : servers) {
+          if (!address.equals(leader)) {
+            results.add(address);
+          }
+        }
+        results.add(leader);
+        return results;
+      }
+      return servers;
     }
   }
 

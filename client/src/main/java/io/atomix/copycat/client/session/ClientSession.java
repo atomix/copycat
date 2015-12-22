@@ -119,7 +119,7 @@ public class ClientSession implements Session, Managed<Session> {
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.selectionStrategy = Assert.notNull(selectionStrategy, "submissionStrategy");
-    this.connectMembers = selectionStrategy.getConnections(leader, new ArrayList<>(members));
+    this.connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(members));
   }
 
   @Override
@@ -158,7 +158,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = selectionStrategy.getConnections(leader, new ArrayList<>(this.members));
+    this.connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(this.members));
   }
 
   /**
@@ -720,7 +720,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private ClientSession resetMembers() {
     if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = selectionStrategy.getConnections(leader, new ArrayList<>(members));
+      connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(members));
       recordFailures = true;
     }
     return this;
