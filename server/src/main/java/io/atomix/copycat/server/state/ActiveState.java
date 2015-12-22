@@ -155,8 +155,8 @@ abstract class ActiveState extends PassiveState {
         .withVoted(false)
         .build();
     }
-    // If we've already voted for someone else then don't vote again.
-    else if (context.getLastVotedFor() == 0 || context.getLastVotedFor() == request.candidate()) {
+    // If no vote has been cast, check the log and cast a vote if necessary.
+    else if (context.getLastVotedFor() == 0) {
       if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
         context.setLastVotedFor(request.candidate());
         return VoteResponse.builder()
@@ -171,6 +171,15 @@ abstract class ActiveState extends PassiveState {
           .withVoted(false)
           .build();
       }
+    }
+    // If we already voted for the requesting server, respond successfully.
+    else if (context.getLastVotedFor() == request.candidate()) {
+      LOGGER.debug("{} - Accepted {}: already voted for {}", context.getCluster().getMember().serverAddress(), request, context.getLastVotedFor());
+      return VoteResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withVoted(true)
+        .build();
     }
     // In this case, we've already voted for someone else.
     else {
