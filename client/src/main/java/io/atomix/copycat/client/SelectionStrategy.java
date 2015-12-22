@@ -20,19 +20,21 @@ import io.atomix.catalyst.transport.Address;
 import java.util.List;
 
 /**
- * Strategy for submitting operations to the cluster.
+ * Strategy for selecting nodes to which to connect and submit operations.
  * <p>
- * Submission strategies are responsible for defining the servers to which a client can connect.
+ * Selection strategies prioritize communication with certain servers over others. When the client
+ * loses its connection or cluster membership changes, the client will request a list of servers to
+ * which the client can connect. The address list should be prioritized.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface SubmissionStrategy {
+public interface SelectionStrategy {
 
   /**
-   * Returns a list of servers to which the client can submit operations.
+   * Returns a prioritized list of servers to which the client can connect and submit operations.
    *
    * @param leader The current cluster leader.
-   * @param servers The current list of servers.
+   * @param servers The full list of servers.
    * @return A collection of servers to which the client can connect.
    */
   List<Address> getConnections(Address leader, List<Address> servers);

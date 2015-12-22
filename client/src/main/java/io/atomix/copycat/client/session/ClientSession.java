@@ -31,7 +31,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.SubmissionStrategy;
+import io.atomix.copycat.client.SelectionStrategy;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.request.*;
@@ -88,7 +88,7 @@ public class ClientSession implements Session, Managed<Session> {
   private Set<Address> members;
   private final ThreadContext context;
   private final ConnectionStrategy connectionStrategy;
-  private final SubmissionStrategy submissionStrategy;
+  private final SelectionStrategy selectionStrategy;
   private List<Address> connectMembers;
   private Connection connection;
   private volatile State state = State.CLOSED;
@@ -112,14 +112,14 @@ public class ClientSession implements Session, Managed<Session> {
   private long eventIndex;
   private long completeIndex;
 
-  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SubmissionStrategy submissionStrategy) {
+  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SelectionStrategy selectionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.client = Assert.notNull(transport, "transport").client();
     this.members = new HashSet<>(Assert.notNull(members, "members"));
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.submissionStrategy = Assert.notNull(submissionStrategy, "submissionStrategy");
-    this.connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(members));
+    this.selectionStrategy = Assert.notNull(selectionStrategy, "submissionStrategy");
+    this.connectMembers = selectionStrategy.getConnections(leader, new ArrayList<>(members));
   }
 
   @Override
@@ -158,7 +158,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private void setMembers(Collection<Address> members) {
     this.members = new HashSet<>(members);
-    this.connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(this.members));
+    this.connectMembers = selectionStrategy.getConnections(leader, new ArrayList<>(this.members));
   }
 
   /**
@@ -369,7 +369,7 @@ public class ClientSession implements Session, Managed<Session> {
    * are attempted until a failure event is detected.
    * <p>
    * The logic for managing connections is as follows:
-   * When a new connection to the cluster is being established, the {@link SubmissionStrategy} is queried to get
+   * When a new connection to the cluster is being established, the {@link SelectionStrategy} is queried to get
    * a list of servers to which this client can send requests. The client will then attempt to connect to each
    * server in the list. If all connection attempts fail, the client will continue to attempt to reconnect to the
    * cluster until the session timeout expires. In the event that the client is able to successfully connect to
@@ -720,7 +720,7 @@ public class ClientSession implements Session, Managed<Session> {
    */
   private ClientSession resetMembers() {
     if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
-      connectMembers = submissionStrategy.getConnections(leader, new ArrayList<>(members));
+      connectMembers = selectionStrategy.getConnections(leader, new ArrayList<>(members));
       recordFailures = true;
     }
     return this;

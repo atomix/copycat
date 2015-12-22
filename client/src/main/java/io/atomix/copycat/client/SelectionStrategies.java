@@ -24,17 +24,17 @@ import java.util.stream.Collectors;
 /**
  * Strategies for managing how clients connect to and communicate with the cluster.
  * <p>
- * Submission strategies manage which servers a client attempts to contact and submit operations
- * to. Clients can communicate with followers, leaders, or both. Submission strategies offer the
+ * Selection strategies manage which servers a client attempts to contact and submit operations
+ * to. Clients can communicate with followers, leaders, or both. Selection strategies offer the
  * option for clients to spread connections across the cluster for scalability or connect to the
  * cluster's leader for performance.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public enum SubmissionStrategies implements SubmissionStrategy {
+public enum SelectionStrategies implements SelectionStrategy {
 
   /**
-   * The {@code ANY} submission strategy allows the client to connect to any server in the cluster. Clients
+   * The {@code ANY} selection strategy allows the client to connect to any server in the cluster. Clients
    * will attempt to connect to a random server, and the client will persist its connection with the first server
    * through which it is able to communicate. If the client becomes disconnected from a server, it will attempt
    * to connect to the next random server again.
@@ -47,7 +47,7 @@ public enum SubmissionStrategies implements SubmissionStrategy {
   },
 
   /**
-   * The {@code LEADER} submission strategy forces the client to attempt to connect to the cluster's leader.
+   * The {@code LEADER} selection strategy forces the client to attempt to connect to the cluster's leader.
    * Connecting to the leader means the client's operations are always handled by the first server to receive
    * them. However, clients connected to the leader will not significantly benefit from {@link Query queries}
    * with lower consistency levels, and more clients connected to the leader could mean more load on a single
@@ -63,7 +63,7 @@ public enum SubmissionStrategies implements SubmissionStrategy {
   },
 
   /**
-   * The {@code FOLLOWERS} submission strategy forces the client to connect only to followers. Connecting to
+   * The {@code FOLLOWERS} selection strategy forces the client to connect only to followers. Connecting to
    * followers ensures that the leader is not overloaded with direct client requests. This strategy should be
    * used when clients frequently submit {@link Query queries} with lower consistency levels that don't need to
    * be forwarded to the cluster leader. For clients that frequently submit commands or queries with linearizable
