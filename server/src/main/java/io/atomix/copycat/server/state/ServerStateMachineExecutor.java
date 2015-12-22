@@ -46,7 +46,8 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachineExecutor.class);
   private final ThreadContext executor;
   private final ServerStateMachineContext context;
-  private final List<ServerScheduledTask> tasks = new ArrayList<>();
+  private final Queue<ServerTask> tasks = new ArrayDeque<>();
+  private final List<ServerScheduledTask> scheduledTasks = new ArrayList<>();
   private final List<ServerScheduledTask> complete = new ArrayList<>();
   private final Map<Class, Function> operations = new HashMap<>();
   private long timestamp;
@@ -81,6 +82,13 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   @Override
   public Executor executor() {
     return executor.executor();
+  }
+
+  /**
+   * Initializes the execution of a task.
+   */
+  void init(long index, Instant instant, boolean synchronous, Command.ConsistencyLevel consistency) {
+    context.update(index, instant, synchronous, consistency);
   }
 
   /**
@@ -122,6 +130,26 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   /**
+   * Commits the application of a command to the state machine.
+   */
+  @SuppressWarnings("unchecked")
+  CompletableFuture<Void> commit() {
+    // Execute any tasks that were queue during execution of the command.
+    if (!tasks.isEmpty()) {
+      for (ServerTask task : tasks) {
+        context.update(context.index(), context.clock().instant(), false, Command.ConsistencyLevel.SEQUENTIAL);
+        try {
+          task.future.complete(task.callback.get());
+        } catch (Exception e) {
+          task.future.completeExceptionally(e);
+        }
+      }
+      tasks.clear();
+    }
+    return context.commit();
+  }
+
+  /**
    * Executes scheduled callbacks based on the provided time.
    *
    * @return The updated executor timestamp. This timestamp is guaranteed to be monotonically increasing.
@@ -130,11 +158,11 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
     this.timestamp = Math.max(this.timestamp, timestamp);
 
     // Only create an iterator if there are actually tasks scheduled.
-    if (!tasks.isEmpty()) {
+    if (!scheduledTasks.isEmpty()) {
 
       // Iterate through scheduled tasks until we reach a task that has not met its scheduled time.
       // The tasks list is sorted by time on insertion.
-      Iterator<ServerScheduledTask> iterator = tasks.iterator();
+      Iterator<ServerScheduledTask> iterator = scheduledTasks.iterator();
       while (iterator.hasNext()) {
         ServerScheduledTask task = iterator.next();
         if (task.complete(this.timestamp)) {
@@ -155,17 +183,25 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
       complete.clear();
     }
+
     return this.timestamp;
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public CompletableFuture<Void> execute(Runnable callback) {
-    return executor.execute(callback);
+    return execute((Supplier<Void>) () -> {
+      callback.run();
+      return null;
+    });
   }
 
   @Override
   public <T> CompletableFuture<T> execute(Supplier<T> callback) {
-    return executor.execute(callback);
+    Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
+    CompletableFuture<T> future = new CompletableFuture<>();
+    tasks.add(new ServerTask(callback, future));
+    return future;
   }
 
   @Override
@@ -209,6 +245,19 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   /**
+   * Server task.
+   */
+  private static class ServerTask {
+    private final Supplier callback;
+    private final CompletableFuture future;
+
+    private ServerTask(Supplier callback, CompletableFuture future) {
+      this.callback = callback;
+      this.future = future;
+    }
+  }
+
+  /**
    * Scheduled task.
    */
   private class ServerScheduledTask implements Scheduled {
@@ -233,28 +282,28 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
      */
     private Scheduled schedule() {
       // Perform binary search to insert the task at the appropriate position in the tasks list.
-      if (tasks.isEmpty()) {
-        tasks.add(this);
+      if (scheduledTasks.isEmpty()) {
+        scheduledTasks.add(this);
       } else {
         int l = 0;
-        int u = tasks.size() - 1;
+        int u = scheduledTasks.size() - 1;
         int i;
         while (true) {
           i = (u + l) / 2;
-          long t = tasks.get(i).time;
+          long t = scheduledTasks.get(i).time;
           if (t == time) {
-            tasks.add(i, this);
+            scheduledTasks.add(i, this);
             return this;
           } else if (t < time) {
             l = i + 1;
             if (l > u) {
-              tasks.add(i + 1, this);
+              scheduledTasks.add(i + 1, this);
               return this;
             }
           } else {
             u = i - 1;
             if (l > u) {
-              tasks.add(i, this);
+              scheduledTasks.add(i, this);
               return this;
             }
           }
@@ -289,7 +338,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
     @Override
     public synchronized void cancel() {
-      tasks.remove(this);
+      scheduledTasks.remove(this);
     }
   }
 

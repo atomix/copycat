@@ -237,6 +237,58 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests executing an asynchronous callback in the state machine.
+   */
+  public void testExecute() throws Throwable {
+    callerContext.execute(() -> {
+
+      long index;
+      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+        entry.setTerm(1)
+          .setTimestamp(timestamp)
+          .setTimeout(500)
+          .setClient(UUID.randomUUID());
+        index = log.append(entry);
+      }
+
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
+        threadAssertNull(error);
+        resume();
+      });
+    });
+
+    await();
+
+    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    assertNotNull(session);
+    assertEquals(session.id(), 1);
+    assertEquals(session.getTimestamp(), timestamp);
+    assertEquals(session.getCommandSequence(), 0);
+
+    callerContext.execute(() -> {
+
+      long index;
+      try (CommandEntry entry = log.create(CommandEntry.class)) {
+        entry.setTerm(1)
+          .setSession(1)
+          .setSequence(1)
+          .setTimestamp(timestamp + 100)
+          .setCommand(new TestExecute());
+        index = log.append(entry);
+      }
+
+      state.getStateMachine().apply(index).whenComplete((result, error) -> {
+        threadAssertNull(result);
+        threadAssertNull(error);
+        resume();
+      });
+
+    });
+
+    await(1000, 2);
+  }
+
+  /**
    * Tests command sequencing.
    */
   public void testCommandSequence() throws Throwable {
@@ -424,6 +476,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
       executor.register(TestCommand.class, this::testCommand);
       executor.register(TestQuery.class, this::testQuery);
       executor.register(EventCommand.class, this::eventCommand);
+      executor.register(TestExecute.class, this::testExecute);
     }
 
     private long testCommand(Commit<TestCommand> commit) {
@@ -436,6 +489,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     private long testQuery(Commit<TestQuery> commit) {
       return sequence.incrementAndGet();
+    }
+
+    private void testExecute(Commit<TestExecute> commit) {
+      executor.execute((Runnable) () -> {
+        threadAssertEquals(context.index(), 2L);
+        resume();
+      });
     }
   }
 
@@ -455,6 +515,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
    * Test query.
    */
   private static class TestQuery implements Query<Long> {
+  }
+
+  /**
+   * Test execute.
+   */
+  private static class TestExecute implements Command<Void> {
   }
 
 }
