@@ -113,6 +113,7 @@ public interface Session {
    * @param event The event to publish.
    * @return A completable future to be called once the event has been published.
    * @throws NullPointerException If {@code event} is {@code null}
+   * @throws ClosedSessionException If the session is closed
    * @throws io.atomix.catalyst.serializer.SerializationException If {@code message} cannot be serialized
    */
   Session publish(String event);
@@ -142,6 +143,7 @@ public interface Session {
    *               {@link io.atomix.catalyst.serializer.TypeSerializer}, or implementing {@link java.io.Serializable}.
    * @return A completable future to be called once the event has been published.
    * @throws NullPointerException If {@code event} is {@code null}
+   * @throws ClosedSessionException If the session is closed
    * @throws io.atomix.catalyst.serializer.SerializationException If {@code message} cannot be serialized
    */
   Session publish(String event, Object message);
