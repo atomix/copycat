@@ -36,6 +36,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.util.AddressSelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,16 +82,12 @@ public class ClientSession implements Session, Managed<Session> {
     EXPIRED
   }
 
-  private final Random random = new Random(System.currentTimeMillis());
   private final UUID clientId;
   private final Client client;
   private Address leader;
-  private Set<Address> members;
   private final ThreadContext context;
   private final ConnectionStrategy connectionStrategy;
-  private final SelectionStrategy selectionStrategy;
-  private Iterable<Address> connectMembers;
-  private Iterator<Address> connectIterator;
+  private AddressSelector selector;
   private Connection connection;
   private volatile State state = State.CLOSED;
   private volatile long id;
@@ -116,11 +113,9 @@ public class ClientSession implements Session, Managed<Session> {
   public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SelectionStrategy selectionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.client = Assert.notNull(transport, "transport").client();
-    this.members = new HashSet<>(Assert.notNull(members, "members"));
+    this.selector = new AddressSelector(members, selectionStrategy);
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.selectionStrategy = Assert.notNull(selectionStrategy, "submissionStrategy");
-    this.connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(members));
   }
 
   @Override
@@ -154,13 +149,6 @@ public class ClientSession implements Session, Managed<Session> {
     return false;
   }
 
-  /**
-   * Sets the client remote members.
-   */
-  private void setMembers(Collection<Address> members) {
-    this.members = new HashSet<>(members);
-    this.connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(this.members));
-  }
 
   /**
    * Sets the session timeout.
@@ -404,7 +392,7 @@ public class ClientSession implements Session, Managed<Session> {
     // session based on the responses from servers with which we did successfully communicate and the
     // time we were last able to successfully communicate with a correct server process. The failureTime
     // indicates the first time we received a NO_LEADER_ERROR from a server.
-    if (connectIterator != null && !connectIterator.hasNext()) {
+    if (!selector.hasNext()) {
       // If the client failed to connect to any server then determine whether to attempt to connect again
       // or to expire the session. If the session is open and its timeout has elapsed, close the session,
       // otherwise automatically attempt to reconnect again.
@@ -546,18 +534,8 @@ public class ClientSession implements Session, Managed<Session> {
    * Establishes a connection to the next member.
    */
   private CompletableFuture<Connection> connect(CompletableFuture<?> future, boolean checkOpen) {
-    // If no connect iterator has been created, create one.
-    if (connectIterator == null) {
-      connectIterator = connectMembers.iterator();
-    }
-
-    // If there are no more connections in the iterator, complete the future exceptionally.
-    if (!connectIterator.hasNext()) {
-      return Futures.exceptionalFuture(new ConnectException());
-    }
-
     // Remove the next random member from the members list.
-    Address member = connectIterator.next();
+    Address member = selector.next();
     boolean recordFailures = this.recordFailures;
     this.recordFailures = false;
 
@@ -730,11 +708,8 @@ public class ClientSession implements Session, Managed<Session> {
    * Resets the members to which to connect.
    */
   private ClientSession resetMembers() {
-    if (connectIterator != null) {
-      connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(members));
-      connectIterator = null;
-      recordFailures = true;
-    }
+    selector.reset();
+    recordFailures = true;
     return this;
   }
 
@@ -771,10 +746,10 @@ public class ClientSession implements Session, Managed<Session> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           setLeader(response.leader());
-          setMembers(response.members());
+          selector.reset(response.leader(), response.members());
           setTimeout(response.timeout());
           onOpen(response.session());
-          resetConnection().resetMembers().keepAlive(Duration.ofMillis(Math.round(response.timeout() * KEEP_ALIVE_RATIO)));
+          resetConnection().keepAlive(Duration.ofMillis(Math.round(response.timeout() * KEEP_ALIVE_RATIO)));
           future.complete(null);
         } else {
           future.completeExceptionally(response.error().createException());
@@ -804,8 +779,7 @@ public class ClientSession implements Session, Managed<Session> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           setLeader(response.leader());
-          setMembers(response.members());
-          resetMembers();
+          selector.reset(response.leader(), response.members());
           future.complete(null);
         } else if (isOpen()) {
           if (recordFailures) {
