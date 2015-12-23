@@ -89,7 +89,8 @@ public class ClientSession implements Session, Managed<Session> {
   private final ThreadContext context;
   private final ConnectionStrategy connectionStrategy;
   private final SelectionStrategy selectionStrategy;
-  private List<Address> connectMembers;
+  private Iterable<Address> connectMembers;
+  private Iterator<Address> connectIterator;
   private Connection connection;
   private volatile State state = State.CLOSED;
   private volatile long id;
@@ -403,7 +404,7 @@ public class ClientSession implements Session, Managed<Session> {
     // session based on the responses from servers with which we did successfully communicate and the
     // time we were last able to successfully communicate with a correct server process. The failureTime
     // indicates the first time we received a NO_LEADER_ERROR from a server.
-    if (connectMembers.isEmpty()) {
+    if (connectIterator != null && !connectIterator.hasNext()) {
       // If the client failed to connect to any server then determine whether to attempt to connect again
       // or to expire the session. If the session is open and its timeout has elapsed, close the session,
       // otherwise automatically attempt to reconnect again.
@@ -545,8 +546,18 @@ public class ClientSession implements Session, Managed<Session> {
    * Establishes a connection to the next member.
    */
   private CompletableFuture<Connection> connect(CompletableFuture<?> future, boolean checkOpen) {
+    // If no connect iterator has been created, create one.
+    if (connectIterator == null) {
+      connectIterator = connectMembers.iterator();
+    }
+
+    // If there are no more connections in the iterator, complete the future exceptionally.
+    if (!connectIterator.hasNext()) {
+      return Futures.exceptionalFuture(new ConnectException());
+    }
+
     // Remove the next random member from the members list.
-    Address member = connectMembers.remove(random.nextInt(connectMembers.size()));
+    Address member = connectIterator.next();
     boolean recordFailures = this.recordFailures;
     this.recordFailures = false;
 
@@ -719,8 +730,9 @@ public class ClientSession implements Session, Managed<Session> {
    * Resets the members to which to connect.
    */
   private ClientSession resetMembers() {
-    if (connectMembers.isEmpty() || connectMembers.size() < members.size() - 1) {
+    if (connectIterator != null) {
       connectMembers = selectionStrategy.selectConnections(leader, new ArrayList<>(members));
+      connectIterator = null;
       recordFailures = true;
     }
     return this;

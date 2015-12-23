@@ -37,6 +37,6 @@ public interface SelectionStrategy {
    * @param servers The full list of servers.
    * @return A collection of servers to which the client can connect.
    */
-  List<Address> selectConnections(Address leader, List<Address> servers);
+  Iterable<Address> selectConnections(Address leader, List<Address> servers);
 
 }
