@@ -591,6 +591,7 @@ final class LeaderState extends ActiveState {
       entry.setTerm(context.getTerm())
         .setTimestamp(timestamp)
         .setClient(request.client())
+        .setSession(request.session())
         .setTimeout(timeout);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);

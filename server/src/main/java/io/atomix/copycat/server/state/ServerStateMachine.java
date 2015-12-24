@@ -408,11 +408,21 @@ final class ServerStateMachine implements AutoCloseable {
    * state machine's register() method must be completed synchronously prior to the completion of the returned future.
    */
   private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
-    ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
-    executor.context().sessions().registerSession(session);
-
     // Allow the executor to execute any scheduled events.
     long timestamp = executor.tick(entry.getTimestamp());
+
+    // Clients can request a specific session ID. If no session ID was provided, use the log entry index.
+    long sessionId = entry.getSession() != 0 ? entry.getSession() : entry.getIndex();
+
+    // If a session with the given session ID already exists, simply complete the registration.
+    ServerSession existingSession = executor.context().sessions().getSession(sessionId);
+    if (existingSession != null) {
+      existingSession.setTimestamp(timestamp).trust();
+      return Futures.completedFuture(sessionId);
+    }
+
+    ServerSession session = new ServerSession(sessionId, executor.context(), entry.getTimeout());
+    executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
     // is guaranteed to be monotonically increasing, whereas the RegisterEntry may have an earlier timestamp
@@ -455,10 +465,10 @@ final class ServerStateMachine implements AutoCloseable {
       CompletableFuture<Void> sessionFuture = executor.commit();
       if (sessionFuture != null) {
         sessionFuture.whenComplete((result, error) -> {
-          context.executor().execute(() -> future.complete(index));
+          context.executor().execute(() -> future.complete(sessionId));
         });
       } else {
-        context.executor().execute(() -> future.complete(index));
+        context.executor().execute(() -> future.complete(sessionId));
       }
     });
 

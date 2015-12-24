@@ -30,7 +30,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=226)
-public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
+public class RegisterEntry extends SessionEntry<RegisterEntry> {
   private UUID client;
   private long timeout;
 
@@ -98,7 +98,7 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, client=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, client=%s, session=%d, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getSession(), getTimestamp());
   }
 
 }
