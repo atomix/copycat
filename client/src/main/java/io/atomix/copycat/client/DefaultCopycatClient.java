@@ -87,19 +87,19 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Collection<Address> members;
   private final Serializer serializer;
   private final ConnectionStrategy connectionStrategy;
-  private final SelectionStrategy selectionStrategy;
+  private final ServerSelectionStrategy serverSelectionStrategy;
   private final RecoveryStrategy recoveryStrategy;
   private volatile ClientSession session;
   private volatile CompletableFuture<CopycatClient> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
 
-  protected DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SelectionStrategy selectionStrategy, RecoveryStrategy recoveryStrategy) {
+  protected DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, ServerSelectionStrategy serverSelectionStrategy, RecoveryStrategy recoveryStrategy) {
     serializer.resolve(new ServiceLoaderTypeResolver());
     this.transport = Assert.notNull(transport, "transport");
     this.members = Assert.notNull(members, "members");
     this.serializer = Assert.notNull(serializer, "serializer");
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.selectionStrategy = Assert.notNull(selectionStrategy, "submissionStrategy");
+    this.serverSelectionStrategy = Assert.notNull(serverSelectionStrategy, "submissionStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
   }
 
@@ -147,7 +147,7 @@ public class DefaultCopycatClient implements CopycatClient {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          ClientSession session = new ClientSession(id, transport, members, serializer, connectionStrategy, selectionStrategy);
+          ClientSession session = new ClientSession(id, transport, members, serializer, connectionStrategy, serverSelectionStrategy);
           if (closeFuture == null) {
             openFuture = session.open().thenApply(s -> {
               synchronized (this) {

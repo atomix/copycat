@@ -31,7 +31,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.SelectionStrategy;
+import io.atomix.copycat.client.ServerSelectionStrategy;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.request.*;
@@ -110,10 +110,10 @@ public class ClientSession implements Session, Managed<Session> {
   private long eventIndex;
   private long completeIndex;
 
-  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, SelectionStrategy selectionStrategy) {
+  public ClientSession(UUID clientId, Transport transport, Collection<Address> members, Serializer serializer, ConnectionStrategy connectionStrategy, ServerSelectionStrategy serverSelectionStrategy) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.client = Assert.notNull(transport, "transport").client();
-    this.selector = new AddressSelector(members, selectionStrategy);
+    this.selector = new AddressSelector(members, serverSelectionStrategy);
     this.context = new SingleThreadContext("copycat-client-" + clientId.toString(), Assert.notNull(serializer, "serializer").clone());
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
   }
@@ -358,7 +358,7 @@ public class ClientSession implements Session, Managed<Session> {
    * are attempted until a failure event is detected.
    * <p>
    * The logic for managing connections is as follows:
-   * When a new connection to the cluster is being established, the {@link SelectionStrategy} is queried to get
+   * When a new connection to the cluster is being established, the {@link ServerSelectionStrategy} is queried to get
    * a list of servers to which this client can send requests. The client will then attempt to connect to each
    * server in the list. If all connection attempts fail, the client will continue to attempt to reconnect to the
    * cluster until the session timeout expires. In the event that the client is able to successfully connect to
@@ -554,7 +554,7 @@ public class ClientSession implements Session, Managed<Session> {
             resetFailureTime();
 
             // Register the connection to the server.
-            setupConnection(connection, recordFailures).whenComplete((setupResult, setupError) -> {
+            setupConnection(connection).whenComplete((setupResult, setupError) -> {
               if (!checkOpen || isOpen()) {
                 CompletableFuture<Connection> connectFuture = this.connectFuture;
                 this.connectFuture = null;
@@ -637,7 +637,7 @@ public class ClientSession implements Session, Managed<Session> {
   /**
    * Sets up the given connection.
    */
-  private CompletableFuture<Connection> setupConnection(Connection connection, boolean recordFailures) {
+  private CompletableFuture<Connection> setupConnection(Connection connection) {
     this.connection = connection;
     connection.closeListener(c -> {
       if (c.equals(this.connection)) {

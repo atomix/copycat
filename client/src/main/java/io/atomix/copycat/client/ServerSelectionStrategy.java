@@ -28,7 +28,7 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface SelectionStrategy {
+public interface ServerSelectionStrategy {
 
   /**
    * Returns a prioritized list of servers to which the client can connect and submit operations.

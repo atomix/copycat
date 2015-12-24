@@ -17,7 +17,7 @@ package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.SelectionStrategy;
+import io.atomix.copycat.client.ServerSelectionStrategy;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,11 +31,11 @@ import java.util.Iterator;
 public class AddressSelector implements Iterator<Address> {
   private Address leader;
   private Collection<Address> servers;
-  private final SelectionStrategy strategy;
+  private final ServerSelectionStrategy strategy;
   private Iterable<Address> selections;
   private Iterator<Address> selectionsIterator;
 
-  public AddressSelector(Collection<Address> servers, SelectionStrategy strategy) {
+  public AddressSelector(Collection<Address> servers, ServerSelectionStrategy strategy) {
     this.servers = Assert.argNot(servers, Assert.notNull(servers, "servers").isEmpty(), "servers list cannot be empty");
     this.strategy = Assert.notNull(strategy, "strategy");
   }
