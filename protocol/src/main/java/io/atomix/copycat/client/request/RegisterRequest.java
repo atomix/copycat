@@ -36,7 +36,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=199)
-public class RegisterRequest extends AbstractRequest<RegisterRequest> {
+public class RegisterRequest extends SessionRequest<RegisterRequest> {
 
   /**
    * Returns a new register client request builder.
@@ -71,12 +71,14 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    serializer.writeObject(client, buffer);
+    super.writeObject(buffer, serializer);
+    buffer.writeString(client.toString());
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    client = serializer.readObject(buffer);
+    super.readObject(buffer, serializer);
+    client = UUID.fromString(buffer.readString());
   }
 
   @Override
@@ -95,13 +97,13 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s", getClass().getSimpleName());
+    return String.format("%s[client=%s, session=%d]", getClass().getSimpleName(), client, session);
   }
 
   /**
    * Register client request builder.
    */
-  public static class Builder extends AbstractRequest.Builder<Builder, RegisterRequest> {
+  public static class Builder extends SessionRequest.Builder<Builder, RegisterRequest> {
     protected Builder(RegisterRequest request) {
       super(request);
     }
@@ -124,7 +126,7 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
     @Override
     public RegisterRequest build() {
       super.build();
-      Assert.stateNot(request.client == null, "client");
+      Assert.stateNot(request.client == null, "client cannot be null");
       return request;
     }
   }

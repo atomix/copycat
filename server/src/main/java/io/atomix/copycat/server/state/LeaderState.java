@@ -644,10 +644,10 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+    context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
     AcceptRequest acceptRequest = AcceptRequest.builder()
-      .withSession(request.session())
+      .withClient(request.client())
       .withAddress(context.getCluster().getMember().serverAddress())
       .build();
     return accept(acceptRequest)
@@ -665,14 +665,14 @@ final class LeaderState extends ActiveState {
 
     try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
       entry.setTerm(context.getTerm())
-        .setSession(request.session())
+        .setClient(request.client())
         .setTimestamp(timestamp)
         .setAddress(request.address());
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
     }
 
-    context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
+    context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {

@@ -15,22 +15,27 @@
  */
 package io.atomix.copycat.client.request;
 
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.util.Assert;
 
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Connect client request.
  * <p>
  * Connect requests are sent by clients to specific servers when first establishing a connection.
- * Connections must be associated with a specific client {@link #session()} and must be established
+ * Connections must be associated with a specific {@link #client() client ID} and must be established
  * each time the client switches servers. A client may only be connected to a single server at any
  * given time.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=201)
-public class ConnectRequest extends SessionRequest<ConnectRequest> {
+public class ConnectRequest extends AbstractRequest<ConnectRequest> {
 
   /**
    * Returns a new connect client request builder.
@@ -52,27 +57,68 @@ public class ConnectRequest extends SessionRequest<ConnectRequest> {
     return new Builder(request);
   }
 
+  private UUID client;
+
+  /**
+   * Returns the connecting client ID.
+   *
+   * @return The connecting client ID.
+   */
+  public UUID client() {
+    return client;
+  }
+
+  @Override
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    super.writeObject(buffer, serializer);
+    buffer.writeString(client.toString());
+  }
+
+  @Override
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    super.readObject(buffer, serializer);
+    client = UUID.fromString(buffer.readString());
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session);
+    return Objects.hash(getClass(), client);
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof ConnectRequest && ((ConnectRequest) object).session == session;
+    return object instanceof ConnectRequest && ((ConnectRequest) object).client.equals(client);
   }
 
   @Override
   public String toString() {
-    return String.format("%s", getClass().getSimpleName());
+    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
   }
 
   /**
    * Register client request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, ConnectRequest> {
+  public static class Builder extends AbstractRequest.Builder<Builder, ConnectRequest> {
     protected Builder(ConnectRequest request) {
       super(request);
+    }
+
+    /**
+     * Sets the connecting client ID.
+     *
+     * @param clientId The connecting client ID.
+     * @return The connect request builder.
+     */
+    public Builder withClientId(UUID clientId) {
+      request.client = Assert.notNull(clientId, "clientId");
+      return this;
+    }
+
+    @Override
+    public ConnectRequest build() {
+      super.build();
+      Assert.stateNot(request.client == null, "client cannot be null");
+      return request;
     }
   }
 

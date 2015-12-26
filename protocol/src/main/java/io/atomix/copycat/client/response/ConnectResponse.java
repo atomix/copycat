@@ -33,7 +33,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=202)
-public class ConnectResponse extends SessionResponse<ConnectResponse> {
+public class ConnectResponse extends AbstractResponse<ConnectResponse> {
 
   /**
    * Returns a new connect client response builder.
@@ -95,7 +95,7 @@ public class ConnectResponse extends SessionResponse<ConnectResponse> {
   /**
    * Connect response builder.
    */
-  public static class Builder extends SessionResponse.Builder<Builder, ConnectResponse> {
+  public static class Builder extends AbstractResponse.Builder<Builder, ConnectResponse> {
     protected Builder(ConnectResponse response) {
       super(response);
     }

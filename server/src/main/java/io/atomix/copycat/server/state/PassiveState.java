@@ -170,7 +170,7 @@ class PassiveState extends AbstractState {
           }
         } else if (entry instanceof ConnectEntry) {
           ConnectEntry connectEntry = (ConnectEntry) entry;
-          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getSession(), connectEntry.getAddress());
+          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
         }
       }
     }

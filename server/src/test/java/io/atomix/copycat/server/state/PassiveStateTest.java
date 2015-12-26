@@ -45,7 +45,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testAccept() throws Throwable {
     runOnServer(() -> {
-      AcceptRequest request = AcceptRequest.builder().withAddress(members.get(0).serverAddress()).withSession(1).build();
+      AcceptRequest request = AcceptRequest.builder().withAddress(members.get(0).serverAddress()).withClient(UUID.randomUUID()).build();
       AcceptResponse response = state.accept(request).get();
       assertIllegalMemberStateError(response);
     });
@@ -369,7 +369,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testConnect() throws Throwable {
     runOnServer(() -> {
-      ConnectRequest request = ConnectRequest.builder().withSession(1).build();
+      ConnectRequest request = ConnectRequest.builder().withClientId(UUID.randomUUID()).build();
       ConnectResponse response = state.connect(request, null).get();
       assertIllegalMemberStateError(response);
     });

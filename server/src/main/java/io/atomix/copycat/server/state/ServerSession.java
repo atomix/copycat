@@ -42,6 +42,7 @@ import java.util.function.Consumer;
 class ServerSession implements Session {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSession.class);
   private final long id;
+  private final UUID client;
   private final ServerStateMachineContext context;
   private final long timeout;
   private Connection connection;
@@ -71,8 +72,9 @@ class ServerSession implements Session {
   private final Listeners<Session> openListeners = new Listeners<>();
   private final Listeners<Session> closeListeners = new Listeners<>();
 
-  ServerSession(long id, ServerStateMachineContext context, long timeout) {
+  ServerSession(long id, UUID client, ServerStateMachineContext context, long timeout) {
     this.id = id;
+    this.client = Assert.notNull(client, "client");
     this.completeIndex = id;
     this.lastApplied = id - 1;
     this.context = context;
@@ -82,6 +84,15 @@ class ServerSession implements Session {
   @Override
   public long id() {
     return id;
+  }
+
+  /**
+   * Returns the session client ID.
+   *
+   * @return The session client ID.
+   */
+  public UUID client() {
+    return client;
   }
 
   /**

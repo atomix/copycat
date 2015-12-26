@@ -387,7 +387,7 @@ final class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    ServerSession session = executor().context().sessions().getSession(entry.getSession());
+    ServerSession session = executor().context().sessions().getSession(entry.getClient());
     if (session != null) {
       long previousIndex = session.getConnectIndex();
       session.setConnectIndex(entry.getIndex());
@@ -421,7 +421,7 @@ final class ServerStateMachine implements AutoCloseable {
       return Futures.completedFuture(sessionId);
     }
 
-    ServerSession session = new ServerSession(sessionId, executor.context(), entry.getTimeout());
+    ServerSession session = new ServerSession(sessionId, entry.getClient(), executor.context(), entry.getTimeout());
     executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp

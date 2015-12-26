@@ -16,22 +16,22 @@
 package io.atomix.copycat.client.error;
 
 /**
- * Write exception.
+ * Query exception.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class WriteException extends RaftException {
-  private static final RaftError.Type TYPE = RaftError.Type.COMMAND_ERROR;
+public class QueryException extends OperationException {
+  private static final RaftError.Type TYPE = RaftError.Type.QUERY_ERROR;
 
-  public WriteException(String message, Object... args) {
+  public QueryException(String message, Object... args) {
     super(TYPE, message, args);
   }
 
-  public WriteException(Throwable cause, String message, Object... args) {
+  public QueryException(Throwable cause, String message, Object... args) {
     super(TYPE, cause, message, args);
   }
 
-  public WriteException(Throwable cause) {
+  public QueryException(Throwable cause) {
     super(TYPE, cause);
   }
 

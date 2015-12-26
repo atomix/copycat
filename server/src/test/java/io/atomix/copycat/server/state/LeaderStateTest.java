@@ -24,6 +24,8 @@ import io.atomix.copycat.server.storage.entry.CommandEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.util.UUID;
+
 /**
  * Leader state test.
  */
@@ -72,7 +74,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
           .executor()
           .context()
           .sessions()
-          .registerSession(new ServerSession(1, serverState.getStateMachine().executor().context(), 1000));
+          .registerSession(new ServerSession(1, UUID.randomUUID(), serverState.getStateMachine().executor().context(), 1000));
       CommandRequest request1 = CommandRequest.builder()
           .withSession(1)
           .withSequence(2)

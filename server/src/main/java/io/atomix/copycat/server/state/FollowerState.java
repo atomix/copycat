@@ -83,10 +83,10 @@ final class FollowerState extends ActiveState {
         .build()));
     } else {
       // Immediately register the session connection and send an accept request to the leader.
-      context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+      context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
       AcceptRequest acceptRequest = AcceptRequest.builder()
-        .withSession(request.session())
+        .withClient(request.client())
         .withAddress(context.getCluster().getMember().serverAddress())
         .build();
       return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)

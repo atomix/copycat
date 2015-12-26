@@ -85,15 +85,15 @@ public class RegisterEntry extends SessionEntry<RegisterEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
+    buffer.writeString(client.toString());
     buffer.writeLong(timeout);
-    serializer.writeObject(client, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
+    client = UUID.fromString(buffer.readString());
     timeout = buffer.readLong();
-    client = serializer.readObject(buffer);
   }
 
   @Override
