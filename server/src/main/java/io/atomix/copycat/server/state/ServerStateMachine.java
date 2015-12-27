@@ -389,10 +389,17 @@ final class ServerStateMachine implements AutoCloseable {
     // clean them once they're committed.
     ServerSession session = executor().context().sessions().getSession(entry.getClient());
     if (session != null) {
-      long previousIndex = session.getConnectIndex();
+      long previousConnect = session.getConnectIndex();
       session.setConnectIndex(entry.getIndex());
-      if (previousIndex > 0) {
-        state.getLog().clean(previousIndex);
+      if (previousConnect > 0) {
+        state.getLog().clean(previousConnect);
+      }
+
+      // Connections are also treated like keep-alive operations if a session exists for the client.
+      long previousKeepAlive = session.getKeepAliveIndex();
+      session.setKeepAliveIndex(entry.getIndex());
+      if (previousKeepAlive > 0) {
+        state.getLog().clean(previousKeepAlive);
       }
     }
     return CompletableFuture.completedFuture(null);
