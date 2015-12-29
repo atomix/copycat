@@ -24,6 +24,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
@@ -158,7 +159,7 @@ final class LeaderState extends ActiveState {
     for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
-      if (!session.isUnregistering() && session.isSuspect()) {
+      if (session.state() == Session.State.UNSTABLE && !session.isUnregistering()) {
         LOGGER.debug("{} - Detected expired session: {}", context.getCluster().getMember().serverAddress(), session.id());
 
         // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
