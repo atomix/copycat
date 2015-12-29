@@ -27,9 +27,9 @@ package io.atomix.copycat.client;
 public interface RecoveryStrategy {
 
   /**
-   * Recovers the session.
+   * Recovers the client.
    *
-   * @param client The client to recover.
+   * @param client The recoverable client.
    */
   void recover(CopycatClient client);
 

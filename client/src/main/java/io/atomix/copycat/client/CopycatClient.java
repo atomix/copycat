@@ -21,6 +21,7 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
+import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.session.Session;
@@ -75,7 +76,29 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface CopycatClient extends Managed<CopycatClient> {
+public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
+
+  /**
+   * Client state.
+   */
+  enum State {
+
+    /**
+     * Indicates that the client is connected and its session is open.
+     */
+    CONNECTED,
+
+    /**
+     * Indicates that the client is suspended and its session may or may not be expired.
+     */
+    SUSPENDED,
+
+    /**
+     * Indicates that the client is closed.
+     */
+    CLOSED
+
+  }
 
   /**
    * Returns a new Copycat client builder.
@@ -106,14 +129,29 @@ public interface CopycatClient extends Managed<CopycatClient> {
   }
 
   /**
+   * Returns the current client state.
+   *
+   * @return The current client state.
+   */
+  State state();
+
+  /**
+   * Registers a callback to be called when the client's state changes.
+   *
+   * @param callback The callback to be called when the client's state changes.
+   * @return The client state change listener.
+   */
+  Listener<State> onStateChange(Consumer<State> callback);
+
+  /**
    * Returns the client execution context.
    * <p>
    * The thread context is the event loop that this client uses to communicate with Copycat servers.
-   * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
-   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
+   * Implementations must guarantee that all asynchronous {@link CompletableFuture} callbacks are
+   * executed on a single thread via the returned {@link ThreadContext}.
    * <p>
-   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Copycat client's internal
-   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}.
+   * The {@link ThreadContext} can also be used to access the Copycat client's internal
+   * {@link Serializer serializer} via {@link ThreadContext#serializer()}.
    *
    * @return The client thread context.
    */
@@ -166,84 +204,10 @@ public interface CopycatClient extends Managed<CopycatClient> {
    * Maintaining the client's session requires that the client be able to communicate with one server that can communicate
    * with the leader at any given time. During periods where the cluster is electing a new leader, the client's session will
    * not timeout but will resume once a new leader is elected.
-   * <p>
-   * Once the client connects to the cluster and opens its session, session listeners registered via {@link Session#onOpen(Consumer)}
-   * will be called. In the event of a session expiration wherein the client fails to communicate with the cluster for at least
-   * a session timeout, the session will be expired and listeners registered via {@link Session#onClose(Consumer)} will be called.
    *
    * @return The client session or {@code null} if no session is open.
    */
   Session session();
-
-  /**
-   * Submits an operation to the Copycat cluster.
-   * <p>
-   * This method is provided for convenience. The submitted {@link Operation} must be an instance
-   * of {@link Command} or {@link Query}.
-   *
-   * @param operation The operation to submit.
-   * @param <T> The operation result type.
-   * @return A completable future to be completed with the operation result.
-   * @throws IllegalArgumentException If the {@link Operation} is not an instance of {@link Command} or {@link Query}.
-   * @throws NullPointerException if {@code operation} is null
-   */
-  default <T> CompletableFuture<T> submit(Operation<T> operation) {
-    Assert.notNull(operation, "operation");
-    if (operation instanceof Command) {
-      return submit((Command<T>) operation);
-    } else if (operation instanceof Query) {
-      return submit((Query<T>) operation);
-    } else {
-      throw new IllegalArgumentException("unknown operation type");
-    }
-  }
-
-  /**
-   * Submits a command to the Copycat cluster.
-   * <p>
-   * Commands are used to alter state machine state. All commands will be forwarded to the current cluster leader.
-   * Once a leader receives the command, it will write the command to its internal {@code Log} and replicate it to a majority
-   * of the cluster. Once the command has been replicated to a majority of the cluster, it will apply the command to its
-   * {@code StateMachine} and respond with the result.
-   * <p>
-   * Once the command has been applied to a server state machine, the returned {@link java.util.concurrent.CompletableFuture}
-   * will be completed with the state machine output.
-   * <p>
-   * Note that all client submissions are guaranteed to be completed in the same order in which they were sent (program order)
-   * and on the same thread. This does not, however, mean that they'll be applied to the server-side replicated state machine
-   * in that order. State machine order is dependent on the configured {@link Command.ConsistencyLevel}.
-   *
-   * @param command The command to submit.
-   * @param <T> The command result type.
-   * @return A completable future to be completed with the command result. The future is guaranteed to be completed after all
-   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
-   * {@link #context()} thread.
-   * @throws NullPointerException if {@code command} is null
-   * @throws IllegalStateException if the {@link #session()} is not open
-   */
-  <T> CompletableFuture<T> submit(Command<T> command);
-
-  /**
-   * Submits a query to the Copycat cluster.
-   * <p>
-   * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
-   * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
-   * and {@link Query.ConsistencyLevel#BOUNDED_LINEARIZABLE} consistency levels, queries will be forwarded
-   * to the cluster leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
-   * by applying queries to an internal server state machine.
-   * <p>
-   * Once the query has been applied to a server state machine, the returned {@link java.util.concurrent.CompletableFuture}
-   * will be completed with the state machine output.
-   *
-   * @param query The query to submit.
-   * @param <T> The query result type.
-   * @return A completable future to be completed with the query result. The future is guaranteed to be completed after all
-   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
-   * {@link #context()} thread.
-   * @throws NullPointerException if {@code query} is null
-   * @throws IllegalStateException if the {@link #session()} is not open
-   */
-  <T> CompletableFuture<T> submit(Query<T> query);
 
   /**
    * Connects the client to the Copycat cluster.
@@ -253,32 +217,21 @@ public interface CopycatClient extends Managed<CopycatClient> {
    *
    * @return A completable future to be completed once the client's {@link #session()} is open.
    */
-  @Override
   CompletableFuture<CopycatClient> open();
 
   /**
-   * Returns a boolean value indicating whether the client is open.
-   * <p>
-   * Whether the client is open depends on whether the client has an open session to the cluster.
+   * Recovers the client session.
    *
-   * @return Indicates whether the client is open.
+   * @return A completable future to be completed once the client's session is recovered.
    */
-  @Override
-  boolean isOpen();
-
-  @Override
-  CompletableFuture<Void> close();
+  CompletableFuture<CopycatClient> recover();
 
   /**
-   * Returns a boolean value indicating whether the client is closed.
-   * <p>
-   * Whether the client is closed depends on whether the client has not connected to the cluster or its session has been
-   * closed or expired.
+   * Closes the client.
    *
-   * @return Indicates whether the client is closed.
+   * @return A completable future to be completed once the client has been closed.
    */
-  @Override
-  boolean isClosed();
+  CompletableFuture<Void> close();
 
   /**
    * Builds a new Copycat client.
@@ -298,6 +251,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
     private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.FOLLOWERS;
+    private RetryStrategy retryStrategy = RetryStrategies.FIBONACCI_BACKOFF;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
     private Builder(Collection<Address> members) {
@@ -346,13 +300,24 @@ public interface CopycatClient extends Managed<CopycatClient> {
     }
 
     /**
-     * Sets the client submission strategy.
+     * Sets the server selection strategy.
      *
-     * @param serverSelectionStrategy The client submission strategy.
+     * @param serverSelectionStrategy The server selection strategy.
      * @return The client builder.
      */
-    public Builder withSubmissionStrategy(ServerSelectionStrategy serverSelectionStrategy) {
-      this.serverSelectionStrategy = Assert.notNull(serverSelectionStrategy, "submissionStrategy");
+    public Builder withServerSelectionStrategy(ServerSelectionStrategy serverSelectionStrategy) {
+      this.serverSelectionStrategy = Assert.notNull(serverSelectionStrategy, "serverSelectionStrategy");
+      return this;
+    }
+
+    /**
+     * Sets the operation retry strategy.
+     *
+     * @param retryStrategy The operation retry strategy.
+     * @return The client builder.
+     */
+    public Builder withRetryStrategy(RetryStrategy retryStrategy) {
+      this.retryStrategy = Assert.notNull(retryStrategy, "retryStrategy");
       return this;
     }
 
@@ -386,7 +351,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
       if (serializer == null) {
         serializer = new Serializer();
       }
-      return new DefaultCopycatClient(transport, members, serializer, connectionStrategy, serverSelectionStrategy, recoveryStrategy);
+      return new DefaultCopycatClient(transport, members, serializer, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
     }
   }
 

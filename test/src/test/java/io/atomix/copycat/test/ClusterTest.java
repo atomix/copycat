@@ -66,7 +66,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
     clients.add(client);
@@ -112,7 +112,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
       // Create a new client each time a server is removed and verify that all values are present.
       CopycatClient client2 = CopycatClient.builder(m1.clientAddress(), m2.clientAddress(), m3.clientAddress())
-        .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+        .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
         .withTransport(new LocalTransport(registry))
         .build();
       clients.add(client2);
@@ -225,7 +225,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
     clients.add(client);
@@ -259,7 +259,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatClient client = createClient();
     Thread.sleep(Duration.ofSeconds(10).toMillis());
-    threadAssertTrue(client.session().isOpen());
+    threadAssertTrue(client.isOpen());
   }
 
   /**
@@ -1262,7 +1262,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
       .withTransport(new LocalTransport(registry))
-      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .build();
     client.open().thenRun(this::resume);
     await(30000);

@@ -39,13 +39,13 @@ public enum RecoveryStrategies implements RecoveryStrategy {
   },
 
   /**
-   * The {@code RECOVER} strategy handles expired client sessions by opening a new session. Linearizable semantics
+   * The {@code RECOVER} strategy handles expired client sessions by recovering the session. Linearizable semantics
    * will be lost between commands across sessions.
    */
   RECOVER {
     @Override
     public void recover(CopycatClient client) {
-      client.open();
+      client.recover();
     }
   }
 

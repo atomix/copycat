@@ -18,21 +18,22 @@ package io.atomix.copycat.client;
 import java.time.Duration;
 
 /**
- * Connection strategies define how clients should handle initializing connections to the cluster.
+ * Operation retry strategy.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface ConnectionStrategy {
+public interface RetryStrategy {
 
   /**
-   * Called when an attempt to connect to the cluster fails.
+   * Called when an operation attempt fails.
    *
-   * @param attempt The failed attempt.
+   * @param attempt The operation attempt.
+   * @param cause The cause of the failure.
    */
-  void attemptFailed(Attempt attempt);
+  void attemptFailed(Attempt attempt, Throwable cause);
 
   /**
-   * Represents a failed attempt at connecting to the server.
+   * Operation attempt.
    */
   interface Attempt {
 
@@ -44,26 +45,33 @@ public interface ConnectionStrategy {
     int attempt();
 
     /**
-     * Fails the connection attempt.
+     * Returns the attempted operation.
+     *
+     * @return The attempted operation.
+     */
+    Operation<?> operation();
+
+    /**
+     * Fails the operation.
      */
     void fail();
 
     /**
-     * Fails the connection attempt with the given exception.
+     * Fails the operation with a specific exception.
      *
-     * @param error The exception with which to fail the attempt.
+     * @param t The exception with which to fail the operation.
      */
-    void fail(Throwable error);
+    void fail(Throwable t);
 
     /**
-     * Retries connecting to the cluster.
+     * Immediately retries the operation.
      */
     void retry();
 
     /**
-     * Retries connecting to the cluster after the given duration.
+     * Retries the operation after the given duration.
      *
-     * @param after The duration after which to retry the connect attempt.
+     * @param after The duration after which to retry the operation.
      */
     void retry(Duration after);
 

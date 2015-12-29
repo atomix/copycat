@@ -29,15 +29,76 @@ import java.util.Iterator;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class AddressSelector implements Iterator<Address> {
+
+  /**
+   * Address selector state.
+   */
+  public enum State {
+
+    /**
+     * Indicates that the selector has been reset.
+     */
+    RESET,
+
+    /**
+     * Indicates that the selector is being iterated.
+     */
+    ITERATE,
+
+    /**
+     * Indicates that selector iteration is complete.
+     */
+    COMPLETE
+
+  }
+
   private Address leader;
   private Collection<Address> servers;
   private final ServerSelectionStrategy strategy;
   private Iterable<Address> selections;
   private Iterator<Address> selectionsIterator;
 
-  public AddressSelector(Collection<Address> servers, ServerSelectionStrategy strategy) {
+  public AddressSelector(Collection<Address> servers, ServerSelectionStrategy selectionStrategy) {
+    this(null, servers, selectionStrategy);
+  }
+
+  public AddressSelector(Address leader, Collection<Address> servers, ServerSelectionStrategy strategy) {
+    this.leader = leader;
     this.servers = Assert.argNot(servers, Assert.notNull(servers, "servers").isEmpty(), "servers list cannot be empty");
     this.strategy = Assert.notNull(strategy, "strategy");
+  }
+
+  /**
+   * Returns the address selector state.
+   *
+   * @return The address selector state.
+   */
+  public State state() {
+    if (selectionsIterator == null) {
+      return State.RESET;
+    } else if (hasNext()) {
+      return State.ITERATE;
+    } else {
+      return State.COMPLETE;
+    }
+  }
+
+  /**
+   * Returns the current selector leader.
+   *
+   * @return The current selector leader.
+   */
+  public Address leader() {
+    return leader;
+  }
+
+  /**
+   * Returns the current set of servers.
+   *
+   * @return The current set of servers.
+   */
+  public Collection<Address> servers() {
+    return servers;
   }
 
   /**
@@ -60,15 +121,48 @@ public class AddressSelector implements Iterator<Address> {
    * @return The address selector.
    */
   public AddressSelector reset(Address leader, Collection<Address> servers) {
+    if (changed(leader, servers)) {
+      this.leader = leader;
+      this.servers = servers;
+      this.selections = strategy.selectConnections(leader, new ArrayList<>(servers));
+      this.selectionsIterator = null;
+    }
+    return this;
+  }
+
+  /**
+   * Returns a boolean value indicating whether the selector state would be changed by the given members.
+   */
+  private boolean changed(Address leader, Collection<Address> servers) {
     Assert.notNull(servers, "servers");
     Assert.argNot(servers.isEmpty(), "servers list cannot be empty");
-    if (leader != null)
+    if (this.leader != null && leader == null) {
+      return true;
+    } else if (this.leader == null && leader != null) {
       Assert.arg(servers.contains(leader), "leader must be present in servers list");
-    this.leader = leader;
-    this.servers = servers;
-    this.selections = strategy.selectConnections(leader, new ArrayList<>(servers));
-    this.selectionsIterator = null;
-    return this;
+      return true;
+    } else if (this.leader != null && !this.leader.equals(leader)) {
+      Assert.arg(servers.contains(leader), "leader must be present in servers list");
+      return true;
+    } else if (!matches(this.servers, servers)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns a boolean value indicating whether the servers in the first list match the servers in the second list.
+   */
+  private boolean matches(Collection<Address> left, Collection<Address> right) {
+    if (left.size() != right.size())
+      return false;
+
+    for (Address address : left) {
+      if (!right.contains(address)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override
