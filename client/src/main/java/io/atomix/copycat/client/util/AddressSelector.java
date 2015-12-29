@@ -66,6 +66,7 @@ public class AddressSelector implements Iterator<Address> {
     this.leader = leader;
     this.servers = Assert.argNot(servers, Assert.notNull(servers, "servers").isEmpty(), "servers list cannot be empty");
     this.strategy = Assert.notNull(strategy, "strategy");
+    this.selections = strategy.selectConnections(leader, new ArrayList<>(servers));
   }
 
   /**

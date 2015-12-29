@@ -15,7 +15,12 @@
  */
 package io.atomix.copycat.client.util;
 
+import io.atomix.catalyst.transport.Address;
+import io.atomix.copycat.client.ServerSelectionStrategies;
 import org.testng.annotations.Test;
+
+import java.util.Arrays;
+import java.util.Collection;
 
 import static org.testng.Assert.*;
 
@@ -27,5 +32,72 @@ import static org.testng.Assert.*;
 @Test
 public class AddressSelectorTest {
 
+  /**
+   * Tests iterating an address selector.
+   */
+  public void testIterate() throws Throwable {
+    Collection<Address> servers = Arrays.asList(
+      new Address("localhost", 5000),
+      new Address("localhost", 5001),
+      new Address("localhost", 5002)
+    );
+
+    AddressSelector selector = new AddressSelector(servers, ServerSelectionStrategies.ANY);
+    assertNull(selector.leader());
+    assertEquals(selector.servers(), servers);
+    assertEquals(selector.state(), AddressSelector.State.RESET);
+    assertTrue(selector.hasNext());
+    assertNotNull(selector.next());
+    assertEquals(selector.state(), AddressSelector.State.ITERATE);
+    assertTrue(selector.hasNext());
+    assertNotNull(selector.next());
+    assertTrue(selector.hasNext());
+    assertNotNull(selector.next());
+    assertFalse(selector.hasNext());
+    assertEquals(selector.state(), AddressSelector.State.COMPLETE);
+  }
+
+  /**
+   * Tests resetting an address selector.
+   */
+  public void testReset() throws Throwable {
+    Collection<Address> servers = Arrays.asList(
+      new Address("localhost", 5000),
+      new Address("localhost", 5001),
+      new Address("localhost", 5002)
+    );
+
+    AddressSelector selector = new AddressSelector(servers, ServerSelectionStrategies.ANY);
+    selector.next();
+    selector.next();
+    selector.next();
+    assertFalse(selector.hasNext());
+    selector.reset();
+    assertTrue(selector.hasNext());
+    assertEquals(selector.state(), AddressSelector.State.RESET);
+    selector.next();
+    assertEquals(selector.state(), AddressSelector.State.ITERATE);
+  }
+
+  /**
+   * Tests updating the members in a selector.
+   */
+  public void testUpdate() throws Throwable {
+    Collection<Address> servers = Arrays.asList(
+      new Address("localhost", 5000),
+      new Address("localhost", 5001),
+      new Address("localhost", 5002)
+    );
+
+    AddressSelector selector = new AddressSelector(servers, ServerSelectionStrategies.ANY);
+    assertNull(selector.leader());
+    assertEquals(selector.servers(), servers);
+    selector.next();
+    assertEquals(selector.state(), AddressSelector.State.ITERATE);
+    selector.reset(new Address("localhost", 5000), servers);
+    assertEquals(selector.leader(), new Address("localhost", 5000));
+    assertEquals(selector.servers(), servers);
+    assertEquals(selector.state(), AddressSelector.State.RESET);
+  }
 
 }
