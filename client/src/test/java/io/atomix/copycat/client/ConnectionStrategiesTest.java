@@ -44,16 +44,27 @@ public class ConnectionStrategiesTest {
    */
   public void testConnectExponentialBackoffStrategy() throws Throwable {
     ConnectionStrategy strategy = ConnectionStrategies.EXPONENTIAL_BACKOFF;
-    ConnectionStrategy.Attempt attempt = mock(ConnectionStrategy.Attempt.class);
-    when(attempt.attempt()).thenReturn(1).thenReturn(2).thenReturn(3).thenReturn(4);
+    ConnectionStrategy.Attempt attempt;
+    attempt = mock(ConnectionStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(1);
     strategy.attemptFailed(attempt);
     verify(attempt).retry(Duration.ofSeconds(2));
-    strategy.attemptFailed(attempt);
-    verify(attempt).retry(Duration.ofSeconds(2));
+    attempt = mock(ConnectionStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(2);
     strategy.attemptFailed(attempt);
     verify(attempt).retry(Duration.ofSeconds(4));
+    attempt = mock(ConnectionStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(3);
     strategy.attemptFailed(attempt);
     verify(attempt).retry(Duration.ofSeconds(8));
+    attempt = mock(ConnectionStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(4);
+    strategy.attemptFailed(attempt);
+    verify(attempt).retry(Duration.ofSeconds(16));
+    attempt = mock(ConnectionStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(5);
+    strategy.attemptFailed(attempt);
+    verify(attempt).retry(Duration.ofSeconds(32));
   }
 
   /**

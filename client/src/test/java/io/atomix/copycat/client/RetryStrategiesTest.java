@@ -17,6 +17,10 @@ package io.atomix.copycat.client;
 
 import org.testng.annotations.Test;
 
+import java.time.Duration;
+
+import static org.mockito.Mockito.*;
+
 /**
  * Retries strategies tests.
  *
@@ -24,4 +28,82 @@ import org.testng.annotations.Test;
  */
 @Test
 public class RetryStrategiesTest {
+
+  /**
+   * Tests the fail retry strategy.
+   * @throws Throwable
+   */
+  public void testRetryFailStrategy() throws Throwable {
+    RetryStrategy strategy = RetryStrategies.FAIL;
+    RetryStrategy.Attempt attempt = mock(RetryStrategy.Attempt.class);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).fail(any());
+  }
+
+  /**
+   * Tests the retry strategy.
+   */
+  public void testRetryStrategy() throws Throwable {
+    RetryStrategy strategy = RetryStrategies.RETRY;
+    RetryStrategy.Attempt attempt = mock(RetryStrategy.Attempt.class);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry();
+  }
+
+  /**
+   * Tests the exponential backoff strategy.
+   */
+  public void testRetryExponentialBackoffStrategy() throws Throwable {
+    RetryStrategy strategy = RetryStrategies.EXPONENTIAL_BACKOFF;
+    RetryStrategy.Attempt attempt;
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(1);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(2));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(2);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(4));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(3);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(5));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(4);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(5));
+  }
+
+  /**
+   * Tests the fibonacci backoff strategy.
+   */
+  public void testRetryFibonacciBackoffStrategy() throws Throwable {
+    RetryStrategy strategy = RetryStrategies.FIBONACCI_BACKOFF;
+    RetryStrategy.Attempt attempt;
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(1);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(1));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(2);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(1));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(3);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(2));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(4);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(3));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(5);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(5));
+    attempt = mock(RetryStrategy.Attempt.class);
+    when(attempt.attempt()).thenReturn(6);
+    strategy.attemptFailed(attempt, new Exception());
+    verify(attempt).retry(Duration.ofSeconds(5));
+  }
+
 }
