@@ -52,14 +52,14 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy, retryStrategy);
+    this(new ClientConnection(id, client, selector), selector, new ClientSessionState(id), context, connectionStrategy, retryStrategy);
   }
 
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
+  private ClientSession(ClientConnection connection, AddressSelector selector, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
     Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
-    this.manager = new ClientSessionManager(connection, state, context, connectionStrategy);
+    this.manager = new ClientSessionManager(connection, selector, state, context, connectionStrategy);
     this.listener = new ClientSessionListener(connection, state, context);
     this.submitter = new ClientSessionSubmitter(connection, state, context, retryStrategy);
   }

@@ -54,6 +54,8 @@ public class ClientSessionStateTest {
   public void testSessionState() {
     ClientSessionState state = new ClientSessionState(UUID.randomUUID());
     assertEquals(state.setSessionId(1).getSessionId(), 1);
+    assertEquals(state.getEventIndex(), 1);
+    assertEquals(state.getCompleteIndex(), 1);
     assertEquals(state.setState(Session.State.OPEN).getState(), Session.State.OPEN);
     assertEquals(state.setCommandRequest(2).getCommandRequest(), 2);
     assertEquals(state.nextCommandRequest(), 3);

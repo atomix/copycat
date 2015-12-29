@@ -17,7 +17,6 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategy;
@@ -28,14 +27,13 @@ import io.atomix.copycat.client.response.KeepAliveResponse;
 import io.atomix.copycat.client.response.RegisterResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.response.UnregisterResponse;
+import io.atomix.copycat.client.util.AddressSelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.ConnectException;
 import java.time.Duration;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * Client session manager.
@@ -44,18 +42,17 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 final class ClientSessionManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientSessionManager.class);
-  private static final int MAX_FAILURES = 1;
   private final ClientSessionState state;
   private final Connection connection;
+  private final AddressSelector selector;
   private final ThreadContext context;
   private final ConnectionStrategy strategy;
-  private final Set<Listener<Session.State>> changeListeners = new CopyOnWriteArraySet<>();
   private Duration interval;
   private Scheduled keepAlive;
-  private int failures;
 
-  ClientSessionManager(Connection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
+  ClientSessionManager(Connection connection, AddressSelector selector, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
     this.connection = Assert.notNull(connection, "connection");
+    this.selector = Assert.notNull(selector, "selector");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.strategy = Assert.notNull(connectionStrategy, "connectionStrategy");
@@ -84,9 +81,8 @@ final class ClientSessionManager {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           interval = Duration.ofMillis(response.timeout()).dividedBy(2);
+          selector.reset(response.leader(), response.members());
           state.setSessionId(response.session())
-            .setEventIndex(response.session())
-            .setCompleteIndex(response.session())
             .setState(Session.State.OPEN);
           attempt.complete();
           keepAlive();
@@ -110,20 +106,16 @@ final class ClientSessionManager {
       .withEventIndex(state.getCompleteIndex())
       .build();
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
-      if (error == null) {
-        if (response.status() == Response.Status.OK) {
-          failures = 0;
-          keepAlive = context.schedule(interval, this::keepAlive);
-        } else if (failures == MAX_FAILURES) {
-          state.setState(Session.State.EXPIRED);
+      if (state.getState() != Session.State.CLOSED) {
+        if (error == null) {
+          if (response.status() == Response.Status.OK) {
+            selector.reset(response.leader(), response.members());
+          } else {
+            state.setState(Session.State.UNSTABLE);
+          }
         } else {
-          failures++;
-          keepAlive = context.schedule(interval, this::keepAlive);
+          state.setState(Session.State.UNSTABLE);
         }
-      } else if (failures == MAX_FAILURES) {
-        state.setState(Session.State.EXPIRED);
-      } else {
-        failures++;
         keepAlive = context.schedule(interval, this::keepAlive);
       }
     });
@@ -157,23 +149,19 @@ final class ClientSessionManager {
       .withSession(sessionId)
       .build();
     connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
-      if (error == null) {
-        if (response.status() == Response.Status.OK) {
-          state.setState(Session.State.CLOSED);
-          future.complete(null);
-        } else if (failures == MAX_FAILURES) {
-          state.setState(Session.State.EXPIRED);
-          future.completeExceptionally(new IllegalStateException("failed to unregister session"));
+      if (state.getState() != Session.State.CLOSED) {
+        if (error == null) {
+          if (response.status() == Response.Status.OK) {
+            state.setState(Session.State.CLOSED);
+            future.complete(null);
+          } else {
+            state.setState(Session.State.UNSTABLE);
+            keepAlive = context.schedule(interval, () -> unregister(future));
+          }
         } else {
-          failures++;
+          state.setState(Session.State.UNSTABLE);
           keepAlive = context.schedule(interval, () -> unregister(future));
         }
-      } else if (failures == MAX_FAILURES) {
-        state.setState(Session.State.EXPIRED);
-        future.completeExceptionally(new IllegalStateException("failed to unregister session"));
-      } else {
-        failures++;
-        keepAlive = context.schedule(interval, () -> unregister(future));
       }
     });
   }

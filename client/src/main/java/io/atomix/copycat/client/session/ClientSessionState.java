@@ -60,6 +60,8 @@ final class ClientSessionState {
    */
   public ClientSessionState setSessionId(long sessionId) {
     this.sessionId = sessionId;
+    this.eventIndex = sessionId;
+    this.completeIndex = sessionId;
     return this;
   }
 
