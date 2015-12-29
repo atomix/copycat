@@ -141,6 +141,7 @@ public class ClientSessionSubmitter {
     if (state.getState() == Session.State.CLOSED || state.getState() == Session.State.EXPIRED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
+      state.getLogger().debug("{} - Sending {}", state.getSessionId(), attempt.request);
       connection.<T, U>send(attempt.request).whenComplete(attempt);
     }
   }
@@ -183,10 +184,11 @@ public class ClientSessionSubmitter {
     @Override
     public void accept(U response, Throwable error) {
       if (error == null) {
+        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
-          sequence(() -> complete(response));
+          complete(response);
         } else if (response.error() == RaftError.Type.COMMAND_ERROR || response.error() == RaftError.Type.QUERY_ERROR || response.error() == RaftError.Type.APPLICATION_ERROR) {
-          sequence(() -> complete(response.error().createException()));
+          complete(response.error().createException());
         } else if (response.error() != RaftError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
@@ -239,7 +241,7 @@ public class ClientSessionSubmitter {
 
     @Override
     public void fail(Throwable t) {
-      sequence(() -> complete(t));
+      complete(t);
     }
 
     @Override
@@ -278,14 +280,16 @@ public class ClientSessionSubmitter {
     @Override
     @SuppressWarnings("unchecked")
     protected void complete(CommandResponse response) {
-      state.setCommandResponse(request.sequence());
-      state.setResponseIndex(response.index());
-      future.complete((T) response.result());
+      sequence(() -> {
+        state.setCommandResponse(request.sequence());
+        state.setResponseIndex(response.index());
+        future.complete((T) response.result());
+      });
     }
 
     @Override
     protected void complete(Throwable error) {
-      future.completeExceptionally(error);
+      sequence(() -> future.completeExceptionally(error));
     }
   }
 
@@ -316,8 +320,10 @@ public class ClientSessionSubmitter {
     protected void complete(QueryResponse response) {
       // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
       if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-        state.setResponseIndex(response.index());
-        future.complete((T) response.result());
+        sequence(() -> {
+          state.setResponseIndex(response.index());
+          future.complete((T) response.result());
+        });
       }
       // If the query consistency level is strong, the query must be executed sequentially. In order to ensure responses
       // are received in a sequential manner, we compare the response index number with the highest index for which
@@ -326,8 +332,10 @@ public class ClientSessionSubmitter {
         if (response.index() > 0 && response.index() < state.getResponseIndex()) {
           retry();
         } else {
-          state.setResponseIndex(response.index());
-          future.complete((T) response.result());
+          sequence(() -> {
+            state.setResponseIndex(response.index());
+            future.complete((T) response.result());
+          });
         }
       }
     }
