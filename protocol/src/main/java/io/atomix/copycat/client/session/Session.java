@@ -37,7 +37,7 @@ import java.util.function.Consumer;
  * via the {@link Session} are guaranteed to arrive on the other side of the connection exactly once and in the order
  * in which they are sent by replicated state machines. In the event of a server-to-client message being lost, the
  * message will be resent so long as at least one Raft server is able to communicate with the client and the client's
- * session does not {@link #isExpired() expire} while switching between servers.
+ * session does not expire while switching between servers.
  * <p>
  * Messages are sent to the other side of the session using the {@link #publish(String, Object)} method:
  * <pre>
@@ -62,6 +62,33 @@ import java.util.function.Consumer;
 public interface Session {
 
   /**
+   * Session state.
+   */
+  enum State {
+
+    /**
+     * Indicates that the session is connected and open.
+     */
+    OPEN,
+
+    /**
+     * Indicates that the session in an unstable state.
+     */
+    UNSTABLE,
+
+    /**
+     * Indicates that the session is expired.
+     */
+    EXPIRED,
+
+    /**
+     * Indicates that the session has been closed.
+     */
+    CLOSED
+
+  }
+
+  /**
    * Returns the session ID.
    * <p>
    * The session ID is unique to an individual session within the cluster. That is, it is guaranteed that
@@ -72,24 +99,19 @@ public interface Session {
   long id();
 
   /**
-   * Returns a boolean value indicating whether the session is open.
+   * Returns the current session state.
    *
-   * @return Indicates whether the session is open.
+   * @return The current session state.
    */
-  boolean isOpen();
+  State state();
 
   /**
-   * Sets an open listener on the session.
-   * <p>
-   * The provided {@link Consumer} will be {@link Consumer#accept(Object) called} once the session has
-   * been registered with the Raft cluster. If the session is already {@link #isOpen() open} at the time
-   * of this method call, the provided {@link Consumer} will be immediately called in the session thread.
+   * Registers a callback to be called when the session state changes.
    *
-   * @param listener The session open listener.
-   * @return The listener context.
-   * @throws NullPointerException if {@code listener} is null
+   * @param callback The callback to be called when the session state changes.
+   * @return The state change listener.
    */
-  Listener<Session> onOpen(Consumer<Session> listener);
+  Listener<State> onStateChange(Consumer<State> callback);
 
   /**
    * Publishes a {@code null} named event to the session.
@@ -99,7 +121,7 @@ public interface Session {
    * to send events from the client-side of the session will result in the event being handled by the client,
    * Sessions guarantee serializable consistency. If an event is sent from a Raft server to a client that is
    * disconnected or otherwise can't receive the event, the event will be resent once the client connects to
-   * another server as long as its session has not {@link #isExpired() expired}.
+   * another server as long as its session has not expired.
    * <p>
    * Event messages must be serializable. For fast serialization, message types should implement
    * {@link io.atomix.catalyst.serializer.CatalystSerializable} or register a custom
@@ -126,7 +148,7 @@ public interface Session {
    * to send events from the client-side of the session will result in the event being handled by the client,
    * Sessions guarantee serializable consistency. If an event is sent from a Raft server to a client that is
    * disconnected or otherwise can't receive the event, the event will be resent once the client connects to
-   * another server as long as its session has not {@link #isExpired() expired}.
+   * another server as long as its session has not expired.
    * <p>
    * Event messages must be serializable. For fast serialization, message types should implement
    * {@link io.atomix.catalyst.serializer.CatalystSerializable} or register a custom
@@ -180,37 +202,5 @@ public interface Session {
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
   <T> Listener<T> onEvent(String event, Consumer<T> callback);
-
-  /**
-   * Sets a session close listener.
-   * <p>
-   * The registered close {@link Consumer} will be {@link Consumer#accept(Object) called} once the session
-   * is closed either via an explicit invocation of a {@link io.atomix.catalyst.util.Managed} session or
-   * by a session {@link #isExpired() expiration}. If the session was closed normally, {@link #isClosed()}
-   * will return {@code true} and {@link #isExpired()} will {@code false}, otherwise if the session expired
-   * then both will return {@code true}.
-   *
-   * @param listener The session close listener.
-   * @return The session.
-   * @throws NullPointerException if {@code listener} is null
-   */
-  Listener<Session> onClose(Consumer<Session> listener);
-
-  /**
-   * Returns a boolean value indicating whether the session is closed.
-   * <p>
-   * This method will return {@code true} if the session was closed via normal means or via a session
-   * {@link #isExpired() expiration}. To determine whether the session expired use {@link #isExpired()}.
-   *
-   * @return Indicates whether the session is closed.
-   */
-  boolean isClosed();
-
-  /**
-   * Returns a boolean value indicating whether the session is expired.
-   *
-   * @return Indicates whether the session is expired.
-   */
-  boolean isExpired();
 
 }
