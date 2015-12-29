@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 final class ClientSessionState {
   private final UUID clientId;
   private volatile long sessionId;
-  private Session.State state = Session.State.CLOSED;
+  private volatile Session.State state = Session.State.CLOSED;
   private long commandRequest;
   private long commandResponse;
   private long responseIndex;

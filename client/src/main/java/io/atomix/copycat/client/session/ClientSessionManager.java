@@ -65,7 +65,7 @@ final class ClientSessionManager {
    */
   public CompletableFuture<Void> open() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    register(new RegisterAttempt(1, 0, future));
+    context.executor().execute(() -> register(new RegisterAttempt(1, 0, future)));
     return future;
   }
 
@@ -128,9 +128,10 @@ final class ClientSessionManager {
    */
   public CompletableFuture<Void> close() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    keepAlive.cancel();
-    state.setState(Session.State.CLOSED);
-    unregister(future);
+    context.executor().execute(() -> {
+      keepAlive.cancel();
+      unregister(future);
+    });
     return future;
   }
 
