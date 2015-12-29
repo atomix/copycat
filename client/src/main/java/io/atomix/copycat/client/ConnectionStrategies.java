@@ -40,7 +40,7 @@ public enum ConnectionStrategies implements ConnectionStrategy {
   EXPONENTIAL_BACKOFF {
     @Override
     public void attemptFailed(Attempt attempt) {
-      attempt.retry(Duration.ofSeconds(Math.min(Math.round(Math.pow(attempt.attempt(), 2)), 60)));
+      attempt.retry(Duration.ofSeconds(Math.min(Math.round(Math.pow(2, attempt.attempt())), 60)));
     }
   },
 
