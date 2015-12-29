@@ -418,16 +418,7 @@ final class ServerStateMachine implements AutoCloseable {
     // Allow the executor to execute any scheduled events.
     long timestamp = executor.tick(entry.getTimestamp());
 
-    // Clients can request a specific session ID. If no session ID was provided, use the log entry index.
-    long sessionId = entry.getSession() != 0 ? entry.getSession() : entry.getIndex();
-
-    // If a session with the given session ID already exists, simply complete the registration.
-    ServerSession existingSession = executor.context().sessions().getSession(sessionId);
-    if (existingSession != null) {
-      existingSession.setTimestamp(timestamp).trust();
-      return Futures.completedFuture(sessionId);
-    }
-
+    long sessionId = entry.getIndex();
     ServerSession session = new ServerSession(sessionId, entry.getClient(), executor.context(), entry.getTimeout());
     executor.context().sessions().registerSession(session);
 

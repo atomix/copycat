@@ -65,7 +65,7 @@ final class ClientSessionManager {
    */
   public CompletableFuture<Void> open() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.executor().execute(() -> register(new RegisterAttempt(1, 0, future)));
+    context.executor().execute(() -> register(new RegisterAttempt(1, future)));
     return future;
   }
 
@@ -75,7 +75,6 @@ final class ClientSessionManager {
   private void register(RegisterAttempt attempt) {
     RegisterRequest request = RegisterRequest.builder()
       .withClient(state.getClientId())
-      .withSession(attempt.session)
       .build();
     connection.<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
@@ -177,12 +176,10 @@ final class ClientSessionManager {
    */
   private final class RegisterAttempt implements ConnectionStrategy.Attempt {
     private final int attempt;
-    private final long session;
     private final CompletableFuture<Void> future;
 
-    private RegisterAttempt(int attempt, long session, CompletableFuture<Void> future) {
+    private RegisterAttempt(int attempt, CompletableFuture<Void> future) {
       this.attempt = attempt;
-      this.session = session;
       this.future = future;
     }
 
@@ -220,13 +217,13 @@ final class ClientSessionManager {
     @Override
     public void retry() {
       LOGGER.debug("Retrying session register attempt");
-      register(new RegisterAttempt(attempt + 1, session, future));
+      register(new RegisterAttempt(attempt + 1, future));
     }
 
     @Override
     public void retry(Duration after) {
       LOGGER.debug("Retrying session register attempt");
-      context.schedule(after, () -> register(new RegisterAttempt(attempt + 1, session, future)));
+      context.schedule(after, () -> register(new RegisterAttempt(attempt + 1, future)));
     }
   }
 

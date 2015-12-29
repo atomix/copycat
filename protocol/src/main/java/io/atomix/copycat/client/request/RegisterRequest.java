@@ -36,7 +36,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=199)
-public class RegisterRequest extends SessionRequest<RegisterRequest> {
+public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
   /**
    * Returns a new register client request builder.
@@ -97,13 +97,13 @@ public class RegisterRequest extends SessionRequest<RegisterRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s[client=%s, session=%d]", getClass().getSimpleName(), client, session);
+    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
   }
 
   /**
    * Register client request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, RegisterRequest> {
+  public static class Builder extends AbstractRequest.Builder<Builder, RegisterRequest> {
     protected Builder(RegisterRequest request) {
       super(request);
     }

@@ -67,7 +67,7 @@ public abstract class SessionRequest<T extends SessionRequest<T>> extends Abstra
      */
     @SuppressWarnings("unchecked")
     public T withSession(long session) {
-      request.session = Assert.argNot(session, session < 0, "session must not be negative");
+      request.session = Assert.argNot(session, session < 1, "session cannot be less than 1");
       return (T) this;
     }
 
