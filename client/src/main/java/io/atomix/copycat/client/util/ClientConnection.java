@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.ConnectException;
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -41,7 +42,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class ClientConnection implements Connection {
+public class ClientConnection implements Connection {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnection.class);
   private final UUID id;
   private final Client client;
@@ -55,6 +56,46 @@ public final class ClientConnection implements Connection {
     this.id = Assert.notNull(id, "id");
     this.client = Assert.notNull(client, "client");
     this.selector = Assert.notNull(selector, "selector");
+  }
+
+  /**
+   * Returns the current selector leader.
+   *
+   * @return The current selector leader.
+   */
+  public Address leader() {
+    return selector.leader();
+  }
+
+  /**
+   * Returns the current set of servers.
+   *
+   * @return The current set of servers.
+   */
+  public Collection<Address> servers() {
+    return selector.servers();
+  }
+
+  /**
+   * Resets the client connection.
+   *
+   * @return The client connection.
+   */
+  public ClientConnection reset() {
+    selector.reset();
+    return this;
+  }
+
+  /**
+   * Resets the client connection.
+   *
+   * @param leader The current cluster leader.
+   * @param servers The current servers.
+   * @return The client connection.
+   */
+  public ClientConnection reset(Address leader, Collection<Address> servers) {
+    selector.reset(leader, servers);
+    return this;
   }
 
   @Override
@@ -80,7 +121,11 @@ public final class ClientConnection implements Connection {
   private <T extends Request<T>, U extends Response<U>> void sendRequest(T request, Connection connection, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
-        connection.<T, U>send(request).whenComplete((r, e) -> handleResponse(request, r, e, future));
+        if (connection != null) {
+          connection.<T, U>send(request).whenComplete((r, e) -> handleResponse(request, r, e, future));
+        } else {
+          future.completeExceptionally(new ConnectException("failed to connect"));
+        }
       } else {
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       }
@@ -145,7 +190,8 @@ public final class ClientConnection implements Connection {
    */
   private void connect(CompletableFuture<Connection> future) {
     if (!selector.hasNext()) {
-      future.completeExceptionally(new ConnectException("failed to connect to the cluster"));
+      LOGGER.debug("Failed to connect to the cluster");
+      future.complete(null);
     } else {
       Address address = selector.next();
       LOGGER.debug("Connecting to {}", address);
@@ -202,11 +248,12 @@ public final class ClientConnection implements Connection {
    * Handles a connect response.
    */
   private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<Connection> future) {
-    if (open && connectFuture != null) {
+    if (open) {
       if (error == null) {
         // If the connection was successfully created, immediately send a keep-alive request
         // to the server to ensure we maintain our session and get an updated list of server addresses.
         if (response.status() == Response.Status.OK) {
+          selector.reset(response.leader(), response.members());
           future.complete(connection);
         } else {
           connect(future);

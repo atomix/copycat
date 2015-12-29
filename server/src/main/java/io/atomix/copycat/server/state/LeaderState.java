@@ -651,7 +651,14 @@ final class LeaderState extends ActiveState {
       .withAddress(context.getCluster().getMember().serverAddress())
       .build();
     return accept(acceptRequest)
-      .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
+      .thenApply(acceptResponse -> ConnectResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withLeader(context.getCluster().getMember().clientAddress())
+        .withMembers(context.getCluster().getMembers().stream()
+          .map(Member::clientAddress)
+          .filter(m -> m != null)
+          .collect(Collectors.toList()))
+        .build())
       .thenApply(this::logResponse);
   }
 

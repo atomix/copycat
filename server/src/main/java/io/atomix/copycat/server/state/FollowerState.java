@@ -32,6 +32,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 /**
  * Follower state.
@@ -90,7 +91,14 @@ final class FollowerState extends ActiveState {
         .withAddress(context.getCluster().getMember().serverAddress())
         .build();
       return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
-        .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
+        .thenApply(acceptResponse -> ConnectResponse.builder()
+          .withStatus(Response.Status.OK)
+          .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
+          .withMembers(context.getCluster().getMembers().stream()
+            .map(Member::clientAddress)
+            .filter(m -> m != null)
+            .collect(Collectors.toList()))
+          .build())
         .thenApply(this::logResponse);
     }
   }
