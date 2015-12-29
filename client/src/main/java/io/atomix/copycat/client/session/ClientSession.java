@@ -39,6 +39,7 @@ import java.util.function.Consumer;
 public class ClientSession implements Session, Managed<Session> {
   private final ClientSessionState state;
   private final ThreadContext context;
+  private final ClientConnection connection;
   private final ClientSessionManager manager;
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
@@ -53,6 +54,7 @@ public class ClientSession implements Session, Managed<Session> {
 
   private ClientSession(ClientConnection connection, AddressSelector selector, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
     Assert.notNull(connection, "connection");
+    this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.manager = new ClientSessionManager(connection, selector, state, context, connectionStrategy);
@@ -144,6 +146,7 @@ public class ClientSession implements Session, Managed<Session> {
       return submitter.close()
         .thenCompose(v -> listener.close())
         .thenCompose(v -> manager.close())
+        .thenCompose(v -> connection.close())
         .whenCompleteAsync((result, error) -> this.context.close(), context.executor());
     } else {
       return submitter.close()
