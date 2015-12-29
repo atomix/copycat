@@ -27,10 +27,8 @@ import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
 
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
 /**
@@ -44,8 +42,6 @@ public class ClientSession implements Session, Managed<Session> {
   private final ClientSessionManager manager;
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
-  private final Set<ManagerListener> openListeners = new CopyOnWriteArraySet<>();
-  private final Set<ManagerListener> closeListeners = new CopyOnWriteArraySet<>();
 
   public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
     this(UUID.randomUUID(), client, selector, context, connectionStrategy, retryStrategy);
@@ -160,52 +156,6 @@ public class ClientSession implements Session, Managed<Session> {
   @Override
   public boolean isClosed() {
     return state.getState() == State.EXPIRED || state.getState() == State.CLOSED;
-  }
-
-  /**
-   * Manager listener.
-   */
-  private abstract class ManagerListener implements Listener<Session> {
-    private final Consumer<Session> callback;
-
-    private ManagerListener(Consumer<Session> callback) {
-      this.callback = callback;
-    }
-
-    @Override
-    public void accept(Session session) {
-      callback.accept(session);
-    }
-  }
-
-  /**
-   * Session open listener.
-   */
-  private final class OpenListener extends ManagerListener {
-    public OpenListener(Consumer<Session> callback) {
-      super(callback);
-      openListeners.add(this);
-    }
-
-    @Override
-    public void close() {
-      openListeners.remove(this);
-    }
-  }
-
-  /**
-   * Session close listener.
-   */
-  private final class CloseListener extends ManagerListener {
-    public CloseListener(Consumer<Session> callback) {
-      super(callback);
-      closeListeners.add(this);
-    }
-
-    @Override
-    public void close() {
-      closeListeners.remove(this);
-    }
   }
 
 }
