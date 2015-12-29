@@ -34,8 +34,6 @@ final class ClientSessionState {
   private Session.State state = Session.State.CLOSED;
   private long commandRequest;
   private long commandResponse;
-  private long requestSequence;
-  private long responseSequence;
   private long responseIndex;
   private long eventIndex;
   private long completeIndex;
@@ -45,15 +43,31 @@ final class ClientSessionState {
     this.clientId = Assert.notNull(clientId, "clientId");
   }
 
+  /**
+   * Returns the client ID.
+   *
+   * @return The client ID.
+   */
   public UUID getClientId() {
     return clientId;
   }
 
+  /**
+   * Sets the client session ID.
+   *
+   * @param sessionId The client session ID.
+   * @return The client session state.
+   */
   public ClientSessionState setSessionId(long sessionId) {
     this.sessionId = sessionId;
     return this;
   }
 
+  /**
+   * Returns the client session ID.
+   *
+   * @return The client session ID.
+   */
   public long getSessionId() {
     return sessionId;
   }
@@ -102,73 +116,111 @@ final class ClientSessionState {
     return listener;
   }
 
+  /**
+   * Sets the last command request sequence number.
+   *
+   * @param commandRequest The last command request sequence number.
+   * @return The client session state.
+   */
   public ClientSessionState setCommandRequest(long commandRequest) {
     this.commandRequest = commandRequest;
     return this;
   }
 
+  /**
+   * Returns the last command request sequence number for the session.
+   *
+   * @return The last command request sequence number for the session.
+   */
   public long getCommandRequest() {
     return commandRequest;
   }
 
+  /**
+   * Returns the next command request sequence number for the session.
+   *
+   * @return The next command request sequence number for the session.
+   */
   public long nextCommandRequest() {
     return ++commandRequest;
   }
 
+  /**
+   * Sets the last command sequence number for which a response has been received.
+   *
+   * @param commandResponse The last command sequence number for which a response has been received.
+   * @return The client session state.
+   */
   public ClientSessionState setCommandResponse(long commandResponse) {
     this.commandResponse = commandResponse;
     return this;
   }
 
+  /**
+   * Returns the last command sequence number for which a response has been received.
+   *
+   * @return The last command sequence number for which a response has been received.
+   */
   public long getCommandResponse() {
     return commandResponse;
   }
 
-  public ClientSessionState setRequestSequence(long requestSequence) {
-    this.requestSequence = requestSequence;
-    return this;
-  }
-
-  public long getRequestSequence() {
-    return requestSequence;
-  }
-
-  public long nextRequestSequence() {
-    return ++requestSequence;
-  }
-
-  public ClientSessionState setResponseSequence(long responseSequence) {
-    this.responseSequence = responseSequence;
-    return this;
-  }
-
-  public long getResponseSequence() {
-    return responseSequence;
-  }
-
+  /**
+   * Sets the highest index for which a response has been received.
+   *
+   * @param responseIndex The highest index for which a command or query response has been received.
+   * @return The client session state.
+   */
   public ClientSessionState setResponseIndex(long responseIndex) {
     this.responseIndex = Math.max(this.responseIndex, responseIndex);
     return this;
   }
 
+  /**
+   * Returns the highest index for which a response has been received.
+   *
+   * @return The highest index for which a command or query response has been received.
+   */
   public long getResponseIndex() {
     return responseIndex;
   }
 
+  /**
+   * Sets the highest index for which an event has been received in sequence.
+   *
+   * @param eventIndex The highest index for which an event has been received in sequence.
+   * @return The client session state.
+   */
   public ClientSessionState setEventIndex(long eventIndex) {
     this.eventIndex = eventIndex;
     return this;
   }
 
+  /**
+   * Returns the highest index for which an event has been received in sequence.
+   *
+   * @return The highest index for which an event has been received in sequence.
+   */
   public long getEventIndex() {
     return eventIndex;
   }
 
+  /**
+   * Sets the highest index for which an event has been processed in sequence.
+   *
+   * @param completeIndex The highest index for which an event has been processed in sequence.
+   * @return The client session state.
+   */
   public ClientSessionState setCompleteIndex(long completeIndex) {
     this.completeIndex = Math.max(this.completeIndex, completeIndex);
     return this;
   }
 
+  /**
+   * Returns the highest index for which an event has been processed in sequence.
+   *
+   * @return The highest index for which an event has been processed in sequence.
+   */
   public long getCompleteIndex() {
     return completeIndex;
   }
