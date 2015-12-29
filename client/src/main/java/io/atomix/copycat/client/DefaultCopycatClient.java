@@ -245,7 +245,11 @@ public class DefaultCopycatClient implements CopycatClient {
       changeListener.close();
 
     // Close the child session and call close listeners once complete.
-    return session.close().whenComplete((result, error) -> setState(State.CLOSED));
+    return session.close()
+      .whenComplete((result, error) -> {
+        setState(State.CLOSED);
+        CompletableFuture.runAsync(context::close);
+      });
   }
 
   @Override
