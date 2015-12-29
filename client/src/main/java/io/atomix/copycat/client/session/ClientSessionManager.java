@@ -108,15 +108,38 @@ final class ClientSessionManager {
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
+          // If the request was successful, update the address selector and schedule the next keep-alive.
           if (response.status() == Response.Status.OK) {
             selector.reset(response.leader(), response.members());
-          } else {
-            state.setState(Session.State.UNSTABLE);
+            keepAlive = context.schedule(interval, this::keepAlive);
           }
-        } else {
-          state.setState(Session.State.UNSTABLE);
+          // If the session is unknown, immediate expire the session.
+          else if (response.error() == RaftError.Type.UNKNOWN_SESSION_ERROR) {
+            state.setState(Session.State.EXPIRED);
+          }
+          // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
+          // This will ensure that the address selector selects all servers without filtering on the leader.
+          else if (selector.leader() != null) {
+            selector.reset(null, selector.servers());
+            keepAlive();
+          }
+          // If no leader was set, set the session state to unstable and schedule another keep-alive.
+          else {
+            state.setState(Session.State.UNSTABLE);
+            keepAlive = context.schedule(interval, this::keepAlive);
+          }
         }
-        keepAlive = context.schedule(interval, this::keepAlive);
+        // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
+        // This will ensure that the address selector selects all servers without filtering on the leader.
+        else if (selector.leader() != null) {
+          selector.reset(null, selector.servers());
+          keepAlive();
+        }
+        // If no leader was set, set the session state to unstable and schedule another keep-alive.
+        else {
+          state.setState(Session.State.UNSTABLE);
+          keepAlive = context.schedule(interval, this::keepAlive);
+        }
       }
     });
   }
@@ -153,17 +176,36 @@ final class ClientSessionManager {
     connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
+          // If the request was successful, update the session state and complete the close future.
           if (response.status() == Response.Status.OK) {
             state.setState(Session.State.CLOSED);
             future.complete(null);
-          } else if (response.error() == RaftError.Type.UNKNOWN_SESSION_ERROR) {
+          }
+          // If the session is unknown, immediate expire the session and complete the close future.
+          else if (response.error() == RaftError.Type.UNKNOWN_SESSION_ERROR) {
             state.setState(Session.State.EXPIRED);
             future.complete(null);
-          } else {
+          }
+          // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
+          // This will ensure that the address selector selects all servers without filtering on the leader.
+          else if (selector.leader() != null) {
+            selector.reset(null, selector.servers());
+            unregister(future);
+          }
+          // If no leader was set, set the session state to unstable and schedule another unregister attempt.
+          else {
             state.setState(Session.State.UNSTABLE);
             keepAlive = context.schedule(interval, () -> unregister(future));
           }
-        } else {
+        }
+        // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
+        // This will ensure that the address selector selects all servers without filtering on the leader.
+        else if (selector.leader() != null) {
+          selector.reset(null, selector.servers());
+          unregister(future);
+        }
+        // If no leader was set, set the session state to unstable and schedule another unregister attempt.
+        else {
           state.setState(Session.State.UNSTABLE);
           keepAlive = context.schedule(interval, () -> unregister(future));
         }
