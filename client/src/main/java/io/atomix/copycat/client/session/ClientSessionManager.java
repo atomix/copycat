@@ -20,6 +20,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategy;
+import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.KeepAliveRequest;
 import io.atomix.copycat.client.request.RegisterRequest;
 import io.atomix.copycat.client.request.UnregisterRequest;
@@ -128,7 +129,8 @@ final class ClientSessionManager {
   public CompletableFuture<Void> close() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.executor().execute(() -> {
-      keepAlive.cancel();
+      if (keepAlive != null)
+        keepAlive.cancel();
       unregister(future);
     });
     return future;
@@ -153,6 +155,9 @@ final class ClientSessionManager {
         if (error == null) {
           if (response.status() == Response.Status.OK) {
             state.setState(Session.State.CLOSED);
+            future.complete(null);
+          } else if (response.error() == RaftError.Type.UNKNOWN_SESSION_ERROR) {
+            state.setState(Session.State.EXPIRED);
             future.complete(null);
           } else {
             state.setState(Session.State.UNSTABLE);
