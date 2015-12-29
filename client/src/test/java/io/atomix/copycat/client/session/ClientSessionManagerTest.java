@@ -16,16 +16,14 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.client.ServerSelectionStrategies;
 import io.atomix.copycat.client.request.RegisterRequest;
 import io.atomix.copycat.client.request.UnregisterRequest;
 import io.atomix.copycat.client.response.RegisterResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.response.UnregisterResponse;
-import io.atomix.copycat.client.util.AddressSelector;
+import io.atomix.copycat.client.util.ClientConnection;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;
@@ -35,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 import static org.mockito.Mockito.*;
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
 
 /**
  * Client session manager test.
@@ -49,7 +47,9 @@ public class ClientSessionManagerTest {
    * Tests registering a session with a client session manager.
    */
   public void testSessionRegisterUnregister() throws Throwable {
-    Connection connection = mock(Connection.class);
+    ClientConnection connection = mock(ClientConnection.class);
+    when(connection.reset()).thenReturn(connection);
+    when(connection.servers()).thenReturn(Collections.singletonList(new Address("localhost", 5000)));
     when(connection.send(any(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withSession(1)
@@ -67,16 +67,17 @@ public class ClientSessionManagerTest {
     Executor executor = new MockExecutor();
     when(context.executor()).thenReturn(executor);
 
-    AddressSelector selector = new AddressSelector(Collections.singletonList(new Address("localhost", 5000)), ServerSelectionStrategies.ANY);
-    ClientSessionManager manager = new ClientSessionManager(connection, selector, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF);
+    ClientSessionManager manager = new ClientSessionManager(connection, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF);
     manager.open().join();
 
     assertEquals(state.getSessionId(), 1);
     assertEquals(state.getState(), Session.State.OPEN);
-    assertEquals(selector.leader(), new Address("localhost", 5000));
-    assertTrue(selector.servers().contains(new Address("localhost", 5000)));
-    assertTrue(selector.servers().contains(new Address("localhost", 5001)));
-    assertTrue(selector.servers().contains(new Address("localhost", 5002)));
+
+    verify(connection).reset(new Address("localhost", 5000), Arrays.asList(
+      new Address("localhost", 5000),
+      new Address("localhost", 5001),
+      new Address("localhost", 5002)
+    ));
 
     when(connection.send(any(UnregisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(UnregisterResponse.builder()

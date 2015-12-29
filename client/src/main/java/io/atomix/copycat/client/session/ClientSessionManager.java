@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
@@ -28,9 +27,7 @@ import io.atomix.copycat.client.response.KeepAliveResponse;
 import io.atomix.copycat.client.response.RegisterResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.response.UnregisterResponse;
-import io.atomix.copycat.client.util.AddressSelector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.atomix.copycat.client.util.ClientConnection;
 
 import java.net.ConnectException;
 import java.time.Duration;
@@ -43,16 +40,14 @@ import java.util.concurrent.CompletableFuture;
  */
 final class ClientSessionManager {
   private final ClientSessionState state;
-  private final Connection connection;
-  private final AddressSelector selector;
+  private final ClientConnection connection;
   private final ThreadContext context;
   private final ConnectionStrategy strategy;
   private Duration interval;
   private Scheduled keepAlive;
 
-  ClientSessionManager(Connection connection, AddressSelector selector, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
+  ClientSessionManager(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
     this.connection = Assert.notNull(connection, "connection");
-    this.selector = Assert.notNull(selector, "selector");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.strategy = Assert.notNull(connectionStrategy, "connectionStrategy");
@@ -74,16 +69,18 @@ final class ClientSessionManager {
    */
   private void register(RegisterAttempt attempt) {
     state.getLogger().debug("Registering session: attempt {}", attempt.attempt);
+
     RegisterRequest request = RegisterRequest.builder()
       .withClient(state.getClientId())
       .build();
+
     state.getLogger().debug("Sending {}", request);
-    connection.<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
+    connection.reset().<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
         state.getLogger().debug("Received {}", response);
         if (response.status() == Response.Status.OK) {
           interval = Duration.ofMillis(response.timeout()).dividedBy(2);
-          selector.reset(response.leader(), response.members());
+          connection.reset(response.leader(), response.members());
           state.setSessionId(response.session())
             .setState(Session.State.OPEN);
           attempt.complete();
@@ -102,19 +99,25 @@ final class ClientSessionManager {
    */
   private void keepAlive() {
     long sessionId = state.getSessionId();
+
+    // If the current sessions state is unstable, reset the connection before sending a keep-alive.
+    if (state.getState() == Session.State.UNSTABLE)
+      connection.reset();
+
     KeepAliveRequest request = KeepAliveRequest.builder()
       .withSession(sessionId)
       .withCommandSequence(state.getCommandResponse())
       .withEventIndex(state.getCompleteIndex())
       .build();
+
     state.getLogger().debug("{} - Sending {}", sessionId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
-          state.getLogger().debug("Received {}", response);
+          state.getLogger().debug("{} - Received {}", sessionId, response);
           // If the request was successful, update the address selector and schedule the next keep-alive.
           if (response.status() == Response.Status.OK) {
-            selector.reset(response.leader(), response.members());
+            connection.reset(response.leader(), response.members());
             keepAlive = context.schedule(interval, this::keepAlive);
           }
           // If the session is unknown, immediate expire the session.
@@ -123,8 +126,8 @@ final class ClientSessionManager {
           }
           // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
           // This will ensure that the address selector selects all servers without filtering on the leader.
-          else if (selector.leader() != null) {
-            selector.reset(null, selector.servers());
+          else if (connection.leader() != null) {
+            connection.reset(null, connection.servers());
             keepAlive();
           }
           // If no leader was set, set the session state to unstable and schedule another keep-alive.
@@ -135,8 +138,8 @@ final class ClientSessionManager {
         }
         // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
         // This will ensure that the address selector selects all servers without filtering on the leader.
-        else if (selector.leader() != null) {
-          selector.reset(null, selector.servers());
+        else if (connection.leader() != null) {
+          connection.reset(null, connection.servers());
           keepAlive();
         }
         // If no leader was set, set the session state to unstable and schedule another keep-alive.
@@ -169,20 +172,26 @@ final class ClientSessionManager {
    * @param future A completable future to be completed once the session is unregistered.
    */
   private void unregister(CompletableFuture<Void> future) {
+    long sessionId = state.getSessionId();
+    state.getLogger().debug("Unregistering session: {}", sessionId);
+
     // If a keep-alive request is already pending, cancel it.
     if (keepAlive != null)
       keepAlive.cancel();
 
-    long sessionId = state.getSessionId();
-    state.getLogger().debug("Unregistering session: {}", sessionId);
+    // If the current sessions state is unstable, reset the connection before sending an unregister request.
+    if (state.getState() == Session.State.UNSTABLE)
+      connection.reset();
+
     UnregisterRequest request = UnregisterRequest.builder()
       .withSession(sessionId)
       .build();
+
     state.getLogger().debug("{} - Sending {}", sessionId, request);
     connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
-          state.getLogger().debug("Received {}", response);
+          state.getLogger().debug("{} - Received {}", sessionId, response);
           // If the request was successful, update the session state and complete the close future.
           if (response.status() == Response.Status.OK) {
             state.setState(Session.State.CLOSED);
@@ -195,8 +204,8 @@ final class ClientSessionManager {
           }
           // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
           // This will ensure that the address selector selects all servers without filtering on the leader.
-          else if (selector.leader() != null) {
-            selector.reset(null, selector.servers());
+          else if (connection.leader() != null) {
+            connection.reset(null, connection.servers());
             unregister(future);
           }
           // If no leader was set, set the session state to unstable and schedule another unregister attempt.
@@ -207,8 +216,8 @@ final class ClientSessionManager {
         }
         // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
         // This will ensure that the address selector selects all servers without filtering on the leader.
-        else if (selector.leader() != null) {
-          selector.reset(null, selector.servers());
+        else if (connection.leader() != null) {
+          connection.reset(null, connection.servers());
           unregister(future);
         }
         // If no leader was set, set the session state to unstable and schedule another unregister attempt.
