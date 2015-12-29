@@ -29,6 +29,8 @@ import io.atomix.copycat.client.session.ClosedSessionException;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientSequencer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -45,6 +47,7 @@ import java.util.function.Function;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class DefaultCopycatClient implements CopycatClient {
+  private static final Logger LOGGER = LoggerFactory.getLogger(DefaultCopycatClient.class);
   private final Transport transport;
   private final Serializer serializer;
   private final CatalystThreadFactory threadFactory = new CatalystThreadFactory("copycat-client-%d");
@@ -55,7 +58,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final RecoveryStrategy recoveryStrategy;
   private final ClientSequencer sequencer = new ClientSequencer();
   private ClientSession session;
-  private State state;
+  private State state = State.CLOSED;
   private final Map<Long, OperationFuture<?>> operations = new LinkedHashMap<>();
   private final Set<StateChangeListener> changeListeners = new CopyOnWriteArraySet<>();
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
@@ -82,6 +85,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private void setState(State state) {
     if (this.state != state) {
       this.state = state;
+      LOGGER.debug("State changed: {}", state);
       changeListeners.forEach(l -> l.accept(state));
     }
   }
@@ -219,6 +223,8 @@ public class DefaultCopycatClient implements CopycatClient {
   public CompletableFuture<CopycatClient> recover() {
     if (state != State.SUSPENDED)
       return Futures.exceptionalFuture(new IllegalStateException("cannot recover client in " + state + " state"));
+
+    LOGGER.debug("Recovering session");
 
     // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
     CompletableFuture<CopycatClient> future = newSession().open().thenApply(s -> this);

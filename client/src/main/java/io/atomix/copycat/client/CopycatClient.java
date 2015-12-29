@@ -351,6 +351,10 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
       if (serializer == null) {
         serializer = new Serializer();
       }
+
+      // Add service loader types to the primary serializer.
+      serializer.resolve(new ServiceLoaderTypeResolver());
+
       return new DefaultCopycatClient(transport, members, serializer, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
     }
   }

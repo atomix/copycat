@@ -42,7 +42,6 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class ClientSessionManager {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ClientSessionManager.class);
   private final ClientSessionState state;
   private final Connection connection;
   private final AddressSelector selector;
@@ -74,11 +73,14 @@ final class ClientSessionManager {
    * Registers a session.
    */
   private void register(RegisterAttempt attempt) {
+    state.getLogger().debug("Registering session: attempt {}", attempt.attempt);
     RegisterRequest request = RegisterRequest.builder()
       .withClient(state.getClientId())
       .build();
+    state.getLogger().debug("Sending {}", request);
     connection.<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
+        state.getLogger().debug("Received {}", response);
         if (response.status() == Response.Status.OK) {
           interval = Duration.ofMillis(response.timeout()).dividedBy(2);
           selector.reset(response.leader(), response.members());
@@ -105,9 +107,11 @@ final class ClientSessionManager {
       .withCommandSequence(state.getCommandResponse())
       .withEventIndex(state.getCompleteIndex())
       .build();
+    state.getLogger().debug("{} - Sending {}", sessionId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
+          state.getLogger().debug("Received {}", response);
           // If the request was successful, update the address selector and schedule the next keep-alive.
           if (response.status() == Response.Status.OK) {
             selector.reset(response.leader(), response.members());
@@ -170,12 +174,15 @@ final class ClientSessionManager {
       keepAlive.cancel();
 
     long sessionId = state.getSessionId();
+    state.getLogger().debug("Unregistering session: {}", sessionId);
     UnregisterRequest request = UnregisterRequest.builder()
       .withSession(sessionId)
       .build();
+    state.getLogger().debug("{} - Sending {}", sessionId, request);
     connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
+          state.getLogger().debug("Received {}", response);
           // If the request was successful, update the session state and complete the close future.
           if (response.status() == Response.Status.OK) {
             state.setState(Session.State.CLOSED);
@@ -263,13 +270,13 @@ final class ClientSessionManager {
 
     @Override
     public void retry() {
-      LOGGER.debug("Retrying session register attempt");
+      state.getLogger().debug("Retrying session register attempt");
       register(new RegisterAttempt(attempt + 1, future));
     }
 
     @Override
     public void retry(Duration after) {
-      LOGGER.debug("Retrying session register attempt");
+      state.getLogger().debug("Retrying session register attempt");
       context.schedule(after, () -> register(new RegisterAttempt(attempt + 1, future)));
     }
   }

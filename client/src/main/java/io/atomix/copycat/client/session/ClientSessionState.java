@@ -17,6 +17,8 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +31,7 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class ClientSessionState {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ClientSession.class);
   private final UUID clientId;
   private volatile long sessionId;
   private volatile Session.State state = Session.State.CLOSED;
@@ -50,6 +53,15 @@ final class ClientSessionState {
    */
   public UUID getClientId() {
     return clientId;
+  }
+
+  /**
+   * Returns the session logger.
+   *
+   * @return The session logger.
+   */
+  public Logger getLogger() {
+    return LOGGER;
   }
 
   /**

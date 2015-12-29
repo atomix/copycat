@@ -25,8 +25,6 @@ import io.atomix.copycat.client.error.UnknownSessionException;
 import io.atomix.copycat.client.request.PublishRequest;
 import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +39,6 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class ClientSessionListener {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ClientSessionListener.class);
   private final ClientSessionState state;
   private final ThreadContext context;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
@@ -105,12 +102,12 @@ public final class ClientSessionListener {
    */
   @SuppressWarnings("unchecked")
   private CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
-    LOGGER.debug("{} - Received {}", state.getSessionId(), request);
+    state.getLogger().debug("{} - Received {}", state.getSessionId(), request);
 
     // If the request is for another session ID, this may be a session that was previously opened
     // for this client.
     if (request.session() != state.getSessionId()) {
-      LOGGER.debug("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
+      state.getLogger().debug("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
       return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
     }
 
@@ -118,7 +115,7 @@ public final class ClientSessionListener {
     // respond with an undefined error and the last index received. This will cause the cluster
     // to resend events starting at eventIndex + 1.
     if (request.previousIndex() != state.getEventIndex()) {
-      LOGGER.debug("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
+      state.getLogger().debug("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withIndex(state.getEventIndex())

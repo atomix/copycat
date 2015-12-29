@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.client.util;
 
+import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.transport.MessageHandler;
@@ -25,6 +26,8 @@ import io.atomix.copycat.client.request.ConnectRequest;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.ConnectResponse;
 import io.atomix.copycat.client.response.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.ConnectException;
 import java.util.Map;
@@ -39,6 +42,7 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public final class ClientConnection implements Connection {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnection.class);
   private final UUID id;
   private final Client client;
   private final AddressSelector selector;
@@ -143,17 +147,19 @@ public final class ClientConnection implements Connection {
     if (!selector.hasNext()) {
       future.completeExceptionally(new ConnectException("failed to connect to the cluster"));
     } else {
-      client.connect(selector.next()).whenComplete((c, e) -> handleConnection(c, e, future));
+      Address address = selector.next();
+      LOGGER.debug("Connecting to {}", address);
+      client.connect(address).whenComplete((c, e) -> handleConnection(address, c, e, future));
     }
   }
 
   /**
    * Handles a connection to a server.
    */
-  private void handleConnection(Connection connection, Throwable error, CompletableFuture<Connection> future) {
+  private void handleConnection(Address address, Connection connection, Throwable error, CompletableFuture<Connection> future) {
     if (open) {
       if (error == null) {
-        setupConnection(connection, future);
+        setupConnection(address, connection, future);
       } else {
         connect(future);
       }
@@ -164,7 +170,9 @@ public final class ClientConnection implements Connection {
    * Sets up the given connection.
    */
   @SuppressWarnings("unchecked")
-  private void setupConnection(Connection connection, CompletableFuture<Connection> future) {
+  private void setupConnection(Address address, Connection connection, CompletableFuture<Connection> future) {
+    LOGGER.debug("Setting up connection to {}", address);
+
     this.connection = connection;
     connection.closeListener(c -> {
       if (c.equals(this.connection)) {
