@@ -17,6 +17,9 @@ package io.atomix.copycat.client;
 
 import org.testng.annotations.Test;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
 /**
  * Session recovery strategies test.
  *
@@ -24,4 +27,25 @@ import org.testng.annotations.Test;
  */
 @Test
 public class RecoveryStrategiesTest {
+
+  /**
+   * Tests the RECOVER recovery strategy.
+   */
+  public void testRecoverStrategy() throws Throwable {
+    RecoveryStrategy strategy = RecoveryStrategies.RECOVER;
+    CopycatClient client = mock(CopycatClient.class);
+    strategy.recover(client);
+    verify(client).recover();
+  }
+
+  /**
+   * Tests the CLOSE recovery strategy.
+   */
+  public void testCloseStrategy() throws Throwable {
+    RecoveryStrategy strategy = RecoveryStrategies.CLOSE;
+    CopycatClient client = mock(CopycatClient.class);
+    strategy.recover(client);
+    verify(client).close();
+  }
+
 }
