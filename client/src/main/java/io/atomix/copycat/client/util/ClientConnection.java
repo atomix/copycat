@@ -20,6 +20,7 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.transport.MessageHandler;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.ConnectRequest;
 import io.atomix.copycat.client.request.Request;
 import io.atomix.copycat.client.response.ConnectResponse;
@@ -88,7 +89,11 @@ public final class ClientConnection implements Connection {
   private <T extends Request<T>, U extends Response<U>> void handleResponse(T request, U response, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
-        if (response.status() == Response.Status.OK) {
+        if (response.status() == Response.Status.OK
+          || response.error() == RaftError.Type.COMMAND_ERROR
+          || response.error() == RaftError.Type.QUERY_ERROR
+          || response.error() == RaftError.Type.APPLICATION_ERROR
+          || response.error() == RaftError.Type.UNKNOWN_SESSION_ERROR) {
           future.complete(response);
         } else {
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));

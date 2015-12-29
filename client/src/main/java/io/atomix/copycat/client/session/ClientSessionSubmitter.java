@@ -24,6 +24,7 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.error.CommandException;
 import io.atomix.copycat.client.error.QueryException;
+import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.CommandRequest;
 import io.atomix.copycat.client.request.OperationRequest;
 import io.atomix.copycat.client.request.QueryRequest;
@@ -184,7 +185,9 @@ public class ClientSessionSubmitter {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           sequence(() -> complete(response));
-        } else {
+        } else if (response.error() == RaftError.Type.COMMAND_ERROR || response.error() == RaftError.Type.QUERY_ERROR || response.error() == RaftError.Type.APPLICATION_ERROR) {
+          sequence(() -> complete(response.error().createException()));
+        } else if (response.error() != RaftError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
       } else {
