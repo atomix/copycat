@@ -395,6 +395,13 @@ final class ServerStateMachine implements AutoCloseable {
         state.getLog().clean(previousConnect);
       }
 
+      // Set the session as trusted. This will prevent the leader from explicitly unregistering the
+      // session if it hasn't done so already.
+      session.trust();
+
+      // Update the session's timestamp with the current state machine time.
+      session.setTimestamp(entry.getTimestamp());
+
       // Connections are also treated like keep-alive operations if a session exists for the client.
       long previousKeepAlive = session.getKeepAliveIndex();
       session.setKeepAliveIndex(entry.getIndex());
