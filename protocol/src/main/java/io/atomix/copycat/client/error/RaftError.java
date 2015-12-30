@@ -85,7 +85,7 @@ public interface RaftError {
     QUERY_ERROR(2) {
       @Override
       public RaftException createException() {
-        return new ReadException("failed to obtain read quorum");
+        return new QueryException("failed to obtain read quorum");
       }
     },
 
@@ -95,7 +95,7 @@ public interface RaftError {
     COMMAND_ERROR(3) {
       @Override
       public RaftException createException() {
-        return new WriteException("failed to obtain write quorum");
+        return new CommandException("failed to obtain write quorum");
       }
     },
 

@@ -19,8 +19,11 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.RaftError;
 
+import java.util.Collection;
 import java.util.Objects;
 
 /**
@@ -33,7 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=202)
-public class ConnectResponse extends SessionResponse<ConnectResponse> {
+public class ConnectResponse extends AbstractResponse<ConnectResponse> {
 
   /**
    * Returns a new connect client response builder.
@@ -55,11 +58,34 @@ public class ConnectResponse extends SessionResponse<ConnectResponse> {
     return new Builder(response);
   }
 
+  private Address leader;
+  private Collection<Address> members;
+
+  /**
+   * Returns the cluster leader.
+   *
+   * @return The cluster leader.
+   */
+  public Address leader() {
+    return leader;
+  }
+
+  /**
+   * Returns the cluster members.
+   *
+   * @return The cluster members.
+   */
+  public Collection<Address> members() {
+    return members;
+  }
+
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
+      leader = serializer.readObject(buffer);
+      members = serializer.readObject(buffer);
     } else {
       error = RaftError.forId(buffer.readByte());
     }
@@ -68,36 +94,76 @@ public class ConnectResponse extends SessionResponse<ConnectResponse> {
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(status.id());
-    if (status == Status.ERROR) {
+    if (status == Status.OK) {
+      serializer.writeObject(leader, buffer);
+      serializer.writeObject(members, buffer);
+    } else {
       buffer.writeByte(error.id());
     }
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status);
+    return Objects.hash(getClass(), status, leader, members);
   }
 
   @Override
   public boolean equals(Object object) {
     if (object instanceof ConnectResponse) {
       ConnectResponse response = (ConnectResponse) object;
-      return response.status == status;
+      return response.status == status
+        && ((response.leader == null && leader == null)
+        || (response.leader != null && leader != null && response.leader.equals(leader)))
+        && ((response.members == null && members == null)
+        || (response.members != null && members != null && response.members.equals(members)));
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+    return String.format("%s[status=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, leader, members);
   }
 
   /**
    * Connect response builder.
    */
-  public static class Builder extends SessionResponse.Builder<Builder, ConnectResponse> {
+  public static class Builder extends AbstractResponse.Builder<Builder, ConnectResponse> {
     protected Builder(ConnectResponse response) {
       super(response);
+    }
+
+    /**
+     * Sets the response leader.
+     *
+     * @param leader The response leader.
+     * @return The response builder.
+     */
+    public Builder withLeader(Address leader) {
+      response.leader = leader;
+      return this;
+    }
+
+    /**
+     * Sets the response members.
+     *
+     * @param members The response members.
+     * @return The response builder.
+     * @throws NullPointerException if {@code members} is null
+     */
+    public Builder withMembers(Collection<Address> members) {
+      response.members = Assert.notNull(members, "members");
+      return this;
+    }
+
+    /**
+     * @throws IllegalStateException if status is OK and members is null
+     */
+    @Override
+    public ConnectResponse build() {
+      super.build();
+      Assert.stateNot(response.status == Status.OK && response.members == null, "members cannot be null");
+      return response;
     }
   }
 

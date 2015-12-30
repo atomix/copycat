@@ -25,6 +25,7 @@ import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
@@ -233,7 +234,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    assertTrue(session.isSuspect());
+    assertTrue(session.state() == Session.State.UNSTABLE);
   }
 
   /**

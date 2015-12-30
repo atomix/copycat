@@ -24,6 +24,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
@@ -158,7 +159,7 @@ final class LeaderState extends ActiveState {
     for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
-      if (!session.isUnregistering() && session.isSuspect()) {
+      if (session.state() == Session.State.UNSTABLE && !session.isUnregistering()) {
         LOGGER.debug("{} - Detected expired session: {}", context.getCluster().getMember().serverAddress(), session.id());
 
         // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
@@ -643,14 +644,21 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+    context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
     AcceptRequest acceptRequest = AcceptRequest.builder()
-      .withSession(request.session())
+      .withClient(request.client())
       .withAddress(context.getCluster().getMember().serverAddress())
       .build();
     return accept(acceptRequest)
-      .thenApply(acceptResponse -> ConnectResponse.builder().withStatus(Response.Status.OK).build())
+      .thenApply(acceptResponse -> ConnectResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withLeader(context.getCluster().getMember().clientAddress())
+        .withMembers(context.getCluster().getMembers().stream()
+          .map(Member::clientAddress)
+          .filter(m -> m != null)
+          .collect(Collectors.toList()))
+        .build())
       .thenApply(this::logResponse);
   }
 
@@ -664,14 +672,14 @@ final class LeaderState extends ActiveState {
 
     try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
       entry.setTerm(context.getTerm())
-        .setSession(request.session())
+        .setClient(request.client())
         .setTimestamp(timestamp)
         .setAddress(request.address());
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {}", context.getCluster().getMember().serverAddress(), entry);
     }
 
-    context.getStateMachine().executor().context().sessions().registerAddress(request.session(), request.address());
+    context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {

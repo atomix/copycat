@@ -20,7 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.response.SessionResponse;
+import io.atomix.copycat.client.response.AbstractResponse;
 
 import java.util.Objects;
 
@@ -36,7 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=206)
-public class AcceptResponse extends SessionResponse<AcceptResponse> {
+public class AcceptResponse extends AbstractResponse<AcceptResponse> {
 
   /**
    * Returns a new accept client response builder.
@@ -98,7 +98,7 @@ public class AcceptResponse extends SessionResponse<AcceptResponse> {
   /**
    * Register response builder.
    */
-  public static class Builder extends SessionResponse.Builder<Builder, AcceptResponse> {
+  public static class Builder extends AbstractResponse.Builder<Builder, AcceptResponse> {
     protected Builder(AcceptResponse response) {
       super(response);
     }

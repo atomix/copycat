@@ -11,28 +11,27 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
 package io.atomix.copycat.client.error;
 
 /**
- * Read exception.
+ * Client operation exception.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ReadException extends RaftException {
-  private static final RaftError.Type TYPE = RaftError.Type.QUERY_ERROR;
+public abstract class OperationException extends RaftException {
 
-  public ReadException(String message, Object... args) {
-    super(TYPE, message, args);
+  public OperationException(RaftError.Type type, String message, Object... args) {
+    super(type, message, args);
   }
 
-  public ReadException(Throwable cause, String message, Object... args) {
-    super(TYPE, cause, message, args);
+  public OperationException(RaftError.Type type, Throwable cause, String message, Object... args) {
+    super(type, cause, message, args);
   }
 
-  public ReadException(Throwable cause) {
-    super(TYPE, cause);
+  public OperationException(RaftError.Type type, Throwable cause) {
+    super(type, cause);
   }
 
 }

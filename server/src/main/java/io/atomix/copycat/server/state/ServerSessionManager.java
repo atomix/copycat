@@ -22,10 +22,7 @@ import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,9 +31,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSessionManager implements Sessions {
-  private final Map<Long, Address> addresses = new ConcurrentHashMap<>();
-  private final Map<Long, Connection> connections = new ConcurrentHashMap<>();
+  private final Map<UUID, Address> addresses = new ConcurrentHashMap<>();
+  private final Map<UUID, Connection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
+  final Map<UUID, ServerSession> clients = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
 
   @Override
@@ -59,24 +57,24 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers an address.
    */
-  ServerSessionManager registerAddress(long sessionId, Address address) {
-    ServerSession session = sessions.get(sessionId);
+  ServerSessionManager registerAddress(UUID client, Address address) {
+    ServerSession session = clients.get(client);
     if (session != null) {
       session.setAddress(address);
     }
-    addresses.put(sessionId, address);
+    addresses.put(client, address);
     return this;
   }
 
   /**
    * Registers a connection.
    */
-  ServerSessionManager registerConnection(long sessionId, Connection connection) {
-    ServerSession session = sessions.get(sessionId);
+  ServerSessionManager registerConnection(UUID client, Connection connection) {
+    ServerSession session = clients.get(client);
     if (session != null) {
       session.setConnection(connection);
     }
-    connections.put(sessionId, connection);
+    connections.put(client, connection);
     return this;
   }
 
@@ -84,11 +82,11 @@ class ServerSessionManager implements Sessions {
    * Unregisters a connection.
    */
   ServerSessionManager unregisterConnection(Connection connection) {
-    Iterator<Map.Entry<Long, Connection>> iterator = connections.entrySet().iterator();
+    Iterator<Map.Entry<UUID, Connection>> iterator = connections.entrySet().iterator();
     while (iterator.hasNext()) {
-      Map.Entry<Long, Connection> entry = iterator.next();
+      Map.Entry<UUID, Connection> entry = iterator.next();
       if (entry.getValue().equals(connection)) {
-        ServerSession session = sessions.get(entry.getKey());
+        ServerSession session = clients.get(entry.getKey());
         if (session != null) {
           session.setConnection(null);
         }
@@ -102,9 +100,10 @@ class ServerSessionManager implements Sessions {
    * Registers a session.
    */
   ServerSession registerSession(ServerSession session) {
-    session.setAddress(addresses.get(session.id()));
-    session.setConnection(connections.get(session.id()));
+    session.setAddress(addresses.get(session.client()));
+    session.setConnection(connections.get(session.client()));
     sessions.put(session.id(), session);
+    clients.put(session.client(), session);
     return session;
   }
 
@@ -112,9 +111,13 @@ class ServerSessionManager implements Sessions {
    * Unregisters a session.
    */
   ServerSession unregisterSession(long sessionId) {
-    addresses.remove(sessionId);
-    connections.remove(sessionId);
-    return sessions.remove(sessionId);
+    ServerSession session = sessions.remove(sessionId);
+    if (session != null) {
+      clients.remove(session.client());
+      addresses.remove(session.client());
+      connections.remove(session.client());
+    }
+    return session;
   }
 
   /**
@@ -125,6 +128,16 @@ class ServerSessionManager implements Sessions {
    */
   ServerSession getSession(long sessionId) {
     return sessions.get(sessionId);
+  }
+
+  /**
+   * Gets a session by client ID.
+   *
+   * @param clientId The client ID.
+   * @return The session or {@code null} if the session doesn't exist.
+   */
+  ServerSession getSession(UUID clientId) {
+    return clients.get(clientId);
   }
 
   @Override

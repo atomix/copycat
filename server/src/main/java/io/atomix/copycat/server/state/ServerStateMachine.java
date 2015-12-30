@@ -387,12 +387,26 @@ final class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // clean them once they're committed.
-    ServerSession session = executor().context().sessions().getSession(entry.getSession());
+    ServerSession session = executor().context().sessions().getSession(entry.getClient());
     if (session != null) {
-      long previousIndex = session.getConnectIndex();
+      long previousConnect = session.getConnectIndex();
       session.setConnectIndex(entry.getIndex());
-      if (previousIndex > 0) {
-        state.getLog().clean(previousIndex);
+      if (previousConnect > 0) {
+        state.getLog().clean(previousConnect);
+      }
+
+      // Set the session as trusted. This will prevent the leader from explicitly unregistering the
+      // session if it hasn't done so already.
+      session.trust();
+
+      // Update the session's timestamp with the current state machine time.
+      session.setTimestamp(entry.getTimestamp());
+
+      // Connections are also treated like keep-alive operations if a session exists for the client.
+      long previousKeepAlive = session.getKeepAliveIndex();
+      session.setKeepAliveIndex(entry.getIndex());
+      if (previousKeepAlive > 0) {
+        state.getLog().clean(previousKeepAlive);
       }
     }
     return CompletableFuture.completedFuture(null);
@@ -408,11 +422,12 @@ final class ServerStateMachine implements AutoCloseable {
    * state machine's register() method must be completed synchronously prior to the completion of the returned future.
    */
   private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
-    ServerSession session = new ServerSession(entry.getIndex(), executor.context(), entry.getTimeout());
-    executor.context().sessions().registerSession(session);
-
     // Allow the executor to execute any scheduled events.
     long timestamp = executor.tick(entry.getTimestamp());
+
+    long sessionId = entry.getIndex();
+    ServerSession session = new ServerSession(sessionId, entry.getClient(), executor.context(), entry.getTimeout());
+    executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
     // is guaranteed to be monotonically increasing, whereas the RegisterEntry may have an earlier timestamp
@@ -455,10 +470,10 @@ final class ServerStateMachine implements AutoCloseable {
       CompletableFuture<Void> sessionFuture = executor.commit();
       if (sessionFuture != null) {
         sessionFuture.whenComplete((result, error) -> {
-          context.executor().execute(() -> future.complete(index));
+          context.executor().execute(() -> future.complete(sessionId));
         });
       } else {
-        context.executor().execute(() -> future.complete(index));
+        context.executor().execute(() -> future.complete(sessionId));
       }
     });
 

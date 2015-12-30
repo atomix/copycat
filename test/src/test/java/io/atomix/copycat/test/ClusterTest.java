@@ -18,10 +18,7 @@ package io.atomix.copycat.test;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.client.CopycatClient;
-import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
@@ -66,7 +63,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
     clients.add(client);
@@ -112,7 +109,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
       // Create a new client each time a server is removed and verify that all values are present.
       CopycatClient client2 = CopycatClient.builder(m1.clientAddress(), m2.clientAddress(), m3.clientAddress())
-        .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+        .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
         .withTransport(new LocalTransport(registry))
         .build();
       clients.add(client2);
@@ -225,10 +222,9 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(3);
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
-    clients.add(client);
     client.open().get();
 
     CopycatServer s1 = createServer(members, nextMember()).open().get();
@@ -245,7 +241,10 @@ public class ClusterTest extends ConcurrentTestCase {
       });
 
       await(30000);
+
     }
+
+    ((DefaultCopycatClient) client).kill().join();
 
     s1.close().join();
     s2.close().join();
@@ -259,7 +258,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatClient client = createClient();
     Thread.sleep(Duration.ofSeconds(10).toMillis());
-    threadAssertTrue(client.session().isOpen());
+    threadAssertTrue(client.isOpen());
   }
 
   /**
@@ -1050,13 +1049,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting linearizable events.
    */
-  public void testThreeNodesLinearizableEventsAfterLeaderKill() throws Throwable {
-    testLinearizableEventsAfterLeaderKill(3);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
   public void testFiveNodesLinearizableEventsAfterLeaderKill() throws Throwable {
     testLinearizableEventsAfterLeaderKill(5);
   }
@@ -1184,8 +1176,44 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client2 = createClient();
     client1.session().onEvent("expired", this::resume);
     client1.submit(new TestExpire()).thenRun(this::resume);
-    client2.close().thenRun(this::resume);
+    ((DefaultCopycatClient) client2).kill().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
+  }
+
+  /**
+   * Tests session close events.
+   */
+  public void testOneNodeCloseEvent() throws Throwable {
+    testSessionClose(1);
+  }
+
+  /**
+   * Tests session close events.
+   */
+  public void testThreeNodeCloseEvent() throws Throwable {
+    testSessionClose(3);
+  }
+
+  /**
+   * Tests session close events.
+   */
+  public void testFiveNodeCloseEvent() throws Throwable {
+    testSessionClose(5);
+  }
+
+  /**
+   * Tests a session closing.
+   */
+  private void testSessionClose(int nodes) throws Throwable {
+    createServers(nodes);
+
+    CopycatClient client1 = createClient();
+    CopycatClient client2 = createClient();
+    client1.submit(new TestClose()).thenRun(this::resume);
+    await(Duration.ofSeconds(10).toMillis(), 1);
+    client1.session().onEvent("closed", this::resume);
+    client2.close().thenRun(this::resume);
+    await(Duration.ofSeconds(10).toMillis(), 2);
   }
 
   /**
@@ -1262,7 +1290,8 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
       .withTransport(new LocalTransport(registry))
-      .withConnectionStrategy(ConnectionStrategies.BACKOFF)
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
+      .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
     client.open().thenRun(this::resume);
     await(30000);
@@ -1303,6 +1332,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public static class TestStateMachine extends StateMachine implements SessionListener, Snapshottable {
     private Commit<TestCommand> last;
     private Commit<TestExpire> expire;
+    private Commit<TestClose> close;
 
     @Override
     public void register(Session session) {
@@ -1322,7 +1352,8 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public void close(Session session) {
-
+      if (close != null && !session.equals(close.session()))
+        close.session().publish("closed");
     }
 
     @Override
@@ -1366,6 +1397,10 @@ public class ClusterTest extends ConcurrentTestCase {
       } finally {
         commit.close();
       }
+    }
+
+    public void close(Commit<TestClose> commit) {
+      this.close = commit;
     }
 
     public void expire(Commit<TestExpire> commit) {
@@ -1459,6 +1494,12 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test event.
    */
   public static class TestExpire implements Command<Void> {
+  }
+
+  /**
+   * Test event.
+   */
+  public static class TestClose implements Command<Void> {
   }
 
 }

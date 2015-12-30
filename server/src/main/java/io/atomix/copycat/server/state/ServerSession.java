@@ -42,7 +42,9 @@ import java.util.function.Consumer;
 class ServerSession implements Session {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSession.class);
   private final long id;
+  private final UUID client;
   private final ServerStateMachineContext context;
+  private State state = State.CLOSED;
   private final long timeout;
   private Connection connection;
   private Address address;
@@ -63,16 +65,14 @@ class ServerSession implements Session {
   private final Queue<EventHolder> events = new ArrayDeque<>();
   private EventHolder event;
   private final Map<Long, CompletableFuture<Void>> futures = new HashMap<>();
-  private boolean suspect;
   private boolean unregistering;
-  private boolean expired;
-  private boolean closed = true;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
-  private final Listeners<Session> openListeners = new Listeners<>();
-  private final Listeners<Session> closeListeners = new Listeners<>();
+  private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSession(long id, ServerStateMachineContext context, long timeout) {
+  ServerSession(long id, UUID client, ServerStateMachineContext context, long timeout) {
     this.id = id;
+    this.client = Assert.notNull(client, "client");
+    this.eventIndex = id;
     this.completeIndex = id;
     this.lastApplied = id - 1;
     this.context = context;
@@ -85,10 +85,42 @@ class ServerSession implements Session {
   }
 
   /**
+   * Returns the session client ID.
+   *
+   * @return The session client ID.
+   */
+  public UUID client() {
+    return client;
+  }
+
+  /**
    * Opens the session.
    */
   void open() {
-    closed = false;
+    setState(State.OPEN);
+  }
+
+  @Override
+  public State state() {
+    return state;
+  }
+
+  /**
+   * Updates the session state.
+   *
+   * @param state The session state.
+   */
+  private void setState(State state) {
+    if (this.state != state) {
+      this.state = state;
+      LOGGER.debug("{} - State changed: {}", id, state);
+      changeListeners.forEach(l -> l.accept(state));
+    }
+  }
+
+  @Override
+  public Listener<State> onStateChange(Consumer<State> callback) {
+    return changeListeners.add(callback);
   }
 
   /**
@@ -439,7 +471,8 @@ class ServerSession implements Session {
 
   @Override
   public Session publish(String event, Object message) {
-    Assert.stateNot(closed, "session is not open");
+    Assert.stateNot(state == State.CLOSED, "session is closed");
+    Assert.stateNot(state == State.EXPIRED, "session is expired");
     Assert.state(context.consistency() != null, "session events can only be published during command execution");
 
     // If the client acked an index greater than the current event sequence number since we know the
@@ -575,13 +608,14 @@ class ServerSession implements Session {
     PublishRequest request = PublishRequest.builder()
       .withSession(id())
       .withEventIndex(event.eventIndex)
-      .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
+      .withPreviousIndex(event.previousIndex)
       .withEvents(event.events)
       .build();
 
     LOGGER.debug("{} - Sending {}", id, request);
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
-      if (isOpen() && error == null) {
+      if (error == null) {
+        LOGGER.debug("{} - Received {}", id, response);
         if (response.status() == Response.Status.OK) {
           clearEvents(response.index());
         } else if (response.error() == null) {
@@ -613,59 +647,25 @@ class ServerSession implements Session {
       .build());
   }
 
-  @Override
-  public boolean isOpen() {
-    return !closed;
-  }
-
-  @Override
-  public Listener<Session> onOpen(Consumer<Session> listener) {
-    return openListeners.add(Assert.notNull(listener, "listener"));
-  }
-
   /**
    * Closes the session.
    */
   void close() {
-    closed = true;
-    for (Listener<Session> listener : closeListeners) {
-      listener.accept(this);
-    }
-  }
-
-  @Override
-  public Listener<Session> onClose(Consumer<Session> listener) {
-    Listener<Session> context = closeListeners.add(Assert.notNull(listener, "listener"));
-    if (closed) {
-      context.accept(this);
-    }
-    return context;
-  }
-
-  @Override
-  public boolean isClosed() {
-    return closed;
+    setState(State.CLOSED);
   }
 
   /**
    * Sets the session as suspect.
    */
   void suspect() {
-    suspect = true;
+    setState(State.UNSTABLE);
   }
 
   /**
    * Sets the session as trusted.
    */
   void trust() {
-    suspect = false;
-  }
-
-  /**
-   * Indicates whether the session is suspect.
-   */
-  boolean isSuspect() {
-    return suspect;
+    setState(State.OPEN);
   }
 
   /**
@@ -686,19 +686,10 @@ class ServerSession implements Session {
    * Expires the session.
    */
   void expire() {
-    closed = true;
-    expired = true;
     for (EventHolder event : events) {
       event.future.complete(null);
     }
-    for (Listener<Session> listener : closeListeners) {
-      listener.accept(this);
-    }
-  }
-
-  @Override
-  public boolean isExpired() {
-    return expired;
+    setState(State.EXPIRED);
   }
 
   @Override

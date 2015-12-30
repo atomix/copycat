@@ -23,13 +23,16 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
 
+import java.util.UUID;
+
 /**
  * Unregister entry.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=227)
-public class ConnectEntry extends SessionEntry<ConnectEntry> {
+public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
+  private UUID client;
   private Address address;
 
   public ConnectEntry() {
@@ -37,6 +40,27 @@ public class ConnectEntry extends SessionEntry<ConnectEntry> {
 
   public ConnectEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
+  }
+
+  /**
+   * Returns the entry client ID.
+   *
+   * @return The entry client ID.
+   */
+  public UUID getClient() {
+    return client;
+  }
+
+  /**
+   * Sets the entry client ID.
+   *
+   * @param client The entry client ID.
+   * @return The register entry.
+   * @throws NullPointerException if {@code client} is null
+   */
+  public ConnectEntry setClient(UUID client) {
+    this.client = Assert.notNull(client, "client");
+    return this;
   }
 
   /**
@@ -63,18 +87,20 @@ public class ConnectEntry extends SessionEntry<ConnectEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
+    buffer.writeString(client.toString());
     serializer.writeObject(address, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
+    client = UUID.fromString(buffer.readString());
     address = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, address=%s, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getAddress(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, client=%s, address=%s, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getAddress(), getTimestamp());
   }
 
 }

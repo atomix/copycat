@@ -13,24 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.client;
+package io.atomix.copycat.client.session;
 
 /**
- * Strategy for recovering client sessions on failures.
- * <p>
- * Client recovery strategies are responsible for recovering a crashed client. When clients fail to contact
- * a server for more than their session timeout, the client's session must be closed as linearizability is
- * lost. The recovery strategy has the opportunity to recover the crashed client gracefully.
+ * Closed session exception.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface RecoveryStrategy {
+public class ClosedSessionException extends IllegalStateException {
 
-  /**
-   * Recovers the client.
-   *
-   * @param client The recoverable client.
-   */
-  void recover(CopycatClient client);
+  public ClosedSessionException() {
+  }
+
+  public ClosedSessionException(String s) {
+    super(s);
+  }
+
+  public ClosedSessionException(String message, Throwable cause) {
+    super(message, cause);
+  }
+
+  public ClosedSessionException(Throwable cause) {
+    super(cause);
+  }
 
 }

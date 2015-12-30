@@ -18,40 +18,50 @@ package io.atomix.copycat.client;
 import java.time.Duration;
 
 /**
- * Basic connection strategies.
+ * Client operation retry strategies.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public enum ConnectionStrategies implements ConnectionStrategy {
+public enum RetryStrategies implements RetryStrategy {
 
   /**
-   * Attempts to connect to the cluster one time and fails.
+   * Fails all attempts.
    */
-  ONCE {
+  FAIL {
     @Override
-    public void attemptFailed(Attempt attempt) {
-      attempt.fail();
+    public void attemptFailed(Attempt attempt, Throwable cause) {
+      attempt.fail(cause);
     }
   },
 
   /**
-   * Attempts to connect to the cluster using exponential backoff up to a one minute retry interval.
+   * Retries attempts immediately.
+   */
+  RETRY {
+    @Override
+    public void attemptFailed(Attempt attempt, Throwable cause) {
+      attempt.retry();
+    }
+  },
+
+  /**
+   * Retries attempts using exponential backoff up to a one minute retry interval.
    */
   EXPONENTIAL_BACKOFF {
     @Override
-    public void attemptFailed(Attempt attempt) {
-      attempt.retry(Duration.ofSeconds(Math.min(Math.round(Math.pow(2, attempt.attempt())), 60)));
+    public void attemptFailed(Attempt attempt, Throwable cause) {
+      attempt.retry(Duration.ofSeconds(Math.min(Math.round(Math.pow(2, attempt.attempt())), 5)));
     }
   },
 
   /**
-   * Attempts to connect to the cluster using fibonacci sequence backoff.
+   * Retries attempts using fibonacci sequence backoff.
    */
   FIBONACCI_BACKOFF {
-    private final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5, 8, 13};
+    private final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
 
     @Override
-    public void attemptFailed(Attempt attempt) {
+    public void attemptFailed(Attempt attempt, Throwable cause) {
       attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt()-1, FIBONACCI.length-1)]));
     }
   }

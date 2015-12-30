@@ -71,12 +71,14 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    serializer.writeObject(client, buffer);
+    super.writeObject(buffer, serializer);
+    buffer.writeString(client.toString());
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    client = serializer.readObject(buffer);
+    super.readObject(buffer, serializer);
+    client = UUID.fromString(buffer.readString());
   }
 
   @Override
@@ -95,7 +97,7 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
 
   @Override
   public String toString() {
-    return String.format("%s", getClass().getSimpleName());
+    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
   }
 
   /**
@@ -124,7 +126,7 @@ public class RegisterRequest extends AbstractRequest<RegisterRequest> {
     @Override
     public RegisterRequest build() {
       super.build();
-      Assert.stateNot(request.client == null, "client");
+      Assert.stateNot(request.client == null, "client cannot be null");
       return request;
     }
   }
