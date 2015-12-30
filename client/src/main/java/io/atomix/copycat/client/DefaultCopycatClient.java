@@ -280,6 +280,10 @@ public class DefaultCopycatClient implements CopycatClient {
     CompletableFuture<Void> future = new CompletableFuture<>();
     session.close().whenCompleteAsync((result, error) -> {
       setState(State.CLOSED);
+      for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
+        entry.getValue().completeExceptionally(new ClosedSessionException("session closed"));
+      }
+
       CompletableFuture.runAsync(() -> {
         context.close();
         if (error == null) {
