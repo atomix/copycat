@@ -157,6 +157,9 @@ final class ClientSessionManager {
    * @return A completable future to be completed once the session manager is closed.
    */
   public CompletableFuture<Void> close() {
+    if (state.getState() == Session.State.EXPIRED)
+      return CompletableFuture.completedFuture(null);
+
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.executor().execute(() -> {
       if (keepAlive != null)
