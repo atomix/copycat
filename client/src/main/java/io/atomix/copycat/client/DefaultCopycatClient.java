@@ -49,7 +49,6 @@ import java.util.function.Function;
 public class DefaultCopycatClient implements CopycatClient {
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultCopycatClient.class);
   private final Transport transport;
-  private final Serializer serializer;
   private final CatalystThreadFactory threadFactory = new CatalystThreadFactory("copycat-client-%d");
   private final ThreadContext context;
   private final AddressSelector selector;
@@ -64,10 +63,13 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  public DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+  }
+
+  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
     this.transport = Assert.notNull(transport, "transport");
-    this.serializer = Assert.notNull(serializer, "serializer");
-    this.context = new SingleThreadContext(threadFactory, serializer.clone());
+    this.context = Assert.notNull(context, "context");
     this.selector = new AddressSelector(members, selectionStrategy);
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.retryStrategy = Assert.notNull(retryStrategy, "retryStrategy");
@@ -103,7 +105,7 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public Serializer serializer() {
     ThreadContext context = ThreadContext.currentContext();
-    return context != null ? context.serializer() : serializer;
+    return context != null ? context.serializer() : this.context.serializer();
   }
 
   @Override
@@ -120,7 +122,7 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, serializer.clone()), connectionStrategy, retryStrategy);
+    session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, context.serializer().clone()), connectionStrategy, retryStrategy);
 
     // Update the session change listener.
     if (changeListener != null)

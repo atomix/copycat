@@ -23,6 +23,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
+import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.session.Session;
 
@@ -248,6 +249,8 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
   final class Builder extends io.atomix.catalyst.util.Builder<CopycatClient> {
     private Transport transport;
     private Serializer serializer;
+    private CatalystThreadFactory threadFactory;
+    private ThreadContext context;
     private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.FOLLOWERS;
@@ -284,6 +287,29 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
      */
     public Builder withSerializer(Serializer serializer) {
       this.serializer = Assert.notNull(serializer, "serializer");
+      return this;
+    }
+
+    /**
+     * Sets the client thread factory.
+     *
+     * @param factory The client thread factory.
+     * @return The client builder.
+     */
+    public Builder withThreadFactory(CatalystThreadFactory factory) {
+      this.threadFactory = Assert.notNull(factory, "factory");
+      return this;
+    }
+
+    /**
+     * Sets the client thread context.
+     *
+     * @param context The client thread context.
+     * @return The client builder.
+     * @throws NullPointerException if the thread context is {@code null}
+     */
+    public Builder withThreadContext(ThreadContext context) {
+      this.context = Assert.notNull(context, "context");
       return this;
     }
 
@@ -347,15 +373,26 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
         }
       }
 
-      // If no serializer instance was provided, create one.
-      if (serializer == null) {
-        serializer = new Serializer();
+      if (threadFactory == null) {
+        threadFactory = new CatalystThreadFactory("copycat-client-%d");
       }
 
-      // Add service loader types to the primary serializer.
-      serializer.resolve(new ServiceLoaderTypeResolver());
+      // If a thread context was provided, pass the context to the client.
+      if (context != null) {
+        context.serializer().resolve(new ServiceLoaderTypeResolver());
 
-      return new DefaultCopycatClient(transport, members, serializer, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+      } else {
+        // If no serializer instance was provided, create one.
+        if (serializer == null) {
+          serializer = new Serializer();
+        }
+
+        // Add service loader types to the primary serializer.
+        serializer.resolve(new ServiceLoaderTypeResolver());
+
+        return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+      }
     }
   }
 
