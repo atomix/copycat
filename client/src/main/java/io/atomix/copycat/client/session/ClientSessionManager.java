@@ -229,6 +229,19 @@ final class ClientSessionManager {
     });
   }
 
+  /**
+   * Kills the client session manager.
+   *
+   * @return A completable future to be completed once the session manager is killed.
+   */
+  public CompletableFuture<Void> kill() {
+    return CompletableFuture.runAsync(() -> {
+      if (keepAlive != null)
+        keepAlive.cancel();
+      state.setState(Session.State.CLOSED);
+    }, context.executor());
+  }
+
   @Override
   public String toString() {
     return String.format("%s[session=%d]", getClass().getSimpleName(), state.getSessionId());

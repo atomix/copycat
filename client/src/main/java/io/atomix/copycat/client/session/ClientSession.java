@@ -156,6 +156,28 @@ public class ClientSession implements Session, Managed<Session> {
     }
   }
 
+  /**
+   * Kills the session.
+   *
+   * @return A completable future to be completed once the session has been killed.
+   */
+  public CompletableFuture<Void> kill() {
+    ThreadContext context = ThreadContext.currentContext();
+    if (context != null) {
+      return submitter.close()
+        .thenCompose(v -> listener.close())
+        .thenCompose(v -> manager.kill())
+        .thenCompose(v -> connection.close())
+        .whenCompleteAsync((result, error) -> this.context.close(), context.executor());
+    } else {
+      return submitter.close()
+        .thenCompose(v -> listener.close())
+        .thenCompose(v -> manager.kill())
+        .thenCompose(v -> connection.close())
+        .whenCompleteAsync((result, error) -> this.context.close());
+    }
+  }
+
   @Override
   public boolean isClosed() {
     return state.getState() == State.EXPIRED || state.getState() == State.CLOSED;

@@ -28,10 +28,22 @@ public final class ClientSequencer {
   private long requestSequence;
   private long responseSequence;
 
+  /**
+   * Returns the next sequence number in the sequencer.
+   *
+   * @return The next sequence number.
+   */
   public long nextSequence() {
     return ++requestSequence;
   }
 
+  /**
+   * Runs the given callback in proper sequential order.
+   *
+   * @param sequenceNumber The sequence number of the callback to run.
+   * @param callback The callback to run in sequential order.
+   * @return The sequencer.
+   */
   public ClientSequencer sequence(long sequenceNumber, Runnable callback) {
     // If the response is for the next sequence number (the response is received in order),
     // complete the future as appropriate. Note that some prior responses may have been received
