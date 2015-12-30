@@ -253,7 +253,7 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
     private ThreadContext context;
     private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
-    private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.FOLLOWERS;
+    private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RetryStrategy retryStrategy = RetryStrategies.FIBONACCI_BACKOFF;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
