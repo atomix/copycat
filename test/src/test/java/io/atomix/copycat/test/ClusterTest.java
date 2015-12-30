@@ -1049,13 +1049,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting linearizable events.
    */
-  public void testThreeNodesLinearizableEventsAfterLeaderKill() throws Throwable {
-    testLinearizableEventsAfterLeaderKill(3);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
   public void testFiveNodesLinearizableEventsAfterLeaderKill() throws Throwable {
     testLinearizableEventsAfterLeaderKill(5);
   }
@@ -1298,6 +1291,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
       .withTransport(new LocalTransport(registry))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
+      .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
     client.open().thenRun(this::resume);
     await(30000);
