@@ -290,6 +290,7 @@ public class DefaultCopycatClient implements CopycatClient {
 
       CompletableFuture.runAsync(() -> {
         context.close();
+        transport.close();
         if (error == null) {
           future.complete(null);
         } else {
@@ -314,7 +315,10 @@ public class DefaultCopycatClient implements CopycatClient {
     return session.kill()
       .whenComplete((result, error) -> {
         setState(State.CLOSED);
-        CompletableFuture.runAsync(context::close);
+        CompletableFuture.runAsync(() -> {
+          context.close();
+          transport.close();
+        });
       });
   }
 
