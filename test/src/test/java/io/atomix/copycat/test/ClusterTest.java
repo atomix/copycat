@@ -225,7 +225,6 @@ public class ClusterTest extends ConcurrentTestCase {
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withTransport(new LocalTransport(registry))
       .build();
-    clients.add(client);
     client.open().get();
 
     CopycatServer s1 = createServer(members, nextMember()).open().get();
@@ -242,7 +241,10 @@ public class ClusterTest extends ConcurrentTestCase {
       });
 
       await(30000);
+
     }
+
+    ((DefaultCopycatClient) client).kill().join();
 
     s1.close().join();
     s2.close().join();
