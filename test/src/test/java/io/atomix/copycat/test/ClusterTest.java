@@ -18,10 +18,7 @@ package io.atomix.copycat.test;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.client.CopycatClient;
-import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
@@ -1184,8 +1181,44 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client2 = createClient();
     client1.session().onEvent("expired", this::resume);
     client1.submit(new TestExpire()).thenRun(this::resume);
-    client2.close().thenRun(this::resume);
+    ((DefaultCopycatClient) client2).kill().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
+  }
+
+  /**
+   * Tests session close events.
+   */
+  public void testOneNodeCloseEvent() throws Throwable {
+    testSessionClose(1);
+  }
+
+  /**
+   * Tests session close events.
+   */
+  public void testThreeNodeCloseEvent() throws Throwable {
+    testSessionClose(3);
+  }
+
+  /**
+   * Tests session close events.
+   */
+  public void testFiveNodeCloseEvent() throws Throwable {
+    testSessionClose(5);
+  }
+
+  /**
+   * Tests a session closing.
+   */
+  private void testSessionClose(int nodes) throws Throwable {
+    createServers(nodes);
+
+    CopycatClient client1 = createClient();
+    CopycatClient client2 = createClient();
+    client1.submit(new TestClose()).thenRun(this::resume);
+    await(Duration.ofSeconds(10).toMillis(), 1);
+    client1.session().onEvent("closed", this::resume);
+    client2.close().thenRun(this::resume);
+    await(Duration.ofSeconds(10).toMillis(), 2);
   }
 
   /**
@@ -1303,6 +1336,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public static class TestStateMachine extends StateMachine implements SessionListener, Snapshottable {
     private Commit<TestCommand> last;
     private Commit<TestExpire> expire;
+    private Commit<TestClose> close;
 
     @Override
     public void register(Session session) {
@@ -1322,7 +1356,8 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public void close(Session session) {
-
+      if (close != null && !session.equals(close.session()))
+        close.session().publish("closed");
     }
 
     @Override
@@ -1366,6 +1401,10 @@ public class ClusterTest extends ConcurrentTestCase {
       } finally {
         commit.close();
       }
+    }
+
+    public void close(Commit<TestClose> commit) {
+      this.close = commit;
     }
 
     public void expire(Commit<TestExpire> commit) {
@@ -1459,6 +1498,12 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test event.
    */
   public static class TestExpire implements Command<Void> {
+  }
+
+  /**
+   * Test event.
+   */
+  public static class TestClose implements Command<Void> {
   }
 
 }
