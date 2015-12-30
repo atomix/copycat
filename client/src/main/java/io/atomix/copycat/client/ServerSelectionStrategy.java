@@ -17,6 +17,7 @@ package io.atomix.copycat.client;
 
 import io.atomix.catalyst.transport.Address;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -37,6 +38,6 @@ public interface ServerSelectionStrategy {
    * @param servers The full list of servers.
    * @return A collection of servers to which the client can connect.
    */
-  Iterable<Address> selectConnections(Address leader, List<Address> servers);
+  Collection<Address> selectConnections(Address leader, List<Address> servers);
 
 }

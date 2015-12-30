@@ -55,7 +55,7 @@ public class AddressSelector implements Iterator<Address> {
   private Address leader;
   private Collection<Address> servers;
   private final ServerSelectionStrategy strategy;
-  private Iterable<Address> selections;
+  private Collection<Address> selections;
   private Iterator<Address> selectionsIterator;
 
   public AddressSelector(Collection<Address> servers, ServerSelectionStrategy selectionStrategy) {
@@ -168,7 +168,7 @@ public class AddressSelector implements Iterator<Address> {
 
   @Override
   public boolean hasNext() {
-    return selectionsIterator == null || selectionsIterator.hasNext();
+    return selectionsIterator == null ? !selections.isEmpty() : selectionsIterator.hasNext();
   }
 
   @Override
