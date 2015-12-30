@@ -140,6 +140,9 @@ public class DefaultCopycatClient implements CopycatClient {
       // When the session is opened, transition the state to CONNECTED.
       case OPEN:
         setState(State.CONNECTED);
+        for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
+          resubmit(entry.getKey(), entry.getValue());
+        }
         break;
       // When the session becomes unstable, transition the state to SUSPENDED.
       case UNSTABLE:
@@ -204,6 +207,24 @@ public class DefaultCopycatClient implements CopycatClient {
     long sequence = sequencer.nextSequence();
     operations.put(sequence, future);
     submitter.apply(operation).whenCompleteAsync((result, error) -> {
+      sequencer.sequence(sequence, () -> {
+        if (error == null) {
+          operations.remove(sequence);
+          future.complete(result);
+        } else if (!(error instanceof ClosedSessionException)) {
+          operations.remove(sequence);
+          future.completeExceptionally(error);
+        }
+      });
+    }, context.executor());
+  }
+
+  /**
+   * Resubmits an operation future upon session recovery.
+   */
+  @SuppressWarnings("unchecked")
+  private <T> void resubmit(long sequence, OperationFuture<T> future) {
+    session.submit(future.operation).whenCompleteAsync((result, error) -> {
       sequencer.sequence(sequence, () -> {
         if (error == null) {
           operations.remove(sequence);

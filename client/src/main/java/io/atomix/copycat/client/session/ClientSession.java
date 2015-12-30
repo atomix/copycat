@@ -20,10 +20,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.ConnectionStrategy;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.RetryStrategy;
+import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
 
@@ -74,6 +71,23 @@ public class ClientSession implements Session, Managed<Session> {
   @Override
   public Listener<State> onStateChange(Consumer<State> callback) {
     return state.onStateChange(callback);
+  }
+
+  /**
+   * Submits an operation to the session.
+   *
+   * @param operation The operation to submit.
+   * @param <T> The operation result type.
+   * @return A completable future to be completed with the operation result.
+   */
+  public <T> CompletableFuture<T> submit(Operation<T> operation) {
+    if (operation instanceof Query) {
+      return submit((Query<T>) operation);
+    } else if (operation instanceof Command) {
+      return submit((Command<T>) operation);
+    } else {
+      throw new UnsupportedOperationException("unknown operation type: " + operation.getClass());
+    }
   }
 
   /**
