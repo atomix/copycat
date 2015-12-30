@@ -72,6 +72,7 @@ class ServerSession implements Session {
   ServerSession(long id, UUID client, ServerStateMachineContext context, long timeout) {
     this.id = id;
     this.client = Assert.notNull(client, "client");
+    this.eventIndex = id;
     this.completeIndex = id;
     this.lastApplied = id - 1;
     this.context = context;
@@ -607,7 +608,7 @@ class ServerSession implements Session {
     PublishRequest request = PublishRequest.builder()
       .withSession(id())
       .withEventIndex(event.eventIndex)
-      .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
+      .withPreviousIndex(event.previousIndex)
       .withEvents(event.events)
       .build();
 
