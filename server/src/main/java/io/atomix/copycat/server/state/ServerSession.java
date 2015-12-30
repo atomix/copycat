@@ -112,6 +112,7 @@ class ServerSession implements Session {
   private void setState(State state) {
     if (this.state != state) {
       this.state = state;
+      LOGGER.debug("{} - State changed: {}", id, state);
       changeListeners.forEach(l -> l.accept(state));
     }
   }
@@ -613,6 +614,7 @@ class ServerSession implements Session {
     LOGGER.debug("{} - Sending {}", id, request);
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
+        LOGGER.debug("{} - Received {}", id, response);
         if (response.status() == Response.Status.OK) {
           clearEvents(response.index());
         } else if (response.error() == null) {
