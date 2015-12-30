@@ -27,7 +27,6 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
-import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.state.ServerState;
 import io.atomix.copycat.server.storage.Log;
@@ -306,7 +305,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The current Raft term.
    */
   public long term() {
-    return state.getTerm();
+    return state != null ? state.getTerm() : 0;
   }
 
   /**
@@ -317,8 +316,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The current Raft leader or {@code null} if this server does not know of any leader.
    */
   public Address leader() {
-    Member leader = state.getLeader();
-    return leader != null ? leader.serverAddress() : null;
+    return state != null && state.getLeader() != null ? state.getLeader().serverAddress() : null;
   }
 
   /**
@@ -357,7 +355,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The current server type.
    */
   public Type type() {
-    return state.getType();
+    return state != null ? state.getType() : null;
   }
 
   /**
@@ -370,7 +368,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The Copycat server state.
    */
   public State state() {
-    return state.getState();
+    return state != null ? state.getState() : null;
   }
 
   /**
@@ -418,7 +416,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The server thread context.
    */
   public ThreadContext context() {
-    return state.getThreadContext();
+    return state != null ? state.getThreadContext() : null;
   }
 
   /**
