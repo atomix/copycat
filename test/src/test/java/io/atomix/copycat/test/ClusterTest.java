@@ -16,8 +16,7 @@
 package io.atomix.copycat.test;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.LocalServerRegistry;
-import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.transport.NettyTransport;
 import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
@@ -50,7 +49,6 @@ import java.util.stream.Collectors;
  */
 @Test
 public class ClusterTest extends ConcurrentTestCase {
-  protected volatile LocalServerRegistry registry;
   protected volatile int port;
   protected volatile List<Member> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
@@ -64,7 +62,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport(2))
       .build();
     clients.add(client);
     client.open().join();
@@ -110,7 +108,7 @@ public class ClusterTest extends ConcurrentTestCase {
       // Create a new client each time a server is removed and verify that all values are present.
       CopycatClient client2 = CopycatClient.builder(m1.clientAddress(), m2.clientAddress(), m3.clientAddress())
         .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-        .withTransport(new LocalTransport(registry))
+        .withTransport(new NettyTransport(2))
         .build();
       clients.add(client2);
       client2.open().thenRun(this::resume);
@@ -223,7 +221,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport(2))
       .build();
     client.open().get();
 
@@ -1272,7 +1270,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatServer createServer(List<Member> members, Member member) {
     CopycatServer server = CopycatServer.builder(member.clientAddress(), member.serverAddress(), members.stream().map(Member::serverAddress).collect(Collectors.toList()))
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport(2))
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
@@ -1289,7 +1287,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport(2))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
@@ -1319,7 +1317,6 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     });
 
-    registry = new LocalServerRegistry();
     members = new ArrayList<>();
     port = 5000;
     clients = new ArrayList<>();

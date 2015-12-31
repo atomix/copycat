@@ -171,6 +171,8 @@ public class ServerContext implements Managed<ServerState> {
 
     return future.whenCompleteAsync((result, error) -> {
       context.close();
+      clientTransport.close();
+      serverTransport.close();
 
       try {
         this.state.getLog().close();

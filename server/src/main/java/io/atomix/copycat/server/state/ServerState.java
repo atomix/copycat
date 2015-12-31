@@ -304,7 +304,6 @@ public class ServerState {
   ServerState setLastVotedFor(int candidate) {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
     Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
-    Assert.stateNot(leader != 0 && candidate != 0, "Cannot cast vote - leader already exists");
     Member member = cluster.getMember(candidate);
     Assert.state(member != null, "unknown candidate: %d", candidate);
     this.lastVotedFor = candidate;
