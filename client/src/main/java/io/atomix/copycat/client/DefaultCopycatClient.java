@@ -57,7 +57,10 @@ public class DefaultCopycatClient implements CopycatClient {
   private final RecoveryStrategy recoveryStrategy;
   private final ClientSequencer sequencer = new ClientSequencer();
   private ClientSession session;
-  private State state = State.CLOSED;
+  private volatile State state = State.CLOSED;
+  private volatile CompletableFuture<CopycatClient> openFuture;
+  private volatile CompletableFuture<CopycatClient> recoverFuture;
+  private volatile CompletableFuture<Void> closeFuture;
   private final Map<Long, OperationFuture<?>> operations = new LinkedHashMap<>();
   private final Set<StateChangeListener> changeListeners = new CopyOnWriteArraySet<>();
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
@@ -160,20 +163,22 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public CompletableFuture<CopycatClient> open() {
+  public synchronized CompletableFuture<CopycatClient> open() {
     if (state != State.CLOSED)
       return CompletableFuture.completedFuture(this);
 
-    CompletableFuture<CopycatClient> future = new CompletableFuture<>();
-    session = newSession();
-    session.open().whenCompleteAsync((result, error) -> {
-      if (error == null) {
-        future.complete(this);
-      } else {
-        future.completeExceptionally(error);
-      }
-    }, context.executor());
-    return future;
+    if (openFuture == null) {
+      openFuture = new CompletableFuture<>();
+      session = newSession();
+      session.open().whenCompleteAsync((result, error) -> {
+        if (error == null) {
+          openFuture.complete(this);
+        } else {
+          openFuture.completeExceptionally(error);
+        }
+      }, context.executor());
+    }
+    return openFuture;
   }
 
   @Override
@@ -249,56 +254,60 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public CompletableFuture<CopycatClient> recover() {
+  public synchronized CompletableFuture<CopycatClient> recover() {
     if (state != State.SUSPENDED)
       return Futures.exceptionalFuture(new IllegalStateException("cannot recover client in " + state + " state"));
 
-    LOGGER.debug("Recovering session");
+    if (recoverFuture == null) {
+      LOGGER.debug("Recovering session");
 
-    // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
-    CompletableFuture<CopycatClient> future = new CompletableFuture<>();
+      // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
+      recoverFuture = new CompletableFuture<>();
 
-    ClientSession session = newSession();
-    session.open().whenCompleteAsync((result, error) -> {
-      // If the session was opened successfully, resubmit any pending operations.
-      if (error == null) {
-        this.session = session;
-        for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
-          resubmit(entry.getKey(), entry.getValue());
+      ClientSession session = newSession();
+      session.open().whenCompleteAsync((result, error) -> {
+        // If the session was opened successfully, resubmit any pending operations.
+        if (error == null) {
+          this.session = session;
+          for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
+            resubmit(entry.getKey(), entry.getValue());
+          }
+          recoverFuture.complete(this);
+        } else {
+          setState(State.CLOSED);
+          recoverFuture.completeExceptionally(error);
         }
-        future.complete(this);
-      } else {
-        setState(State.CLOSED);
-        future.completeExceptionally(error);
-      }
-    }, context.executor());
-    return future;
+      }, context.executor());
+    }
+    return recoverFuture;
   }
 
   @Override
-  public CompletableFuture<Void> close() {
+  public synchronized CompletableFuture<Void> close() {
     if (state == State.CLOSED)
       return CompletableFuture.completedFuture(null);
 
-    // Close the child session and call close listeners once complete.
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    session.close().whenCompleteAsync((result, error) -> {
-      setState(State.CLOSED);
-      for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
-        entry.getValue().completeExceptionally(new ClosedSessionException("session closed"));
-      }
-
-      CompletableFuture.runAsync(() -> {
-        context.close();
-        transport.close();
-        if (error == null) {
-          future.complete(null);
-        } else {
-          future.completeExceptionally(error);
+    if (closeFuture == null) {
+      // Close the child session and call close listeners once complete.
+      closeFuture = new CompletableFuture<>();
+      session.close().whenCompleteAsync((result, error) -> {
+        setState(State.CLOSED);
+        for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
+          entry.getValue().completeExceptionally(new ClosedSessionException("session closed"));
         }
-      });
-    }, context.executor());
-    return future;
+
+        CompletableFuture.runAsync(() -> {
+          context.close();
+          transport.close();
+          if (error == null) {
+            closeFuture.complete(null);
+          } else {
+            closeFuture.completeExceptionally(error);
+          }
+        });
+      }, context.executor());
+    }
+    return closeFuture;
   }
 
   @Override
@@ -311,15 +320,21 @@ public class DefaultCopycatClient implements CopycatClient {
    *
    * @return A completable future to be completed once the client's session has been killed.
    */
-  public CompletableFuture<Void> kill() {
-    return session.kill()
-      .whenComplete((result, error) -> {
-        setState(State.CLOSED);
-        CompletableFuture.runAsync(() -> {
-          context.close();
-          transport.close();
+  public synchronized CompletableFuture<Void> kill() {
+    if (state == State.CLOSED)
+      return CompletableFuture.completedFuture(null);
+
+    if (closeFuture == null) {
+      closeFuture = session.kill()
+        .whenComplete((result, error) -> {
+          setState(State.CLOSED);
+          CompletableFuture.runAsync(() -> {
+            context.close();
+            transport.close();
+          });
         });
-      });
+    }
+    return closeFuture;
   }
 
   /**
