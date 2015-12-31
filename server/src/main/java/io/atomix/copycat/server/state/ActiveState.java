@@ -145,6 +145,15 @@ abstract class ActiveState extends PassiveState {
         .withVoted(false)
         .build();
     }
+    // If a leader was already determined for this term then reject the request.
+    else if (context.getLeader() != null) {
+      LOGGER.debug("{} - Rejected {}: leader already exists", context.getCluster().getMember().serverAddress(), request);
+      return VoteResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withVoted(false)
+        .build();
+    }
     // If the requesting candidate is not a known member of the cluster (to this
     // node) then don't vote for it. Only vote for candidates that we know about.
     else if (!context.getCluster().getMembers().stream().<Integer>map(Member::id).collect(Collectors.toSet()).contains(request.candidate())) {
