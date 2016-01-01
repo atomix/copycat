@@ -18,9 +18,11 @@ package io.atomix.copycat.client;
 /**
  * Strategy for recovering client sessions on failures.
  * <p>
- * Client recovery strategies are responsible for recovering a crashed client. When clients fail to contact
- * a server for more than their session timeout, the client's session must be closed as linearizability is
- * lost. The recovery strategy has the opportunity to recover the crashed client gracefully.
+ * Client recovery strategies are responsible for recovering a crashed client. When a client is unable
+ * to communicate with the cluster for some time period, the cluster may expire the client's session.
+ * In the event that a client reconnects and discovers its session is expired, the client's configured
+ * recovery strategy will be queried to determine how to handle the failure. Typically, recovery strategies
+ * can either {@link CopycatClient#recover() recover} or {@link CopycatClient#close() close} the client.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Copycat service interface.
+ * Base interface for communicating with a Copycat cluster.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

@@ -18,7 +18,11 @@ package io.atomix.copycat.client;
 import java.time.Duration;
 
 /**
- * Operation retry strategy.
+ * Strategy for handling operation submission failures by a client.
+ * <p>
+ * When a client submits an operation to the cluster, if the operation fails to be committed due
+ * to a communication or other failure, the retry strategy will be queried to determine how to
+ * handle the operation failure.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
