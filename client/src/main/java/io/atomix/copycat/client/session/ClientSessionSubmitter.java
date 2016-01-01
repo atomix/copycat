@@ -43,7 +43,7 @@ import java.util.function.BiConsumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ClientSessionSubmitter {
+final class ClientSessionSubmitter {
   private final Connection connection;
   private final ClientSessionState state;
   private final ThreadContext context;
