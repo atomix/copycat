@@ -408,7 +408,7 @@ final class LeaderState extends ActiveState {
     // sequence number. In that case, it's likely that the command was submitted more than once to the
     // cluster, and the command will be deduplicated once applied to the state machine.
     if (request.sequence() > session.nextRequestSequence()) {
-      session.registerRequest(request.sequence(), () -> command(request).whenComplete(future));
+      session.registerRequest(request.sequence(), () -> context.getThreadContext().executor().execute(() -> command(request).whenComplete(future)));
       return future;
     }
 
