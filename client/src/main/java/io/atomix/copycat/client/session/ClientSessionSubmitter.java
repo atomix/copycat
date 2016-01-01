@@ -18,10 +18,7 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.RetryStrategy;
+import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.error.CommandException;
 import io.atomix.copycat.client.error.QueryException;
 import io.atomix.copycat.client.error.RaftError;
@@ -275,6 +272,17 @@ public class ClientSessionSubmitter {
     @Override
     protected Throwable defaultException() {
       return new CommandException("failed to complete command");
+    }
+
+    @Override
+    public void fail(Throwable t) {
+      super.fail(t);
+      CommandRequest request = CommandRequest.builder()
+        .withSession(this.request.session())
+        .withSequence(this.request.sequence())
+        .withCommand(new NoOpCommand())
+        .build();
+      context.executor().execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
     }
 
     @Override
