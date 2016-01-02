@@ -181,12 +181,17 @@ final class LeaderAppender implements AutoCloseable {
     if (!open)
       return;
 
+    // If prior requests to the member have failed, build an empty append request to send to the member
+    // to prevent having to read from disk to configure, install, or append to an unavailable member.
+    if (member.getFailureCount() > 0) {
+      sendAppendRequest(member, buildAppendEmptyRequest(member));
+    }
     // If the member term is less than the current term or the member's configuration index is less
     // than the local configuration index, send a configuration update to the member.
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion()) {
+    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion()) {
       configure(member);
     }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
@@ -198,10 +203,7 @@ final class LeaderAppender implements AutoCloseable {
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (!appending.contains(member)) {
-      AppendRequest request = buildAppendRequest(member);
-      if (request != null) {
-        sendAppendRequest(member, request);
-      }
+      sendAppendRequest(member, buildAppendRequest(member));
     }
   }
 
@@ -329,9 +331,9 @@ final class LeaderAppender implements AutoCloseable {
     // If the member failed to respond to recent communication send an empty commit. This
     // helps avoid doing expensive work until we can ascertain the member is back up.
     if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
-      return buildEmptyRequest(member);
+      return buildAppendEmptyRequest(member);
     } else {
-      return buildEntryRequest(member);
+      return buildAppendEntriesRequest(member);
     }
   }
 
@@ -340,7 +342,7 @@ final class LeaderAppender implements AutoCloseable {
    * <p>
    * Empty append requests are used as heartbeats to followers.
    */
-  private AppendRequest buildEmptyRequest(MemberState member) {
+  private AppendRequest buildAppendEmptyRequest(MemberState member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
@@ -357,7 +359,7 @@ final class LeaderAppender implements AutoCloseable {
   /**
    * Builds a populated AppendEntries request.
    */
-  private AppendRequest buildEntryRequest(MemberState member) {
+  private AppendRequest buildAppendEntriesRequest(MemberState member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
