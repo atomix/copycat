@@ -47,7 +47,7 @@ final class LeaderAppender implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(LeaderAppender.class);
   private static final int MAX_BATCH_SIZE = 1024 * 32;
   private final LeaderState leader;
-  protected final ServerState context;
+  private final ServerState context;
   private final Set<MemberState> appending = new HashSet<>();
   private final Set<MemberState> configuring = new HashSet<>();
   private final Set<MemberState> installing = new HashSet<>();
