@@ -301,11 +301,10 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
   /**
    * Recovers the client session.
    * <p>
-   * Only a client in the {@link State#SUSPENDED} state may be recovered. When a client is recovered, the
-   * client will create and register a new {@link Session}. Once the session is recovered, the client will
-   * transition back to the {@link State#CONNECTED} state and resubmit pending operations from the previous
-   * session. Pending operations are guaranteed to be submitted to the new session in the same order in which
-   * they were submitted to the prior session and prior to submitting any new operations.
+   * When a client is recovered, the client will create and register a new {@link Session}. Once the session is
+   * recovered, the client will transition to the {@link State#CONNECTED} state and resubmit pending operations
+   * from the previous session. Pending operations are guaranteed to be submitted to the new session in the same
+   * order in which they were submitted to the prior session and prior to submitting any new operations.
    *
    * @return A completable future to be completed once the client's session is recovered.
    */

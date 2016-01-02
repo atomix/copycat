@@ -255,9 +255,6 @@ public class DefaultCopycatClient implements CopycatClient {
 
   @Override
   public synchronized CompletableFuture<CopycatClient> recover() {
-    if (state != State.SUSPENDED)
-      return Futures.exceptionalFuture(new IllegalStateException("cannot recover client in " + state + " state"));
-
     if (recoverFuture == null) {
       LOGGER.debug("Recovering session");
 
