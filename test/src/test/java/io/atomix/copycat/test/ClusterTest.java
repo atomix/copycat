@@ -57,87 +57,6 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile List<CopycatServer> servers = new ArrayList<>();
 
   /**
-   * Tests setting many keys in a map.
-   */
-  public void testReplaceOperations() throws Throwable {
-    List<CopycatServer> servers = createServers(3);
-
-    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withTransport(new LocalTransport(registry))
-      .build();
-    clients.add(client);
-    client.open().join();
-
-    // Put a thousand values in the map.
-    for (int i = 0; i < 1000; i++) {
-      String value = "" + i;
-      client.submit(new TestCommand(value, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
-        threadAssertEquals(result, value);
-        resume();
-      });
-    }
-    await(30000, 1000);
-
-    // Sleep for 5 seconds to allow log compaction to take place.
-    Thread.sleep(5000);
-
-    // Verify that all values are present.
-    for (int i = 0; i < 1000; i++) {
-      String value = "" + i;
-      client.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
-        threadAssertEquals(result, value);
-        resume();
-      });
-    }
-    await(30000, 1000);
-
-    // Create and join additional servers to the cluster.
-    Member m1 = nextMember();
-    createServer(members, m1).open().get();
-    Member m2 = nextMember();
-    createServer(members, m2).open().get();
-    Member m3 = nextMember();
-    createServer(members, m3).open().get();
-
-    // Sleep for 5 seconds to allow clients to locate the new servers.
-    Thread.sleep(5000);
-
-    // Iterate through the old servers and shut them down one by one.
-    for (CopycatServer server : servers) {
-      server.close().join();
-
-      // Create a new client each time a server is removed and verify that all values are present.
-      CopycatClient client2 = CopycatClient.builder(m1.clientAddress(), m2.clientAddress(), m3.clientAddress())
-        .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-        .withTransport(new LocalTransport(registry))
-        .build();
-      clients.add(client2);
-      client2.open().thenRun(this::resume);
-      await(15000);
-
-      for (int i = 0; i < 1000; i++) {
-        String value = "" + i;
-        client2.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
-          threadAssertEquals(result, value);
-          resume();
-        });
-      }
-      await(30000, 1000);
-    }
-
-    // Verify that all values are present with the original client.
-    for (int i = 0; i < 1000; i++) {
-      String value = "" + i;
-      client.submit(new TestQuery(value, Query.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
-        threadAssertEquals(result, value);
-        resume();
-      });
-    }
-    await(30000, 1000);
-  }
-
-  /**
    * Tests joining a server to an existing cluster.
    */
   public void testServerJoin() throws Throwable {
@@ -213,42 +132,6 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer server = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     server.close().thenRun(this::resume);
     await(30000);
-  }
-
-  /**
-   * Tests scaling the cluster from 1 node to 3 nodes and back.
-   */
-  public void testReplace() throws Throwable {
-    List<CopycatServer> servers = createServers(3);
-
-    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
-      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withTransport(new LocalTransport(registry))
-      .build();
-    client.open().get();
-
-    CopycatServer s1 = createServer(members, nextMember()).open().get();
-    CopycatServer s2 = createServer(members, nextMember()).open().get();
-    CopycatServer s3 = createServer(members, nextMember()).open().get();
-
-    for (int i = 0; i < servers.size(); i++) {
-      servers.get(i).close().join();
-
-      String value = String.format("Hello world %d!", i);
-      client.submit(new TestCommand(value, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
-        threadAssertEquals(result, value);
-        resume();
-      });
-
-      await(30000);
-
-    }
-
-    ((DefaultCopycatClient) client).kill().join();
-
-    s1.close().join();
-    s2.close().join();
-    s3.close().join();
   }
 
   /**
