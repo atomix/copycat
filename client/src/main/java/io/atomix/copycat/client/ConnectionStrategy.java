@@ -19,6 +19,17 @@ import java.time.Duration;
 
 /**
  * Connection strategies define how clients should handle initializing connections to the cluster.
+ * <p>
+ * Connection strategies are used by the {@link CopycatClient} at startup to indicate how to handle
+ * failures when connecting to the cluster. When a client is first started, the client will attempt to
+ * any server listed in the {@link io.atomix.catalyst.transport.Address address} list provided to the
+ * client at startup. If the client fails to register a new session with any server, the connection
+ * strategy will dictate how to handle the failure.
+ * <p>
+ * Connection strategies are used in the same manner when attempting to recover a lost session. In
+ * the event that a client's connection to the cluster is lost and the client must open a new session,
+ * if recovering the client's session fails then the connection strategy will again dictate how to
+ * handle the failure.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -56,7 +67,7 @@ public interface ConnectionStrategy {
     void fail(Throwable error);
 
     /**
-     * Retries connecting to the cluster.
+     * Immediately retries connecting to the cluster.
      */
     void retry();
 

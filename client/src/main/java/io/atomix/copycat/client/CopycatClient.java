@@ -64,6 +64,8 @@ import java.util.function.Consumer;
  * All client methods are fully asynchronous and return {@link CompletableFuture}. To block until a method is complete, use
  * the {@link CompletableFuture#get()} or {@link CompletableFuture#join()} methods.
  * <p>
+ * <b>Sessions</b>
+ * <p>
  * Sessions work to provide linearizable semantics for client {@link Command commands}. When a command is submitted to the cluster,
  * the command will be forwarded to the leader where it will be logged and replicated. Once the command is stored on a majority
  * of servers, the leader will apply it to its state machine and respond according to the command's {@link Command#consistency()}.
@@ -74,28 +76,92 @@ import java.util.function.Consumer;
  * query is handled. For queries with stronger consistency levels, they will be forwarded to the cluster's leader. For weaker
  * consistency queries, they may be executed on follower nodes according to the consistency level constraints. See the
  * {@link Query.ConsistencyLevel} documentation for more info.
+ * <p>
+ * Throughout the lifetime of a client, the client may operate on the cluster via multiple sessions according to the configured
+ * {@link RecoveryStrategy}. In the event that the client's session expires, the client may reopen a new session and continue
+ * to submit operations under the recovered session. The client will always attempt to ensure commands submitted are eventually
+ * committed to the cluster even across sessions. If a command is submitted under one session but is not completed before the
+ * session is lost and a new session is established, the client will resubmit pending commands from the prior session under
+ * the new session. This, though, may break linearizability guarantees since linearizability is only guaranteed within the context
+ * if a session. Users should watch the client for {@link io.atomix.copycat.client.CopycatClient.State state} changes to
+ * determine when linearizability guarantees may be broken. See the {@link io.atomix.copycat.client.CopycatClient.State}
+ * documentation for more info.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
 
   /**
-   * Client state.
+   * Indicates the state of the client's communication with the Copycat cluster.
+   * <p>
+   * Throughout the lifetime of a client, the client will transition through various states according to its
+   * ability to communicate with the cluster within the context of a {@link Session}. In some cases, client
+   * state changes may be indicative of a loss of guarantees. Users of the client should
+   * {@link CopycatClient#onStateChange(Consumer) watch the state of the client} to determine when guarantees
+   * are lost and react to changes in the client's ability to communicate with the cluster.
+   * <p>
+   * <pre>
+   *   {@code
+   *   client.onStateChange(state -> {
+   *     switch (state) {
+   *       case OPEN:
+   *         // The client is healthy
+   *         break;
+   *       case SUSPENDED:
+   *         // The client is healthy and operations may be unsafe
+   *         break;
+   *       case CLOSED:
+   *         // The client has been closed and pending operations have failed
+   *         break;
+   *     }
+   *   });
+   *   }
+   * </pre>
+   * So long as the client is in the {@link #CONNECTED} state, all guarantees with respect to reads and writes will
+   * be maintained, and a loss of the {@code CONNECTED} state may indicate a loss of linearizability. See the specific
+   * states for more info.
    */
   enum State {
 
     /**
      * Indicates that the client is connected and its session is open.
+     * <p>
+     * The {@code CONNECTED} state indicates that the client is healthy and operating normally. {@link Command commands}
+     * and {@link Query queries} submitted and completed while the client is in this state are guaranteed to adhere to
+     * the respective {@link io.atomix.copycat.client.Command.ConsistencyLevel consistency}
+     * {@link io.atomix.copycat.client.Query.ConsistencyLevel levels}.
      */
     CONNECTED,
 
     /**
      * Indicates that the client is suspended and its session may or may not be expired.
+     * <p>
+     * The {@code SUSPENDED} state is indicative of an inability to communicate with the cluster within the context of
+     * the client's {@link Session}. Operations submitted to or completed by clients in this state should be considered
+     * unsafe. An operation submitted to a {@link #CONNECTED} client that transitions to the {@code SUSPENDED} state
+     * prior to the operation's completion may be committed multiple times in the event that the underlying session
+     * is ultimately {@link Session.State#EXPIRED expired}, thus breaking linearizability. Additionally, state machines
+     * may see the session expire while the client is in this state.
+     * <p>
+     * If the client is configured with a {@link RecoveryStrategy} that recovers the client's session upon expiration,
+     * the client will transition back to the {@link #CONNECTED} state once a new session is registered, otherwise the
+     * client will transition either to the {@link #CONNECTED} or {@link #CLOSED} state based on whether its session
+     * is expired as determined once it re-establishes communication with the cluster.
+     * <p>
+     * If the client is configured with a {@link RecoveryStrategy} that <em>does not</em> recover the client's session
+     * upon a session expiration, all guarantees will be maintained by the client even for operations submitted in this
+     * state. If linearizability guarantees are essential, users should use the {@link RecoveryStrategies#CLOSE} strategy
+     * and allow the client to fail when its session is lost.
      */
     SUSPENDED,
 
     /**
      * Indicates that the client is closed.
+     * <p>
+     * A client may transition to this state as a result of an expired session or an explicit {@link CopycatClient#close() close}
+     * by the user. In the event that the client's {@link Session} is lost, if the configured {@link RecoveryStrategy}
+     * forces the client to close upon failure, the client will immediately be closed. If the {@link RecoveryStrategy}
+     * attempts to recover the client's session, the client still may close if it is unable to register a new session.
      */
     CLOSED
 
@@ -131,6 +197,10 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
 
   /**
    * Returns the current client state.
+   * <p>
+   * The client's {@link State} is indicative of the client's ability to communicate with the cluster at any given
+   * time. Users of the client should use the state to determine when guarantees may be lost. See the {@link State}
+   * documentation for information on the specific states.
    *
    * @return The current client state.
    */
@@ -213,8 +283,16 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
   /**
    * Connects the client to the Copycat cluster.
    * <p>
-   * When the client is opened, it will attempt to connect to and open a session with each unique configured server
-   * {@link Address}. Once the session is open, the returned {@link CompletableFuture} will be completed.
+   * When the client is opened, it will attempt to connect to and register a session with each unique configured server
+   * {@link Address}. Once the session is open, the client will transition to the {@link State#CONNECTED} state and the
+   * returned {@link CompletableFuture} will be completed.
+   * <p>
+   * The client will connect to servers in the cluster according to the pattern specified by theconfigured
+   * {@link ServerSelectionStrategy}.
+   * <p>
+   * In the event that the client is unable to register a session through any of the servers listed in the provided
+   * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
+   * to retry the registration attempt.
    *
    * @return A completable future to be completed once the client's {@link #session()} is open.
    */
@@ -222,6 +300,12 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
 
   /**
    * Recovers the client session.
+   * <p>
+   * Only a client in the {@link State#SUSPENDED} state may be recovered. When a client is recovered, the
+   * client will create and register a new {@link Session}. Once the session is recovered, the client will
+   * transition back to the {@link State#CONNECTED} state and resubmit pending operations from the previous
+   * session. Pending operations are guaranteed to be submitted to the new session in the same order in which
+   * they were submitted to the prior session and prior to submitting any new operations.
    *
    * @return A completable future to be completed once the client's session is recovered.
    */
@@ -229,6 +313,12 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
 
   /**
    * Closes the client.
+   * <p>
+   * Closing the client will cause the client to unregister its current {@link Session} if open. Once the
+   * client's session is unregistered, the returned {@link CompletableFuture} will be completed. If the client
+   * is unable to unregister its session, the client will transition to the {@link State#SUSPENDED} state and
+   * continue to attempt to reconnect and unregister its session until it is able to unregister its session or
+   * determine that it was already expired by the cluster.
    *
    * @return A completable future to be completed once the client has been closed.
    */

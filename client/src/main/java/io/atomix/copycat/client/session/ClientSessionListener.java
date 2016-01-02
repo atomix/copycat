@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class ClientSessionListener {
+final class ClientSessionListener {
   private final ClientSessionState state;
   private final ThreadContext context;
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
