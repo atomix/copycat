@@ -118,6 +118,7 @@ final class ClientSessionManager {
           // If the request was successful, update the address selector and schedule the next keep-alive.
           if (response.status() == Response.Status.OK) {
             connection.reset(response.leader(), response.members());
+            state.setState(Session.State.OPEN);
             keepAlive = context.schedule(interval, this::keepAlive);
           }
           // If the session is unknown, immediate expire the session.
