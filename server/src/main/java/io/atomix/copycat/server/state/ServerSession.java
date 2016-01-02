@@ -566,11 +566,9 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession resendEvents(long index) {
-    if (index > completeIndex) {
-      clearEvents(index);
-      for (EventHolder event : events) {
-        sendSequentialEvent(event);
-      }
+    clearEvents(index);
+    for (EventHolder event : events) {
+      sendSequentialEvent(event);
     }
     return this;
   }
@@ -622,9 +620,12 @@ class ServerSession implements Session {
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
         LOGGER.debug("{} - Received {}", id, response);
+        // If the event was received successfully, clear events up to the event index.
         if (response.status() == Response.Status.OK) {
           clearEvents(response.index());
-        } else if (response.error() == null) {
+        }
+        // If the event failed and the response index is non-null, resend all events from the response index.
+        else if (response.error() == null && response.index() > 0) {
           resendEvents(response.index());
         }
       }
