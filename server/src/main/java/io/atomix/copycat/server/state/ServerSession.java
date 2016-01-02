@@ -487,6 +487,11 @@ class ServerSession implements Session {
       this.event = new EventHolder(eventIndex, previousIndex);
     }
 
+    // If the current context is LINEARIZABLE and no future has been set for the event, create one.
+    if (context.consistency() == Command.ConsistencyLevel.LINEARIZABLE && this.event.future == null) {
+      this.event.future = new CompletableFuture<>();
+    }
+
     // Add the event to the event holder.
     this.event.events.add(new Event<>(event, message));
 
@@ -545,7 +550,8 @@ class ServerSession implements Session {
       while (event != null && event.eventIndex <= index) {
         events.remove();
         completeIndex = event.eventIndex;
-        event.future.complete(null);
+        if (event.future != null)
+          event.future.complete(null);
         event = events.peek();
       }
       completeIndex = index;
@@ -716,7 +722,7 @@ class ServerSession implements Session {
     private final long eventIndex;
     private final long previousIndex;
     private final List<Event<?>> events = new ArrayList<>(8);
-    private final CompletableFuture<Void> future = new CompletableFuture<>();
+    private CompletableFuture<Void> future;
 
     private EventHolder(long eventIndex, long previousIndex) {
       this.eventIndex = eventIndex;

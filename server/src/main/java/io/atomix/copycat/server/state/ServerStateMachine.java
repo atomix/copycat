@@ -551,16 +551,32 @@ final class ServerStateMachine implements AutoCloseable {
       // The keep-alive entry also serves to clear cached command responses and events from memory.
       // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
       executor.executor().execute(() -> {
+        // Update the state machine context with the keep-alive entry's index. This ensures that events published
+        // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
+        executor.init(index, Instant.ofEpochMilli(timestamp), false, Command.ConsistencyLevel.SEQUENTIAL);
+
         session.clearResponses(commandSequence).resendEvents(eventIndex);
 
         // Calculate the last completed index.
         long lastCompleted = calculateLastCompleted(index);
 
-        // Update the highest index completed for all sessions to allow log compaction to progress.
-        context.executor().execute(() -> {
-          setLastCompleted(lastCompleted);
-          future.complete(null);
-        });
+        // Callbacks in the state machine may have been triggered by the execution of the keep-alive.
+        // Get any futures for scheduled tasks and await their completion, then update the highest
+        // index completed for all sessions to allow log compaction to progress.
+        CompletableFuture<Void> sessionFuture = executor.commit();
+        if (sessionFuture != null) {
+          sessionFuture.whenComplete((result, error) -> {
+            context.executor().execute(() -> {
+              setLastCompleted(lastCompleted);
+              future.complete(null);
+            });
+          });
+        } else {
+          context.executor().execute(() -> {
+            setLastCompleted(lastCompleted);
+            future.complete(null);
+          });
+        }
       });
 
       // Update the session keep alive index for log cleaning.
@@ -841,27 +857,17 @@ final class ServerStateMachine implements AutoCloseable {
 
         // Once the operation has been applied to the state machine, commit events published by the command.
         // The state machine context will build a composite future for events published to all sessions.
+        // If events were published during the execution of the command and under a LINEARIZABLE event consistency,
+        // the composite future will be non-null. Wait for events to be acknowledged by clients and for a non-null
+        // future to be completed before completing the command future.
         CompletableFuture<Void> sessionFuture = executor.commit();
-
-        // If the command consistency level is not LINEARIZABLE or null, register the response and complete the
-        // command immediately in the state machine thread. Note that we don't store the event future since
-        // the sequential nature of the command means we shouldn't need to block even on retries.
-        if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
-          session.registerResponse(sequence, result, null);
-          context.executor().execute(() -> future.complete(result));
-        } else {
-          // If the command consistency level is LINEARIZABLE, store the response with the event future. The stored
-          // response will be used to provide linearizable semantics for commands resubmitted to the cluster.
-          // If an event future was provided by the state machine context indicating that events were published by
-          // the command, wait for the events to be received and acknowledged by the respective sessions before returning.
-          session.registerResponse(sequence, result, sessionFuture);
-          if (sessionFuture != null) {
-            sessionFuture.whenComplete((sessionResult, sessionError) -> {
-              context.executor().execute(() -> future.complete(result));
-            });
-          } else {
+        session.registerResponse(sequence, result, sessionFuture);
+        if (sessionFuture != null) {
+          sessionFuture.whenComplete((sessionResult, sessionError) -> {
             context.executor().execute(() -> future.complete(result));
-          }
+          });
+        } else {
+          context.executor().execute(() -> future.complete(result));
         }
       } catch (Exception e) {
         // If an exception occurs during execution of the command, store the exception.
