@@ -334,6 +334,21 @@ public class DefaultCopycatClient implements CopycatClient {
     return closeFuture;
   }
 
+  @Override
+  public int hashCode() {
+    return 23 + 37 * (session != null ? session.hashCode() : 0);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof DefaultCopycatClient && ((DefaultCopycatClient) object).session() == session;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[session=%s]", getClass().getSimpleName(), session);
+  }
+
   /**
    * A completable future related to a single operation.
    */

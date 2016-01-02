@@ -197,4 +197,22 @@ public class ClientSession implements Session, Managed<Session> {
     return state.getState() == State.EXPIRED || state.getState() == State.CLOSED;
   }
 
+  @Override
+  public int hashCode() {
+    int hashCode = 31;
+    long id = id();
+    hashCode = 37 * hashCode + (int)(id ^ (id >>> 32));
+    return hashCode;
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof ClientSession && ((ClientSession) object).id() == id();
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[id=%d]", getClass().getSimpleName(), id());
+  }
+
 }
