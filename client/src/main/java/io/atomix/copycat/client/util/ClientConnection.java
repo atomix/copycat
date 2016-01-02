@@ -127,6 +127,7 @@ public class ClientConnection implements Connection {
           future.completeExceptionally(new ConnectException("failed to connect"));
         }
       } else {
+        this.connection = null;
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       }
     }
@@ -157,9 +158,12 @@ public class ClientConnection implements Connection {
    * Connects to the cluster.
    */
   private CompletableFuture<Connection> connect() {
-    // If the address selector has been reset then reset the connection.
-    if (selector.state() == AddressSelector.State.RESET)
-      connection = null;
+    // If the address selector has been then reset the connection.
+    if (selector.state() == AddressSelector.State.RESET && connection != null) {
+      connectFuture = new CompletableFuture<>();
+      connection.close().whenComplete((result, error) -> connect(connectFuture));
+      return connectFuture.whenComplete((result, error) -> connectFuture = null);
+    }
 
     // If a connection was already established then use that connection.
     if (connection != null)
@@ -181,7 +185,8 @@ public class ClientConnection implements Connection {
    * Connects to the cluster using the next connection.
    */
   private CompletableFuture<Connection> next() {
-    connection = null;
+    if (connection != null)
+      return connection.close().thenRun(() -> connection = null).thenCompose(v -> connect());
     return connect();
   }
 
