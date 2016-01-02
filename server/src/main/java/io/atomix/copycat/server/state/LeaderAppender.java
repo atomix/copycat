@@ -184,7 +184,9 @@ final class LeaderAppender implements AutoCloseable {
     // If prior requests to the member have failed, build an empty append request to send to the member
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
     if (member.getFailureCount() > 0) {
-      sendAppendRequest(member, buildAppendEmptyRequest(member));
+      if (!appending.contains(member)) {
+        sendAppendRequest(member, buildAppendEmptyRequest(member));
+      }
     }
     // If the member term is less than the current term or the member's configuration index is less
     // than the local configuration index, send a configuration update to the member.
