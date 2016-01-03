@@ -15,17 +15,26 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.buffer.Buffer;
+import io.atomix.catalyst.buffer.HeapBuffer;
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
+import io.atomix.copycat.server.request.ConfigureRequest;
+import io.atomix.copycat.server.request.InstallRequest;
 import io.atomix.copycat.server.response.AppendResponse;
+import io.atomix.copycat.server.response.ConfigureResponse;
+import io.atomix.copycat.server.response.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -34,9 +43,14 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class LeaderAppender extends AbstractAppender {
+final class LeaderAppender implements AutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(LeaderAppender.class);
   private static final int MAX_BATCH_SIZE = 1024 * 32;
   private final LeaderState leader;
+  private final ServerState context;
+  private final Set<MemberState> appending = new HashSet<>();
+  private final Set<MemberState> configuring = new HashSet<>();
+  private final Set<MemberState> installing = new HashSet<>();
   private final long leaderTime;
   private final long leaderIndex;
   private long commitTime;
@@ -44,10 +58,11 @@ final class LeaderAppender extends AbstractAppender {
   private CompletableFuture<Long> commitFuture;
   private CompletableFuture<Long> nextCommitFuture;
   private final Map<Long, CompletableFuture<Long>> commitFutures = new HashMap<>();
+  private boolean open = true;
 
   LeaderAppender(LeaderState leader) {
-    super(leader.context);
     this.leader = Assert.notNull(leader, "leader");
+    this.context = leader.context;
     this.leaderTime = System.currentTimeMillis();
     this.leaderIndex = context.getLog().nextIndex();
     this.commitTime = leaderTime;
@@ -156,6 +171,42 @@ final class LeaderAppender extends AbstractAppender {
       }
       return new CompletableFuture<>();
     });
+  }
+
+  /**
+   * Sends append entries requests to the given member.
+   */
+  protected void appendEntries(MemberState member) {
+    // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
+    if (!open)
+      return;
+
+    // If prior requests to the member have failed, build an empty append request to send to the member
+    // to prevent having to read from disk to configure, install, or append to an unavailable member.
+    if (member.getFailureCount() > 0) {
+      if (!appending.contains(member)) {
+        sendAppendRequest(member, buildAppendEmptyRequest(member));
+      }
+    }
+    // If the member term is less than the current term or the member's configuration index is less
+    // than the local configuration index, send a configuration update to the member.
+    // Ensure that only one configuration attempt per member is attempted at any given time by storing the
+    // member state in a set of configuring members.
+    // Once the configuration is complete sendAppendRequest will be called recursively.
+    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getCluster().getVersion()) {
+      configure(member);
+    }
+    // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
+    // is less than the nextIndex, send a snapshot request.
+    else if (context.getSnapshotStore().currentSnapshot() != null
+      && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
+      && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
+      install(member);
+    }
+    // If no AppendRequest is already being sent, send an AppendRequest.
+    else if (!appending.contains(member)) {
+      sendAppendRequest(member, buildAppendRequest(member));
+    }
   }
 
   /**
@@ -269,7 +320,12 @@ final class LeaderAppender extends AbstractAppender {
     }
   }
 
-  @Override
+  /**
+   * Builds an append request.
+   *
+   * @param member The member to which to send the request.
+   * @return The append request.
+   */
   protected AppendRequest buildAppendRequest(MemberState member) {
     // If the log is empty then send an empty commit.
     // If the next index hasn't yet been set then we send an empty commit first.
@@ -277,9 +333,9 @@ final class LeaderAppender extends AbstractAppender {
     // If the member failed to respond to recent communication send an empty commit. This
     // helps avoid doing expensive work until we can ascertain the member is back up.
     if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
-      return buildEmptyRequest(member);
+      return buildAppendEmptyRequest(member);
     } else {
-      return buildEntryRequest(member);
+      return buildAppendEntriesRequest(member);
     }
   }
 
@@ -288,7 +344,7 @@ final class LeaderAppender extends AbstractAppender {
    * <p>
    * Empty append requests are used as heartbeats to followers.
    */
-  private AppendRequest buildEmptyRequest(MemberState member) {
+  private AppendRequest buildAppendEmptyRequest(MemberState member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
@@ -305,7 +361,7 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Builds a populated AppendEntries request.
    */
-  private AppendRequest buildEntryRequest(MemberState member) {
+  private AppendRequest buildAppendEntriesRequest(MemberState member) {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
@@ -350,19 +406,83 @@ final class LeaderAppender extends AbstractAppender {
     return builder.build();
   }
 
-  @Override
-  protected void startAppendRequest(MemberState member, AppendRequest request) {
-    super.startAppendRequest(member, request);
+  /**
+   * Gets the previous index.
+   */
+  protected long getPrevIndex(MemberState member) {
+    return member.getNextIndex() - 1;
+  }
+
+  /**
+   * Gets the previous entry.
+   */
+  protected Entry getPrevEntry(MemberState member, long prevIndex) {
+    if (prevIndex > 0) {
+      return context.getLog().get(prevIndex);
+    }
+    return null;
+  }
+
+  /**
+   * Connects to the member and sends a commit message.
+   */
+  protected void sendAppendRequest(MemberState member, AppendRequest request) {
+    // Add the member to the appending set to prevent concurrent append attempts to the member.
+    appending.add(member);
+
+    // Set the start time of the member's current commit. This will be used to associate responses
+    // with the current commit request.
     member.setCommitStartTime(commitTime);
+
+    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
+    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      context.checkThread();
+
+      if (open) {
+        if (error == null) {
+          sendAppendRequest(connection, member, request);
+        } else {
+          // Remove the member from the appending set to allow the next append request.
+          appending.remove(member);
+
+          // Trigger commit futures if necessary.
+          commitTime(member, error);
+
+          // Log the failed attempt to contact the member.
+          failAttempt(member, error);
+        }
+      }
+    });
   }
 
-  @Override
-  protected void endAppendRequest(MemberState member, AppendRequest request, Throwable error) {
-    super.endAppendRequest(member, request, error);
-    commitTime(member, error);
+  /**
+   * Sends a commit message.
+   */
+  protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
+    connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
+      context.checkThread();
+
+      // Remove the member from the appending list to allow the next append request.
+      appending.remove(member);
+
+      // Trigger commit futures if necessary.
+      commitTime(member, error);
+
+      if (open) {
+        if (error == null) {
+          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+          handleAppendResponse(member, request, response);
+        } else {
+          // Log the failed attempt to contact the member.
+          failAttempt(member, error);
+        }
+      }
+    });
   }
 
-  @Override
+  /**
+   * Handles an append response.
+   */
   protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
     if (response.status() == Response.Status.OK) {
       handleAppendResponseOk(member, request, response);
@@ -375,10 +495,8 @@ final class LeaderAppender extends AbstractAppender {
    * Handles a {@link Response.Status#OK} response.
    */
   private void handleAppendResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
+    // Reset the member failure count and update the member's availability status if necessary.
     succeedAttempt(member);
-
-    // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
-    commitTime(member, null);
 
     // If replication succeeded then trigger commit futures.
     if (response.succeeded()) {
@@ -434,11 +552,6 @@ final class LeaderAppender extends AbstractAppender {
     }
   }
 
-  @Override
-  protected void handleAppendError(MemberState member, AppendRequest request, Throwable error) {
-    failAttempt(member, error);
-  }
-
   /**
    * Succeeds an attempt to contact a member.
    */
@@ -457,6 +570,9 @@ final class LeaderAppender extends AbstractAppender {
    * Fails an attempt to contact a member.
    */
   private void failAttempt(MemberState member, Throwable error) {
+    // Reset the connection to the given member to ensure failed connections are reconstructed upon retries.
+    context.getConnections().resetConnection(member.getMember().serverAddress());
+
     // If any append error occurred, increment the failure count for the member. Log the first three failures,
     // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
     // when attempting to send entries to down followers.
@@ -491,6 +607,315 @@ final class LeaderAppender extends AbstractAppender {
       member.getMember().update(CopycatServer.Type.ACTIVE);
       leader.configure(context.getCluster().getMembers());
     }
+  }
+
+  /**
+   * Returns a boolean value indicating whether there are more entries to send.
+   */
+  protected boolean hasMoreEntries(MemberState member) {
+    // If the member's nextIndex is an entry in the local log then more entries can be sent.
+    return member.getNextIndex() <= context.getLog().lastIndex();
+  }
+
+  /**
+   * Updates the match index when a response is received.
+   */
+  protected void updateMatchIndex(MemberState member, AppendResponse response) {
+    // If the replica returned a valid match index then update the existing match index.
+    member.setMatchIndex(response.logIndex());
+  }
+
+  /**
+   * Updates the next index when the match index is updated.
+   */
+  protected void updateNextIndex(MemberState member) {
+    // If the match index was set, update the next index to be greater than the match index if necessary.
+    member.setNextIndex(Math.max(member.getNextIndex(), Math.max(member.getMatchIndex() + 1, 1)));
+  }
+
+  /**
+   * Resets the match index when a response fails.
+   */
+  protected void resetMatchIndex(MemberState member, AppendResponse response) {
+    member.setMatchIndex(response.logIndex());
+    LOGGER.debug("{} - Reset match index for {} to {}", context.getCluster().getMember().serverAddress(), member, member.getMatchIndex());
+  }
+
+  /**
+   * Resets the next index when a response fails.
+   */
+  protected void resetNextIndex(MemberState member) {
+    if (member.getMatchIndex() != 0) {
+      member.setNextIndex(member.getMatchIndex() + 1);
+    } else {
+      member.setNextIndex(context.getLog().firstIndex());
+    }
+    LOGGER.debug("{} - Reset next index for {} to {}", context.getCluster().getMember().serverAddress(), member, member.getNextIndex());
+  }
+
+  /**
+   * Sends a configuration to the given member.
+   */
+  protected void configure(MemberState member) {
+    if (!configuring.contains(member)) {
+      ConfigureRequest request = buildConfigureRequest(member);
+      if (request != null) {
+        sendConfigureRequest(member, request);
+      }
+    }
+  }
+
+  /**
+   * Builds a configure request for the given member.
+   */
+  protected ConfigureRequest buildConfigureRequest(MemberState member) {
+    Member leader = context.getLeader();
+    return ConfigureRequest.builder()
+      .withTerm(context.getTerm())
+      .withLeader(leader != null ? leader.id() : 0)
+      .withIndex(context.getCluster().getVersion())
+      .withMembers(context.getCluster().getMembers())
+      .build();
+  }
+
+  /**
+   * Connects to the member and sends a configure request.
+   */
+  protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
+    // Add the member to the configuring set to prevent concurrent configure attempts.
+    configuring.add(member);
+
+    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      context.checkThread();
+
+      if (open) {
+        if (error == null) {
+          sendConfigureRequest(connection, member, request);
+        } else {
+          // Remove the member from the configuring set to allow a new configure request.
+          configuring.remove(member);
+
+          // Trigger commit futures if necessary.
+          commitTime(member, error);
+
+          // Log the failed attempt to contact the member.
+          failAttempt(member, error);
+        }
+      }
+    });
+  }
+
+  /**
+   * Sends a configuration message.
+   */
+  protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
+    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
+    connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
+      context.checkThread();
+
+      // Remove the member from the configuring list to allow a new configure request.
+      configuring.remove(member);
+
+      // Trigger commit futures if necessary.
+      commitTime(member, error);
+
+      if (open) {
+        if (error == null) {
+          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+          handleConfigureResponse(member, request, response);
+        } else {
+          LOGGER.warn("{} - Failed to configure {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+
+          // Log the failed attempt to contact the member.
+          failAttempt(member, error);
+        }
+      }
+    });
+  }
+
+  /**
+   * Handles a configuration response.
+   */
+  protected void handleConfigureResponse(MemberState member, ConfigureRequest request, ConfigureResponse response) {
+    if (response.status() == Response.Status.OK) {
+      handleConfigureResponseOk(member, request, response);
+    } else {
+      handleConfigureResponseError(member, request, response);
+    }
+  }
+
+  /**
+   * Handles an OK configuration response.
+   */
+  protected void handleConfigureResponseOk(MemberState member, ConfigureRequest request, ConfigureResponse response) {
+    // Reset the member failure count and update the member's status if necessary.
+    succeedAttempt(member);
+
+    // Update the member's current configuration term and index according to the installed configuration.
+    member.setConfigTerm(request.term()).setConfigIndex(request.index());
+
+    // Recursively append entries to the member.
+    appendEntries(member);
+  }
+
+  /**
+   * Handles an ERROR configuration response.
+   */
+  protected void handleConfigureResponseError(MemberState member, ConfigureRequest request, ConfigureResponse response) {
+    appendEntries(member);
+  }
+
+  /**
+   * Sends a snapshot to the given member.
+   */
+  protected void install(MemberState member) {
+    if (!installing.contains(member)) {
+      InstallRequest request = buildInstallRequest(member);
+      if (request != null) {
+        sendInstallRequest(member, request);
+      }
+    }
+  }
+
+  /**
+   * Builds an install request for the given member.
+   */
+  protected InstallRequest buildInstallRequest(MemberState member) {
+    Snapshot snapshot = context.getSnapshotStore().currentSnapshot();
+    if (member.getNextSnapshotIndex() != snapshot.index()) {
+      member.setNextSnapshotIndex(snapshot.index()).setNextSnapshotOffset(0);
+    }
+
+    InstallRequest request;
+    synchronized (snapshot) {
+      // Open a new snapshot reader.
+      try (SnapshotReader reader = snapshot.reader()) {
+        // Skip to the next batch of bytes according to the snapshot chunk size and current offset.
+        reader.skip(member.getNextSnapshotOffset() * MAX_BATCH_SIZE);
+        Buffer buffer = HeapBuffer.allocate(Math.min(MAX_BATCH_SIZE, reader.remaining()));
+        reader.read(buffer);
+
+        // Create the install request, indicating whether this is the last chunk of data based on the number
+        // of bytes remaining in the buffer.
+        Member leader = context.getLeader();
+        request = InstallRequest.builder()
+          .withTerm(context.getTerm())
+          .withLeader(leader != null ? leader.id() : 0)
+          .withIndex(member.getNextSnapshotIndex())
+          .withOffset(member.getNextSnapshotOffset())
+          .withData(buffer.flip())
+          .withComplete(!reader.hasRemaining())
+          .build();
+      }
+    }
+
+    return request;
+  }
+
+  /**
+   * Connects to the member and sends a snapshot request.
+   */
+  protected void sendInstallRequest(MemberState member, InstallRequest request) {
+    // Add the member to the installing set to prevent concurrent install attempts.
+    installing.add(member);
+
+    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
+      context.checkThread();
+
+      if (open) {
+        if (error == null) {
+          sendInstallRequest(connection, member, request);
+        } else {
+          // Remove the member from the installing set to allow a new install request.
+          installing.remove(member);
+
+          // Trigger commit futures if necessary.
+          commitTime(member, error);
+
+          // Log the failed attempt to contact the member.
+          failAttempt(member, error);
+        }
+      }
+    });
+  }
+
+  /**
+   * Sends a snapshot message.
+   */
+  protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
+    LOGGER.debug("{} - Sent {} to {}", context.getCluster().getMember().serverAddress(), request, member.getMember().serverAddress());
+    connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
+      context.checkThread();
+
+      // Remove the member from the installing list to allow a new install request.
+      installing.remove(member);
+
+      // Trigger commit futures if necessary.
+      commitTime(member, error);
+
+      if (open) {
+        if (error == null) {
+          LOGGER.debug("{} - Received {} from {}", context.getCluster().getMember().serverAddress(), response, member.getMember().serverAddress());
+          handleInstallResponse(member, request, response);
+        } else {
+          LOGGER.warn("{} - Failed to install {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+
+          // Reset the member's snapshot index and offset to resend the snapshot from the start
+          // once a connection to the member is re-established.
+          member.setNextSnapshotIndex(0).setNextSnapshotOffset(0);
+
+          // Log the failed attempt to contact the member.
+          failAttempt(member, error);
+        }
+      }
+    });
+  }
+
+  /**
+   * Handles an install response.
+   */
+  protected void handleInstallResponse(MemberState member, InstallRequest request, InstallResponse response) {
+    if (response.status() == Response.Status.OK) {
+      handleInstallResponseOk(member, request, response);
+    } else {
+      handleInstallResponseError(member, request, response);
+    }
+  }
+
+  /**
+   * Handles an OK install response.
+   */
+  protected void handleInstallResponseOk(MemberState member, InstallRequest request, InstallResponse response) {
+    // Reset the member failure count and update the member's status if necessary.
+    succeedAttempt(member);
+
+    // If the install request was completed successfully, set the member's snapshotIndex and reset
+    // the next snapshot index/offset.
+    if (request.complete()) {
+      member.setSnapshotIndex(request.index())
+        .setNextSnapshotIndex(0)
+        .setNextSnapshotOffset(0);
+    }
+    // If more install requests remain, increment the member's snapshot offset.
+    else {
+      member.setNextSnapshotOffset(request.offset() + 1);
+    }
+
+    // Recursively append entries to the member.
+    appendEntries(member);
+  }
+
+  /**
+   * Handles an ERROR install response.
+   */
+  protected void handleInstallResponseError(MemberState member, InstallRequest request, InstallResponse response) {
+    LOGGER.warn("{} - Failed to install {}", context.getCluster().getMember().serverAddress(), member.getMember().serverAddress());
+    member.setNextSnapshotIndex(0).setNextSnapshotOffset(0);
+  }
+
+  @Override
+  public void close() {
+    open = false;
   }
 
 }
