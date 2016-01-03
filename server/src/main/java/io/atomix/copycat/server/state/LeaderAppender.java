@@ -445,11 +445,11 @@ final class LeaderAppender implements AutoCloseable {
           // Remove the member from the appending set to allow the next append request.
           appending.remove(member);
 
-          // Trigger commit futures if necessary.
-          commitTime(member, error);
-
           // Log the failed attempt to contact the member.
           failAttempt(member, error);
+
+          // Trigger commit futures if necessary.
+          commitTime(member, error);
         }
       }
     });
@@ -695,11 +695,11 @@ final class LeaderAppender implements AutoCloseable {
           // Remove the member from the configuring set to allow a new configure request.
           configuring.remove(member);
 
-          // Trigger commit futures if necessary.
-          commitTime(member, error);
-
           // Log the failed attempt to contact the member.
           failAttempt(member, error);
+
+          // Trigger commit futures if necessary.
+          commitTime(member, error);
         }
       }
     });
@@ -829,11 +829,11 @@ final class LeaderAppender implements AutoCloseable {
           // Remove the member from the installing set to allow a new install request.
           installing.remove(member);
 
-          // Trigger commit futures if necessary.
-          commitTime(member, error);
-
           // Log the failed attempt to contact the member.
           failAttempt(member, error);
+
+          // Trigger commit futures if necessary.
+          commitTime(member, error);
         }
       }
     });
