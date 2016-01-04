@@ -416,7 +416,10 @@ public class Log implements AutoCloseable {
    */
   public Log commit(long index) {
     assertIsOpen();
-    segments.commitIndex(index);
+    if (index > 0) {
+      assertValidIndex(index);
+      segments.commitIndex(index);
+    }
     return this;
   }
 
