@@ -474,6 +474,8 @@ public class ServerState {
     connection.handler(VoteRequest.class, request -> state.vote(request));
     connection.handler(CommandRequest.class, request -> state.command(request));
     connection.handler(QueryRequest.class, request -> state.query(request));
+
+    connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }
 
   /**
