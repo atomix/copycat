@@ -147,7 +147,7 @@ final class ClientSessionListener {
 
         return PublishResponse.builder()
           .withStatus(Response.Status.OK)
-          .withIndex(state.getEventIndex())
+          .withIndex(state.getCompleteIndex())
           .build();
       }, context.executor());
   }
