@@ -78,9 +78,18 @@ class ReserveState extends AbstractState {
     context.checkThread();
     logRequest(request);
 
+    // If the request indicates a term that is greater than the current term then
+    // assign that term and leader to the current context and step down as leader.
+    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(request.term());
+      context.setLeader(request.leader());
+    }
+
     return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withStatus(Response.Status.OK)
+      .withTerm(context.getTerm())
+      .withSucceeded(true)
+      .withLogIndex(0)
       .build()));
   }
 
