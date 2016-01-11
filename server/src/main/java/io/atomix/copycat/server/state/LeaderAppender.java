@@ -39,7 +39,6 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class LeaderAppender extends AbstractAppender {
-  private static final int MAX_BATCH_SIZE = 1024 * 32;
   private final LeaderState leader;
   private final long leaderTime;
   private final long leaderIndex;
@@ -170,7 +169,7 @@ final class LeaderAppender extends AbstractAppender {
 
     // If prior requests to the member have failed, build an empty append request to send to the member
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
-    if (member.getMember().type() == Member.Type.RESERVE || member.getMember().type() == Member.Type.PASSIVE || member.getFailureCount() > 0) {
+    if (member.getFailureCount() > 0) {
       if (canAppend(member)) {
         sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
@@ -183,6 +182,12 @@ final class LeaderAppender extends AbstractAppender {
     else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getVersion()) {
       if (canConfigure(member)) {
         sendConfigureRequest(member, buildConfigureRequest(member));
+      }
+    }
+    // If the member is a reserve or passive member, send an empty AppendRequest to it.
+    else if (member.getMember().type() == Member.Type.RESERVE || member.getMember().type() == Member.Type.PASSIVE) {
+      if (canAppend(member)) {
+        sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
