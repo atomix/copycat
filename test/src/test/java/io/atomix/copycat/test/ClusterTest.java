@@ -61,16 +61,6 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile List<CopycatServer> servers = new ArrayList<>();
 
   /**
-   * Tests joining a server to an existing cluster.
-   */
-  public void testServerJoin() throws Throwable {
-    createServers(3);
-    CopycatServer joiner = createServer(members, nextMember());
-    joiner.open().thenRun(this::resume);
-    await(30000);
-  }
-
-  /**
    * Tests joining a server after many entries have been committed.
    */
   public void testServerJoinLate() throws Throwable {
@@ -146,6 +136,158 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client = createClient();
     Thread.sleep(Duration.ofSeconds(10).toMillis());
     threadAssertTrue(client.isOpen());
+  }
+
+  /**
+   * Tests an active member joining the cluster.
+   */
+  public void testActiveJoin() throws Throwable {
+    testServerJoin(Member.Type.ACTIVE);
+  }
+
+  /**
+   * Tests a passive member joining the cluster.
+   */
+  public void testPassiveJoin() throws Throwable {
+    testServerJoin(Member.Type.PASSIVE);
+  }
+
+  /**
+   * Tests a reserve member joining the cluster.
+   */
+  public void testReserveJoin() throws Throwable {
+    testServerJoin(Member.Type.RESERVE);
+  }
+
+  /**
+   * Tests a server joining the cluster.
+   */
+  private void testServerJoin(Member.Type type) throws Throwable {
+    createServers(3);
+    CopycatServer server = createServer(members, nextMember(type));
+    server.open().thenRun(this::resume);
+    await(10000);
+  }
+
+  /**
+   * Tests an availability change of an active member.
+   */
+  public void testActiveAvailabilityChange() throws Throwable {
+    testAvailabilityChange(Member.Type.ACTIVE);
+  }
+
+  /**
+   * Tests an availability change of a passive member.
+   */
+  public void testPassiveAvailabilityChange() throws Throwable {
+    testAvailabilityChange(Member.Type.PASSIVE);
+  }
+
+  /**
+   * Tests an availability change of a reserve member.
+   */
+  public void testReserveAvailabilityChange() throws Throwable {
+    testAvailabilityChange(Member.Type.RESERVE);
+  }
+
+  /**
+   * Tests a member availability change.
+   */
+  private void testAvailabilityChange(Member.Type type) throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+
+    CopycatServer server = servers.get(0);
+    server.cluster().onJoin(m -> {
+      m.onStatusChange(s -> {
+        threadAssertEquals(s, Member.Status.UNAVAILABLE);
+        resume();
+      });
+    });
+
+    Member member = nextMember(type);
+    CopycatServer joiner = createServer(members, member);
+    joiner.open().thenRun(this::resume);
+    await(10000);
+
+    joiner.kill().thenRun(this::resume);
+    await(10000, 2);
+  }
+
+  /**
+   * Tests detecting an availability change of a reserve member on a passive member.
+   */
+  public void testPassiveReserveAvailabilityChange() throws Throwable {
+    createServers(3);
+
+    CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
+    CopycatServer reserve = createServer(members, nextMember(Member.Type.RESERVE));
+
+    passive.cluster().member(reserve.cluster().member().address()).onStatusChange(s -> {
+      threadAssertEquals(s, Member.Status.UNAVAILABLE);
+      resume();
+    });
+
+    reserve.kill().thenRun(this::resume);
+    await(10000, 2);
+  }
+
+  /**
+   * Tests detecting an availability change of a passive member on a reserve member.
+   */
+  public void testReservePassiveAvailabilityChange() throws Throwable {
+    createServers(3);
+
+    CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
+    CopycatServer reserve = createServer(members, nextMember(Member.Type.RESERVE));
+
+    reserve.cluster().member(passive.cluster().member().address()).onStatusChange(s -> {
+      threadAssertEquals(s, Member.Status.UNAVAILABLE);
+      resume();
+    });
+
+    passive.kill().thenRun(this::resume);
+    await(10000, 2);
+  }
+
+  /**
+   * Tests an active member join event.
+   */
+  public void testActiveJoinEvent() throws Throwable {
+    testJoinEvent(Member.Type.ACTIVE);
+  }
+
+  /**
+   * Tests a passive member join event.
+   */
+  public void testPassiveJoinEvent() throws Throwable {
+    testJoinEvent(Member.Type.PASSIVE);
+  }
+
+  /**
+   * Tests a reserve member join event.
+   */
+  public void testReserveJoinEvent() throws Throwable {
+    testJoinEvent(Member.Type.RESERVE);
+  }
+
+  /**
+   * Tests a member join event.
+   */
+  private void testJoinEvent(Member.Type type) throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+
+    Member member = nextMember(type);
+
+    CopycatServer server = servers.get(0);
+    server.cluster().onJoin(m -> {
+      threadAssertEquals(m.address(), member.address());
+      threadAssertEquals(m.type(), type);
+      resume();
+    });
+
+    CopycatServer joiner = createServer(members, member);
+    joiner.open().thenRun(this::resume);
+    await(10000, 2);
   }
 
   /**
@@ -1109,7 +1251,17 @@ public class ClusterTest extends ConcurrentTestCase {
    * @return The next server address.
    */
   private Member nextMember() {
-    return new TestMember(Member.Type.INACTIVE, new Address("localhost", ++port), new Address("localhost", port + 1000));
+    return nextMember(Member.Type.INACTIVE);
+  }
+
+  /**
+   * Returns the next server address.
+   *
+   * @param type The startup member type.
+   * @return The next server address.
+   */
+  private Member nextMember(Member.Type type) {
+    return new TestMember(type, new Address("localhost", ++port), new Address("localhost", port + 1000));
   }
 
   /**
@@ -1158,15 +1310,20 @@ public class ClusterTest extends ConcurrentTestCase {
    * Creates a Copycat server.
    */
   private CopycatServer createServer(List<Member> members, Member member) {
-    CopycatServer server = CopycatServer.builder(member.clientAddress(), member.serverAddress(), members.stream().map(Member::serverAddress).collect(Collectors.toList()))
+    CopycatServer.Builder builder = CopycatServer.builder(member.clientAddress(), member.serverAddress(), members.stream().map(Member::serverAddress).collect(Collectors.toList()))
       .withTransport(new LocalTransport(registry))
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
         .withCompactionThreads(1)
         .build())
-      .withStateMachine(new TestStateMachine())
-      .build();
+      .withStateMachine(new TestStateMachine());
+
+    if (member.type() != Member.Type.INACTIVE) {
+      builder.withType(member.type());
+    }
+
+    CopycatServer server = builder.build();
     servers.add(server);
     return server;
   }
