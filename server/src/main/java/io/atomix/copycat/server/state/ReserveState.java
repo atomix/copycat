@@ -90,6 +90,7 @@ class ReserveState extends AbstractState {
   protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
+
     return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
       .withStatus(Response.Status.ERROR)
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
