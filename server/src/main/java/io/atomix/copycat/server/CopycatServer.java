@@ -596,6 +596,7 @@ public class CopycatServer implements Managed<CopycatServer> {
     private static final Duration DEFAULT_SESSION_TIMEOUT = Duration.ofMillis(5000);
 
     private String name = DEFAULT_NAME;
+    private Member.Type type = Member.Type.ACTIVE;
     private Transport clientTransport;
     private Transport serverTransport;
     private Storage storage;
@@ -612,6 +613,7 @@ public class CopycatServer implements Managed<CopycatServer> {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
       this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
       this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
+      this.type = cluster.contains(serverAddress) ? Member.Type.ACTIVE : Member.Type.RESERVE;
     }
 
     /**
@@ -624,6 +626,17 @@ public class CopycatServer implements Managed<CopycatServer> {
      */
     public Builder withName(String name) {
       this.name = Assert.notNull(name, "name");
+      return this;
+    }
+
+    /**
+     * Sets the initial server member type.
+     *
+     * @param type The initial server member type.
+     * @return The server builder.
+     */
+    public Builder withType(Member.Type type) {
+      this.type = Assert.notNull(type, "type");
       return this;
     }
 
@@ -806,7 +819,7 @@ public class CopycatServer implements Managed<CopycatServer> {
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
       ThreadContext threadContext = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
 
-      ServerContext context = new ServerContext(Member.Type.INACTIVE, serverAddress, clientAddress, cluster, meta, log, snapshot, stateMachine, connections, threadContext);
+      ServerContext context = new ServerContext(type, serverAddress, clientAddress, cluster, meta, log, snapshot, stateMachine, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout);

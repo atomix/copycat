@@ -210,6 +210,7 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
           cancelConfigureTimer();
           configureTimeout = cluster.getContext().getThreadContext().schedule(cluster.getContext().getElectionTimeout().multipliedBy(2), () -> configure(type, future));
         } else {
+          cancelConfigureTimer();
           future.completeExceptionally(response.error().createException());
         }
       }

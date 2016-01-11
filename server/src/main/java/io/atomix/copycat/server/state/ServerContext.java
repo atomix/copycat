@@ -71,8 +71,8 @@ public class ServerContext implements AutoCloseable {
 
   @SuppressWarnings("unchecked")
   public ServerContext(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, MetaStore meta, Log log, SnapshotStore snapshot, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
-    ServerMember member = new ServerMember(type, serverAddress, clientAddress);
-    this.cluster = new ClusterState(this, member);
+    ServerMember member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress);
+    this.cluster = new ClusterState(this, member, type);
     this.meta = Assert.notNull(meta, "meta");
     this.log = Assert.notNull(log, "log");
     this.snapshot = Assert.notNull(snapshot, "data");

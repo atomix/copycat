@@ -48,6 +48,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private static final int MAX_JOIN_ATTEMPTS = 3;
   private final ServerContext context;
   private final ServerMember member;
+  private final Member.Type initialType;
   private long index = -1;
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
   private final Map<Address, MemberState> addressMap = new ConcurrentHashMap<>();
@@ -60,9 +61,10 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final Listeners<Member> joinListeners = new Listeners<>();
   private final Listeners<Member> leaveListeners = new Listeners<>();
 
-  ClusterState(ServerContext context, ServerMember member) {
+  ClusterState(ServerContext context, ServerMember member, Member.Type initialType) {
     this.context = Assert.notNull(context, "context");
     this.member = Assert.notNull(member, "member");
+    this.initialType = Assert.notNull(initialType, "initialType");
   }
 
   /**
@@ -292,16 +294,20 @@ final class ClusterState implements Cluster, AutoCloseable {
     // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
     // Note that we don't complete the join future when transitioning to a valid state since we need
     // to ensure that the server's configuration has been updated in the cluster before completing the join.
-    if (member.type() != Member.Type.INACTIVE) {
-      if (member.type() == Member.Type.ACTIVE) {
-        context.transition(CopycatServer.State.FOLLOWER);
-      } else if (member.type() == Member.Type.PASSIVE) {
+    switch (member.type()) {
+      case INACTIVE:
+        join(getActiveMemberStates().iterator(), 1);
+        break;
+      case RESERVE:
+        context.transition(CopycatServer.State.RESERVE);
+        break;
+      case PASSIVE:
+      case PROMOTABLE:
         context.transition(CopycatServer.State.PASSIVE);
-      } else {
-        joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + member.type()));
-      }
-    } else {
-      join(getActiveMemberStates().iterator(), 1);
+        break;
+      case ACTIVE:
+        context.transition(CopycatServer.State.FOLLOWER);
+        break;
     }
 
     return joinFuture.whenComplete((result, error) -> joinFuture = null);
@@ -317,7 +323,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       context.getConnections().getConnection(member.getMember().serverAddress()).thenCompose(connection -> {
         JoinRequest request = JoinRequest.builder()
-          .withMember(member())
+          .withMember(new ServerMember(initialType, member().serverAddress(), member().clientAddress()))
           .build();
         return connection.<JoinRequest, JoinResponse>send(request);
       }).whenComplete((response, error) -> {
