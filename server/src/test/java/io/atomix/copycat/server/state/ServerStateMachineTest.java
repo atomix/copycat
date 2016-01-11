@@ -30,12 +30,9 @@ import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
-import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -61,9 +58,6 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private ServerContext state;
   private long timestamp;
   private AtomicLong sequence;
-  private MetaStore meta;
-  private Log log;
-  private SnapshotStore snapshot;
 
   @BeforeMethod
   public void createStateMachine() {
@@ -73,16 +67,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     transport = new LocalTransport(registry);
     Storage storage = new Storage(StorageLevel.MEMORY);
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
-    meta = storage.openMetaStore("test");
-    log = storage.openLog("test");
-    snapshot = storage.openSnapshotStore("test");
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
     Collection<Address> members = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5000),
       new Address("localhost", 5000)
     );
-    state = new ServerContext(member.type(), member.serverAddress(), member.clientAddress(), members, meta, log, snapshot, new TestStateMachine(), new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+    state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, new TestStateMachine(), new ConnectionManager(new LocalTransport(registry).client()), callerContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }
@@ -94,12 +85,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+      try (RegisterEntry entry = state.getLog().create(RegisterEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp)
           .setTimeout(500)
           .setClient(UUID.randomUUID());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -118,13 +109,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (KeepAliveEntry entry = log.create(KeepAliveEntry.class)) {
+      try (KeepAliveEntry entry = state.getLog().create(KeepAliveEntry.class)) {
         entry.setTerm(1)
           .setSession(1)
           .setTimestamp(timestamp + 1000)
           .setCommandSequence(0)
           .setEventIndex(0);
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -145,12 +136,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+      try (RegisterEntry entry = state.getLog().create(RegisterEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp)
           .setTimeout(500)
           .setClient(UUID.randomUUID());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -169,10 +160,10 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (InitializeEntry entry = log.create(InitializeEntry.class)) {
+      try (InitializeEntry entry = state.getLog().create(InitializeEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp + 100);
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -193,12 +184,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+      try (RegisterEntry entry = state.getLog().create(RegisterEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp)
           .setTimeout(500)
           .setClient(UUID.randomUUID());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -217,13 +208,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (KeepAliveEntry entry = log.create(KeepAliveEntry.class)) {
+      try (KeepAliveEntry entry = state.getLog().create(KeepAliveEntry.class)) {
         entry.setTerm(1)
           .setSession(2)
           .setTimestamp(timestamp + 1000)
           .setCommandSequence(0)
           .setEventIndex(0);
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -244,12 +235,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+      try (RegisterEntry entry = state.getLog().create(RegisterEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp)
           .setTimeout(500)
           .setClient(UUID.randomUUID());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -269,13 +260,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (CommandEntry entry = log.create(CommandEntry.class)) {
+      try (CommandEntry entry = state.getLog().create(CommandEntry.class)) {
         entry.setTerm(1)
           .setSession(1)
           .setSequence(1)
           .setTimestamp(timestamp + 100)
           .setCommand(new TestExecute());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -296,12 +287,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+      try (RegisterEntry entry = state.getLog().create(RegisterEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp)
           .setTimeout(500)
           .setClient(UUID.randomUUID());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -321,13 +312,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (CommandEntry entry = log.create(CommandEntry.class)) {
+      try (CommandEntry entry = state.getLog().create(CommandEntry.class)) {
         entry.setTerm(1)
           .setSession(1)
           .setSequence(1)
           .setTimestamp(timestamp + 100)
           .setCommand(new TestCommand());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -345,13 +336,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (CommandEntry entry = log.create(CommandEntry.class)) {
+      try (CommandEntry entry = state.getLog().create(CommandEntry.class)) {
         entry.setTerm(1)
           .setSession(1)
           .setSequence(2)
           .setTimestamp(timestamp + 200)
           .setCommand(new TestCommand());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -364,13 +355,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (CommandEntry entry = log.create(CommandEntry.class)) {
+      try (CommandEntry entry = state.getLog().create(CommandEntry.class)) {
         entry.setTerm(1)
           .setSession(1)
           .setSequence(3)
           .setTimestamp(timestamp + 300)
           .setCommand(new TestCommand());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -393,12 +384,12 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (RegisterEntry entry = log.create(RegisterEntry.class)) {
+      try (RegisterEntry entry = state.getLog().create(RegisterEntry.class)) {
         entry.setTerm(1)
           .setTimestamp(timestamp)
           .setTimeout(500)
           .setClient(UUID.randomUUID());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -419,7 +410,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     callerContext.execute(() -> {
 
-      QueryEntry entry = log.create(QueryEntry.class);
+      QueryEntry entry = state.getLog().create(QueryEntry.class);
         entry.setIndex(1)
           .setTerm(1)
           .setSession(1)
@@ -436,13 +427,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     callerContext.execute(() -> {
 
       long index;
-      try (CommandEntry entry = log.create(CommandEntry.class)) {
+      try (CommandEntry entry = state.getLog().create(CommandEntry.class)) {
         entry.setTerm(1)
           .setSession(1)
           .setSequence(1)
           .setTimestamp(timestamp + 100)
           .setCommand(new TestCommand());
-        index = log.append(entry);
+        index = state.getLog().append(entry);
       }
 
       state.getStateMachine().apply(index).whenComplete((result, error) -> {
@@ -461,10 +452,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
   @AfterMethod
   public void closeStateMachine() {
-    state.getStateMachine().close();
-    meta.close();
-    log.close();
-    stateContext.close();
+    state.close();
     callerContext.close();
   }
 

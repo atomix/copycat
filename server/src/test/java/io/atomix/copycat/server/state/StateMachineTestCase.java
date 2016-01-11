@@ -27,12 +27,9 @@ import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
-import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -53,9 +50,6 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
   private ThreadContext stateContext;
   private ServerContext state;
   private Map<Long, Long> sequence;
-  private MetaStore meta;
-  private Log log;
-  private SnapshotStore snapshot;
 
   @BeforeMethod
   public void setupStateMachine() {
@@ -64,16 +58,13 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
     stateContext = new SingleThreadContext("state", new Serializer());
     Transport transport = new LocalTransport(new LocalServerRegistry());
     Storage storage = new Storage(StorageLevel.MEMORY);
-    meta = storage.openMetaStore("test");
-    log = storage.openLog("test");
-    snapshot = storage.openSnapshotStore("test");
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
     Collection<Address> members = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5000),
       new Address("localhost", 5000)
     );
-    state = new ServerContext(member.type(), member.serverAddress(), member.clientAddress(), members, meta, log, snapshot, createStateMachine(), new ConnectionManager(transport.client()), callerContext);
+    state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, createStateMachine(), new ConnectionManager(transport.client()), callerContext);
   }
 
   /**
@@ -207,10 +198,7 @@ public abstract class StateMachineTestCase extends ConcurrentTestCase {
 
   @AfterMethod
   public void teardownStateMachine() {
-    state.getStateMachine().close();
-    meta.close();
-    log.close();
-    stateContext.close();
+    state.close();
     callerContext.close();
   }
 

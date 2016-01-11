@@ -47,7 +47,7 @@ class ReserveState extends AbstractState {
   public CompletableFuture<AbstractState> open() {
     return super.open().thenRun(() -> {
       if (type() == CopycatServer.State.RESERVE) {
-        context.getLog().truncate();
+        context.resetLog();
       }
     }).thenApply(v -> this);
   }
@@ -305,7 +305,7 @@ class ReserveState extends AbstractState {
   public CompletableFuture<Void> close() {
     return super.close().thenRun(() -> {
       if (type() == CopycatServer.State.RESERVE) {
-        context.getLog().truncate();
+        context.resetLog();
       }
     });
   }

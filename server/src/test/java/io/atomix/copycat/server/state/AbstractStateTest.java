@@ -28,13 +28,10 @@ import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -52,9 +49,6 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected T state;
   protected Serializer serializer;
   protected Storage storage;
-  protected MetaStore meta;
-  protected Log log;
-  protected SnapshotStore snapshot;
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
@@ -72,15 +66,12 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     storage = new Storage(StorageLevel.MEMORY);
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
 
-    meta = storage.openMetaStore("test");
-    log = storage.openLog("test");
-    snapshot = storage.openSnapshotStore("test");
     stateMachine = new TestStateMachine();
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverContext = new ServerContext(members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), meta, log, snapshot, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**
@@ -88,7 +79,6 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    */
   @AfterMethod
   void afterMethod() throws Throwable {
-    log.close();
     serverCtx.close();
   }
 

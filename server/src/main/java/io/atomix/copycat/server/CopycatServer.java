@@ -37,9 +37,6 @@ import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.compaction.Compaction;
-import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -275,7 +272,6 @@ public class CopycatServer implements Managed<CopycatServer> {
   private final String name;
   private final Transport clientTransport;
   private final Transport serverTransport;
-  private final Storage storage;
   private final Server clientServer;
   private final Server internalServer;
   private final ServerContext context;
@@ -284,11 +280,10 @@ public class CopycatServer implements Managed<CopycatServer> {
   private Listener<Member> electionListener;
   private boolean open;
 
-  private CopycatServer(String name, Transport clientTransport, Transport serverTransport, Storage storage, ServerContext context) {
+  private CopycatServer(String name, Transport clientTransport, Transport serverTransport, ServerContext context) {
     this.name = Assert.notNull(name, "name");
     this.clientTransport = Assert.notNull(clientTransport, "clientTransport");
     this.serverTransport = Assert.notNull(serverTransport, "serverTransport");
-    this.storage = Assert.notNull(storage, "storage");
     this.internalServer = serverTransport.server();
     this.clientServer = !context.getCluster().member().serverAddress().equals(context.getCluster().member().clientAddress()) ? clientTransport.server() : null;
     this.context = Assert.notNull(context, "context");
@@ -309,7 +304,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The server storage.
    */
   public Storage storage() {
-    return storage;
+    return context.getStorage();
   }
 
   /**
@@ -560,30 +555,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return A completable future to be completed once the server has been deleted.
    */
   public CompletableFuture<Void> delete() {
-    return close().thenRun(this::doDelete);
-  }
-
-  /**
-   * Deletes the server state.
-   */
-  private void doDelete() {
-    if (open)
-      return;
-
-    // Delete the metadata store.
-    MetaStore meta = storage.openMetaStore(name);
-    meta.close();
-    meta.delete();
-
-    // Delete the log.
-    Log log = storage.openLog(name);
-    log.close();
-    log.delete();
-
-    // Delete the snapshot store.
-    SnapshotStore snapshot = storage.openSnapshotStore(name);
-    snapshot.close();
-    snapshot.delete();
+    return close().thenRun(context::delete);
   }
 
   /**
@@ -799,32 +771,15 @@ public class CopycatServer implements Managed<CopycatServer> {
       storage.serializer().resolve(new ServiceLoaderTypeResolver());
       serializer.resolve(new ServiceLoaderTypeResolver());
 
-      // Open the meta store.
-      MetaStore meta = storage.openMetaStore(name);
-
-      // Open the log.
-      Log log = storage.openLog(name);
-
-      // Configure the log compaction mode. If the state machine supports snapshotting, the default
-      // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
-      if (stateMachine instanceof Snapshottable) {
-        log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
-      } else {
-        log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
-      }
-
-      // Open the snapshot store.
-      SnapshotStore snapshot = storage.openSnapshotStore(name);
-
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
       ThreadContext threadContext = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
 
-      ServerContext context = new ServerContext(type, serverAddress, clientAddress, cluster, meta, log, snapshot, stateMachine, connections, threadContext);
+      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, stateMachine, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout);
 
-      return new CopycatServer(name, clientTransport, serverTransport, storage, context);
+      return new CopycatServer(name, clientTransport, serverTransport, context);
     }
   }
 

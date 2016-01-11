@@ -24,11 +24,14 @@ import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -51,11 +54,13 @@ public class ServerContext implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Member> electionListeners = new Listeners<>();
-  private ThreadContext threadContext;
+  private final String name;
+  private final ThreadContext threadContext;
   private final StateMachine userStateMachine;
   private final ClusterState cluster;
+  private final Storage storage;
   private final MetaStore meta;
-  private final Log log;
+  private Log log;
   private final SnapshotStore snapshot;
   private final ServerStateMachine stateMachine;
   private final ConnectionManager connections;
@@ -70,12 +75,11 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, MetaStore meta, Log log, SnapshotStore snapshot, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+    this.name = Assert.notNull(name, "name");
     ServerMember member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress);
     this.cluster = new ClusterState(this, member, type);
-    this.meta = Assert.notNull(meta, "meta");
-    this.log = Assert.notNull(log, "log");
-    this.snapshot = Assert.notNull(snapshot, "data");
+    this.storage = Assert.notNull(storage, "storage");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
@@ -83,6 +87,15 @@ public class ServerContext implements AutoCloseable {
     // Create a state machine executor and configure the state machine.
     ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, this, stateContext);
+
+    // Open the meta store.
+    this.meta = storage.openMetaStore(name);
+
+    // Open the snapshot store.
+    this.snapshot = storage.openSnapshotStore(name);
+
+    // Open the log.
+    resetLog();
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
@@ -130,6 +143,15 @@ public class ServerContext implements AutoCloseable {
    */
   public ThreadContext getThreadContext() {
     return threadContext;
+  }
+
+  /**
+   * Returns the server storage.
+   *
+   * @return The server storage.
+   */
+  public Storage getStorage() {
+    return storage;
   }
 
   /**
@@ -402,12 +424,33 @@ public class ServerContext implements AutoCloseable {
   }
 
   /**
-   * Returns the state log.
+   * Returns the server log.
    *
-   * @return The state log.
+   * @return The server log.
    */
   public Log getLog() {
     return log;
+  }
+
+  /**
+   * Resets the state log.
+   *
+   * @return The server context.
+   */
+  ServerContext resetLog() {
+    log.close();
+    log.delete();
+    log = storage.openLog(name);
+
+    // Configure the log compaction mode. If the state machine supports snapshotting, the default
+    // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
+    if (userStateMachine instanceof Snapshottable) {
+      log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
+    } else {
+      log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
+    }
+
+    return this;
   }
 
   /**
@@ -542,6 +585,26 @@ public class ServerContext implements AutoCloseable {
     }
     stateMachine.close();
     threadContext.close();
+  }
+
+  /**
+   * Deletes the server context.
+   */
+  public void delete() {
+    // Delete the metadata store.
+    MetaStore meta = storage.openMetaStore(name);
+    meta.close();
+    meta.delete();
+
+    // Delete the log.
+    Log log = storage.openLog(name);
+    log.close();
+    log.delete();
+
+    // Delete the snapshot store.
+    SnapshotStore snapshot = storage.openSnapshotStore(name);
+    snapshot.close();
+    snapshot.delete();
   }
 
   @Override
