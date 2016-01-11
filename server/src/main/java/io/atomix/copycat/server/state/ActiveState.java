@@ -15,12 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.error.RaftException;
-import io.atomix.copycat.client.request.QueryRequest;
 import io.atomix.copycat.client.request.Request;
-import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
@@ -31,7 +26,6 @@ import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.PollResponse;
 import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.entry.QueryEntry;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -237,102 +231,6 @@ abstract class ActiveState extends PassiveState {
         entry.close();
       }
     }
-  }
-
-  @Override
-  protected CompletableFuture<QueryResponse> query(QueryRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
-    if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL
-      || request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
-
-      // If this server has not yet applied entries up to the client's session ID, forward the
-      // query to the leader. This ensures that a follower does not tell the client its session
-      // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
-      if (context.getStateMachine().getLastApplied() < request.session()) {
-        LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
-        return queryForward(request);
-      }
-
-      // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
-      // Forward the request to the leader.
-      if (context.getLog().lastIndex() < context.getCommitIndex()) {
-        LOGGER.debug("{} - State appears to be out of sync, forwarding query to leader");
-        return queryForward(request);
-      }
-
-      return queryLocal(request);
-    } else {
-      return queryForward(request);
-    }
-  }
-
-  /**
-   * Forwards the query to the leader.
-   */
-  private CompletableFuture<QueryResponse> queryForward(QueryRequest request) {
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
-        .build()));
-    }
-
-    LOGGER.debug("{} - Forwarded {}", context.getCluster().member().address(), request);
-    return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
-  }
-
-  /**
-   * Performs a local query.
-   */
-  private CompletableFuture<QueryResponse> queryLocal(QueryRequest request) {
-    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(request.index())
-      .setTerm(context.getTerm())
-      .setTimestamp(System.currentTimeMillis())
-      .setSession(request.session())
-      .setSequence(request.sequence())
-      .setQuery(request.query());
-
-    // For CAUSAL queries, the state machine version is the last index applied to the state machine. For other consistency
-    // levels, the state machine may actually wait until those queries are applied to the state machine, so the last applied
-    // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
-    final long index;
-    if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      index = context.getStateMachine().getLastApplied();
-    } else {
-      index = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
-    }
-
-    context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {
-      if (isOpen()) {
-        if (error == null) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withIndex(index)
-            .withResult(result)
-            .build()));
-        } else if (error instanceof RaftException) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withIndex(index)
-            .withError(((RaftException) error).getType())
-            .build()));
-        } else {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withIndex(index)
-            .withError(RaftError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-      }
-      entry.release();
-    }, context.getThreadContext().executor());
-    return future;
   }
 
 }
