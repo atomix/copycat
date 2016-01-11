@@ -84,10 +84,6 @@ public class ServerContext implements AutoCloseable {
     this.connections = Assert.notNull(connections, "connections");
     this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
 
-    // Create a state machine executor and configure the state machine.
-    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, this, stateContext);
-
     // Open the meta store.
     this.meta = storage.openMetaStore(name);
 
@@ -96,6 +92,10 @@ public class ServerContext implements AutoCloseable {
 
     // Open the log.
     resetLog();
+
+    // Create a state machine executor and configure the state machine.
+    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
+    this.stateMachine = new ServerStateMachine(userStateMachine, this, stateContext);
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
@@ -438,8 +438,11 @@ public class ServerContext implements AutoCloseable {
    * @return The server context.
    */
   ServerContext resetLog() {
-    log.close();
-    log.delete();
+    if (log != null) {
+      log.close();
+      log.delete();
+    }
+
     log = storage.openLog(name);
 
     // Configure the log compaction mode. If the state machine supports snapshotting, the default
