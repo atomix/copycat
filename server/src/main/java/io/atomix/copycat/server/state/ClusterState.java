@@ -344,8 +344,11 @@ final class ClusterState implements Cluster, AutoCloseable {
             } else if (type == Member.Type.ACTIVE) {
               context.transition(CopycatServer.State.FOLLOWER);
               joinFuture.complete(null);
-            } else if (type == Member.Type.PASSIVE) {
+            } else if (type == Member.Type.PASSIVE || type == Member.Type.PROMOTABLE) {
               context.transition(CopycatServer.State.PASSIVE);
+              joinFuture.complete(null);
+            } else if (type == Member.Type.RESERVE) {
+              context.transition(CopycatServer.State.RESERVE);
               joinFuture.complete(null);
             } else {
               joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + type));
