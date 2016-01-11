@@ -129,7 +129,7 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
 
   @Override
   public CompletableFuture<Void> demote() {
-    return configure(Type.values()[type.ordinal()-1]);
+    return configure(Type.values()[type.ordinal() - 1]);
   }
 
   @Override
@@ -149,7 +149,12 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
    * @return The member.
    */
   ServerMember update(Member.Type type) {
-    this.type = Assert.notNull(type, "type");
+    if (this.type != type) {
+      this.type = Assert.notNull(type, "type");
+      if (typeChangeListeners != null) {
+        typeChangeListeners.accept(type);
+      }
+    }
     return this;
   }
 
@@ -160,7 +165,12 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
    * @return The member.
    */
   ServerMember update(Status status) {
-    this.status = Assert.notNull(status, "status");
+    if (this.status != status) {
+      this.status = Assert.notNull(status, "status");
+      if (statusChangeListeners != null) {
+        statusChangeListeners.accept(status);
+      }
+    }
     return this;
   }
 

@@ -526,6 +526,11 @@ final class ClusterState implements Cluster, AutoCloseable {
           state.resetState(context.getLog());
         }
 
+        // If the member status has changed, update the local member status.
+        if (state.getMember().status() != member.status()) {
+          state.getMember().update(member.status());
+        }
+
         // Update the optimized member collections according to the member type.
         for (List<MemberState> memberType : memberTypes.values()) {
           memberType.remove(state);

@@ -54,38 +54,65 @@ abstract class AbstractAppender implements AutoCloseable {
     this.context = Assert.notNull(context, "context");
   }
 
+  /**
+   * Returns a boolean value indicating whether an {@link AppendRequest} can be sent to the given member.
+   */
   protected boolean canAppend(MemberState member) {
     return !appending.contains(member);
   }
 
+  /**
+   * Locks the {@link AppendRequest} lock for the given member.
+   */
   protected boolean lockAppend(MemberState member) {
     return appending.add(member);
   }
 
+  /**
+   * Unlocks the {@link AppendRequest} lock for the given member.
+   */
   protected boolean unlockAppend(MemberState member) {
     return appending.remove(member);
   }
 
+  /**
+   * Returns a boolean value indicating whether a {@link ConfigureRequest} can be sent to the given member.
+   */
   protected boolean canConfigure(MemberState member) {
     return !configuring.contains(member);
   }
 
+  /**
+   * Locks the {@link ConfigureRequest} lock for the given member.
+   */
   protected boolean lockConfigure(MemberState member) {
     return configuring.add(member);
   }
 
+  /**
+   * Unlocks the {@link ConfigureRequest} lock for the given member.
+   */
   protected boolean unlockConfigure(MemberState member) {
     return configuring.remove(member);
   }
 
+  /**
+   * Returns a boolean value indicating whether an {@link InstallRequest} can be sent to the given member.
+   */
   protected boolean canInstall(MemberState member) {
     return !installing.contains(member);
   }
 
+  /**
+   * Locks the {@link InstallRequest} lock for the given member.
+   */
   protected boolean lockInstall(MemberState member) {
     return installing.add(member);
   }
 
+  /**
+   * Unlocks the {@link InstallRequest} lock for the given member.
+   */
   protected boolean unlockInstall(MemberState member) {
     return installing.remove(member);
   }
