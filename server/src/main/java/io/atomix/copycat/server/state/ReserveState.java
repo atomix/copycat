@@ -43,6 +43,15 @@ class ReserveState extends AbstractState {
     return CopycatServer.State.RESERVE;
   }
 
+  @Override
+  public CompletableFuture<AbstractState> open() {
+    return super.open().thenRun(() -> {
+      if (type() == CopycatServer.State.RESERVE) {
+        context.getLog().truncate();
+      }
+    }).thenApply(v -> this);
+  }
+
   /**
    * Forwards the given request to the leader if possible.
    */
@@ -290,6 +299,15 @@ class ReserveState extends AbstractState {
       .withStatus(Response.Status.ERROR)
       .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
+  }
+
+  @Override
+  public CompletableFuture<Void> close() {
+    return super.close().thenRun(() -> {
+      if (type() == CopycatServer.State.RESERVE) {
+        context.getLog().truncate();
+      }
+    });
   }
 
 }
