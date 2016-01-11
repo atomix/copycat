@@ -49,7 +49,6 @@ import java.util.stream.Collectors;
  */
 public class ServerContext implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
-  private static final int MAX_JOIN_ATTEMPTS = 3;
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Member> electionListeners = new Listeners<>();
   private ThreadContext threadContext;
@@ -256,7 +255,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The state leader.
    */
-  public ServerMember getLeader() {
+  ServerMember getLeader() {
     if (leader == 0) {
       return null;
     }
@@ -286,7 +285,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The state term.
    */
-  public long getTerm() {
+  long getTerm() {
     return term;
   }
 
@@ -317,7 +316,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The state last voted for candidate.
    */
-  public int getLastVotedFor() {
+  int getLastVotedFor() {
     return lastVotedFor;
   }
 
@@ -340,7 +339,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The commit index.
    */
-  public long getCommitIndex() {
+  long getCommitIndex() {
     return commitIndex;
   }
 
@@ -362,7 +361,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The global index.
    */
-  public long getGlobalIndex() {
+  long getGlobalIndex() {
     return globalIndex;
   }
 
