@@ -20,11 +20,9 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
-import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
@@ -40,7 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -67,10 +64,6 @@ public class ServerContext implements AutoCloseable {
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
-  private Scheduled joinTimer;
-  private CompletableFuture<Void> joinFuture;
-  private Scheduled configureTimer;
-  private Scheduled leaveTimer;
   private int leader;
   private long term;
   private int lastVotedFor;
@@ -510,50 +503,6 @@ public class ServerContext implements AutoCloseable {
     }
 
     stateChangeListeners.forEach(l -> l.accept(this.state.type()));
-  }
-
-  /**
-   * Demotes the server to the given type.
-   */
-  public CompletableFuture<Void> configure(Address server, Member.Type type) {
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    threadContext.executor().execute(() -> configure(server, type, future));
-    return future;
-  }
-
-  /**
-   * Recursively reconfigures the cluster.
-   */
-  private void configure(Address server, Member.Type type, CompletableFuture<Void> future) {
-    // Set a timer to retry the attempt to leave the cluster.
-    configureTimer = threadContext.schedule(electionTimeout, () -> {
-      configure(server, type, future);
-    });
-
-    // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
-    // Non-leader states should forward the request to the leader if there is one. Leader states
-    // will log, replicate, and commit the reconfiguration.
-    Member member = cluster.member(server.hashCode());
-    state.configure(ConfigurationRequest.builder()
-      .withMember(new ServerMember(type, member.serverAddress(), member.clientAddress()))
-      .build()).whenComplete((response, error) -> {
-      if (error == null && response.status() == Response.Status.OK) {
-        cancelConfigureTimer();
-        cluster.configure(response.index(), response.members());
-        future.complete(null);
-      }
-    });
-  }
-
-  /**
-   * Cancels the configure timeout.
-   */
-  private void cancelConfigureTimer() {
-    if (configureTimer != null) {
-      LOGGER.debug("{} - Cancelling configure timeout", cluster.member().address());
-      configureTimer.cancel();
-      configureTimer = null;
-    }
   }
 
   /**
