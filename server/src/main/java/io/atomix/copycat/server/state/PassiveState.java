@@ -20,6 +20,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
@@ -35,11 +36,11 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class PassiveState extends AbstractState {
+class PassiveState extends ReserveState {
   private Snapshot pendingSnapshot;
   private int nextSnapshotOffset;
 
-  public PassiveState(ServerState context) {
+  public PassiveState(ServerContext context) {
     super(context);
   }
 
@@ -70,7 +71,7 @@ class PassiveState extends AbstractState {
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
     if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().getMember().serverAddress(), request, context.getTerm());
+      LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -89,7 +90,7 @@ class PassiveState extends AbstractState {
    */
   protected AppendResponse doCheckPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -97,7 +98,7 @@ class PassiveState extends AbstractState {
         .withLogIndex(context.getLog().lastIndex())
         .build();
     } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().getMember().serverAddress(), request, request.logIndex(), context.getLog().lastIndex());
+      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -109,7 +110,7 @@ class PassiveState extends AbstractState {
     // If the previous entry term doesn't match the local previous term then reject the request.
     try (Entry entry = context.getLog().get(request.logIndex())) {
       if (entry == null || entry.getTerm() != request.logTerm()) {
-        LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().getMember().serverAddress(), request, entry != null ? entry.getTerm() : "unknown");
+        LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, entry != null ? entry.getTerm() : "unknown");
         return AppendResponse.builder()
           .withStatus(Response.Status.OK)
           .withTerm(context.getTerm())
@@ -135,7 +136,7 @@ class PassiveState extends AbstractState {
         // If the entry index is greater than the last log index, skip missing entries.
         if (context.getLog().lastIndex() < entry.getIndex()) {
           context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, entry.getIndex());
+          LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
         } else {
           // Compare the term of the received entry with the matching entry in the log.
           try (Entry match = context.getLog().get(entry.getIndex())) {
@@ -143,13 +144,13 @@ class PassiveState extends AbstractState {
               if (entry.getTerm() != match.getTerm()) {
                 // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
                 // If appending to the log fails, apply commits and reply false to the append request.
-                LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().getMember().serverAddress());
+                LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
                 context.getLog().truncate(entry.getIndex() - 1).append(entry);
-                LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, entry.getIndex());
+                LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
               }
             } else {
               context.getLog().truncate(entry.getIndex() - 1).append(entry);
-              LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().getMember().serverAddress(), entry, entry.getIndex());
+              LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
             }
           }
         }
@@ -157,14 +158,14 @@ class PassiveState extends AbstractState {
         // If the entry is a configuration entry then immediately configure the cluster.
         if (entry instanceof ConfigurationEntry) {
           ConfigurationEntry configurationEntry = (ConfigurationEntry) entry;
-          if (context.getCluster().getMember().type() == CopycatServer.Type.PASSIVE) {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
-            if (context.getCluster().getMember().type() == CopycatServer.Type.ACTIVE) {
+          if (context.getCluster().member().type() == Member.Type.PASSIVE) {
+            context.getClusterState().configure(entry.getIndex(), configurationEntry.getMembers());
+            if (context.getCluster().member().type() == Member.Type.ACTIVE) {
               transition(CopycatServer.State.FOLLOWER);
             }
           } else {
-            context.getCluster().configure(entry.getIndex(), configurationEntry.getMembers());
-            if (context.getCluster().getMember().type() == CopycatServer.Type.PASSIVE) {
+            context.getClusterState().configure(entry.getIndex(), configurationEntry.getMembers());
+            if (context.getCluster().member().type() == Member.Type.PASSIVE) {
               transition(CopycatServer.State.PASSIVE);
             }
           }
@@ -287,7 +288,7 @@ class PassiveState extends AbstractState {
   /**
    * Forwards the given request to the leader if possible.
    */
-  protected <T extends Request<T>, U extends Response<U>> CompletableFuture<U> forward(T request) {
+  protected <T extends Request, U extends Response> CompletableFuture<U> forward(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
     context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
@@ -401,43 +402,6 @@ class PassiveState extends AbstractState {
   }
 
   @Override
-  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
-    }
-
-    // Store the previous member type for comparison to determine whether this node should transition.
-    CopycatServer.Type previousType = context.getCluster().getMember().type();
-
-    // Configure the cluster membership.
-    context.getCluster().configure(request.index(), request.members());
-
-    // If the local member type changed, transition the state as appropriate.
-    // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
-    // PASSIVE servers are transitioned to the PASSIVE state.
-    CopycatServer.Type type = context.getCluster().getMember().type();
-    if (previousType != type) {
-      if (type == CopycatServer.Type.ACTIVE) {
-        context.transition(CopycatServer.State.FOLLOWER);
-      } else if (type == CopycatServer.Type.PASSIVE) {
-        context.transition(CopycatServer.State.PASSIVE);
-      } else {
-        transition(CopycatServer.State.INACTIVE);
-      }
-    }
-
-    return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
-      .withStatus(Response.Status.OK)
-      .build()));
-  }
-
-  @Override
   protected CompletableFuture<JoinResponse> join(JoinRequest request) {
     context.checkThread();
     logRequest(request);
@@ -449,6 +413,21 @@ class PassiveState extends AbstractState {
         .build()));
     } else {
       return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  protected CompletableFuture<ConfigurationResponse> configure(ConfigurationRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(ConfigurationResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<ConfigurationRequest, ConfigurationResponse>forward(request).thenApply(this::logResponse);
     }
   }
 

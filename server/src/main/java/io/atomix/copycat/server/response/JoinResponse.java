@@ -16,6 +16,10 @@
 package io.atomix.copycat.server.response;
 
 import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.server.cluster.Member;
+
+import java.util.Collection;
 
 /**
  * Server join configuration change response.
@@ -28,7 +32,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=210)
-public class JoinResponse extends ConfigurationResponse<JoinResponse> {
+public class JoinResponse extends ConfigurationResponse {
 
   /**
    * Returns a new join response builder.
@@ -52,9 +56,38 @@ public class JoinResponse extends ConfigurationResponse<JoinResponse> {
   /**
    * Join response builder.
    */
-  public static class Builder extends ConfigurationResponse.Builder<Builder, JoinResponse> {
+  public static class Builder extends ConfigurationResponse.Builder {
     protected Builder(JoinResponse response) {
       super(response);
+    }
+
+    @Override
+    public Builder withStatus(Status status) {
+      super.withStatus(status);
+      return this;
+    }
+
+    @Override
+    public Builder withError(RaftError error) {
+      super.withError(error);
+      return this;
+    }
+
+    @Override
+    public Builder withMembers(Collection<Member> members) {
+      super.withMembers(members);
+      return this;
+    }
+
+    @Override
+    public Builder withIndex(long index) {
+      super.withIndex(index);
+      return this;
+    }
+
+    @Override
+    public JoinResponse build() {
+      return (JoinResponse) super.build();
     }
   }
 

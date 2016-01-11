@@ -28,7 +28,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class AbstractResponse<T extends Response<T>> implements Response<T> {
+public abstract class AbstractResponse implements Response {
   protected Status status = Status.OK;
   protected RaftError error;
 
@@ -61,7 +61,7 @@ public abstract class AbstractResponse<T extends Response<T>> implements Respons
    * @param <T> The builder type.
    * @param <U> The response type.
    */
-  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractResponse<U>> extends Response.Builder<T, U> {
+  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractResponse> extends Response.Builder<T, U> {
     protected U response;
 
     /**

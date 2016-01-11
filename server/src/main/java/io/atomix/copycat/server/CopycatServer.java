@@ -19,19 +19,29 @@ import io.atomix.catalyst.buffer.PooledHeapAllocator;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Server;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
+import io.atomix.catalyst.util.concurrent.Futures;
+import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.server.cluster.Cluster;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
-import io.atomix.copycat.server.state.ServerState;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.compaction.Compaction;
+import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
+import io.atomix.copycat.server.storage.system.MetaStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -119,6 +129,7 @@ import java.util.function.Function;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CopycatServer implements Managed<CopycatServer> {
+  private static final Logger LOGGER = LoggerFactory.getLogger(CopycatServer.class);
 
   /**
    * Returns a new Raft server builder.
@@ -203,30 +214,6 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
-   * Copycat server type.
-   * <p>
-   * The server type represents the type of member a server is within a cluster.
-   */
-  public enum Type {
-
-    /**
-     * Represents an inactive server.
-     */
-    INACTIVE,
-
-    /**
-     * Represents a passive server.
-     */
-    PASSIVE,
-
-    /**
-     * Represents an active server.
-     */
-    ACTIVE
-
-  }
-
-  /**
    * Raft server state types.
    * <p>
    * States represent the context of the server's internal state machine. Throughout the lifetime of a server,
@@ -242,6 +229,13 @@ public class CopycatServer implements Managed<CopycatServer> {
      * All servers start in this state and return to this state when {@link #close() stopped}.
      */
     INACTIVE,
+
+    /**
+     * Represents the state of a server that is a reserve member of the cluster.
+     * <p>
+     * Reserve servers only receive notification of leader, term, and configuration changes.
+     */
+    RESERVE,
 
     /**
      * Represents the state of a server in the process of catching up its log.
@@ -272,90 +266,59 @@ public class CopycatServer implements Managed<CopycatServer> {
      * Represents the state of a server which is actively coordinating and replicating logs with other servers.
      * <p>
      * Leaders are responsible for handling and replicating writes from clients. Note that more than one leader can
-     * exist at any given time, but Raft guarantees that no two leaders will exist for the same {@link #term()}.
+     * exist at any given time, but Raft guarantees that no two leaders will exist for the same {@link Cluster#term()}.
      */
     LEADER
 
   }
 
+  private final String name;
+  private final Transport clientTransport;
+  private final Transport serverTransport;
+  private final Storage storage;
+  private final Server clientServer;
+  private final Server internalServer;
   private final ServerContext context;
   private volatile CompletableFuture<CopycatServer> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
-  private ServerState state;
-  private final Duration electionTimeout;
-  private final Duration heartbeatInterval;
-  private final Duration sessionTimeout;
-  private Listener<Address> electionListener;
+  private Listener<Member> electionListener;
   private boolean open;
 
-  private CopycatServer(ServerContext context, Duration electionTimeout, Duration heartbeatInterval, Duration sessionTimeout) {
-    this.context = context;
-    this.electionTimeout = electionTimeout;
-    this.heartbeatInterval = heartbeatInterval;
-    this.sessionTimeout = sessionTimeout;
+  private CopycatServer(String name, Transport clientTransport, Transport serverTransport, Storage storage, ServerContext context) {
+    this.name = Assert.notNull(name, "name");
+    this.clientTransport = Assert.notNull(clientTransport, "clientTransport");
+    this.serverTransport = Assert.notNull(serverTransport, "serverTransport");
+    this.storage = Assert.notNull(storage, "storage");
+    this.internalServer = serverTransport.server();
+    this.clientServer = !context.getCluster().member().serverAddress().equals(context.getCluster().member().clientAddress()) ? clientTransport.server() : null;
+    this.context = Assert.notNull(context, "context");
   }
 
   /**
-   * Returns the current Raft term.
-   * <p>
-   * The term is a monotonically increasing number that essentially acts as a logical time for the cluster. For any
-   * given term, Raft guarantees that only one {@link #leader()} can be elected, but note that a leader may also
-   * not yet exist for the term.
+   * Returns the server name.
    *
-   * @return The current Raft term.
+   * @return The server name.
    */
-  public long term() {
-    return state != null ? state.getTerm() : 0;
+  public String name() {
+    return name;
   }
 
   /**
-   * Returns the current Raft leader.
-   * <p>
-   * If no leader has been elected, the leader address will be {@code null}.
+   * Returns the server storage.
    *
-   * @return The current Raft leader or {@code null} if this server does not know of any leader.
+   * @return The server storage.
    */
-  public Address leader() {
-    return state != null && state.getLeader() != null ? state.getLeader().serverAddress() : null;
+  public Storage storage() {
+    return storage;
   }
 
   /**
-   * Registers a leader election listener.
-   * <p>
-   * The provided {@link Consumer} will be called whenever a new leader is elected. Note that this can
-   * happen repeatedly throughout the lifetime of the cluster. Raft guarantees that no two leaders can
-   * be elected for the same {@link #term()}, but that does not necessarily mean that another server
-   * cannot believe another node to be the leader.
+   * Returns the server's cluster configuration.
    *
-   * @param listener The leader election listener.
-   * @return The listener context. This can be used to unregister the election listener via
-   * {@link Listener#close()}.
-   * @throws NullPointerException If {@code listener} is {@code null}
+   * @return The server's cluster configuration.
    */
-  public Listener<Address> onLeaderElection(Consumer<Address> listener) {
-    return state.onLeaderElection(listener);
-  }
-
-  /**
-   * Returns a collection of current cluster members.
-   * <p>
-   * The current members list includes members in all states, including non-voting states. Additionally, because
-   * the membership set can change over time, the set of members on one server may not exactly reflect the
-   * set of members on another server at any given point in time.
-   *
-   * @return A collection of current Raft cluster members.
-   */
-  public Collection<Address> members() {
-    return state.getMembers();
-  }
-
-  /**
-   * Returns the current server type.
-   *
-   * @return The current server type.
-   */
-  public Type type() {
-    return state != null ? state.getType() : null;
+  public Cluster cluster() {
+    return context.getCluster();
   }
 
   /**
@@ -368,7 +331,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The Copycat server state.
    */
   public State state() {
-    return state != null ? state.getState() : null;
+    return context.getState();
   }
 
   /**
@@ -393,7 +356,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @throws NullPointerException If {@code listener} is {@code null}
    */
   public Listener<State> onStateChange(Consumer<State> listener) {
-    return state.onStateChange(listener);
+    return context.onStateChange(listener);
   }
 
   /**
@@ -416,7 +379,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return The server thread context.
    */
   public ThreadContext context() {
-    return state != null ? state.getThreadContext() : null;
+    return context.getThreadContext();
   }
 
   /**
@@ -438,21 +401,17 @@ public class CopycatServer implements Managed<CopycatServer> {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          Function<ServerState, CompletionStage<CopycatServer>> completionFunction = state -> {
+          Function<Void, CompletionStage<CopycatServer>> completionFunction = state -> {
             CompletableFuture<CopycatServer> future = new CompletableFuture<>();
             openFuture = null;
-            this.state = state;
-            state.setElectionTimeout(electionTimeout)
-              .setHeartbeatInterval(heartbeatInterval)
-              .setSessionTimeout(sessionTimeout)
-              .join()
+            cluster().join()
               .whenComplete((result, error) -> {
                 if (error == null) {
-                  if (state.getLeader() != null) {
+                  if (cluster().leader() != null) {
                     open = true;
                     future.complete(this);
                   } else {
-                    electionListener = state.onLeaderElection(leader -> {
+                    electionListener = cluster().onLeaderElection(leader -> {
                       if (electionListener != null) {
                         open = true;
                         future.complete(this);
@@ -469,19 +428,72 @@ public class CopycatServer implements Managed<CopycatServer> {
           };
 
           if (closeFuture == null) {
-            openFuture = context.open().thenCompose(completionFunction);
+            openFuture = listen().thenCompose(completionFunction);
           } else {
-            openFuture = closeFuture.thenCompose(c -> context.open().thenCompose(completionFunction));
+            openFuture = closeFuture.thenCompose(c -> listen().thenCompose(completionFunction));
           }
         }
       }
     }
-    return openFuture;
+
+    return openFuture.whenComplete((result, error) -> {
+      if (error == null) {
+        LOGGER.info("Server started successfully!");
+      } else {
+        LOGGER.warn("Failed to start server!");
+      }
+    });
+  }
+
+  /**
+   * Starts listening the server.
+   */
+  private CompletableFuture<Void> listen() {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    context.getThreadContext().executor().execute(() -> {
+      internalServer.listen(cluster().member().serverAddress(), c -> context.connectServer(c)).whenComplete((internalResult, internalError) -> {
+        if (internalError == null) {
+          // If the client address is different than the server address, start a separate client server.
+          if (clientServer != null) {
+            clientServer.listen(cluster().member().clientAddress(), c -> context.connectClient(c)).whenComplete((clientResult, clientError) -> {
+              open = true;
+              future.complete(null);
+            });
+          } else {
+            open = true;
+            future.complete(null);
+          }
+        } else {
+          future.completeExceptionally(internalError);
+        }
+      });
+    });
+
+    return future;
   }
 
   @Override
   public boolean isOpen() {
     return open;
+  }
+
+  @Override
+  public CompletableFuture<Void> close() {
+    if (!open)
+      return CompletableFuture.completedFuture(null);
+
+    if (closeFuture == null) {
+      synchronized (this) {
+        if (closeFuture == null) {
+          if (openFuture == null) {
+            closeFuture = cluster().leave().thenCompose(v -> kill());
+          } else {
+            closeFuture = openFuture.thenCompose(c -> cluster().leave().thenCompose(v -> kill()));
+          }
+        }
+      }
+    }
+    return closeFuture;
   }
 
   /**
@@ -493,35 +505,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return Indicates whether the server is running.
    */
   @Override
-  public CompletableFuture<Void> close() {
-    if (!open)
-      return CompletableFuture.completedFuture(null);
-
-    if (closeFuture == null) {
-      synchronized (this) {
-        if (closeFuture == null) {
-          if (openFuture == null) {
-            closeFuture = state.leave()
-              .thenCompose(v -> context.close())
-              .whenComplete((result, error) -> {
-                state = null;
-                open = false;
-              });
-          } else {
-            closeFuture = openFuture.thenCompose(c -> state.leave()
-              .thenCompose(v -> context.close()))
-              .whenComplete((result, error) -> {
-                state = null;
-                open = false;
-              });
-          }
-        }
-      }
-    }
-    return closeFuture;
-  }
-
-  @Override
   public boolean isClosed() {
     return !open;
   }
@@ -532,8 +515,41 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return A completable future to be completed once the server has been killed.
    */
   public CompletableFuture<Void> kill() {
-    return context.close().whenComplete((result, error) -> {
-      state = null;
+    if (!open)
+      return Futures.exceptionalFuture(new IllegalStateException("context not open"));
+
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    context.getThreadContext().executor().execute(() -> {
+      open = false;
+      if (clientServer != null) {
+        clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
+          internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
+            if (internalError != null) {
+              future.completeExceptionally(internalError);
+            } else if (clientError != null) {
+              future.completeExceptionally(clientError);
+            } else {
+              future.complete(null);
+            }
+          }, context.getThreadContext().executor());
+        }, context.getThreadContext().executor());
+      } else {
+        internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
+          if (internalError != null) {
+            future.completeExceptionally(internalError);
+          } else {
+            future.complete(null);
+          }
+        }, context.getThreadContext().executor());
+      }
+
+      context.transition(CopycatServer.State.INACTIVE);
+    });
+
+    return future.whenCompleteAsync((result, error) -> {
+      clientTransport.close();
+      serverTransport.close();
+      context.close();
       open = false;
     });
   }
@@ -544,7 +560,30 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return A completable future to be completed once the server has been deleted.
    */
   public CompletableFuture<Void> delete() {
-    return close().thenRun(context::delete);
+    return close().thenRun(this::doDelete);
+  }
+
+  /**
+   * Deletes the server state.
+   */
+  private void doDelete() {
+    if (open)
+      return;
+
+    // Delete the metadata store.
+    MetaStore meta = storage.openMetaStore(name);
+    meta.close();
+    meta.delete();
+
+    // Delete the log.
+    Log log = storage.openLog(name);
+    log.close();
+    log.delete();
+
+    // Delete the snapshot store.
+    SnapshotStore snapshot = storage.openSnapshotStore(name);
+    snapshot.close();
+    snapshot.delete();
   }
 
   /**
@@ -744,8 +783,35 @@ public class CopycatServer implements Managed<CopycatServer> {
           .build();
       }
 
-      ServerContext context = new ServerContext(name, clientAddress, clientTransport, serverAddress, serverTransport, cluster, stateMachine, storage, serializer);
-      return new CopycatServer(context, electionTimeout, heartbeatInterval, sessionTimeout);
+      storage.serializer().resolve(new ServiceLoaderTypeResolver());
+      serializer.resolve(new ServiceLoaderTypeResolver());
+
+      // Open the meta store.
+      MetaStore meta = storage.openMetaStore(name);
+
+      // Open the log.
+      Log log = storage.openLog(name);
+
+      // Configure the log compaction mode. If the state machine supports snapshotting, the default
+      // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
+      if (stateMachine instanceof Snapshottable) {
+        log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
+      } else {
+        log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
+      }
+
+      // Open the snapshot store.
+      SnapshotStore snapshot = storage.openSnapshotStore(name);
+
+      ConnectionManager connections = new ConnectionManager(serverTransport.client());
+      ThreadContext threadContext = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
+
+      ServerContext context = new ServerContext(Member.Type.INACTIVE, serverAddress, clientAddress, cluster, meta, log, snapshot, stateMachine, connections, threadContext);
+      context.setElectionTimeout(electionTimeout)
+        .setHeartbeatInterval(heartbeatInterval)
+        .setSessionTimeout(sessionTimeout);
+
+      return new CopycatServer(name, clientTransport, serverTransport, storage, context);
     }
   }
 

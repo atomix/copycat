@@ -36,7 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=206)
-public class AcceptResponse extends AbstractResponse<AcceptResponse> {
+public class AcceptResponse extends AbstractResponse {
 
   /**
    * Returns a new accept client response builder.

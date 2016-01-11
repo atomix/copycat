@@ -20,12 +20,12 @@ package io.atomix.copycat.client.response;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class SessionResponse<T extends SessionResponse<T>> extends AbstractResponse<T> {
+public abstract class SessionResponse extends AbstractResponse {
 
   /**
    * Session response builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends SessionResponse<U>> extends AbstractResponse.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends SessionResponse> extends AbstractResponse.Builder<T, U> {
     protected Builder(U response) {
       super(response);
     }

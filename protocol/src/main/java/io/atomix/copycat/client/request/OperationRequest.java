@@ -32,7 +32,7 @@ import io.atomix.copycat.client.Operation;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public abstract class OperationRequest<T extends OperationRequest<T>> extends SessionRequest<T> {
+public abstract class OperationRequest extends SessionRequest {
   protected long sequence;
 
   /**
@@ -66,7 +66,7 @@ public abstract class OperationRequest<T extends OperationRequest<T>> extends Se
   /**
    * Operation request builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends OperationRequest<U>> extends SessionRequest.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends OperationRequest> extends SessionRequest.Builder<T, U> {
     protected Builder(U request) {
       super(request);
     }

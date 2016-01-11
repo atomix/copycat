@@ -37,7 +37,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new LeaderState(serverState);
+    state = new LeaderState(serverContext);
   }
 
   /**
@@ -45,7 +45,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
    */
   public void testLeaderStepsDownAndVotesOnHigherTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1).setLeader(0);
+      serverContext.setTerm(1).setLeader(0);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -55,11 +55,11 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
 
       VoteResponse response = state.vote(request).get();
       
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverContext.getTerm(), 2L);
+      threadAssertEquals(serverContext.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
-      threadAssertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
+      threadAssertEquals(serverContext.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
@@ -68,13 +68,13 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
    */
   public void testLeaderSequencesCommands() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1)
+      serverContext.setTerm(1)
           .setLeader(members.get(0).hashCode())
           .getStateMachine()
           .executor()
           .context()
           .sessions()
-          .registerSession(new ServerSession(1, UUID.randomUUID(), serverState.getStateMachine().executor().context(), 1000));
+          .registerSession(new ServerSession(1, UUID.randomUUID(), serverContext.getStateMachine().executor().context(), 1000));
       CommandRequest request1 = CommandRequest.builder()
           .withSession(1)
           .withSequence(2)
@@ -98,16 +98,16 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
 
     Thread.sleep(1000);
 
-    serverState.getThreadContext().execute(() -> {
-      try (CommandEntry entry = serverState.getLog().get(1)) {
+    serverContext.getThreadContext().execute(() -> {
+      try (CommandEntry entry = serverContext.getLog().get(1)) {
         threadAssertEquals("foo", ((TestCommand) entry.getOperation()).value);
       }
 
-      try (CommandEntry entry = serverState.getLog().get(2)) {
+      try (CommandEntry entry = serverContext.getLog().get(2)) {
         threadAssertEquals("bar", ((TestCommand) entry.getOperation()).value);
       }
 
-      try (CommandEntry entry = serverState.getLog().get(3)) {
+      try (CommandEntry entry = serverContext.getLog().get(3)) {
         threadAssertEquals("baz", ((TestCommand) entry.getOperation()).value);
       }
 

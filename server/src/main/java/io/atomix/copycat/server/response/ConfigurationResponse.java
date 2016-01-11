@@ -17,11 +17,12 @@ package io.atomix.copycat.server.response;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -38,7 +39,18 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends AbstractResponse<T> {
+@SerializeWith(id=232)
+public class ConfigurationResponse extends AbstractResponse {
+
+  /**
+   * Returns a new configuration response builder.
+   *
+   * @return A new configuration response builder.
+   */
+  public static Builder builder() {
+    return new Builder(new ConfigurationResponse());
+  }
+
   protected long index;
   protected Collection<Member> members;
 
@@ -110,8 +122,8 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
   /**
    * Configuration response builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationResponse<U>> extends AbstractResponse.Builder<T, U> {
-    protected Builder(U response) {
+  public static class Builder extends AbstractResponse.Builder<Builder, ConfigurationResponse> {
+    protected Builder(ConfigurationResponse response) {
       super(response);
     }
 
@@ -123,9 +135,9 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws IllegalArgumentException if {@code index} is negative
      */
     @SuppressWarnings("unchecked")
-    public T withIndex(long index) {
+    public Builder withIndex(long index) {
       response.index = Assert.argNot(index, index < 0, "index cannot be negative");
-      return (T) this;
+      return this;
     }
 
     /**
@@ -136,9 +148,9 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws NullPointerException if {@code members} is null
      */
     @SuppressWarnings("unchecked")
-    public T withMembers(Collection<Member> members) {
+    public Builder withMembers(Collection<Member> members) {
       response.members = Assert.notNull(members, "members");
-      return (T) this;
+      return this;
     }
 
     @Override
@@ -155,7 +167,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
      * @throws IllegalStateException if active members or passive members are null
      */
     @Override
-    public U build() {
+    public ConfigurationResponse build() {
       super.build();
       if (response.status == Status.OK) {
         Assert.state(response.members != null, "activeMembers members cannot be null");

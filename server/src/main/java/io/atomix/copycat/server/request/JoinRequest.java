@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.request;
 
 import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.copycat.server.cluster.Member;
 
 /**
  * Server join configuration change request.
@@ -27,7 +28,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=209)
-public class JoinRequest extends ConfigurationRequest<JoinRequest> {
+public class JoinRequest extends ConfigurationRequest {
 
   /**
    * Returns a new join request builder.
@@ -51,9 +52,20 @@ public class JoinRequest extends ConfigurationRequest<JoinRequest> {
   /**
    * Join request builder.
    */
-  public static class Builder extends ConfigurationRequest.Builder<Builder, JoinRequest> {
+  public static class Builder extends ConfigurationRequest.Builder {
     protected Builder(JoinRequest request) {
       super(request);
+    }
+
+    @Override
+    public Builder withMember(Member member) {
+      super.withMember(member);
+      return this;
+    }
+
+    @Override
+    public JoinRequest build() {
+      return (JoinRequest) super.build();
     }
   }
 

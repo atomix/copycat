@@ -18,14 +18,15 @@ package io.atomix.copycat.test;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.util.Listener;
 import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.session.SessionListener;
-import io.atomix.copycat.server.state.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -35,12 +36,15 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.io.Serializable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -1105,7 +1109,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * @return The next server address.
    */
   private Member nextMember() {
-    return new Member(CopycatServer.Type.INACTIVE, new Address("localhost", ++port), new Address("localhost", port + 1000));
+    return new TestMember(Member.Type.INACTIVE, new Address("localhost", ++port), new Address("localhost", port + 1000));
   }
 
   /**
@@ -1383,6 +1387,89 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test event.
    */
   public static class TestClose implements Command<Void> {
+  }
+
+  /**
+   * Test member.
+   */
+  public static class TestMember implements Member, Serializable {
+    private Type type;
+    private Address serverAddress;
+    private Address clientAddress;
+
+    public TestMember() {
+    }
+
+    public TestMember(Type type, Address serverAddress, Address clientAddress) {
+      this.type = type;
+      this.serverAddress = serverAddress;
+      this.clientAddress = clientAddress;
+    }
+
+    @Override
+    public int id() {
+      return serverAddress.hashCode();
+    }
+
+    @Override
+    public Address address() {
+      return serverAddress;
+    }
+
+    @Override
+    public Address clientAddress() {
+      return clientAddress;
+    }
+
+    @Override
+    public Address serverAddress() {
+      return serverAddress;
+    }
+
+    @Override
+    public Type type() {
+      return type;
+    }
+
+    @Override
+    public Listener<Type> onTypeChange(Consumer<Type> callback) {
+      return null;
+    }
+
+    @Override
+    public Status status() {
+      return null;
+    }
+
+    @Override
+    public Listener<Status> onStatusChange(Consumer<Status> callback) {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> promote() {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> promote(Type type) {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> demote() {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> demote(Type type) {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> remove() {
+      return null;
+    }
   }
 
 }

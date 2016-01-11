@@ -31,7 +31,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=198)
-public class QueryResponse extends OperationResponse<QueryResponse> {
+public class QueryResponse extends OperationResponse {
 
   /**
    * Returns a new query response builder.

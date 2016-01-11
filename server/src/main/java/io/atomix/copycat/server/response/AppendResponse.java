@@ -38,7 +38,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=208)
-public class AppendResponse extends AbstractResponse<AppendResponse> {
+public class AppendResponse extends AbstractResponse {
 
   /**
    * Returns a new append response builder.

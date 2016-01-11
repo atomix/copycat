@@ -21,6 +21,7 @@ import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.request.*;
 import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -40,11 +41,13 @@ import java.util.stream.Collectors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class FollowerState extends ActiveState {
+  private final FollowerAppender appender;
   private final Random random = new Random();
   private Scheduled heartbeatTimer;
 
-  public FollowerState(ServerState context) {
+  public FollowerState(ServerContext context) {
     super(context);
+    this.appender = new FollowerAppender(context);
   }
 
   @Override
@@ -88,13 +91,13 @@ final class FollowerState extends ActiveState {
 
       AcceptRequest acceptRequest = AcceptRequest.builder()
         .withClient(request.client())
-        .withAddress(context.getCluster().getMember().serverAddress())
+        .withAddress(context.getCluster().member().serverAddress())
         .build();
       return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
         .thenApply(acceptResponse -> ConnectResponse.builder()
           .withStatus(Response.Status.OK)
           .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
-          .withMembers(context.getCluster().getMembers().stream()
+          .withMembers(context.getCluster().members().stream()
             .map(Member::clientAddress)
             .filter(m -> m != null)
             .collect(Collectors.toList()))
@@ -153,7 +156,7 @@ final class FollowerState extends ActiveState {
    * Starts the heartbeat timer.
    */
   private void startHeartbeatTimeout() {
-    LOGGER.debug("{} - Starting heartbeat timer", context.getCluster().getMember().serverAddress());
+    LOGGER.debug("{} - Starting heartbeat timer", context.getCluster().member().address());
     resetHeartbeatTimeout();
   }
 
@@ -178,7 +181,7 @@ final class FollowerState extends ActiveState {
       if (isOpen()) {
         context.setLeader(0);
         if (context.getLastVotedFor() == 0) {
-          LOGGER.debug("{} - Heartbeat timed out in {}", context.getCluster().getMember().serverAddress(), delay);
+          LOGGER.debug("{} - Heartbeat timed out in {}", context.getCluster().member().address(), delay);
           sendPollRequests();
         } else {
           // If the node voted for a candidate then reset the election timer.
@@ -194,22 +197,22 @@ final class FollowerState extends ActiveState {
   private void sendPollRequests() {
     // Set a new timer within which other nodes must respond in order for this node to transition to candidate.
     heartbeatTimer = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
-      LOGGER.debug("{} - Failed to poll a majority of the cluster in {}", context.getCluster().getMember().serverAddress(), context.getElectionTimeout());
+      LOGGER.debug("{} - Failed to poll a majority of the cluster in {}", context.getCluster().member().address(), context.getElectionTimeout());
       resetHeartbeatTimeout();
     });
 
     // Create a quorum that will track the number of nodes that have responded to the poll request.
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<Member> votingMembers = new HashSet<>(context.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE));
+    final Set<ServerMember> votingMembers = new HashSet<>(context.getClusterState().getActiveMemberStates().stream().map(MemberState::getMember).collect(Collectors.toList()));
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
       transition(CopycatServer.State.LEADER);
       return;
     }
 
-    final Quorum quorum = new Quorum(context.getCluster().getQuorum(), (elected) -> {
+    final Quorum quorum = new Quorum(context.getClusterState().getQuorum(), (elected) -> {
       // If a majority of the cluster indicated they would vote for us then transition to candidate.
       complete.set(true);
       if (elected) {
@@ -232,15 +235,15 @@ final class FollowerState extends ActiveState {
       lastTerm = 0;
     }
 
-    LOGGER.info("{} - Polling members {}", context.getCluster().getMember().serverAddress(), votingMembers);
+    LOGGER.info("{} - Polling members {}", context.getCluster().member().address(), votingMembers);
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
-    for (Member member : votingMembers) {
-      LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().getMember().serverAddress(), member, context.getTerm() + 1);
+    for (ServerMember member : votingMembers) {
+      LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
       PollRequest request = PollRequest.builder()
         .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().getMember().serverAddress().hashCode())
+        .withCandidate(context.getCluster().member().address().hashCode())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
@@ -249,7 +252,7 @@ final class FollowerState extends ActiveState {
           context.checkThread();
           if (isOpen() && !complete.get()) {
             if (error != null) {
-              LOGGER.warn("{} - {}", context.getCluster().getMember().serverAddress(), error.getMessage());
+              LOGGER.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
               quorum.fail();
             } else {
               if (response.term() > context.getTerm()) {
@@ -257,13 +260,13 @@ final class FollowerState extends ActiveState {
               }
 
               if (!response.accepted()) {
-                LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
                 quorum.succeed();
               }
             }
@@ -290,7 +293,12 @@ final class FollowerState extends ActiveState {
   @Override
   public CompletableFuture<AppendResponse> append(AppendRequest request) {
     CompletableFuture<AppendResponse> future = super.append(request);
+
+    // Reset the heartbeat timeout.
     resetHeartbeatTimeout();
+
+    // Send AppendEntries requests to passive members if necessary.
+    appender.appendEntries();
     return future;
   }
 
@@ -309,14 +317,14 @@ final class FollowerState extends ActiveState {
    */
   private void cancelHeartbeatTimeout() {
     if (heartbeatTimer != null) {
-      LOGGER.debug("{} - Cancelling heartbeat timer", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Cancelling heartbeat timer", context.getCluster().member().address());
       heartbeatTimer.cancel();
     }
   }
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return super.close().thenRun(this::cancelHeartbeatTimeout);
+    return super.close().thenRun(appender::close).thenRun(this::cancelHeartbeatTimeout);
   }
 
 }

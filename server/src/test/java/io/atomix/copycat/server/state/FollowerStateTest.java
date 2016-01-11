@@ -34,7 +34,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new FollowerState(serverState);
+    state = new FollowerState(serverContext);
   }
 
   /**
@@ -42,7 +42,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerAcceptsPollForMultipleCandidatesPerTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverContext.setTerm(2);
       PollRequest request1 = PollRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -53,7 +53,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       PollResponse response = state.poll(request1).get();
 
       threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
 
@@ -67,7 +67,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       response = state.poll(request2).get();
 
       threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
     });
@@ -78,7 +78,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerRejectsPollWhenLogNotUpToDate() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       append(10, 1);
       PollRequest request = PollRequest.builder()
           .withTerm(2)
@@ -90,7 +90,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       PollResponse response = state.poll(request).get();
 
       threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.accepted());
     });
@@ -101,7 +101,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerSetsTermOnPollRequest() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1).setLeader(0);
+      serverContext.setTerm(1).setLeader(0);
       PollRequest request = PollRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -112,7 +112,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       PollResponse response = state.poll(request).get();
 
       threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
     });
@@ -123,7 +123,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerRejectsPollRequestWithLowerTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       PollRequest request = PollRequest.builder()
           .withTerm(1)
           .withCandidate(members.get(1).hashCode())
@@ -134,7 +134,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       PollResponse response = state.poll(request).get();
 
       threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.accepted());
     });
@@ -145,7 +145,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerAcceptsPollWhenLogUpToDate() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverContext.setTerm(2);
       append(10, 1);
       PollRequest request = PollRequest.builder()
           .withTerm(2)
@@ -157,7 +157,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       PollResponse response = state.poll(request).get();
 
       threadAssertEquals(response.status(), Status.OK);
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.accepted());
     });
@@ -168,7 +168,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerSetsTermOnVoteRequest() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(1);
+      serverContext.setTerm(1);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -178,7 +178,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response = state.vote(request).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
     });
@@ -189,7 +189,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerRejectsVoteRequestWithLesserTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2);
+      serverContext.setTerm(2);
       VoteRequest request = VoteRequest.builder()
           .withTerm(1)
           .withCandidate(members.get(1).hashCode())
@@ -199,7 +199,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response = state.vote(request).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.voted());
     });
@@ -210,7 +210,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerVotesForOneCandidatePerTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       VoteRequest request1 = VoteRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -220,8 +220,8 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response = state.vote(request1).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverContext.getTerm(), 2L);
+      threadAssertEquals(serverContext.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
 
@@ -234,8 +234,8 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       response = state.vote(request2).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverContext.getTerm(), 2L);
+      threadAssertEquals(serverContext.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.voted());
     });
@@ -246,7 +246,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerOverridesVoteForNewTerm() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       VoteRequest request1 = VoteRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -256,8 +256,8 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response1 = state.vote(request1).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverContext.getTerm(), 2L);
+      threadAssertEquals(serverContext.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response1.term(), 2L);
       threadAssertTrue(response1.voted());
 
@@ -270,8 +270,8 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response2 = state.vote(request2).get();
 
-      threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(2).hashCode());
+      threadAssertEquals(serverContext.getTerm(), 3L);
+      threadAssertEquals(serverContext.getLastVotedFor(), members.get(2).hashCode());
       threadAssertEquals(response2.term(), 3L);
       threadAssertTrue(response2.voted());
     });
@@ -283,7 +283,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerRejectsVoteWhenLogNotUpToDate() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       append(10, 1);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
@@ -294,7 +294,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response = state.vote(request).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertFalse(response.voted());
     });
@@ -305,7 +305,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerAcceptsVoteWhenLogUpToDate() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       append(10, 1);
       VoteRequest request = VoteRequest.builder()
           .withTerm(2)
@@ -316,7 +316,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response = state.vote(request).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
+      threadAssertEquals(serverContext.getTerm(), 2L);
       threadAssertEquals(response.term(), 2L);
       threadAssertTrue(response.voted());
     });
@@ -327,7 +327,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
    */
   public void testFollowerUpdatesLeaderAndTermOnAppend() throws Throwable {
     runOnServer(() -> {
-      serverState.setTerm(2).setLeader(0);
+      serverContext.setTerm(2).setLeader(0);
       VoteRequest request1 = VoteRequest.builder()
           .withTerm(2)
           .withCandidate(members.get(1).hashCode())
@@ -337,8 +337,8 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       VoteResponse response1 = state.vote(request1).get();
 
-      threadAssertEquals(serverState.getTerm(), 2L);
-      threadAssertEquals(serverState.getLastVotedFor(), members.get(1).hashCode());
+      threadAssertEquals(serverContext.getTerm(), 2L);
+      threadAssertEquals(serverContext.getLastVotedFor(), members.get(1).hashCode());
       threadAssertEquals(response1.term(), 2L);
       threadAssertTrue(response1.voted());
 
@@ -353,9 +353,9 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
 
       AppendResponse response2 = state.append(request2).get();
 
-      threadAssertEquals(serverState.getTerm(), 3L);
-      threadAssertEquals(serverState.getLeader().serverAddress(), members.get(2).serverAddress());
-      threadAssertEquals(serverState.getLastVotedFor(), 0);
+      threadAssertEquals(serverContext.getTerm(), 3L);
+      threadAssertEquals(serverContext.getLeader().serverAddress(), members.get(2).serverAddress());
+      threadAssertEquals(serverContext.getLastVotedFor(), 0);
       threadAssertEquals(response2.term(), 3L);
       threadAssertTrue(response2.succeeded());
     });

@@ -26,7 +26,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class AbstractRequest<T extends Request<T>> implements Request<T> {
+public abstract class AbstractRequest implements Request {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
@@ -42,7 +42,7 @@ public abstract class AbstractRequest<T extends Request<T>> implements Request<T
    * @param <T> The builder type.
    * @param <U> The request type.
    */
-  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractRequest<U>> extends Request.Builder<T, U> {
+  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractRequest> extends Request.Builder<T, U> {
     protected final U request;
 
     /**

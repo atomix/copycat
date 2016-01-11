@@ -34,7 +34,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=215)
-public class VoteRequest extends AbstractRequest<VoteRequest> {
+public class VoteRequest extends AbstractRequest {
 
   /**
    * Returns a new vote request builder.

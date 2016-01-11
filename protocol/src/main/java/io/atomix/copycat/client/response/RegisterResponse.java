@@ -38,7 +38,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=200)
-public class RegisterResponse extends AbstractResponse<RegisterResponse> {
+public class RegisterResponse extends AbstractResponse {
 
   /**
    * Returns a new register client response builder.

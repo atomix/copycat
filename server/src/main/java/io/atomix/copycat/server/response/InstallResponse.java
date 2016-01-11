@@ -34,7 +34,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=230)
-public class InstallResponse extends AbstractResponse<InstallResponse> {
+public class InstallResponse extends AbstractResponse {
 
   /**
    * Returns a new install response builder.

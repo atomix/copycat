@@ -27,9 +27,9 @@ import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Commit;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -58,7 +58,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private ThreadContext callerContext;
   private ThreadContext stateContext;
   private Transport transport;
-  private ServerState state;
+  private ServerContext state;
   private long timestamp;
   private AtomicLong sequence;
   private MetaStore meta;
@@ -76,13 +76,13 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     meta = storage.openMetaStore("test");
     log = storage.openLog("test");
     snapshot = storage.openSnapshotStore("test");
-    Member member = new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
+    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
     Collection<Address> members = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5000),
       new Address("localhost", 5000)
     );
-    state = new ServerState(member, members, meta, log, snapshot, new TestStateMachine(), new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+    state = new ServerContext(member.type(), member.serverAddress(), member.clientAddress(), members, meta, log, snapshot, new TestStateMachine(), new ConnectionManager(new LocalTransport(registry).client()), callerContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

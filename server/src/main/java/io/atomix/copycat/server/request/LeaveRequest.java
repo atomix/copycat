@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.request;
 
 import io.atomix.catalyst.serializer.SerializeWith;
+import io.atomix.copycat.server.cluster.Member;
 
 /**
  * Server leave configuration request.
@@ -27,7 +28,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=211)
-public class LeaveRequest extends ConfigurationRequest<LeaveRequest> {
+public class LeaveRequest extends ConfigurationRequest {
 
   /**
    * Returns a new leave request builder.
@@ -51,9 +52,20 @@ public class LeaveRequest extends ConfigurationRequest<LeaveRequest> {
   /**
    * Leave request builder.
    */
-  public static class Builder extends ConfigurationRequest.Builder<Builder, LeaveRequest> {
+  public static class Builder extends ConfigurationRequest.Builder {
     protected Builder(LeaveRequest request) {
       super(request);
+    }
+
+    @Override
+    public Builder withMember(Member member) {
+      super.withMember(member);
+      return this;
+    }
+
+    @Override
+    public LeaveRequest build() {
+      return (LeaveRequest) super.build();
     }
   }
 

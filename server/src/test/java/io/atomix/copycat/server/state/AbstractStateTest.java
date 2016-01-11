@@ -25,9 +25,9 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
 import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -58,8 +58,8 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
-  protected ServerState serverState;
-  protected List<Member> members;
+  protected ServerContext serverContext;
+  protected List<ServerMember> members;
 
   /**
    * Sets up a server state.
@@ -80,7 +80,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverState = new ServerState(members.get(0), members.stream().map(Member::serverAddress).collect(Collectors.toList()), meta, log, snapshot, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverContext = new ServerContext(members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), meta, log, snapshot, stateMachine, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**
@@ -97,9 +97,9 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    */
   protected void append(int entries, long term) throws Throwable {
     for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
+      try (TestEntry entry = serverContext.getLog().create(TestEntry.class)) {
         entry.setTerm(term);
-        serverState.getLog().append(entry);
+        serverContext.getLog().append(entry);
       }
     }
   }
@@ -108,7 +108,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    * Gets the entry at the given index.
    */
   protected <T extends Entry> T get(long index) throws Throwable {
-    return serverState.getLog().get(index);
+    return serverContext.getLog().get(index);
   }
 
   /**
@@ -132,19 +132,19 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected List<TestEntry> entries(int entries, long term) {
     List<TestEntry> result = new ArrayList<>();
     for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = serverState.getLog().create(TestEntry.class)) {
+      try (TestEntry entry = serverContext.getLog().create(TestEntry.class)) {
         result.add(entry.setTerm(term));
       }
     }
     return result;
   }
 
-  protected void assertNoLeaderError(AbstractResponse<?> response) {
+  protected void assertNoLeaderError(AbstractResponse response) {
     threadAssertEquals(response.status(), Response.Status.ERROR);
     threadAssertEquals(response.error(), RaftError.Type.NO_LEADER_ERROR);
   }
 
-  protected void assertIllegalMemberStateError(AbstractResponse<?> response) {
+  protected void assertIllegalMemberStateError(AbstractResponse response) {
     threadAssertEquals(response.status(), Response.Status.ERROR);
     threadAssertEquals(response.error(), RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR);
   }
@@ -152,10 +152,10 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   /**
    * Creates a collection of member addresses.
    */
-  private List<Member> createMembers(int nodes) {
-    List<Member> members = new ArrayList<>();
+  private List<ServerMember> createMembers(int nodes) {
+    List<ServerMember> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
+      members.add(new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
     }
     return members;
   }

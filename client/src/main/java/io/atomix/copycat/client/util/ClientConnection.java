@@ -109,7 +109,7 @@ public class ClientConnection implements Connection {
   /**
    * Sends the given request attempt to the cluster.
    */
-  private <T extends Request<T>, U extends Response<U>> void sendRequest(T request, CompletableFuture<U> future) {
+  private <T extends Request, U extends Response> void sendRequest(T request, CompletableFuture<U> future) {
     if (open) {
       connect().whenComplete((c, e) -> sendRequest(request, c, e, future));
     }
@@ -118,7 +118,7 @@ public class ClientConnection implements Connection {
   /**
    * Sends the given request attempt to the cluster via the given connection if connected.
    */
-  private <T extends Request<T>, U extends Response<U>> void sendRequest(T request, Connection connection, Throwable error, CompletableFuture<U> future) {
+  private <T extends Request, U extends Response> void sendRequest(T request, Connection connection, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
         if (connection != null) {
@@ -136,7 +136,7 @@ public class ClientConnection implements Connection {
   /**
    * Handles a response from the cluster.
    */
-  private <T extends Request<T>, U extends Response<U>> void handleResponse(T request, U response, Throwable error, CompletableFuture<U> future) {
+  private <T extends Request, U extends Response> void handleResponse(T request, U response, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
         if (response.status() == Response.Status.OK

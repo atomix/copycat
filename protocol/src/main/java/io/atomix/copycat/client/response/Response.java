@@ -27,7 +27,7 @@ import io.atomix.copycat.client.error.RaftError;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Response<T extends Response<T>> extends CatalystSerializable {
+public interface Response extends CatalystSerializable {
 
   /**
    * Response status.

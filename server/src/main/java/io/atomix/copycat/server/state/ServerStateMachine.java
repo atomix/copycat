@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
-  private final ServerState state;
+  private final ServerContext state;
   private final ServerStateMachineExecutor executor;
   private final ServerCommitPool commits;
   private volatile long lastApplied;
@@ -55,7 +55,7 @@ final class ServerStateMachine implements AutoCloseable {
   private long configuration;
   private Snapshot pendingSnapshot;
 
-  ServerStateMachine(StateMachine stateMachine, ServerState state, ThreadContext executor) {
+  ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.state = Assert.notNull(state, "state");
     this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager()), executor);
@@ -90,7 +90,7 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
       // of a snapshot is predicated on session events being received by clients up to the snapshot index.
-      LOGGER.info("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.index());
+      LOGGER.info("{} - Taking snapshot {}", state.getCluster().member().address(), pendingSnapshot.index());
       synchronized (pendingSnapshot) {
         try (SnapshotWriter writer = pendingSnapshot.writer()) {
           ((Snapshottable) stateMachine).snapshot(writer);
@@ -116,7 +116,7 @@ final class ServerStateMachine implements AutoCloseable {
       // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
       // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
       // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
-      LOGGER.info("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.index());
+      LOGGER.info("{} - Installing snapshot {}", state.getCluster().member().address(), currentSnapshot.index());
       executor.executor().execute(() -> {
         synchronized (currentSnapshot) {
           try (SnapshotReader reader = currentSnapshot.reader()) {
@@ -144,7 +144,7 @@ final class ServerStateMachine implements AutoCloseable {
     // waiting snapshot index, persist the snapshot and update the last snapshot index.
     if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.index()) {
       long snapshotIndex = pendingSnapshot.index();
-      LOGGER.debug("{} - Completing snapshot {}", state.getCluster().getMember().serverAddress(), snapshotIndex);
+      LOGGER.debug("{} - Completing snapshot {}", state.getCluster().member().address(), snapshotIndex);
       synchronized (pendingSnapshot) {
         pendingSnapshot.complete();
         pendingSnapshot = null;
@@ -269,7 +269,7 @@ final class ServerStateMachine implements AutoCloseable {
       for (long i = lastApplied + 1; i <= lastIndex; i++) {
         Entry entry = state.getLog().get(i);
         if (entry != null) {
-          LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
+          LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
           apply(entry, false).whenComplete((result, error) -> {
             if (counter.incrementAndGet() == entriesToApply) {
               future.complete(null);
@@ -324,7 +324,7 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed with the result.
    */
   public CompletableFuture<?> apply(Entry entry) {
-    LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
+    LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
     return apply(entry, true);
   }
 

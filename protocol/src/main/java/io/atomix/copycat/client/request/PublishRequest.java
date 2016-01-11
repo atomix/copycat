@@ -40,7 +40,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=195)
-public class PublishRequest extends SessionRequest<PublishRequest> {
+public class PublishRequest extends SessionRequest {
 
   /**
    * Returns a new publish request builder.
