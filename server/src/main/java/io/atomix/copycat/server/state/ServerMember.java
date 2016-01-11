@@ -27,7 +27,7 @@ import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.ConfigurationRequest;
+import io.atomix.copycat.server.request.ReconfigureRequest;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -208,7 +208,8 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    cluster.getContext().getAbstractState().configure(ConfigurationRequest.builder()
+    cluster.getContext().getAbstractState().reconfigure(ReconfigureRequest.builder()
+      .withIndex(cluster.getVersion())
       .withMember(new ServerMember(type, serverAddress(), clientAddress()))
       .build()).whenComplete((response, error) -> {
       if (error == null) {

@@ -131,7 +131,7 @@ abstract class AbstractState implements Managed<AbstractState> {
   /**
    * Handles a configure request.
    */
-  protected abstract CompletableFuture<ConfigurationResponse> configure(ConfigurationRequest request);
+  protected abstract CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request);
 
   /**
    * Handles a leave request.

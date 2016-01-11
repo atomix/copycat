@@ -288,7 +288,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<ConfigurationResponse> configure(final ConfigurationRequest request) {
+  public CompletableFuture<ReconfigureResponse> reconfigure(final ReconfigureRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -297,7 +297,16 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(ConfigurationResponse.builder()
+      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .build()));
+    }
+
+    // If the configuration request index is less than the last known configuration index for
+    // the leader, fail the request and force the requester to retry. This ensures that servers
+    // aren't basing their configuration change requests on out-of-date membership information.
+    if (request.index() < context.getClusterState().getVersion()) {
+      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
     }
@@ -305,7 +314,7 @@ final class LeaderState extends ActiveState {
     // If the member is not a known member of the cluster, fail the promotion.
     ServerMember existingMember = context.getClusterState().member(request.member().id());
     if (existingMember == null) {
-      return CompletableFuture.completedFuture(logResponse(ConfigurationResponse.builder()
+      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
@@ -323,18 +332,18 @@ final class LeaderState extends ActiveState {
 
     Collection<Member> members = context.getCluster().members();
 
-    CompletableFuture<ConfigurationResponse> future = new CompletableFuture<>();
+    CompletableFuture<ReconfigureResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(ConfigurationResponse.builder()
+          future.complete(logResponse(ReconfigureResponse.builder()
             .withStatus(Response.Status.OK)
             .withIndex(index)
             .withMembers(members)
             .build()));
         } else {
-          future.complete(logResponse(ConfigurationResponse.builder()
+          future.complete(logResponse(ReconfigureResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withError(RaftError.Type.INTERNAL_ERROR)
             .build()));

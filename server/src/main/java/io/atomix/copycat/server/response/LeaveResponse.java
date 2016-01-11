@@ -16,10 +16,6 @@
 package io.atomix.copycat.server.response;
 
 import io.atomix.catalyst.serializer.SerializeWith;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.server.cluster.Member;
-
-import java.util.Collection;
 
 /**
  * Server leave configuration change response.
@@ -56,38 +52,9 @@ public class LeaveResponse extends ConfigurationResponse {
   /**
    * Leave response builder.
    */
-  public static class Builder extends ConfigurationResponse.Builder {
+  public static class Builder extends ConfigurationResponse.Builder<Builder, LeaveResponse> {
     protected Builder(LeaveResponse response) {
       super(response);
-    }
-
-    @Override
-    public Builder withStatus(Status status) {
-      super.withStatus(status);
-      return this;
-    }
-
-    @Override
-    public Builder withError(RaftError error) {
-      super.withError(error);
-      return this;
-    }
-
-    @Override
-    public Builder withMembers(Collection<Member> members) {
-      super.withMembers(members);
-      return this;
-    }
-
-    @Override
-    public Builder withIndex(long index) {
-      super.withIndex(index);
-      return this;
-    }
-
-    @Override
-    public LeaveResponse build() {
-      return (LeaveResponse) super.build();
     }
   }
 

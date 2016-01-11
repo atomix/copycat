@@ -24,6 +24,7 @@ import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.request.ReconfigureRequest;
 import io.atomix.copycat.server.request.ConfigurationRequest;
 import io.atomix.copycat.server.request.JoinRequest;
 import io.atomix.copycat.server.request.LeaveRequest;
@@ -403,7 +404,8 @@ final class ClusterState implements Cluster, AutoCloseable {
       } else {
         LOGGER.debug("{} - Sending server identification to {}", member().address(), leader.address());
         context.getConnections().getConnection(leader.serverAddress()).thenCompose(connection -> {
-          ConfigurationRequest request = ConfigurationRequest.builder()
+          ReconfigureRequest request = ReconfigureRequest.builder()
+            .withIndex(getVersion())
             .withMember(member())
             .build();
           return connection.<ConfigurationRequest, ConfigurationResponse>send(request);

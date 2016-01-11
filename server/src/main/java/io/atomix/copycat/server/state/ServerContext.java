@@ -508,7 +508,7 @@ public class ServerContext implements AutoCloseable {
     connection.handler(ConfigureRequest.class, request -> state.configure(request));
     connection.handler(InstallRequest.class, request -> state.install(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
-    connection.handler(ConfigurationRequest.class, request -> state.configure(request));
+    connection.handler(ReconfigureRequest.class, request -> state.reconfigure(request));
     connection.handler(LeaveRequest.class, request -> state.leave(request));
     connection.handler(AppendRequest.class, request -> state.append(request));
     connection.handler(PollRequest.class, request -> state.poll(request));

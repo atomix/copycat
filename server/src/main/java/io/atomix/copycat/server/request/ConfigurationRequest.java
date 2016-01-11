@@ -17,7 +17,6 @@ package io.atomix.copycat.server.request;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
@@ -34,13 +33,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=231)
-public class ConfigurationRequest extends AbstractRequest {
-
-  public static Builder builder() {
-    return new Builder(new ConfigurationRequest());
-  }
-
+public abstract class ConfigurationRequest extends AbstractRequest {
   protected Member member;
 
   /**
@@ -69,7 +62,10 @@ public class ConfigurationRequest extends AbstractRequest {
 
   @Override
   public boolean equals(Object object) {
-    return getClass().isAssignableFrom(object.getClass()) && ((ConfigurationRequest) object).member.equals(member);
+    if (getClass().isAssignableFrom(object.getClass())) {
+      return ((ConfigurationRequest) object).member.equals(member);
+    }
+    return false;
   }
 
   @Override
@@ -80,8 +76,8 @@ public class ConfigurationRequest extends AbstractRequest {
   /**
    * Configuration request builder.
    */
-  public static class Builder extends AbstractRequest.Builder<Builder, ConfigurationRequest> {
-    protected Builder(ConfigurationRequest request) {
+  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationRequest> extends AbstractRequest.Builder<T, U> {
+    protected Builder(U request) {
       super(request);
     }
 
@@ -93,16 +89,16 @@ public class ConfigurationRequest extends AbstractRequest {
      * @throws NullPointerException if {@code member} is null
      */
     @SuppressWarnings("unchecked")
-    public Builder withMember(Member member) {
+    public T withMember(Member member) {
       request.member = Assert.notNull(member, "member");
-      return this;
+      return (T) this;
     }
 
     /**
      * @throws IllegalStateException if member is null
      */
     @Override
-    public ConfigurationRequest build() {
+    public U build() {
       super.build();
       Assert.state(request.member != null, "member cannot be null");
       return request;

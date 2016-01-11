@@ -87,7 +87,7 @@ class InactiveState extends AbstractState {
   }
 
   @Override
-  protected CompletableFuture<ConfigurationResponse> configure(ConfigurationRequest request) {
+  protected CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

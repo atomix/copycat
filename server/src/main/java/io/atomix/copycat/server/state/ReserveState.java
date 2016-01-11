@@ -226,17 +226,17 @@ class ReserveState extends AbstractState {
   }
 
   @Override
-  protected CompletableFuture<ConfigurationResponse> configure(ConfigurationRequest request) {
+  protected CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(ConfigurationResponse.builder()
+      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<ConfigurationRequest, ConfigurationResponse>forward(request).thenApply(this::logResponse);
+      return this.<ReconfigureRequest, ReconfigureResponse>forward(request).thenApply(this::logResponse);
     }
   }
 
