@@ -180,6 +180,48 @@ public class CopycatServer implements Managed<CopycatServer> {
    * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
    * file to your {@code META-INF/services} folder on the classpath.
    *
+   * @param type The server member type.
+   * @param address The address through which clients and servers connect to this server.
+   * @param cluster The cluster members to which to connect.
+   * @return The server builder.
+   */
+  public static Builder builder(Member.Type type, Address address, Address... cluster) {
+    return builder(address, address, Arrays.asList(cluster)).withType(type);
+  }
+
+  /**
+   * Returns a new Raft server builder.
+   * <p>
+   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
+   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * not have to be present in the address list.
+   * <p>
+   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
+   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
+   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
+   * file to your {@code META-INF/services} folder on the classpath.
+   *
+   * @param type The server member type.
+   * @param address The address through which clients and servers connect to this server.
+   * @param cluster The cluster members to which to connect.
+   * @return The server builder.
+   */
+  public static Builder builder(Member.Type type, Address address, Collection<Address> cluster) {
+    return new Builder(address, address, cluster).withType(type);
+  }
+
+  /**
+   * Returns a new Raft server builder.
+   * <p>
+   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
+   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * not have to be present in the address list.
+   * <p>
+   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
+   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
+   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
+   * file to your {@code META-INF/services} folder on the classpath.
+   *
    * @param clientAddress The address through which clients connect to the server.
    * @param serverAddress The local server member address.
    * @param cluster The cluster members to which to connect.
@@ -208,6 +250,50 @@ public class CopycatServer implements Managed<CopycatServer> {
    */
   public static Builder builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
     return new Builder(clientAddress, serverAddress, cluster);
+  }
+
+  /**
+   * Returns a new Raft server builder.
+   * <p>
+   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
+   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * not have to be present in the address list.
+   * <p>
+   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
+   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
+   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
+   * file to your {@code META-INF/services} folder on the classpath.
+   *
+   * @param type The server member type.
+   * @param clientAddress The address through which clients connect to the server.
+   * @param serverAddress The local server member address.
+   * @param cluster The cluster members to which to connect.
+   * @return The server builder.
+   */
+  public static Builder builder(Member.Type type, Address clientAddress, Address serverAddress, Address... cluster) {
+    return builder(clientAddress, serverAddress, Arrays.asList(cluster)).withType(type);
+  }
+
+  /**
+   * Returns a new Raft server builder.
+   * <p>
+   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
+   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
+   * not have to be present in the address list.
+   * <p>
+   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
+   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
+   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
+   * file to your {@code META-INF/services} folder on the classpath.
+   *
+   * @param type The server member type.
+   * @param clientAddress The address through which clients connect to the server.
+   * @param serverAddress The local server member address.
+   * @param cluster The cluster members to which to connect.
+   * @return The server builder.
+   */
+  public static Builder builder(Member.Type type, Address clientAddress, Address serverAddress, Collection<Address> cluster) {
+    return new Builder(clientAddress, serverAddress, cluster).withType(type);
   }
 
   /**
