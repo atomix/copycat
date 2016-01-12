@@ -24,10 +24,10 @@ import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.ReconfigureRequest;
 import io.atomix.copycat.server.request.ConfigurationRequest;
 import io.atomix.copycat.server.request.JoinRequest;
 import io.atomix.copycat.server.request.LeaveRequest;
+import io.atomix.copycat.server.request.ReconfigureRequest;
 import io.atomix.copycat.server.response.ConfigurationResponse;
 import io.atomix.copycat.server.response.JoinResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
@@ -291,25 +291,27 @@ final class ClusterState implements Cluster, AutoCloseable {
 
     joinFuture = new CompletableFuture<>();
 
-    // If the server type is defined, that indicates it's a member of the current configuration and
-    // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
-    // Note that we don't complete the join future when transitioning to a valid state since we need
-    // to ensure that the server's configuration has been updated in the cluster before completing the join.
-    switch (member.type()) {
-      case INACTIVE:
-        join(getActiveMemberStates().iterator(), 1);
-        break;
-      case RESERVE:
-        context.transition(CopycatServer.State.RESERVE);
-        break;
-      case PASSIVE:
-      case PROMOTABLE:
-        context.transition(CopycatServer.State.PASSIVE);
-        break;
-      case ACTIVE:
-        context.transition(CopycatServer.State.FOLLOWER);
-        break;
-    }
+    context.getThreadContext().executor().execute(() -> {
+      // If the server type is defined, that indicates it's a member of the current configuration and
+      // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
+      // Note that we don't complete the join future when transitioning to a valid state since we need
+      // to ensure that the server's configuration has been updated in the cluster before completing the join.
+      switch (member.type()) {
+        case INACTIVE:
+          join(getActiveMemberStates().iterator(), 1);
+          break;
+        case RESERVE:
+          context.transition(CopycatServer.State.RESERVE);
+          break;
+        case PASSIVE:
+        case PROMOTABLE:
+          context.transition(CopycatServer.State.PASSIVE);
+          break;
+        case ACTIVE:
+          context.transition(CopycatServer.State.FOLLOWER);
+          break;
+      }
+    });
 
     return joinFuture.whenComplete((result, error) -> joinFuture = null);
   }
@@ -442,7 +444,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    */
   public CompletableFuture<Void> leave() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.getThreadContext().execute(() -> {
+    context.getThreadContext().executor().execute(() -> {
       if (getActiveMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member().address());
         context.transition(CopycatServer.State.INACTIVE);
