@@ -14,3 +14,4 @@
 # limitations under the License.
 #
 io.atomix.copycat.server.storage.TestEntry
+io.atomix.copycat.server.storage.MetaStoreTest$TestMember

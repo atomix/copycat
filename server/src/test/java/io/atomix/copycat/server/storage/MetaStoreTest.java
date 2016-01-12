@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
@@ -28,7 +31,6 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
@@ -135,7 +137,7 @@ public class MetaStoreTest {
   /**
    * Test member.
    */
-  public static class TestMember implements Member, Serializable {
+  public static class TestMember implements Member, CatalystSerializable {
     private Type type;
     private Address serverAddress;
     private Address clientAddress;
@@ -212,6 +214,29 @@ public class MetaStoreTest {
     @Override
     public CompletableFuture<Void> remove() {
       return null;
+    }
+
+    @Override
+    public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+      buffer.writeByte(type.ordinal());
+      serializer.writeObject(serverAddress, buffer);
+      serializer.writeObject(clientAddress, buffer);
+    }
+
+    @Override
+    public void readObject(BufferInput<?> buffer, Serializer serializer) {
+      type = Type.values()[buffer.readByte()];
+      serverAddress = serializer.readObject(buffer);
+      clientAddress = serializer.readObject(buffer);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      if (object instanceof Member) {
+        Member member = (Member) object;
+        return member.type() == type() && member.serverAddress().equals(serverAddress());
+      }
+      return false;
     }
   }
 
