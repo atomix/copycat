@@ -19,6 +19,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.error.CommandException;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
@@ -304,7 +305,9 @@ public abstract class StateMachine implements AutoCloseable {
     return c -> {
       try {
         method.invoke(this, c);
-      } catch (IllegalAccessException | InvocationTargetException e) {
+      } catch (InvocationTargetException e) {
+        throw new CommandException(e.getCause());
+      } catch (IllegalAccessException e) {
         throw new AssertionError(e);
       }
     };
