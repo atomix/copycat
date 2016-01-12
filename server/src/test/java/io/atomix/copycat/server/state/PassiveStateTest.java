@@ -42,26 +42,6 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
     state = new PassiveState(serverContext);
   }
 
-  public void testAccept() throws Throwable {
-    runOnServer(() -> {
-      AcceptRequest request = AcceptRequest.builder().withAddress(members.get(0).serverAddress()).withClient(UUID.randomUUID()).build();
-      AcceptResponse response = state.accept(request).get();
-      assertIllegalMemberStateError(response);
-    });
-  }
-
-  public void testKeepAlive() throws Throwable {
-    runOnServer(() -> {
-      KeepAliveRequest request = KeepAliveRequest.builder()
-          .withCommandSequence(1)
-          .withEventIndex(1)
-          .withSession(1)
-          .build();
-      KeepAliveResponse response = state.keepAlive(request).get();
-      assertIllegalMemberStateError(response);
-    });
-  }
-
   public void testDoAppendEntries() throws Throwable {
     // TODO
   }
@@ -350,42 +330,10 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
     });
   }
 
-  public void testRegister() throws Throwable {
-    runOnServer(() -> {
-      RegisterRequest request = RegisterRequest.builder().withClient(UUID.randomUUID()).build();
-      RegisterResponse response = state.register(request).get();
-      assertIllegalMemberStateError(response);
-    });
-  }
-
-  public void testUnregister() throws Throwable {
-    runOnServer(() -> {
-      UnregisterRequest request = UnregisterRequest.builder().withSession(1).build();
-      UnregisterResponse response = state.unregister(request).get();
-      assertIllegalMemberStateError(response);
-    });
-  }
-
-  public void testConnect() throws Throwable {
-    runOnServer(() -> {
-      ConnectRequest request = ConnectRequest.builder().withClientId(UUID.randomUUID()).build();
-      ConnectResponse response = state.connect(request, null).get();
-      assertIllegalMemberStateError(response);
-    });
-  }
-
   public void testPoll() throws Throwable {
     runOnServer(() -> {
       PollRequest request = PollRequest.builder().withCandidate(1).withLogIndex(1).withLogTerm(1).withTerm(1).build();
       PollResponse response = state.poll(request).get();
-      assertIllegalMemberStateError(response);
-    });
-  }
-
-  public void testPublish() throws Throwable {
-    runOnServer(() -> {
-      PublishRequest request = PublishRequest.builder().withSession(1).withEventIndex(1).build();
-      PublishResponse response = state.publish(request).get();
       assertIllegalMemberStateError(response);
     });
   }
