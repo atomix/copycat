@@ -108,7 +108,7 @@ public interface CopycatClient extends CopycatService, Managed<CopycatClient> {
    *         // The client is healthy
    *         break;
    *       case SUSPENDED:
-   *         // The client is healthy and operations may be unsafe
+   *         // The client cannot connect to the cluster and operations may be unsafe
    *         break;
    *       case CLOSED:
    *         // The client has been closed and pending operations have failed

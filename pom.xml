@@ -150,14 +150,14 @@
           <doctitle>Copycat API Reference (${jv})</doctitle>
           <windowtitle>Copycat API Reference (${jv})</windowtitle>
           <aggregate>true</aggregate>
-          <excludePackageNames>io.atomix.copycat.examples*:*.state:io.atomix.copycat.server.util</excludePackageNames>
+          <excludePackageNames>io.atomix.copycat.examples*:*.state:io.atomix.copycat.client.util:io.atomix.copycat.server.util</excludePackageNames>
           <additionalparam>
             -Xdoclint:none
             -notimestamp
             -link http://docs.oracle.com/javase/8/docs/api/
             -link http://atomix.io/catalyst/api/latest/
             -group "Raft client" io.atomix.copycat.client*
-            -group "Raft server" io.atomix.copycat.server:io.atomix.copycat.server.request:io.atomix.copycat.server.response:io.atomix.copycat.server.session:io.atomix.copycat.server.storage*:io.atomix.copycat.examples*
+            -group "Raft server" io.atomix.copycat.server:io.atomix.copycat.server.cluster:io.atomix.copycat.server.request:io.atomix.copycat.server.response:io.atomix.copycat.server.session:io.atomix.copycat.server.storage*:io.atomix.copycat.examples*
           </additionalparam>
         </configuration>
       </plugin>
