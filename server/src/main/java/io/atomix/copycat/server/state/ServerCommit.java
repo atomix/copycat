@@ -100,8 +100,11 @@ final class ServerCommit implements Commit<Operation<?>> {
   @Override
   public void close() {
     if (open) {
-      if (operation instanceof Command) {
-        log.clean(index);
+      if (operation instanceof Command && log.isOpen()) {
+        try {
+          log.clean(index);
+        } catch (IllegalStateException e) {
+        }
       }
 
       index = 0;
