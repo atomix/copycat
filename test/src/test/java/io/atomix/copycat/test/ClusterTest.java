@@ -63,19 +63,39 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests joining a server after many entries have been committed.
    */
-  public void testServerJoinLate() throws Throwable {
+  public void testActiveJoinLate() throws Throwable {
+    testServerJoinLate(Member.Type.ACTIVE, CopycatServer.State.FOLLOWER);
+  }
+
+  /**
+   * Tests joining a server after many entries have been committed.
+   */
+  public void testPassiveJoinLate() throws Throwable {
+    testServerJoinLate(Member.Type.PASSIVE, CopycatServer.State.PASSIVE);
+  }
+
+  /**
+   * Tests joining a server after many entries have been committed.
+   */
+  public void testReserveJoinLate() throws Throwable {
+    testServerJoinLate(Member.Type.RESERVE, CopycatServer.State.RESERVE);
+  }
+
+  /**
+   * Tests joining a server after many entries have been committed.
+   */
+  private void testServerJoinLate(Member.Type type, CopycatServer.State state) throws Throwable {
     createServers(3);
     CopycatClient client = createClient();
     submit(client, 0, 1000);
     await(30000);
-    CopycatServer joiner = createServer(members, nextMember());
-    joiner.open().thenRun(this::resume);
-    await(30000);
-    joiner.onStateChange(state -> {
-      if (state == CopycatServer.State.FOLLOWER)
+    CopycatServer joiner = createServer(members, nextMember(type));
+    joiner.onStateChange(s -> {
+      if (s == state)
         resume();
     });
-    await(30000);
+    joiner.open().thenRun(this::resume);
+    await(30000, 2);
   }
 
   /**
