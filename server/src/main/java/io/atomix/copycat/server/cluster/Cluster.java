@@ -17,13 +17,46 @@ package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.copycat.server.CopycatServer;
 
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Copycat cluster info.
+ * Copycat server cluster API.
+ * <p>
+ * This class provides the view of the Copycat cluster from the perspective of a single server. When a
+ * {@link io.atomix.copycat.server.CopycatServer CopycatServer} is started, the server will form a cluster
+ * with other servers. Each Copycat cluster consists of some set of {@link #members() members}, and each
+ * {@link Member} represents a single server in the cluster. Users can use the {@code Cluster} to react to
+ * state changes in the underlying Raft algorithm via the various listeners.
+ * <p>
+ * <pre>
+ *   {@code
+ *   server.cluster().onJoin(member -> {
+ *     System.out.println(member.address() + " joined the cluster!");
+ *   });
+ *   }
+ * </pre>
+ * Membership exposed via this interface is provided from the perspective of the local server and may not
+ * necessarily be consistent with cluster membership from the perspective of other nodes. The only consistent
+ * membership list is on the {@link #leader() leader} node.
+ * <h3>Cluster management</h3>
+ * Users can use the {@code Cluster} to manage the Copycat cluster membership. Typically, servers join the
+ * cluster by calling {@link CopycatServer#open()} or {@link #join()}, but in the event that a server fails
+ * permanently and thus cannot remove itself, other nodes can remove arbitrary servers.
+ * <p>
+ * <pre>
+ *   {@code
+ *   server.cluster().onJoin(member -> {
+ *     member.remove().thenRun(() -> System.out.println("Removed " + member.address() + " from the cluster!"));
+ *   });
+ *   }
+ * </pre>
+ * Additionally, members can be {@link Member#promote() promoted} and {@link Member#demote() demoted} by any
+ * other member of the cluster. See the {@link Member.Type} documentation for more information on promotion
+ * and demotion of members.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -31,13 +64,21 @@ public interface Cluster {
 
   /**
    * Returns the current cluster leader.
+   * <p>
+   * If no leader has been elected for the current {@link #term() term}, the leader will be {@code null}.
+   * Once a leader is elected, the leader must be known to the local server's configuration. If the returned
+   * {@link Member} is {@code null} then that does not necessarily indicate that no leader yet exists for the
+   * current term, only that the local server has not learned of a valid leader for the term.
    *
-   * @return The current cluster leader.
+   * @return The current cluster leader or {@code null} if no leader is known for the current term.
    */
   Member leader();
 
   /**
    * Returns the current cluster term.
+   * <p>
+   * The term is a monotonically increasing number used by the Raft algorithm to represent a point in logical
+   * time. For any given term, only one {@link #leader() leader} may be elected.
    *
    * @return The current cluster term.
    */
@@ -45,6 +86,18 @@ public interface Cluster {
 
   /**
    * Registers a callback to be called when a leader is elected.
+   * <p>
+   * The provided {@code callback} will be called when a new leader is elected for any given term. Once a
+   * leader election callback is called, the correct {@link #term()} for the leader is guaranteed to have
+   * already been set. Thus, to get the term for the provided leader, simply read the cluster {@link #term()}.
+   * <p>
+   * <pre>
+   *   {@code
+   *   server.cluster().onLeaderElection(member -> {
+   *     System.out.println(member.address() + " elected for term " + server.cluster().term());
+   *   });
+   *   }
+   * </pre>
    *
    * @param callback The callback to be called when a new leader is elected.
    * @return The leader election listener.
@@ -53,6 +106,10 @@ public interface Cluster {
 
   /**
    * Returns the local cluster member.
+   * <p>
+   * The local member is representative of the parent {@link CopycatServer} to which this cluster
+   * perspective belongs. The local cluster member will always be non-null and
+   * {@link io.atomix.copycat.server.cluster.Member.Status#AVAILABLE AVAILABLE}.
    *
    * @return The local cluster member.
    */
@@ -60,6 +117,8 @@ public interface Cluster {
 
   /**
    * Returns a member by ID.
+   * <p>
+   * The returned {@link Member} is referenced by the unique {@link Member#id()}.
    *
    * @param id The member ID.
    * @return The member or {@code null} if no member with the given {@code id} exists.
@@ -68,14 +127,23 @@ public interface Cluster {
 
   /**
    * Returns a member by address.
+   * <p>
+   * The returned {@link Member} is referenced by the member's {@link Member#address()} which is synonymous
+   * with the member's {@link Member#serverAddress()}.
    *
    * @param address The member server address.
    * @return The member or {@code null} if no member with the given {@link Address} exists.
+   * @throws NullPointerException if {@code address} is {@code null}
    */
   Member member(Address address);
 
   /**
    * Returns a collection of all cluster members.
+   * <p>
+   * The returned members are representative of the last configuration known to the local server. Over time,
+   * the cluster configuration may change. In the event of a membership change, the returned {@link Collection}
+   * will not be modified, but instead a new collection will be created. Similarly, modifying the returned
+   * collection will have no impact on the cluster membership.
    *
    * @return A collection of all cluster members.
    */
@@ -83,6 +151,21 @@ public interface Cluster {
 
   /**
    * Joins the cluster.
+   * <p>
+   * Invocations of this method will cause the local {@link CopycatServer} to join the cluster.
+   * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#open()}
+   * to open a new server and join the cluster in order to ensure all associated resources are property opened.
+   * <p>
+   * When a server joins the cluster, the server will connect to arbitrary {@link Member}s, attempting to locate
+   * the cluster leader and send a {@link io.atomix.copycat.server.request.JoinRequest}. Once the leader has been
+   * found, the leader will replicate and commit a configuration change, notifying other members of the cluster of
+   * the joining server.
+   * <p>
+   * In order to preserve safety during configuration changes, Copycat leaders do not allow concurrent configuration
+   * changes. In the event that an existing configuration change (a server joining or leaving the cluster or a
+   * member being {@link Member#promote() promoted} or {@link Member#demote() demoted}) is under way, the local
+   * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
+   * the join will fail after a fixed number of failed attempts.
    *
    * @return A completable future to be completed once the local server has joined the cluster.
    */
@@ -90,6 +173,20 @@ public interface Cluster {
 
   /**
    * Leaves the cluster.
+   * <p>
+   * Invocations of this method will cause the local {@link CopycatServer} to leave the cluster.
+   * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#close()}
+   * to leave the cluster and close a server in order to ensure all associated resources are properly closed.
+   * <p>
+   * When a server leaves the cluster, the server submits a {@link io.atomix.copycat.server.request.LeaveRequest}
+   * to the cluster leader. The leader will replicate and commit the configuration change in order to remove the
+   * leaving server from the cluster and notify each member of the leaving server.
+   * <p>
+   * In order to preserve safety during configuration changes, Copycat leaders do not allow concurrent configuration
+   * changes. In the event that an existing configuration change (a server joining or leaving the cluster or a
+   * member being {@link Member#promote() promoted} or {@link Member#demote() demoted}) is under way, the local
+   * server will retry attempts to leave the cluster until successful. The server will continuously attempt to
+   * leave the cluster until successful.
    *
    * @return A completable future to be completed once the local server has left the cluster.
    */
@@ -97,6 +194,23 @@ public interface Cluster {
 
   /**
    * Registers a callback to be called when a member joins the cluster.
+   * <p>
+   * The registered {@code callback} will be called whenever a new {@link Member} joins the cluster. Membership
+   * changes are sequentially consistent, meaning each server in the cluster will see members join in the same
+   * order, but different servers may see members join at different points in time. Users should not in any case
+   * assume that because one server has seen a member join the cluster all servers have.
+   * <p>
+   * The returned {@link Listener} can be used to stop listening for servers joining the cluster.
+   * <p>
+   * <pre>
+   *   {@code
+   *   // Start listening for members joining the cluster.
+   *   Listener<Member> listener = server.cluster().onJoin(member -> System.out.println(member.address() + " joined!"));
+   *
+   *   // Stop listening for members joining the cluster.
+   *   listener.close();
+   *   }
+   * </pre>
    *
    * @param callback The callback to be called when a member joins the cluster.
    * @return The join listener.
@@ -105,6 +219,23 @@ public interface Cluster {
 
   /**
    * Registers a callback to be called when a member leaves the cluster.
+   * <p>
+   * The registered {@code callback} will be called whenever an existing {@link Member} leaves the cluster. Membership
+   * changes are sequentially consistent, meaning each server in the cluster will see members leave in the same
+   * order, but different servers may see members leave at different points in time. Users should not in any case
+   * assume that because one server has seen a member leave the cluster all servers have.
+   * <p>
+   * The returned {@link Listener} can be used to stop listening for servers leaving the cluster.
+   * <p>
+   * <pre>
+   *   {@code
+   *   // Start listening for members leaving the cluster.
+   *   Listener<Member> listener = server.cluster().onLeave(member -> System.out.println(member.address() + " left!"));
+   *
+   *   // Stop listening for members leaving the cluster.
+   *   listener.close();
+   *   }
+   * </pre>
    *
    * @param callback The callback to be called when a member leaves the cluster.
    * @return The leave listener.

@@ -68,8 +68,8 @@ public class ServerContext implements AutoCloseable {
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
-  private int leader;
-  private long term;
+  private volatile int leader;
+  private volatile long term;
   private int lastVotedFor;
   private long commitIndex;
   private long globalIndex;
