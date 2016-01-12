@@ -25,6 +25,7 @@ import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * The reserve state receives configuration changes from followers and proxies other requests
@@ -148,10 +149,14 @@ class ReserveState extends AbstractState {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<RegisterRequest, RegisterResponse>forward(request).thenApply(this::logResponse);
+    }
   }
 
   @Override
@@ -159,10 +164,30 @@ class ReserveState extends AbstractState {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      // Immediately register the session connection and send an accept request to the leader.
+      context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
+
+      AcceptRequest acceptRequest = AcceptRequest.builder()
+        .withClient(request.client())
+        .withAddress(context.getCluster().member().serverAddress())
+        .build();
+      return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
+        .thenApply(acceptResponse -> ConnectResponse.builder()
+          .withStatus(Response.Status.OK)
+          .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
+          .withMembers(context.getCluster().members().stream()
+            .map(Member::clientAddress)
+            .filter(m -> m != null)
+            .collect(Collectors.toList()))
+          .build())
+        .thenApply(this::logResponse);
+    }
   }
 
   @Override
@@ -181,22 +206,14 @@ class ReserveState extends AbstractState {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withLeader(context.getLeader() != null ? context.getLeader().serverAddress() : null)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
-  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<KeepAliveRequest, KeepAliveResponse>forward(request).thenApply(this::logResponse);
+    }
   }
 
   @Override
@@ -204,10 +221,30 @@ class ReserveState extends AbstractState {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    if (session == null || session.getConnection() == null) {
+      return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
+    } else {
+      return session.getConnection().<PublishRequest, PublishResponse>send(request);
+    }
+  }
+
+  @Override
+  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
+    }
   }
 
   @Override
