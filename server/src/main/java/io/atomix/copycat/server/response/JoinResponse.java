@@ -28,7 +28,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=210)
-public class JoinResponse extends ConfigurationResponse<JoinResponse> {
+public class JoinResponse extends ConfigurationResponse {
 
   /**
    * Returns a new join response builder.

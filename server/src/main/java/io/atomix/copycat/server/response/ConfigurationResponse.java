@@ -21,7 +21,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -38,7 +38,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends AbstractResponse<T> {
+public abstract class ConfigurationResponse extends AbstractResponse {
   protected long index;
   protected Collection<Member> members;
 
@@ -110,7 +110,7 @@ public class ConfigurationResponse<T extends ConfigurationResponse<T>> extends A
   /**
    * Configuration response builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationResponse<U>> extends AbstractResponse.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationResponse> extends AbstractResponse.Builder<T, U> {
     protected Builder(U response) {
       super(response);
     }

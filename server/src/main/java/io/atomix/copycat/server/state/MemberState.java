@@ -23,8 +23,8 @@ import io.atomix.copycat.server.storage.Log;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class MemberState {
-  private Member member;
+final class MemberState {
+  private final ServerMember member;
   private long term;
   private long configIndex;
   private long snapshotIndex;
@@ -36,8 +36,8 @@ class MemberState {
   private long commitStartTime;
   private int failures;
 
-  public MemberState(Member member) {
-    this.member = Assert.notNull(member, "member");
+  public MemberState(ServerMember member, ClusterState cluster) {
+    this.member = Assert.notNull(member, "member").setCluster(cluster);
   }
 
   /**
@@ -54,23 +54,12 @@ class MemberState {
   }
 
   /**
-   * Returs the member.
+   * Returns the member.
    *
    * @return The member.
    */
-  public Member getMember() {
+  public ServerMember getMember() {
     return member;
-  }
-
-  /**
-   * Sets the member.
-   *
-   * @param member The member.
-   * @return The member state.
-   */
-  MemberState setMember(Member member) {
-    this.member = Assert.notNull(member, "member");
-    return this;
   }
 
   /**

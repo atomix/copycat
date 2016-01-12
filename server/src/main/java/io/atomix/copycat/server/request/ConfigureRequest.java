@@ -21,7 +21,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -37,7 +37,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=219)
-public class ConfigureRequest extends AbstractRequest<ConfigureRequest> {
+public class ConfigureRequest extends AbstractRequest {
 
   /**
    * Returns a new configuration request builder.

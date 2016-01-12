@@ -22,7 +22,7 @@ import io.atomix.catalyst.serializer.CatalystSerializable;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Request<T extends Request<T>> extends CatalystSerializable {
+public interface Request extends CatalystSerializable {
 
   /**
    * Request builder.

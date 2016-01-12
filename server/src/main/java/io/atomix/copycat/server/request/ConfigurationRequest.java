@@ -20,7 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Objects;
 
@@ -33,13 +33,13 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends AbstractRequest<T> {
+public abstract class ConfigurationRequest extends AbstractRequest {
   protected Member member;
 
   /**
-   * Returns the joining member.
+   * Returns the member to configure.
    *
-   * @return The joining member.
+   * @return The member to configure.
    */
   public Member member() {
     return member;
@@ -62,7 +62,10 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
 
   @Override
   public boolean equals(Object object) {
-    return getClass().isAssignableFrom(object.getClass()) && ((ConfigurationRequest) object).member.equals(member);
+    if (getClass().isAssignableFrom(object.getClass())) {
+      return ((ConfigurationRequest) object).member.equals(member);
+    }
+    return false;
   }
 
   @Override
@@ -71,9 +74,9 @@ public class ConfigurationRequest<T extends ConfigurationRequest<T>> extends Abs
   }
 
   /**
-   * Join request builder.
+   * Configuration request builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationRequest<U>> extends AbstractRequest.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends ConfigurationRequest> extends AbstractRequest.Builder<T, U> {
     protected Builder(U request) {
       super(request);
     }

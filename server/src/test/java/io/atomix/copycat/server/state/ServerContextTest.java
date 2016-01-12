@@ -32,7 +32,7 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class ServerStateTest extends AbstractStateTest<AbstractState> {
+public class ServerContextTest extends AbstractStateTest<AbstractState> {
   private LocalServerRegistry registry;
   private Transport transport;
   private ThreadContext clientCtx;
@@ -55,7 +55,7 @@ public class ServerStateTest extends AbstractStateTest<AbstractState> {
     client = transport.client();
 
     serverCtx.execute(() -> {
-      server.listen(members.get(0).clientAddress(), serverState::connectClient).whenComplete((result, error) -> {
+      server.listen(members.get(0).clientAddress(), serverContext::connectClient).whenComplete((result, error) -> {
         threadAssertNull(error);
         resume();
       });
@@ -88,7 +88,7 @@ public class ServerStateTest extends AbstractStateTest<AbstractState> {
   /**
    * Tests a server response.
    */
-  private <T extends Request<T>, U extends Response<U>> void test(T request, Consumer<U> callback) throws Throwable {
+  private <T extends Request, U extends Response> void test(T request, Consumer<U> callback) throws Throwable {
     clientCtx.execute(() -> {
       connection.<T, U>send(request).whenComplete((response, error) -> {
         threadAssertNull(error);

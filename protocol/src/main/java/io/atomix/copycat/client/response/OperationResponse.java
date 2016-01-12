@@ -32,7 +32,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class OperationResponse<T extends OperationResponse<T>> extends SessionResponse<T> {
+public abstract class OperationResponse extends SessionResponse {
   protected long index;
   protected Object result;
 
@@ -101,7 +101,7 @@ public abstract class OperationResponse<T extends OperationResponse<T>> extends 
   /**
    * Operation response builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends OperationResponse<U>> extends SessionResponse.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends OperationResponse> extends SessionResponse.Builder<T, U> {
     protected Builder(U response) {
       super(response);
     }

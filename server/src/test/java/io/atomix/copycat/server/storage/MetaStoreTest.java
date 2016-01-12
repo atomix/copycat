@@ -15,11 +15,14 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.state.Member;
+import io.atomix.catalyst.util.Listener;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import org.testng.annotations.AfterMethod;
@@ -33,6 +36,8 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -74,17 +79,17 @@ public class MetaStoreTest {
     assertEquals(meta.loadVote(), 2);
 
     Collection<Member> members = Arrays.asList(
-      new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000)),
-      new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
-      new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
+      new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000)),
+      new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
+      new TestMember(Member.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
     );
     meta.storeConfiguration(new Configuration(1, members));
 
     Configuration configuration = meta.loadConfiguration();
     assertEquals(configuration.index(), 1);
-    assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))));
-    assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001))));
-    assertTrue(configuration.members().contains(new Member(CopycatServer.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))));
+    assertTrue(configuration.members().contains(new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))));
+    assertTrue(configuration.members().contains(new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001))));
+    assertTrue(configuration.members().contains(new TestMember(Member.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))));
   }
 
   /**
@@ -127,6 +132,112 @@ public class MetaStoreTest {
       });
     }
     testId = UUID.randomUUID().toString();
+  }
+
+  /**
+   * Test member.
+   */
+  public static class TestMember implements Member, CatalystSerializable {
+    private Type type;
+    private Address serverAddress;
+    private Address clientAddress;
+
+    public TestMember() {
+    }
+
+    public TestMember(Type type, Address serverAddress, Address clientAddress) {
+      this.type = type;
+      this.serverAddress = serverAddress;
+      this.clientAddress = clientAddress;
+    }
+
+    @Override
+    public int id() {
+      return serverAddress.hashCode();
+    }
+
+    @Override
+    public Address address() {
+      return serverAddress;
+    }
+
+    @Override
+    public Address clientAddress() {
+      return clientAddress;
+    }
+
+    @Override
+    public Address serverAddress() {
+      return serverAddress;
+    }
+
+    @Override
+    public Type type() {
+      return type;
+    }
+
+    @Override
+    public Listener<Type> onTypeChange(Consumer<Type> callback) {
+      return null;
+    }
+
+    @Override
+    public Status status() {
+      return null;
+    }
+
+    @Override
+    public Listener<Status> onStatusChange(Consumer<Status> callback) {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> promote() {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> promote(Type type) {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> demote() {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> demote(Type type) {
+      return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> remove() {
+      return null;
+    }
+
+    @Override
+    public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+      buffer.writeByte(type.ordinal());
+      serializer.writeObject(serverAddress, buffer);
+      serializer.writeObject(clientAddress, buffer);
+    }
+
+    @Override
+    public void readObject(BufferInput<?> buffer, Serializer serializer) {
+      type = Type.values()[buffer.readByte()];
+      serverAddress = serializer.readObject(buffer);
+      clientAddress = serializer.readObject(buffer);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      if (object instanceof Member) {
+        Member member = (Member) object;
+        return member.type() == type() && member.serverAddress().equals(serverAddress());
+      }
+      return false;
+    }
   }
 
 }

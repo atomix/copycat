@@ -37,7 +37,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=194)
-public class KeepAliveResponse extends SessionResponse<KeepAliveResponse> {
+public class KeepAliveResponse extends SessionResponse {
 
   /**
    * Returns a new keep alive response builder.

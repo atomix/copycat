@@ -36,7 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=214)
-public class PollResponse extends AbstractResponse<PollResponse> {
+public class PollResponse extends AbstractResponse {
 
   /**
    * Returns a new poll response builder.

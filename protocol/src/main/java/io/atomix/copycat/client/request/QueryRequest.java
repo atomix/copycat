@@ -45,7 +45,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=197)
-public class QueryRequest extends OperationRequest<QueryRequest> {
+public class QueryRequest extends OperationRequest {
 
   /**
    * Returns a new query request builder.

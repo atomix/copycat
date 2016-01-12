@@ -32,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
  */
 class InactiveState extends AbstractState {
 
-  public InactiveState(ServerState context) {
+  public InactiveState(ServerContext context) {
     super(context);
   }
 
@@ -83,6 +83,11 @@ class InactiveState extends AbstractState {
 
   @Override
   protected CompletableFuture<JoinResponse> join(JoinRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
+  protected CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

@@ -36,7 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=202)
-public class ConnectResponse extends AbstractResponse<ConnectResponse> {
+public class ConnectResponse extends AbstractResponse {
 
   /**
    * Returns a new connect client response builder.

@@ -38,7 +38,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=229)
-public class InstallRequest extends AbstractRequest<InstallRequest> {
+public class InstallRequest extends AbstractRequest {
 
   /**
    * Returns a new install request builder.

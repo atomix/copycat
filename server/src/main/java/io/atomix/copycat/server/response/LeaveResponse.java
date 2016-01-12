@@ -28,7 +28,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=212)
-public class LeaveResponse extends ConfigurationResponse<LeaveResponse> {
+public class LeaveResponse extends ConfigurationResponse {
 
   /**
    * Returns a new leave response builder.

@@ -31,7 +31,7 @@ import io.atomix.catalyst.serializer.SerializeWith;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=192)
-public class CommandResponse extends OperationResponse<CommandResponse> {
+public class CommandResponse extends OperationResponse {
 
   /**
    * Returns a new submit response builder.

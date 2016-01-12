@@ -29,7 +29,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=203)
-public class UnregisterRequest extends SessionRequest<UnregisterRequest> {
+public class UnregisterRequest extends SessionRequest {
 
   /**
    * Returns a new unregister request builder.

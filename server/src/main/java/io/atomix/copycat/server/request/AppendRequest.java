@@ -38,7 +38,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=207)
-public class AppendRequest extends AbstractRequest<AppendRequest> {
+public class AppendRequest extends AbstractRequest {
 
   /**
    * Returns a new append request builder.

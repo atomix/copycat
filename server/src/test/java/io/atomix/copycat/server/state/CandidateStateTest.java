@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.transport.Server;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.VoteRequest;
 import io.atomix.copycat.server.response.AppendResponse;
@@ -39,13 +40,13 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
   @Override
   void beforeMethod() throws Throwable {
     super.beforeMethod();
-    state = new CandidateState(serverState);
+    state = new CandidateState(serverContext);
   }
 
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
-      int leader = serverState.getCluster().getRemoteMemberStates(CopycatServer.Type.ACTIVE).iterator().next().getMember().id();
-      serverState.setTerm(1);
+      int leader = serverContext.getClusterState().getActiveMemberStates().iterator().next().getMember().id();
+      serverContext.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
@@ -57,33 +58,33 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.succeeded());
-      assertEquals(serverState.getTerm(), 2L);
-      assertEquals(serverState.getLeader().hashCode(), leader);
+      assertEquals(serverContext.getTerm(), 2L);
+      assertEquals(serverContext.getLeader().hashCode(), leader);
       assertEquals(response.term(), 2L);
-      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
+      assertEquals(serverContext.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateIncrementsTermVotesForSelfOnElection() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getCluster().getMember().serverAddress().hashCode();
-      serverState.setTerm(2);
+      int self = serverContext.getCluster().member().id();
+      serverContext.setTerm(2);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverContext.getTerm(), 3L);
+      assertEquals(serverContext.getLastVotedFor(), self);
     });
   }
 
   public void testCandidateVotesForSelfOnRequest() throws Throwable {
     runOnServer(() -> {
-      int self = serverState.getCluster().getMember().serverAddress().hashCode();
-      serverState.setTerm(2);
+      int self = serverContext.getCluster().member().id();
+      serverContext.setTerm(2);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 3L);
+      assertEquals(serverContext.getTerm(), 3L);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(3)
@@ -96,20 +97,20 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.voted());
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverContext.getTerm(), 3L);
+      assertEquals(serverContext.getLastVotedFor(), self);
       assertEquals(response.term(), 3L);
     });
   }
 
   public void testCandidateVotesAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
-      serverState.setTerm(1);
+      int candidate = serverContext.getClusterState().getActiveMemberStates().iterator().next().getMember().id();
+      serverContext.setTerm(1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverContext.getTerm(), 2L);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(3)
@@ -122,23 +123,23 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertTrue(response.voted());
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), candidate);
+      assertEquals(serverContext.getTerm(), 3L);
+      assertEquals(serverContext.getLastVotedFor(), candidate);
       assertEquals(response.term(), 3L);
-      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
+      assertEquals(serverContext.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateRejectsVoteAndTransitionsOnTerm() throws Throwable {
     runOnServer(() -> {
-      int candidate = serverState.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE).iterator().next().id();
-      serverState.setTerm(1);
+      int candidate = serverContext.getClusterState().getActiveMemberStates().iterator().next().getMember().id();
+      serverContext.setTerm(1);
 
       append(2, 1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
+      assertEquals(serverContext.getTerm(), 2L);
 
       VoteRequest request = VoteRequest.builder()
         .withTerm(3)
@@ -151,21 +152,21 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
 
       assertEquals(response.status(), Response.Status.OK);
       assertFalse(response.voted());
-      assertEquals(serverState.getTerm(), 3L);
-      assertEquals(serverState.getLastVotedFor(), 0);
+      assertEquals(serverContext.getTerm(), 3L);
+      assertEquals(serverContext.getLastVotedFor(), 0);
       assertEquals(response.term(), 3L);
-      assertEquals(serverState.getState(), CopycatServer.State.FOLLOWER);
+      assertEquals(serverContext.getState(), CopycatServer.State.FOLLOWER);
     });
   }
 
   public void testCandidateTransitionsToLeaderOnElection() throws Throwable {
-    serverState.onStateChange(state -> {
+    serverContext.onStateChange(state -> {
       if (state == CopycatServer.State.LEADER)
         resume();
     });
 
     runOnServer(() -> {
-      for (Member member : serverState.getCluster().getMembers()) {
+      for (Member member : serverContext.getCluster().members()) {
         Server server = transport.server();
         server.listen(member.serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
@@ -176,28 +177,28 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       }
     });
 
-    await(1000, serverState.getCluster().getMembers().size());
+    await(1000, serverContext.getCluster().members().size());
 
     runOnServer(() -> {
-      int self = serverState.getCluster().getMember().serverAddress().hashCode();
-      serverState.setTerm(1);
+      int self = serverContext.getCluster().member().id();
+      serverContext.setTerm(1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverContext.getTerm(), 2L);
+      assertEquals(serverContext.getLastVotedFor(), self);
     });
     await(1000);
   }
 
   public void testCandidateTransitionsToFollowerOnRejection() throws Throwable {
-    serverState.onStateChange(state -> {
+    serverContext.onStateChange(state -> {
       if (state == CopycatServer.State.FOLLOWER)
         resume();
     });
 
     runOnServer(() -> {
-      for (Member member : serverState.getCluster().getMembers()) {
+      for (Member member : serverContext.getCluster().members()) {
         Server server = transport.server();
         server.listen(member.serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
@@ -208,16 +209,16 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       }
     });
 
-    await(1000, serverState.getCluster().getMembers().size());
+    await(1000, serverContext.getCluster().members().size());
 
     runOnServer(() -> {
-      int self = serverState.getCluster().getMember().serverAddress().hashCode();
-      serverState.setTerm(1);
+      int self = serverContext.getCluster().member().id();
+      serverContext.setTerm(1);
 
       state.startElection();
 
-      assertEquals(serverState.getTerm(), 2L);
-      assertEquals(serverState.getLastVotedFor(), self);
+      assertEquals(serverContext.getTerm(), 2L);
+      assertEquals(serverContext.getLastVotedFor(), self);
     });
     await(1000);
   }

@@ -34,7 +34,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=213)
-public class PollRequest extends AbstractRequest<PollRequest> {
+public class PollRequest extends AbstractRequest {
 
   /**
    * Returns a new poll request builder.

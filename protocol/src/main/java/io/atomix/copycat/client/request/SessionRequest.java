@@ -28,7 +28,7 @@ import io.atomix.catalyst.util.Assert;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class SessionRequest<T extends SessionRequest<T>> extends AbstractRequest<T> {
+public abstract class SessionRequest extends AbstractRequest {
   protected long session;
 
   /**
@@ -53,7 +53,7 @@ public abstract class SessionRequest<T extends SessionRequest<T>> extends Abstra
   /**
    * Session request builder.
    */
-  public static abstract class Builder<T extends Builder<T, U>, U extends SessionRequest<U>> extends AbstractRequest.Builder<T, U> {
+  public static abstract class Builder<T extends Builder<T, U>, U extends SessionRequest> extends AbstractRequest.Builder<T, U> {
     protected Builder(U request) {
       super(request);
     }

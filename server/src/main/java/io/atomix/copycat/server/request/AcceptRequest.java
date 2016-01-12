@@ -38,7 +38,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=205)
-public class AcceptRequest extends AbstractRequest<AcceptRequest> {
+public class AcceptRequest extends AbstractRequest {
 
   /**
    * Returns a new accept client request builder.

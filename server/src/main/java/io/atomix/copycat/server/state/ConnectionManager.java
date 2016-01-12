@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class ConnectionManager {
+public final class ConnectionManager {
   private final Client client;
   private final Map<Address, Connection> connections = new HashMap<>();
 

@@ -35,7 +35,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=201)
-public class ConnectRequest extends AbstractRequest<ConnectRequest> {
+public class ConnectRequest extends AbstractRequest {
 
   /**
    * Returns a new connect client request builder.

@@ -134,7 +134,7 @@ final class ClientSessionSubmitter {
    *
    * @param attempt The attempt to submit.
    */
-  private <T extends OperationRequest<T>, U extends OperationResponse<U>, V> void submit(OperationAttempt<T, U, V> attempt) {
+  private <T extends OperationRequest, U extends OperationResponse, V> void submit(OperationAttempt<T, U, V> attempt) {
     if (state.getState() == Session.State.CLOSED || state.getState() == Session.State.EXPIRED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
@@ -155,7 +155,7 @@ final class ClientSessionSubmitter {
   /**
    * Operation attempt.
    */
-  private abstract class OperationAttempt<T extends OperationRequest<T>, U extends OperationResponse<U>, V> implements RetryStrategy.Attempt, BiConsumer<U, Throwable> {
+  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse, V> implements RetryStrategy.Attempt, BiConsumer<U, Throwable> {
     protected final long sequence;
     protected final int attempt;
     protected final T request;

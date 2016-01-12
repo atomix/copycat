@@ -34,10 +34,10 @@ import java.util.concurrent.CompletableFuture;
  */
 abstract class AbstractState implements Managed<AbstractState> {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
-  protected final ServerState context;
+  protected final ServerContext context;
   private boolean open = true;
 
-  protected AbstractState(ServerState context) {
+  protected AbstractState(ServerContext context) {
     this.context = context;
   }
 
@@ -52,7 +52,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getCluster().getMember().serverAddress(), request);
+    LOGGER.debug("{} - Received {}", context.getCluster().member().address(), request);
     return request;
   }
 
@@ -60,7 +60,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getCluster().getMember().serverAddress(), response);
+    LOGGER.debug("{} - Sent {}", context.getCluster().member().address(), response);
     return response;
   }
 
@@ -127,6 +127,11 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Handles a join request.
    */
   protected abstract CompletableFuture<JoinResponse> join(JoinRequest request);
+
+  /**
+   * Handles a configure request.
+   */
+  protected abstract CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request);
 
   /**
    * Handles a leave request.

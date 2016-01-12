@@ -31,6 +31,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 /**
  * Candidate state.
@@ -42,7 +43,7 @@ final class CandidateState extends ActiveState {
   private Quorum quorum;
   private Scheduled currentTimer;
 
-  public CandidateState(ServerState context) {
+  public CandidateState(ServerContext context) {
     super(context);
   }
 
@@ -60,7 +61,7 @@ final class CandidateState extends ActiveState {
    * Starts the election.
    */
   void startElection() {
-    LOGGER.info("{} - Starting election", context.getCluster().getMember().serverAddress());
+    LOGGER.info("{} - Starting election", context.getCluster().member().address());
     sendVoteRequests();
   }
 
@@ -81,27 +82,27 @@ final class CandidateState extends ActiveState {
 
     // When the election timer is reset, increment the current term and
     // restart the election.
-    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getCluster().getMember().serverAddress().hashCode());
+    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getCluster().member().address().hashCode());
 
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
     currentTimer = context.getThreadContext().schedule(delay, () -> {
       // When the election times out, clear the previous majority vote
       // check and restart the election.
-      LOGGER.debug("{} - Election timed out", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Election timed out", context.getCluster().member().address());
       if (quorum != null) {
         quorum.cancel();
         quorum = null;
       }
       sendVoteRequests();
-      LOGGER.debug("{} - Restarted election", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Restarted election", context.getCluster().member().address());
     });
 
     final AtomicBoolean complete = new AtomicBoolean();
-    final Set<Member> votingMembers = new HashSet<>(context.getCluster().getRemoteMembers(CopycatServer.Type.ACTIVE));
+    final Set<ServerMember> votingMembers = new HashSet<>(context.getClusterState().getActiveMemberStates().stream().map(MemberState::getMember).collect(Collectors.toList()));
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
       transition(CopycatServer.State.LEADER);
       return;
     }
@@ -110,7 +111,7 @@ final class CandidateState extends ActiveState {
     // to this node will be automatically successful.
     // First check if the quorum is null. If the quorum isn't null then that
     // indicates that another vote is already going on.
-    final Quorum quorum = new Quorum(context.getCluster().getQuorum(), (elected) -> {
+    final Quorum quorum = new Quorum(context.getClusterState().getQuorum(), (elected) -> {
       complete.set(true);
       if (elected) {
         transition(CopycatServer.State.LEADER);
@@ -132,15 +133,15 @@ final class CandidateState extends ActiveState {
       lastTerm = 0;
     }
 
-    LOGGER.info("{} - Requesting votes from {}", context.getCluster().getMember().serverAddress(), votingMembers);
+    LOGGER.info("{} - Requesting votes from {}", context.getCluster().member().address(), votingMembers);
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
-    for (Member member : votingMembers) {
-      LOGGER.debug("{} - Requesting vote from {} for term {}", context.getCluster().getMember().serverAddress(), member, context.getTerm());
+    for (ServerMember member : votingMembers) {
+      LOGGER.debug("{} - Requesting vote from {} for term {}", context.getCluster().member().address(), member, context.getTerm());
       VoteRequest request = VoteRequest.builder()
         .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().getMember().serverAddress().hashCode())
+        .withCandidate(context.getCluster().member().address().hashCode())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
@@ -154,18 +155,18 @@ final class CandidateState extends ActiveState {
               quorum.fail();
             } else {
               if (response.term() > context.getTerm()) {
-                LOGGER.debug("{} - Received greater term from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received greater term from {}", context.getCluster().member().address(), member);
                 context.setTerm(response.term());
                 complete.set(true);
                 transition(CopycatServer.State.FOLLOWER);
               } else if (!response.voted()) {
-                LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received successful vote for a different term from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received successful vote for a different term from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received successful vote from {}", context.getCluster().getMember().serverAddress(), member);
+                LOGGER.debug("{} - Received successful vote from {}", context.getCluster().member().address(), member);
                 quorum.succeed();
               }
             }
@@ -201,7 +202,7 @@ final class CandidateState extends ActiveState {
     }
 
     // If the vote request is not for this candidate then reject the vote.
-    if (request.candidate() == context.getCluster().getMember().serverAddress().hashCode()) {
+    if (request.candidate() == context.getCluster().member().address().hashCode()) {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -222,7 +223,7 @@ final class CandidateState extends ActiveState {
   private void cancelElection() {
     context.checkThread();
     if (currentTimer != null) {
-      LOGGER.debug("{} - Cancelling election", context.getCluster().getMember().serverAddress());
+      LOGGER.debug("{} - Cancelling election", context.getCluster().member().address());
       currentTimer.cancel();
     }
     if (quorum != null) {

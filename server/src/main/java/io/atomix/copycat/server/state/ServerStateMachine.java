@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
-  private final ServerState state;
+  private final ServerContext state;
   private final ServerStateMachineExecutor executor;
   private final ServerCommitPool commits;
   private volatile long lastApplied;
@@ -55,7 +55,7 @@ final class ServerStateMachine implements AutoCloseable {
   private long configuration;
   private Snapshot pendingSnapshot;
 
-  ServerStateMachine(StateMachine stateMachine, ServerState state, ThreadContext executor) {
+  ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.state = Assert.notNull(state, "state");
     this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager()), executor);
@@ -90,7 +90,7 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
       // of a snapshot is predicated on session events being received by clients up to the snapshot index.
-      LOGGER.info("{} - Taking snapshot {}", state.getCluster().getMember().serverAddress(), pendingSnapshot.index());
+      LOGGER.info("{} - Taking snapshot {}", state.getCluster().member().address(), pendingSnapshot.index());
       synchronized (pendingSnapshot) {
         try (SnapshotWriter writer = pendingSnapshot.writer()) {
           ((Snapshottable) stateMachine).snapshot(writer);
@@ -116,7 +116,7 @@ final class ServerStateMachine implements AutoCloseable {
       // synchronize on the snapshot object. In practice, this probably isn't even necessary and could prove
       // to be an expensive operation. Snapshots can be read concurrently with separate SnapshotReaders since
       // memory snapshots are copied to the reader and file snapshots open a separate FileBuffer for each reader.
-      LOGGER.info("{} - Installing snapshot {}", state.getCluster().getMember().serverAddress(), currentSnapshot.index());
+      LOGGER.info("{} - Installing snapshot {}", state.getCluster().member().address(), currentSnapshot.index());
       executor.executor().execute(() -> {
         synchronized (currentSnapshot) {
           try (SnapshotReader reader = currentSnapshot.reader()) {
@@ -144,7 +144,7 @@ final class ServerStateMachine implements AutoCloseable {
     // waiting snapshot index, persist the snapshot and update the last snapshot index.
     if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.index()) {
       long snapshotIndex = pendingSnapshot.index();
-      LOGGER.debug("{} - Completing snapshot {}", state.getCluster().getMember().serverAddress(), snapshotIndex);
+      LOGGER.debug("{} - Completing snapshot {}", state.getCluster().member().address(), snapshotIndex);
       synchronized (pendingSnapshot) {
         pendingSnapshot.complete();
         pendingSnapshot = null;
@@ -269,7 +269,7 @@ final class ServerStateMachine implements AutoCloseable {
       for (long i = lastApplied + 1; i <= lastIndex; i++) {
         Entry entry = state.getLog().get(i);
         if (entry != null) {
-          LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
+          LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
           apply(entry, false).whenComplete((result, error) -> {
             if (counter.incrementAndGet() == entriesToApply) {
               future.complete(null);
@@ -324,7 +324,7 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed with the result.
    */
   public CompletableFuture<?> apply(Entry entry) {
-    LOGGER.debug("{} - Applying {}", state.getCluster().getMember().serverAddress(), entry);
+    LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
     return apply(entry, true);
   }
 
@@ -445,6 +445,11 @@ final class ServerStateMachine implements AutoCloseable {
     // a new session being registered. User state machine methods are always called in the state machine thread.
     CompletableFuture<Long> future = new ComposableFuture<>();
     executor.executor().execute(() -> {
+      if (!state.getLog().isOpen()) {
+        future.completeExceptionally(new IllegalStateException("log closed"));
+        return;
+      }
+
       // Update the state machine context with the register entry's index. This ensures that events published
       // within the register method will be properly associated with the unregister entry's index. All events
       // published during registration of a session are linearizable to ensure that clients receive related events
@@ -551,6 +556,11 @@ final class ServerStateMachine implements AutoCloseable {
       // The keep-alive entry also serves to clear cached command responses and events from memory.
       // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
       executor.executor().execute(() -> {
+        if (!state.getLog().isOpen()) {
+          future.completeExceptionally(new IllegalStateException("log closed"));
+          return;
+        }
+
         // Update the state machine context with the keep-alive entry's index. This ensures that events published
         // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
         executor.init(index, Instant.ofEpochMilli(timestamp), false, Command.ConsistencyLevel.SEQUENTIAL);
@@ -641,6 +651,11 @@ final class ServerStateMachine implements AutoCloseable {
       // the session not being kept alive by the client. In all other cases, we close the session normally.
       if (entry.isExpired()) {
         executor.executor().execute(() -> {
+          if (!state.getLog().isOpen()) {
+            future.completeExceptionally(new IllegalStateException("log closed"));
+            return;
+          }
+
           // Update the state machine context with the unregister entry's index. This ensures that events published
           // within the expire or close methods will be properly associated with the unregister entry's index.
           // All events published during expiration or closing of a session are linearizable to ensure that clients
@@ -678,6 +693,11 @@ final class ServerStateMachine implements AutoCloseable {
       // the session. In that case, we simply close the session without expiring it.
       else {
         executor.executor().execute(() -> {
+          if (!state.getLog().isOpen()) {
+            future.completeExceptionally(new IllegalStateException("log closed"));
+            return;
+          }
+
           // Update the state machine context with the unregister entry's index. This ensures that events published
           // within the close method will be properly associated with the unregister entry's index. All events published
           // during expiration or closing of a session are linearizable to ensure that clients receive related events
@@ -776,6 +796,10 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Switch to the state machine thread and get the existing response.
       executor.executor().execute(() -> {
+        if (!state.getLog().isOpen()) {
+          future.completeExceptionally(new IllegalStateException("log closed"));
+          return;
+        }
 
         // If the command's consistency level is not LINEARIZABLE or null (which are equivalent), return the
         // cached response immediately in the server thread.
@@ -845,6 +869,10 @@ final class ServerStateMachine implements AutoCloseable {
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
     ServerCommit commit = commits.acquire(entry, timestamp);
     executor.executor().execute(() -> {
+      if (!state.getLog().isOpen()) {
+        future.completeExceptionally(new IllegalStateException("log closed"));
+        return;
+      }
 
       // Update the state machine context with the commit index and local server context. The synchronous flag
       // indicates whether the server expects linearizable completion of published events. Events will be published
@@ -961,7 +989,16 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private CompletableFuture<Object> executeQuery(ServerCommit commit, CompletableFuture<Object> future, ThreadContext context) {
     executor.executor().execute(() -> {
+      if (!state.getLog().isOpen()) {
+        future.completeExceptionally(new IllegalStateException("log closed"));
+        return;
+      }
+
+      // Update the state machine context with the query entry's index. We set a null consistency
+      // level to indicate that events cannot be published in this context. Publishing events in
+      // response to state machine queries is non-deterministic as queries are not replicated.
       executor.init(commit.index(), commit.time(), true, null);
+
       try {
         Object result = executor.executeOperation(commit);
         context.executor().execute(() -> future.complete(result));

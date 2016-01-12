@@ -36,7 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 @SerializeWith(id=196)
-public class PublishResponse extends SessionResponse<PublishResponse> {
+public class PublishResponse extends SessionResponse {
 
   /**
    * Returns a new publish response builder.
