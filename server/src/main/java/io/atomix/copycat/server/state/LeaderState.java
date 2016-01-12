@@ -34,6 +34,7 @@ import io.atomix.copycat.server.storage.entry.*;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 /**
@@ -502,6 +503,12 @@ final class LeaderState extends ActiveState {
                   .withIndex(commitIndex)
                   .withResult(result)
                   .build()));
+              } else if (error instanceof CompletionException && error.getCause() instanceof RaftException) {
+                future.complete(logResponse(CommandResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withIndex(commitIndex)
+                  .withError(((RaftException) error.getCause()).getType())
+                  .build()));
               } else if (error instanceof RaftException) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
@@ -600,7 +607,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.COMMAND_ERROR)
+            .withError(RaftError.Type.QUERY_ERROR)
             .build()));
         }
       }
@@ -623,6 +630,11 @@ final class LeaderState extends ActiveState {
             .withStatus(Response.Status.OK)
             .withIndex(index)
             .withResult(result)
+            .build()));
+        } else if (error instanceof CompletionException && error.getCause() instanceof RaftException) {
+          future.complete(logResponse(QueryResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(((RaftException) error.getCause()).getType())
             .build()));
         } else if (error instanceof RaftException) {
           future.complete(logResponse(QueryResponse.builder()
@@ -677,6 +689,11 @@ final class LeaderState extends ActiveState {
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof RaftException) {
+                future.complete(logResponse(RegisterResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((RaftException) sessionError.getCause()).getType())
+                  .build()));
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
@@ -755,6 +772,11 @@ final class LeaderState extends ActiveState {
                 future.complete(logResponse(AcceptResponse.builder()
                   .withStatus(Response.Status.OK)
                   .build()));
+              } else if (connectError instanceof CompletionException && connectError.getCause() instanceof RaftException) {
+                future.complete(logResponse(AcceptResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((RaftException) connectError.getCause()).getType())
+                  .build()));
               } else if (connectError instanceof RaftException) {
                 future.complete(logResponse(AcceptResponse.builder()
                   .withStatus(Response.Status.ERROR)
@@ -803,7 +825,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenCompleteAsync((sessionResult, sessionError) -> {
+          context.getStateMachine().apply(index).whenComplete((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(KeepAliveResponse.builder()
@@ -813,6 +835,12 @@ final class LeaderState extends ActiveState {
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof RaftException) {
+                future.complete(logResponse(KeepAliveResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withLeader(context.getCluster().member().clientAddress())
+                  .withError(((RaftException) sessionError.getCause()).getType())
+                  .build()));
               } else if (sessionError instanceof RaftException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
@@ -828,7 +856,7 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-          }, context.getThreadContext().executor());
+          });
         } else {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
@@ -868,6 +896,11 @@ final class LeaderState extends ActiveState {
               if (unregisterError == null) {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.OK)
+                  .build()));
+              } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof RaftException) {
+                future.complete(logResponse(UnregisterResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((RaftException) unregisterError.getCause()).getType())
                   .build()));
               } else if (unregisterError instanceof RaftException) {
                 future.complete(logResponse(UnregisterResponse.builder()
