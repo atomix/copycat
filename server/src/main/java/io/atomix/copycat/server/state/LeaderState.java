@@ -306,7 +306,7 @@ final class LeaderState extends ActiveState {
     // If the configuration request index is less than the last known configuration index for
     // the leader, fail the request and force the requester to retry. This ensures that servers
     // aren't basing their configuration change requests on out-of-date membership information.
-    if (request.index() < context.getClusterState().getVersion()) {
+    if (request.index() > 0 && request.index() < context.getClusterState().getVersion()) {
       return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));

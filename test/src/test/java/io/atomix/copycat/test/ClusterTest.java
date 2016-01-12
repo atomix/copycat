@@ -240,7 +240,12 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
 
     CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
+    passive.open().thenRun(this::resume);
+
     CopycatServer reserve = createServer(members, nextMember(Member.Type.RESERVE));
+    reserve.open().thenRun(this::resume);
+
+    await(10000, 2);
 
     passive.cluster().member(reserve.cluster().member().address()).onStatusChange(s -> {
       threadAssertEquals(s, Member.Status.UNAVAILABLE);
@@ -258,7 +263,12 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
 
     CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
+    passive.open().thenRun(this::resume);
+
     CopycatServer reserve = createServer(members, nextMember(Member.Type.RESERVE));
+    reserve.open().thenRun(this::resume);
+
+    await(10000, 2);
 
     reserve.cluster().member(passive.cluster().member().address()).onStatusChange(s -> {
       threadAssertEquals(s, Member.Status.UNAVAILABLE);
@@ -273,7 +283,24 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests an active member join event.
    */
   public void testActiveJoinEvent() throws Throwable {
-    testJoinEvent(Member.Type.ACTIVE);
+    List<CopycatServer> servers = createServers(3);
+
+    Member member = nextMember(Member.Type.ACTIVE);
+
+    CopycatServer server = servers.get(0);
+    server.cluster().onJoin(m -> {
+      threadAssertEquals(m.address(), member.address());
+      threadAssertEquals(m.type(), Member.Type.PROMOTABLE);
+      m.onTypeChange(t -> {
+        threadAssertEquals(t, Member.Type.ACTIVE);
+        resume();
+      });
+      resume();
+    });
+
+    CopycatServer joiner = createServer(members, member);
+    joiner.open().thenRun(this::resume);
+    await(10000, 3);
   }
 
   /**
