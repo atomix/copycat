@@ -21,6 +21,7 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.request.InstallRequest;
@@ -377,7 +378,9 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected boolean hasMoreEntries(MemberState member) {
     // If the member's nextIndex is an entry in the local log then more entries can be sent.
-    return member.getNextIndex() <= context.getLog().lastIndex();
+    return member.getMember().type() != Member.Type.RESERVE
+      && member.getMember().type() != Member.Type.PASSIVE
+      && member.getNextIndex() <= context.getLog().lastIndex();
   }
 
   /**
