@@ -22,6 +22,10 @@ import io.atomix.catalyst.util.Assert;
 
 /**
  * Stores information about a {@link Snapshot} of the state machine.
+ * <p>
+ * Snapshot descriptors represent the header of a snapshot file which stores metadata about
+ * the snapshot contents. This API provides methods for reading and a builder for writing
+ * snapshot headers/descriptors.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

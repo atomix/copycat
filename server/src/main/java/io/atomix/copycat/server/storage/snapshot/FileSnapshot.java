@@ -24,7 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * File-based snapshot.
+ * File-based snapshot backed by a {@link FileBuffer}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

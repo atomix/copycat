@@ -19,7 +19,7 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
 
 /**
- * In-memory snapshot.
+ * In-memory snapshot backed by a {@link HeapBuffer}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

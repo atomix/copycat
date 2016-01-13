@@ -29,9 +29,42 @@ import java.util.*;
 /**
  * Persists server snapshots via the {@link Storage} module.
  * <p>
- * The server snapshot store is responsible for periodically persisting state machine state according
+ * The server snapshot store is responsible for persisting periodic state machine snapshots according
  * to the configured {@link Storage#level() storage level}. Each server with a snapshottable state machine
  * persists the state machine state to allow commands to be removed from disk.
+ * <p>
+ * When a snapshot store is {@link Storage#openSnapshotStore(String) created}, the store will load any
+ * existing snapshots from disk and make them available for reading. Only snapshots that have been
+ * written and {@link Snapshot#complete() completed} will be read from disk. Incomplete snapshots are
+ * automatically deleted from disk when the snapshot store is opened.
+ * <p>
+ * <pre>
+ *   {@code
+ *   SnapshotStore snapshots = storage.openSnapshotStore("test");
+ *   Snapshot snapshot = snapshots.snapshot(1);
+ *   }
+ * </pre>
+ * To create a new {@link Snapshot}, use the {@link #createSnapshot(long)} method. Each snapshot must
+ * be created with a unique {@code index} which represents the index of the server state machine at
+ * the point at which the snapshot was taken. Snapshot indices are used to sort snapshots loaded from
+ * disk and apply them at the correct point in the state machine.
+ * <p>
+ * <pre>
+ *   {@code
+ *   Snapshot snapshot = snapshots.create(10);
+ *   try (SnapshotWriter writer = snapshot.writer()) {
+ *     ...
+ *   }
+ *   snapshot.complete();
+ *   }
+ * </pre>
+ * Snapshots don't necessarily represent the beginning of the log. Typical Raft implementations take a
+ * snapshot of the state machine state and then clear their logs up to that point. However, in Copycat
+ * a snapshot may actually only represent a subset of the state machine's state. Indeed, internal Copycat
+ * server state machines use log cleaning and store no state in snapshots. When a snapshot is taken of
+ * the state machine state, only prior entries that contributed to the state stored in the snapshot -
+ * commands marked with the {@link io.atomix.copycat.client.Command.CompactionMode#SNAPSHOT SNAPSHOT}
+ * compaction mode - are removed from the log prior to the snapshot.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -63,6 +96,10 @@ public class SnapshotStore implements AutoCloseable {
 
   /**
    * Returns the most recent completed snapshot.
+   * <p>
+   * The current snapshot is the last {@link Snapshot} successfully written <em>and</em>
+   * {@link Snapshot#complete() completed}. It represents the most recent snapshot successfully
+   * written to disk and from which the server state can be restored.
    *
    * @return The most recent completed snapshot.
    */
@@ -71,7 +108,11 @@ public class SnapshotStore implements AutoCloseable {
   }
 
   /**
-   * Returns a collection of all snapshots.
+   * Returns a collection of all snapshots stored on disk.
+   * <p>
+   * Snapshots will be loaded from the underlying {@link Storage} when the snapshot store is created.
+   * The returned collection of {@link Snapshot}s will include any stored {@link Snapshot#complete() complete}
+   * snapshots. Both stored and new incomplete snapshots will be excluded from this list.
    *
    * @return A collection of all snapshots.
    */
