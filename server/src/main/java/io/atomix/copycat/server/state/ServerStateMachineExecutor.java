@@ -21,6 +21,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
+import io.atomix.copycat.client.NoOpCommand;
 import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.client.error.ApplicationException;
 import io.atomix.copycat.server.Commit;
@@ -96,6 +97,11 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    */
   @SuppressWarnings("unchecked")
   <T extends Operation<U>, U> U executeOperation(Commit commit) {
+    // If the commit operation is a no-op command, complete the operation.
+    if (commit.operation() instanceof NoOpCommand) {
+      return null;
+    }
+
     // Get the function registered for the operation. If no function is registered, attempt to
     // use a global function if available.
     Function function = operations.get(commit.type());
