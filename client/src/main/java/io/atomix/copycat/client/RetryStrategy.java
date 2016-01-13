@@ -29,7 +29,12 @@ import java.time.Duration;
 public interface RetryStrategy {
 
   /**
-   * Called when an operation attempt fails.
+   * Handles the failure of an operation submission attempt.
+   * <p>
+   * Retry strategies can choose how to react to the failure to submit an operation by either
+   * {@link Attempt#fail() failing} or {@link Attempt#retry() retrying} the attempt. In the event that
+   * an operation attempt is failed, the operation's associated {@link java.util.concurrent.CompletableFuture}
+   * will be completed exceptionally.
    *
    * @param attempt The operation attempt.
    * @param cause The cause of the failure.
@@ -37,19 +42,30 @@ public interface RetryStrategy {
   void attemptFailed(Attempt attempt, Throwable cause);
 
   /**
-   * Operation attempt.
+   * Represents a single attempt to submit an operation to the Copycat cluster.
+   * <p>
+   * For each operation submission attempt, an {@code Attempt} object will be provided to the
+   * {@link RetryStrategy} upon failure.
    */
   interface Attempt {
 
     /**
      * Returns the attempt count.
+     * <p>
+     * The attempt count is representative of the number of submission attempts have been made
+     * prior to the failure of this attempt. For the first {@link Attempt} for any given submitted
+     * operation, the attempt count will be {@code 1} and will increase for each {@link #retry() retry}
+     * of an attempt.
      *
-     * @return The attempt count.
+     * @return The submission attempt count.
      */
     int attempt();
 
     /**
-     * Returns the attempted operation.
+     * Returns the operation was attempted and failed.
+     * <p>
+     * The attempt operation is the {@link Command} or {@link Query} that was submitted by the user
+     * to the {@link CopycatClient client}.
      *
      * @return The attempted operation.
      */
@@ -57,11 +73,21 @@ public interface RetryStrategy {
 
     /**
      * Fails the operation.
+     * <p>
+     * When the operation is failed with no user-provided exception, the associated
+     * {@link java.util.concurrent.CompletableFuture} will be
+     * {@link java.util.concurrent.CompletableFuture#completeExceptionally(Throwable) completed exceptionally}
+     * with either a {@link io.atomix.copycat.client.error.CommandException} or {@link io.atomix.copycat.client.error.QueryException}
+     * based on the type of the attempted {@link #operation() operation}.
      */
     void fail();
 
     /**
      * Fails the operation with a specific exception.
+     * <p>
+     * When the operation is failed, the associated {@link java.util.concurrent.CompletableFuture} will
+     * be {@link java.util.concurrent.CompletableFuture#completeExceptionally(Throwable) completed exceptionally}
+     * with the provided exception.
      *
      * @param t The exception with which to fail the operation.
      */
@@ -69,11 +95,28 @@ public interface RetryStrategy {
 
     /**
      * Immediately retries the operation.
+     * <p>
+     * The operation will immediately be resubmitted to the cluster via the client's current
+     * {@link io.atomix.copycat.client.session.Session Session}. If the client is in the
+     * {@link CopycatClient.State#SUSPENDED SUSPENDED} state, the operation may be enqueued to be resubmitted
+     * once the client reestablishes communication with the cluster. In the event that the client transitions between
+     * the {@link CopycatClient.State#SUSPENDED} and {@link CopycatClient.State#CONNECTED} states, the operation
+     * may be resubmitted under a new session.
      */
     void retry();
 
     /**
      * Retries the operation after the given duration.
+     * <p>
+     * The operation will be resubmitted to the cluster after the given duration has expired. Note that even
+     * if operations are resubmitted after different durations, all operations will be completed in the order
+     * in which they were submitted by the user. Reordering operations via attempt retries will not negatively
+     * impact the order of results.
+     * <p>
+     * If the client is in the {@link CopycatClient.State#SUSPENDED SUSPENDED} state once the given {@link Duration}
+     * expires, the operation may be enqueued to be resubmitted once the client reestablishes communication with
+     * the cluster. In the event that the client transitions between the {@link CopycatClient.State#SUSPENDED}
+     * and {@link CopycatClient.State#CONNECTED} states, the operation may be resubmitted under a new session.
      *
      * @param after The duration after which to retry the operation.
      */

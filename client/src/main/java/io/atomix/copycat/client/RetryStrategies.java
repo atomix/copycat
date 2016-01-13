@@ -18,7 +18,20 @@ package io.atomix.copycat.client;
 import java.time.Duration;
 
 /**
- * Client operation retry strategies.
+ * Strategies for resubmitting failed client operations to the cluster.
+ * <p>
+ * This enum provides basic {@link RetryStrategy} implementations for dictating how operations
+ * submitted by a {@link CopycatClient} are retried in the event of a failure. Retry strategies
+ * can be configured via the client {@link CopycatClient.Builder Builder}.
+ * <p>
+ * <pre>
+ *   {@code
+ *   CopycatClient client = CopycatClient.builder(members)
+ *     .withTransport(new NettyTransport())
+ *     .withRetryStrategy(RetryStrategies.EXPONENTIAL_BACKOFF)
+ *     .build();
+ *   }
+ * </pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

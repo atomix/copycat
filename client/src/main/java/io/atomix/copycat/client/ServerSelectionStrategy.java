@@ -17,7 +17,6 @@ package io.atomix.copycat.client;
 
 import io.atomix.catalyst.transport.Address;
 
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -33,11 +32,20 @@ public interface ServerSelectionStrategy {
 
   /**
    * Returns a prioritized list of servers to which the client can connect and submit operations.
+   * <p>
+   * The client will iterate the provided {@link Address} list in order, attempting to connect to
+   * each listed server until all servers have been exhausted. Implementations should provide a
+   * complete list of servers with which the client can communicate. Limiting the server list
+   * only to a single server such as the {@code leader} may result in the client failing, such as in
+   * the event that no leader exists or the client is partitioned from the leader.
    *
-   * @param leader The current cluster leader.
-   * @param servers The full list of servers.
+   * @param leader The current cluster leader. The {@code leader} may be {@code null} if no current
+   *               leader exists.
+   * @param servers The full list of available servers. The provided server list is representative
+   *                of the most recent membership update received by the client. The server list
+   *                may evolve over time as the structure of the cluster changes.
    * @return A collection of servers to which the client can connect.
    */
-  Collection<Address> selectConnections(Address leader, List<Address> servers);
+  List<Address> selectConnections(Address leader, List<Address> servers);
 
 }
