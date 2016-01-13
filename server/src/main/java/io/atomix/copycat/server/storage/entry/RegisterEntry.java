@@ -25,7 +25,13 @@ import io.atomix.catalyst.util.ReferenceManager;
 import java.util.UUID;
 
 /**
- * Register client entry.
+ * Stores a client register request.
+ * <p>
+ * The {@code RegisterEntry} is stored and replicated when a client submits a
+ * {@link io.atomix.copycat.client.request.RegisterRequest} to the cluster to register a new session.
+ * Session registrations are replicated and applied on all state machines to ensure each server state
+ * machine has a consistent view of the sessions in the cluster, and registration entries are not
+ * removed from the underlying log until the session itself has been expired or closed.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

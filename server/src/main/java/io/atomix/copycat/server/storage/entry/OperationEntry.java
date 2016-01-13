@@ -22,7 +22,13 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
- * Operation entry.
+ * Stores a state machine operation.
+ * <p>
+ * Each state machine operation is stored with a client-provided {@link #getSequence() sequence number}.
+ * The sequence number is used by state machines to apply client operations in the order in which they
+ * were submitted by the client (FIFO order). Additionally, each operation is written with the leader's
+ * {@link #getTimestamp() timestamp} at the time the entry was logged. This gives state machines an
+ * approximation of time with which to react to the application of operations to the state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

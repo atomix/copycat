@@ -26,7 +26,11 @@ import io.atomix.catalyst.util.ReferenceManager;
 import java.util.UUID;
 
 /**
- * Unregister entry.
+ * Stores a connection between a client and server.
+ * <p>
+ * The {@code ConnectEntry} is used to represent the establishment of a connection between a
+ * specific {@link #getClient() client} and {@link #getAddress() server}. Storing and replicating
+ * connections allows servers to share a consistent view of the clients connected to each server.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

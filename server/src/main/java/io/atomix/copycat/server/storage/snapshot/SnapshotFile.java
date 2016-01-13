@@ -22,7 +22,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 /**
- * Snapshot file utility.
+ * Represents a snapshot file on disk.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

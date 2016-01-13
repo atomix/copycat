@@ -22,7 +22,13 @@ import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 
 /**
- * A special placeholder command.
+ * Special placeholder command representing a client operation that has no effect on the state machine.
+ * <p>
+ * No-op commands are submitted by clients to the cluster to complete missing command sequence numbers.
+ * Copycat clusters require that clients submit commands in sequential order and use a client-provided
+ * sequence number to ensure FIFO ordering of operations submitted to the cluster. In the event that a
+ * command fails to be committed to the cluster, a client can resubmit a no-op command to ensure command
+ * sequence numbers continue to progress.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

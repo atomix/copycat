@@ -22,7 +22,15 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 /**
- * Server snapshot writer.
+ * Writes bytes to a state machine {@link Snapshot}.
+ * <p>
+ * This class provides the primary interface for writing snapshot buffers to disk or memory.
+ * Snapshot bytes are written to an underlying {@link Buffer} which is backed by either memory
+ * or disk based on the configured {@link io.atomix.copycat.server.storage.StorageLevel}.
+ * <p>
+ * In addition to standard {@link BufferOutput} methods, snapshot writers support writing
+ * {@link java.io.Serializable} and {@link io.atomix.catalyst.serializer.CatalystSerializable} objects
+ * to the snapshot via the {@link #writeObject(Object)} method.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

@@ -40,8 +40,8 @@ import java.util.function.Function;
  *   {@code
  *   private Object putWithTtl(Commit<PutWithTtl> commit) {
  *     map.put(commit.operation().key(), commit);
- *     executor().schedule(Duration.ofMillis(commit.operation().ttl()), () -> {
- *       map.remove(commit.operation().key()).clean();
+ *     executor.schedule(Duration.ofMillis(commit.operation().ttl()), () -> {
+ *       map.remove(commit.operation().key()).close();
  *     });
  *   }
  *   }

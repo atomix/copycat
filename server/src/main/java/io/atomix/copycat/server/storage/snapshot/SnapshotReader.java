@@ -22,7 +22,15 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 /**
- * Server snapshot reader.
+ * Reads bytes from a state machine {@link Snapshot}.
+ * <p>
+ * This class provides the primary interface for reading snapshot buffers from disk or memory.
+ * Snapshot bytes are read from an underlying {@link Buffer} which is backed by either memory
+ * or disk based on the configured {@link io.atomix.copycat.server.storage.StorageLevel}.
+ * <p>
+ * In addition to standard {@link BufferInput} methods, snapshot readers support reading
+ * {@link java.io.Serializable} and {@link io.atomix.catalyst.serializer.CatalystSerializable} objects
+ * from the snapshot via the {@link #readObject()}} method.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
