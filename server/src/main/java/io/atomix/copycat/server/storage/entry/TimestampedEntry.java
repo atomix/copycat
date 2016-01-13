@@ -21,7 +21,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 
 /**
- * Timestamped entry.
+ * Base class for timestamped entries.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

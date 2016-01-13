@@ -26,7 +26,10 @@ import io.atomix.copycat.client.Operation;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
- * Command entry.
+ * Stores a state machine {@link Command}.
+ * <p>
+ * The {@code CommandEntry} is used to store an individual state machine command from an individual
+ * client along with information relevant to sequencing the command in the server state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

@@ -28,7 +28,7 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Log entry.
+ * Stores a state change in a {@link Log}.
  * <p>
  * The {@code Entry} represents a single record in a Copycat {@link Log}. Each entry is stored at
  * a unique {@link #getIndex() index} in the log. Indexes are applied to entries once written to a log.
@@ -37,6 +37,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@link io.atomix.catalyst.serializer.CatalystSerializable#writeObject(io.atomix.catalyst.buffer.BufferOutput, io.atomix.catalyst.serializer.Serializer)}
  * and {@link io.atomix.catalyst.serializer.CatalystSerializable#readObject(io.atomix.catalyst.buffer.BufferInput, io.atomix.catalyst.serializer.Serializer)}.
  * respectively.
+ * <p>
+ * Because log entries may remain in memory for an arbitrary amount of time, {@code Entry} objects are
+ * recycled by the log using the {@link TypedEntryPool}. The lifecycle of an entry is managed via the
+ * {@link ReferenceCounted} interface. Once all references to an entry have been {@link #release() released}
+ * the entry will be placed back in the pool.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

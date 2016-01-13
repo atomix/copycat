@@ -23,7 +23,14 @@ import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
- * Unregister entry.
+ * Stores a client session close.
+ * <p>
+ * The {@code UnregisterEntry} is stored in reaction to receiving a
+ * {@link io.atomix.copycat.client.request.UnregisterRequest} from a client or in reaction to a leader
+ * expiring a session on the server. When a leader expires a session, the leader must commit an
+ * {@code UnregisterEntry} to ensure that the session is expired deterministically across the cluster.
+ * The {@link #isExpired()} method indicates whether the entry represents a session being expired by
+ * the leader or an explicit request by a client to close its session.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

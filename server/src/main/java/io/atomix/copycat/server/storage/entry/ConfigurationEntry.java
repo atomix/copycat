@@ -26,7 +26,12 @@ import io.atomix.copycat.server.cluster.Member;
 import java.util.Collection;
 
 /**
- * Configuration entry.
+ * Stores a cluster configuration.
+ * <p>
+ * The {@code ConfigurationEntry} stores information relevant to a single cluster configuration change.
+ * Configuration change entries store a collection of {@link Member members} which each represent a
+ * server in the cluster. Each time the set of members changes or a property of a single member changes,
+ * a new {@code ConfigurationEntry} must be logged for the configuration change.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
