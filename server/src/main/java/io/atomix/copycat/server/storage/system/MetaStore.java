@@ -25,11 +25,13 @@ import io.atomix.copycat.server.storage.StorageLevel;
 import java.io.File;
 
 /**
- * Persists server state via the {@link Storage} module.
+ * Manages persistence of server configurations.
  * <p>
- * The server metastore is responsible for persisting server state according to the configured
+ * The server metastore is responsible for persisting server configurations according to the configured
  * {@link Storage#level() storage level}. Each server persists their current {@link #loadTerm() term}
- * and last {@link #loadVote() vote} as is dictated by the Raft consensus algorithm.
+ * and last {@link #loadVote() vote} as is dictated by the Raft consensus algorithm. Additionally, the
+ * metastore is responsible for storing the last know server {@link Configuration}, including cluster
+ * membership.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

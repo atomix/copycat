@@ -21,7 +21,11 @@ import io.atomix.copycat.server.cluster.Member;
 import java.util.Collection;
 
 /**
- * Stored server configuration.
+ * Represents a persisted server configuration.
+ * <p>
+ * This class represents a cluster configuration stored on disk. Configurations are managed by
+ * a {@link MetaStore}, stored on disk when {@link io.atomix.copycat.server.cluster.Cluster Cluster}
+ * configurations change, and loaded from disk on server startup.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -36,6 +40,9 @@ public class Configuration {
 
   /**
    * Returns the configuration index.
+   * <p>
+   * The index is the index of the {@link io.atomix.copycat.server.storage.entry.ConfigurationEntry ConfigurationEntry}
+   * which resulted in this configuration.
    *
    * @return The configuration index.
    */
@@ -44,9 +51,9 @@ public class Configuration {
   }
 
   /**
-   * Returns the collection of active members.
+   * Returns the cluster membership for this configuration.
    *
-   * @return The collection of active members.
+   * @return The cluster membership.
    */
   public Collection<Member> members() {
     return members;
