@@ -23,6 +23,7 @@ import io.atomix.copycat.client.error.CommandException;
 import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 import java.lang.reflect.*;
 import java.time.Clock;
@@ -43,9 +44,8 @@ import java.util.function.Function;
  * When {@link Command commands} and {@link Query queries} (i.e. <em>operations</em>) are submitted to the Raft cluster,
  * the {@link CopycatServer} will log and replicate them as necessary and, once complete, apply them to the configured
  * state machine.
- * <p>
- * <b>State machine operations</b>
- * <p>
+ *
+ * <h3>State machine operations</h3>
  * State machine operations are implemented as methods on the state machine. Operations can be automatically detected
  * by the state machine during setup or can be explicitly registered by overriding the {@link #configure(StateMachineExecutor)}
  * method. Each operation method must take a single {@link Commit} argument for a specific operation type.
@@ -59,7 +59,7 @@ import java.util.function.Function;
  *         try {
  *           return previous.operation().value();
  *         } finally {
- *           previous.clean();
+ *           previous.close();
  *         }
  *       }
  *       return null;
@@ -88,9 +88,8 @@ import java.util.function.Function;
  * and given the same commands in the same order, all servers' state machines should arrive at the same state with the
  * same output (return value). The return value of each operation callback is the response value that will be sent back
  * to the client.
- * <p>
- * <b>Deterministic scheduling</b>
- * <p>
+ *
+ * <h3>Deterministic scheduling</h3>
  * The {@link StateMachineExecutor} is responsible for executing state machine operations sequentially and provides an
  * interface similar to that of {@link java.util.concurrent.ScheduledExecutorService} to allow state machines to schedule
  * time-based callbacks. Because of the determinism requirement, scheduled callbacks are guaranteed to be executed
@@ -101,7 +100,7 @@ import java.util.function.Function;
  *   public void putWithTtl(Commit<PutWithTtl> commit) {
  *     map.put(commit.operation().key(), commit);
  *     executor.schedule(Duration.ofMillis(commit.operation().ttl()), () -> {
- *       map.remove(commit.operation().key()).clean();
+ *       map.remove(commit.operation().key()).close();
  *     });
  *   }
  *   }
@@ -118,7 +117,7 @@ import java.util.function.Function;
  *         next.session().publish("lock");
  *       }
  *     } finally {
- *       commit.clean();
+ *       commit.close();
  *     }
  *   }
  *   }
@@ -138,27 +137,72 @@ import java.util.function.Function;
  * one server ever actually sends the event. Still, it's critical that all state machines publish all events to ensure
  * consistency and fault tolerance. In the event that a server fails after publishing a session event, the client will transparently
  * reconnect to another server and retrieve lost event messages.
- * <p>
- * <b>Cleaning commits</b>
- * <p>
+ *
+ * <h3>Log cleaning</h3>
  * As operations are logged, replicated, committed, and applied to the state machine, the underlying
  * {@link io.atomix.copycat.server.storage.Log} grows. Without freeing unnecessary commits from the log it would eventually
  * consume all available disk or memory. Copycat uses a log cleaning algorithm to remove {@link Commit}s that no longer
  * contribute to the state machine's state from the log. To aid in this process, it's the responsibility of state machine
  * implementations to indicate when each commit is no longer needed by calling {@link Commit#close()}.
- * <p>
+ * <pre>
+ *   {@code
+ *   public class ValueStateMachine extends StateMachine {
+ *     private Commit<SetValue> value;
+ *
+ *     public void set(Commit<SetValue> commit) {
+ *       this.value = commit;
+ *     }
+ *
+ *     public void delete(Commit<DeleteValue> commit) {
+ *       if (value != null) {
+ *         value.close();
+ *         value = null;
+ *       }
+ *       commit.close();
+ *     }
+ *   }
+ *   }
+ * </pre>
  * State machines should hold on to the {@link Commit} object passed to operation callbacks for as long as the commit
  * contributes to the state machine's state. Once a commit is no longer needed, commits should be {@link Commit#close() closed}.
  * Closing a commit notifies the log compaction algorithm that it's safe to remove the commit from the internal
  * commit log. Copycat will guarantee that {@link Commit}s are persisted in the underlying
- * {@link io.atomix.copycat.server.storage.Log} as long as is necessary (even after a commit is cleaned) to
+ * {@link io.atomix.copycat.server.storage.Log} as long as is necessary (even after a commit is closed) to
  * ensure all operations are applied to a majority of servers and to guarantee delivery of
  * {@link Session#publish(String, Object) session events} published as a result of specific operations.
  * State machines only need to specify when it's safe to remove each commit from the log.
  * <p>
- * Note that if commits are not properly cleaned from the log and are instead garbage collected, a warning will be logged.
+ * Note that if commits are not properly closed and are instead garbage collected, a warning will be logged.
  * Failure to {@link Commit#close() close} a command commit should be considered a critical bug since instances of the
  * command can eventually fill up disk.
+ *
+ * <h3>Snapshotting</h3>
+ * On top of Copycat's log cleaning algorithm mentioned above, Copycat provides a mechanism for storing and loading
+ * snapshots of a state machine's state. Snapshots are images of the state machine's state stored at a specific
+ * point in logical time (an {@code index}). To support snapshotting, state machine implementations should implement
+ * the {@link Snapshottable} interface.
+ * <pre>
+ *   {@code
+ *   public class ValueStateMachine extends StateMachine implements Snapshottable {
+ *     private Object value;
+ *
+ *     public void set(Commit<SetValue> commit) {
+ *       this.value = commit.operation().value();
+ *       commit.close();
+ *     }
+ *
+ *     public void snapshot(SnapshotWriter writer) {
+ *       writer.writeObject(value);
+ *     }
+ *   }
+ *   }
+ * </pre>
+ * For snapshottable state machines, Copycat will periodically request a {@link io.atomix.copycat.server.storage.snapshot.Snapshot Snapshot}
+ * of the state machine's state by calling the {@link Snapshottable#snapshot(SnapshotWriter)} method. Once the state
+ * machine has written a snapshot of its state, Copycat will automatically remove all commands from the underlying log
+ * marked with the {@link io.atomix.copycat.client.Command.CompactionMode#SNAPSHOT SNAPSHOT} compaction mode. Note that
+ * state machines should still ensure that snapshottable commits are {@link Commit#close() closed} once they've been
+ * applied to the state machine, but state machines are free to immediately close all snapshottable commits.
  *
  * @see Commit
  * @see Command
