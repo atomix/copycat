@@ -23,7 +23,6 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
 import io.atomix.copycat.server.storage.entry.Entry;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -63,7 +62,7 @@ public class AppendRequest extends AbstractRequest {
   private int leader;
   private long logIndex;
   private long logTerm;
-  private List<Entry> entries = new ArrayList<>(128);
+  private List<Entry> entries;
   private long commitIndex = -1;
   private long globalIndex = -1;
 
@@ -307,8 +306,8 @@ public class AppendRequest extends AbstractRequest {
     }
 
     /**
-     * @throws IllegalStateException if the term, log term, log index, commit index, or global index are not positive, or 
-     * if entries is null 
+     * @throws IllegalStateException if the term, log term, log index, commit index, or global index are not positive, or
+     * if entries is null
      */
     @Override
     public AppendRequest build() {

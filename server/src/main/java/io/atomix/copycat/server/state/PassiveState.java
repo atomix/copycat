@@ -53,6 +53,18 @@ class PassiveState extends ReserveState {
   }
 
   @Override
+  public CompletableFuture<AbstractState> open() {
+    return super.open().thenRun(this::truncateUncommittedEntries).thenApply(v -> this);
+  }
+
+  /**
+   * Truncates uncommitted entries from the log.
+   */
+  private void truncateUncommittedEntries() {
+    context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+  }
+
+  @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
 
@@ -67,31 +79,20 @@ class PassiveState extends ReserveState {
   }
 
   /**
-   * Starts the append process.
+   * Handles an append request.
    */
-  protected AppendResponse handleAppend(AppendRequest request) {
-    // If the request term is less than the current term then immediately
-    // reply false and return our current term. The leader will receive
-    // the updated term and step down.
-    if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
-        .build();
-    } else if (request.logIndex() != 0 && request.logTerm() != 0) {
-      return doCheckPreviousEntry(request);
+  private AppendResponse handleAppend(AppendRequest request) {
+    if (request.logIndex() > 0) {
+      return checkPreviousEntry(request);
     } else {
-      return doAppendEntries(request);
+      return appendEntries(request);
     }
   }
 
   /**
-   * Checks the previous log entry for consistency.
+   * Checks the previous entry in the append request for consistency.
    */
-  protected AppendResponse doCheckPreviousEntry(AppendRequest request) {
+  private AppendResponse checkPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
       LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
@@ -109,67 +110,33 @@ class PassiveState extends ReserveState {
         .withLogIndex(context.getLog().lastIndex())
         .build();
     }
-
-    // If the previous entry term doesn't match the local previous term then reject the request.
-    try (Entry entry = context.getLog().get(request.logIndex())) {
-      if (entry == null || entry.getTerm() != request.logTerm()) {
-        LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, entry != null ? entry.getTerm() : "unknown");
-        return AppendResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
-          .withSucceeded(false)
-          .withLogIndex(request.logIndex() <= context.getLog().lastIndex() ? request.logIndex() - 1 : context.getLog().lastIndex())
-          .build();
-      } else {
-        return doAppendEntries(request);
-      }
-    }
+    return appendEntries(request);
   }
 
   /**
    * Appends entries to the local log.
    */
-  protected AppendResponse doAppendEntries(AppendRequest request) {
-    // If the log contains entries after the request's previous log index
-    // then remove those entries to be replaced by the request entries.
-    if (!request.entries().isEmpty()) {
+  private AppendResponse appendEntries(AppendRequest request) {
+    // Append entries to the log starting at the last log index.
+    long commitIndex = Math.max(context.getCommitIndex(), request.commitIndex());
+    for (Entry entry : request.entries()) {
+      // If the entry index is greater than the last index and less than the commit index, append the entry.
+      // We perform no additional consistency checks here since passive members may only receive committed entries.
+      if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() < commitIndex) {
+        context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
+        LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
+      }
 
-      // Iterate through request entries and append them to the log.
-      for (Entry entry : request.entries()) {
-        // If the entry index is greater than the last log index, skip missing entries.
-        if (context.getLog().lastIndex() < entry.getIndex()) {
-          context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-        } else {
-          // Compare the term of the received entry with the matching entry in the log.
-          try (Entry match = context.getLog().get(entry.getIndex())) {
-            if (match != null) {
-              if (entry.getTerm() != match.getTerm()) {
-                // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
-                // If appending to the log fails, apply commits and reply false to the append request.
-                LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
-                context.getLog().truncate(entry.getIndex() - 1).append(entry);
-                LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-              }
-            } else {
-              context.getLog().truncate(entry.getIndex() - 1).append(entry);
-              LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-            }
-          }
-        }
-
-        // If the entry is a configuration entry then immediately configure the cluster.
-        if (entry instanceof ConnectEntry) {
-          ConnectEntry connectEntry = (ConnectEntry) entry;
-          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
-        }
+      // If the entry is a connect entry then immediately configure the connection.
+      if (entry instanceof ConnectEntry) {
+        ConnectEntry connectEntry = (ConnectEntry) entry;
+        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
       }
     }
 
     // If we've made it this far, apply commits and send a successful response.
     // Apply commits to the state machine asynchronously so the append request isn't blocked on I/O.
-    long commitIndex = request.commitIndex();
-    context.setCommitIndex(Math.max(context.getCommitIndex(), commitIndex));
+    context.setCommitIndex(commitIndex);
     context.getThreadContext().execute(() -> context.getStateMachine().applyAll(commitIndex));
 
     return AppendResponse.builder()
