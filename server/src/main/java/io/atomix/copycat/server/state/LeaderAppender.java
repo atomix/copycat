@@ -192,7 +192,7 @@ final class LeaderAppender extends AbstractAppender {
     }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
-    else if (context.getSnapshotStore().currentSnapshot() != null
+    else if (member.getMember().type() == Member.Type.ACTIVE && context.getSnapshotStore().currentSnapshot() != null
       && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (canInstall(member)) {
