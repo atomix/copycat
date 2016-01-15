@@ -153,9 +153,10 @@ abstract class AbstractAppender implements AutoCloseable {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
+    ServerMember leader = context.getLeader();
     return AppendRequest.builder()
       .withTerm(context.getTerm())
-      .withLeader(context.getCluster().member().id())
+      .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withCommitIndex(context.getCommitIndex())
@@ -170,9 +171,10 @@ abstract class AbstractAppender implements AutoCloseable {
     long prevIndex = getPrevIndex(member);
     Entry prevEntry = getPrevEntry(member, prevIndex);
 
+    ServerMember leader = context.getLeader();
     AppendRequest.Builder builder = AppendRequest.builder()
       .withTerm(context.getTerm())
-      .withLeader(context.getCluster().member().id())
+      .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevIndex)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withCommitIndex(context.getCommitIndex())
