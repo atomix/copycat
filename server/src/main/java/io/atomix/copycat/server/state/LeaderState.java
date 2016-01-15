@@ -264,9 +264,9 @@ final class LeaderState extends ActiveState {
     Member member = request.member();
 
     // Add the joining member to the members list. If the joining member's type is ACTIVE, join the member in the
-    // PROMOTABLE state to allow it to get caught up without impacting the qorum size.
+    // PROMOTABLE state to allow it to get caught up without impacting the quorum size.
     Collection<Member> members = context.getCluster().members();
-    members.add(new ServerMember(member.type() == Member.Type.ACTIVE ? Member.Type.PROMOTABLE : member.type(), member.serverAddress(), member.clientAddress()));
+    members.add(new ServerMember(member.type(), member.serverAddress(), member.clientAddress()));
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {

@@ -319,7 +319,6 @@ class ReserveState extends AbstractState {
         case ACTIVE:
           context.transition(CopycatServer.State.FOLLOWER);
           break;
-        case PROMOTABLE:
         case PASSIVE:
           context.transition(CopycatServer.State.PASSIVE);
           break;

@@ -213,27 +213,6 @@ final class ClusterState implements Cluster, AutoCloseable {
   }
 
   /**
-   * Returns a list of promotable members.
-   *
-   * @return A list of promotable members.
-   */
-  List<MemberState> getPromotableMemberStates() {
-    return getRemoteMemberStates(Member.Type.PROMOTABLE);
-  }
-
-  /**
-   * Returns a list of promotable members.
-   *
-   * @param comparator A comparator with which to sort the members list.
-   * @return The sorted members list.
-   */
-  List<MemberState> getPromotableMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> promotableMembers = getPromotableMemberStates();
-    Collections.sort(promotableMembers, comparator);
-    return promotableMembers;
-  }
-
-  /**
    * Returns a list of passive members.
    *
    * @return A list of passive members.
@@ -304,7 +283,6 @@ final class ClusterState implements Cluster, AutoCloseable {
           context.transition(CopycatServer.State.RESERVE);
           break;
         case PASSIVE:
-        case PROMOTABLE:
           context.transition(CopycatServer.State.PASSIVE);
           break;
         case ACTIVE:
@@ -347,7 +325,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             } else if (type == Member.Type.ACTIVE) {
               context.transition(CopycatServer.State.FOLLOWER);
               joinFuture.complete(null);
-            } else if (type == Member.Type.PASSIVE || type == Member.Type.PROMOTABLE) {
+            } else if (type == Member.Type.PASSIVE) {
               context.transition(CopycatServer.State.PASSIVE);
               joinFuture.complete(null);
             } else if (type == Member.Type.RESERVE) {

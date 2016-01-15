@@ -290,17 +290,13 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer server = servers.get(0);
     server.cluster().onJoin(m -> {
       threadAssertEquals(m.address(), member.address());
-      threadAssertEquals(m.type(), Member.Type.PROMOTABLE);
-      m.onTypeChange(t -> {
-        threadAssertEquals(t, Member.Type.ACTIVE);
-        resume();
-      });
+      threadAssertEquals(m.type(), Member.Type.ACTIVE);
       resume();
     });
 
     CopycatServer joiner = createServer(members, member);
     joiner.open().thenRun(this::resume);
-    await(10000, 3);
+    await(10000, 2);
   }
 
   /**
