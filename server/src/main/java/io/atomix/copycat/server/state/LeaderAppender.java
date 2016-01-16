@@ -142,19 +142,16 @@ final class LeaderAppender extends AbstractAppender {
       context.setGlobalIndex(index);
       return CompletableFuture.completedFuture(index);
     }
-    // If there are no other active members in the cluster, update the commit index and complete
-    // the commit but ensure append entries requests are sent to all members recursively.
+    // If there are no other active members in the cluster, update the commit index and complete the commit.
+    // The updated commit index will be sent to passive/reserve members on heartbeats.
     else if (context.getClusterState().getActiveMemberStates().isEmpty()) {
       context.setCommitIndex(index);
-      for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
-        appendEntries(member);
-      }
       return CompletableFuture.completedFuture(index);
     }
 
-    // Ensure append requests are being recursively sent to all members, including reserve, passive, and promotable members.
+    // Only send entry-specific AppendRequests to active members of the cluster.
     return commitFutures.computeIfAbsent(index, i -> {
-      for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
+      for (MemberState member : context.getClusterState().getActiveMemberStates()) {
         appendEntries(member);
       }
       return new CompletableFuture<>();
