@@ -57,7 +57,7 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public MetaStore storeTerm(long term) {
-    buffer.writeLong(0, term);
+    buffer.writeLong(0, term).flush();
     return this;
   }
 
@@ -77,7 +77,7 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public MetaStore storeVote(int vote) {
-    buffer.writeInt(8, vote);
+    buffer.writeInt(8, vote).flush();
     return this;
   }
 
@@ -99,6 +99,7 @@ public class MetaStore implements AutoCloseable {
   public MetaStore storeConfiguration(Configuration configuration) {
     buffer.position(12).writeLong(configuration.index());
     storage.serializer().writeObject(configuration.members(), buffer);
+    buffer.flush();
     return this;
   }
 
