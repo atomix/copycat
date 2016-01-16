@@ -356,8 +356,13 @@ final class ClusterState implements Cluster, AutoCloseable {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
 
+            Configuration configuration = new Configuration(response.index(), response.members());
+
             // Configure the cluster with the join response.
-            configure(new Configuration(response.index(), response.members()));
+            configure(configuration);
+
+            // Commit the configuration as we know it was committed via the successful join response.
+            commit(configuration);
 
             // Cancel the join timer.
             cancelJoinTimer();
@@ -486,7 +491,11 @@ final class ClusterState implements Cluster, AutoCloseable {
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
-        configure(new Configuration(response.index(), response.members()));
+        Configuration configuration = new Configuration(response.index(), response.members());
+
+        // Configure the cluster and commit the configuration as we know the successful response
+        // indicates commitment.
+        configure(configuration).commit(configuration);
         future.complete(null);
       }
     });
@@ -520,7 +529,13 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return The cluster state.
    */
   ClusterState commit(Configuration configuration) {
-    context.getMetaStore().storeConfiguration(configuration);
+    // If the local member has been removed from the committed configuration, transition the local member.
+    if (!configuration.members().contains(member))
+      context.transition(Member.Type.INACTIVE);
+
+    // If the local stored configuration is older than the committed configuration, overwrite it.
+    if (context.getMetaStore().loadConfiguration().index() < configuration.index())
+      context.getMetaStore().storeConfiguration(configuration);
     return this;
   }
 
@@ -542,7 +557,6 @@ final class ClusterState implements Cluster, AutoCloseable {
     for (Member member : configuration.members()) {
       if (member.equals(this.member)) {
         this.member.update(member.type()).update(member.clientAddress());
-        context.transition(this.member.type());
       } else {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
@@ -584,6 +598,13 @@ final class ClusterState implements Cluster, AutoCloseable {
     // If the local member is not part of the configuration, set its type to null.
     if (!configuration.members().contains(this.member)) {
       this.member.update(Member.Type.INACTIVE);
+    }
+
+    // Transition the local member only if the member is not listed as INACTIVE.
+    // Configuration changes that remove the local member from the cluster are only applied
+    // to the local server upon commitment. This ensures that e.g. a leader that's removing
+    // itself from the configuration can commit the configuration change prior to shutting down.
+    if (this.member.type() != Member.Type.INACTIVE) {
       context.transition(this.member.type());
     }
 
