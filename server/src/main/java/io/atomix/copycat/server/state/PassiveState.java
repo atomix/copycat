@@ -54,14 +54,18 @@ class PassiveState extends ReserveState {
 
   @Override
   public CompletableFuture<AbstractState> open() {
-    return super.open().thenRun(this::truncateUncommittedEntries).thenApply(v -> this);
+    return super.open()
+      .thenRun(this::truncateUncommittedEntries)
+      .thenApply(v -> this);
   }
 
   /**
    * Truncates uncommitted entries from the log.
    */
   private void truncateUncommittedEntries() {
-    context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+    if (type() == CopycatServer.State.PASSIVE) {
+      context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+    }
   }
 
   @Override
