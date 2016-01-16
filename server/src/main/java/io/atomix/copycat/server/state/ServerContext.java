@@ -33,17 +33,14 @@ import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
-import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
  * Raft server state.
@@ -77,8 +74,6 @@ public class ServerContext implements AutoCloseable {
   @SuppressWarnings("unchecked")
   public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
     this.name = Assert.notNull(name, "name");
-    ServerMember member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress);
-    this.cluster = new ClusterState(this, member, type);
     this.storage = Assert.notNull(storage, "storage");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
@@ -94,26 +89,14 @@ public class ServerContext implements AutoCloseable {
     resetLog();
 
     // Create a state machine executor and configure the state machine.
-    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + member.serverAddress() + "-state-%d", threadContext.serializer().clone());
+    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + serverAddress + "-state-%d", threadContext.serializer().clone());
     this.stateMachine = new ServerStateMachine(userStateMachine, this, stateContext);
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
 
-    // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
-    Configuration configuration = meta.loadConfiguration();
-    if (configuration != null) {
-      LOGGER.info("{} - Loaded {}", cluster.member().address(), configuration);
-      cluster.configure(configuration.index(), configuration.members());
-    } else if (members.contains(member.serverAddress())) {
-      Set<Member> activeMembers = members.stream().filter(m -> !m.equals(member.serverAddress())).map(m -> new ServerMember(Member.Type.ACTIVE, m, null)).collect(Collectors.toSet());
-      activeMembers.add(new ServerMember(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
-      cluster.configure(0, activeMembers);
-    } else {
-      Set<Member> activeMembers = members.stream().map(m -> new ServerMember(Member.Type.ACTIVE, m, null)).collect(Collectors.toSet());
-      cluster.configure(0, activeMembers);
-    }
+    this.cluster = new ClusterState(type, serverAddress, clientAddress, members, this);
   }
 
   /**
@@ -350,7 +333,6 @@ public class ServerContext implements AutoCloseable {
    */
   ServerContext setCommitIndex(long commitIndex) {
     Assert.argNot(commitIndex < 0, "commit index must be positive");
-    Assert.argNot(commitIndex < this.commitIndex, "cannot decrease commit index");
     this.commitIndex = Math.max(this.commitIndex, commitIndex);
     log.commit(Math.min(this.commitIndex, log.lastIndex()));
     return this;
@@ -520,6 +502,34 @@ public class ServerContext implements AutoCloseable {
   }
 
   /**
+   * Transitions the server to the base state for the given member type.
+   */
+  protected void transition(Member.Type type) {
+    switch (type) {
+      case ACTIVE:
+        if (!(state instanceof ActiveState)) {
+          transition(CopycatServer.State.FOLLOWER);
+        }
+        break;
+      case PASSIVE:
+        if (this.state.type() != CopycatServer.State.PASSIVE) {
+          transition(CopycatServer.State.PASSIVE);
+        }
+        break;
+      case RESERVE:
+        if (this.state.type() != CopycatServer.State.RESERVE) {
+          transition(CopycatServer.State.RESERVE);
+        }
+        break;
+      default:
+        if (this.state.type() != CopycatServer.State.INACTIVE) {
+          transition(CopycatServer.State.INACTIVE);
+        }
+        break;
+    }
+  }
+
+  /**
    * Transition handler.
    */
   public void transition(CopycatServer.State state) {
@@ -531,12 +541,11 @@ public class ServerContext implements AutoCloseable {
 
     LOGGER.info("{} - Transitioning to {}", cluster.member().address(), state);
 
-    if (this.state != null) {
-      try {
-        this.state.close().get();
-      } catch (InterruptedException | ExecutionException e) {
-        throw new IllegalStateException("failed to close Raft state", e);
-      }
+    // Close the old state.
+    try {
+      this.state.close().get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IllegalStateException("failed to close Raft state", e);
     }
 
     // Force state transitions to occur synchronously in order to prevent race conditions.

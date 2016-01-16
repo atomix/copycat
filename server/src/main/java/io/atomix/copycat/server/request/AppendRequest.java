@@ -23,6 +23,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
 import io.atomix.copycat.server.storage.entry.Entry;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -155,7 +156,7 @@ public class AppendRequest extends AbstractRequest {
     globalIndex = buffer.readLong();
 
     int numEntries = buffer.readInt();
-    entries.clear();
+    entries = new ArrayList<>(numEntries);
     for (int i = 0; i < numEntries; i++) {
       long index = buffer.readLong();
       Entry entry = serializer.readObject(buffer);

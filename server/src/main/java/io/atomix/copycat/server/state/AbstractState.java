@@ -77,10 +77,41 @@ abstract class AbstractState implements Managed<AbstractState> {
   }
 
   /**
-   * Transitions to a new state.
+   * Forwards the given request to the leader if possible.
    */
-  protected void transition(CopycatServer.State state) {
-    context.transition(state);
+  protected <T extends Request, U extends Response> CompletableFuture<U> forward(T request) {
+    CompletableFuture<U> future = new CompletableFuture<>();
+    context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
+      if (connectError == null) {
+        connection.<T, U>send(request).whenComplete((response, responseError) -> {
+          if (responseError == null) {
+            future.complete(response);
+          } else {
+            future.completeExceptionally(responseError);
+          }
+        });
+      } else {
+        future.completeExceptionally(connectError);
+      }
+    });
+    return future;
+  }
+
+  /**
+   * Updates the term and leader.
+   */
+  protected boolean updateTermAndLeader(long term, int leader) {
+    // If the request indicates a term that is greater than the current term or no leader has been
+    // set for the current term, update leader and term.
+    if (term > context.getTerm() || (term == context.getTerm() && context.getLeader() == null)) {
+      context.setTerm(term);
+      context.setLeader(leader);
+
+      // Reset the current cluster configuration to the last committed configuration when a leader change occurs.
+      context.getClusterState().reset();
+      return true;
+    }
+    return false;
   }
 
   /**

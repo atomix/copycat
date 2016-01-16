@@ -28,6 +28,7 @@ import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.ReconfigureRequest;
+import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -209,13 +210,13 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
     cluster.getContext().getAbstractState().reconfigure(ReconfigureRequest.builder()
-      .withIndex(cluster.getVersion())
+      .withIndex(cluster.getConfiguration().index())
       .withMember(new ServerMember(type, serverAddress(), clientAddress()))
       .build()).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           cancelConfigureTimer();
-          cluster.configure(response.index(), response.members());
+          cluster.configure(new Configuration(response.index(), response.members()));
           future.complete(null);
         } else if (response.error() == null) {
           cancelConfigureTimer();

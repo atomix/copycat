@@ -30,6 +30,7 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.*;
+import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -116,7 +117,7 @@ final class LeaderState extends ActiveState {
           future.complete(null);
         } else {
           context.setLeader(0);
-          transition(CopycatServer.State.FOLLOWER);
+          context.transition(CopycatServer.State.FOLLOWER);
         }
       }
     });
@@ -225,7 +226,7 @@ final class LeaderState extends ActiveState {
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getClusterState().configure(entry.getIndex(), entry.getMembers());
+      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getMembers()));
     }
 
     return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
@@ -256,7 +257,7 @@ final class LeaderState extends ActiveState {
     if (context.getCluster().member(request.member().id()) != null) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
-        .withIndex(context.getClusterState().getVersion())
+        .withIndex(context.getClusterState().getConfiguration().index())
         .withMembers(context.getCluster().members())
         .build()));
     }
@@ -307,7 +308,7 @@ final class LeaderState extends ActiveState {
     // If the configuration request index is less than the last known configuration index for
     // the leader, fail the request and force the requester to retry. This ensures that servers
     // aren't basing their configuration change requests on out-of-date membership information.
-    if (request.index() > 0 && request.index() < context.getClusterState().getVersion()) {
+    if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index()) {
       return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
         .build()));
@@ -406,6 +407,7 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<PollResponse> poll(final PollRequest request) {
+    logRequest(request);
     return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(Response.Status.OK)
       .withTerm(context.getTerm())
@@ -415,12 +417,12 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
-    if (request.term() > context.getTerm()) {
+    if (updateTermAndLeader(request.term(), 0)) {
       LOGGER.debug("{} - Received greater term", context.getCluster().member().address());
-      context.setLeader(0);
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(CopycatServer.State.FOLLOWER);
       return super.vote(request);
     } else {
+      logRequest(request);
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -432,9 +434,12 @@ final class LeaderState extends ActiveState {
   @Override
   public CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
-    if (request.term() > context.getTerm()) {
-      return super.append(request);
+    if (updateTermAndLeader(request.term(), request.leader())) {
+      CompletableFuture<AppendResponse> future = super.append(request);
+      context.transition(CopycatServer.State.FOLLOWER);
+      return future;
     } else if (request.term() < context.getTerm()) {
+      logRequest(request);
       return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -442,8 +447,7 @@ final class LeaderState extends ActiveState {
         .withLogIndex(context.getLog().lastIndex())
         .build()));
     } else {
-      context.setLeader(request.leader());
-      transition(CopycatServer.State.FOLLOWER);
+      context.setLeader(request.leader()).transition(CopycatServer.State.FOLLOWER);
       return super.append(request);
     }
   }

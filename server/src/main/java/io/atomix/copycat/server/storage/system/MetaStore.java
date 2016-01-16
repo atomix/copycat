@@ -21,6 +21,8 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
@@ -36,6 +38,7 @@ import java.io.File;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class MetaStore implements AutoCloseable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(MetaStore.class);
   private final Storage storage;
   private final Buffer buffer;
 
@@ -56,7 +59,8 @@ public class MetaStore implements AutoCloseable {
    * @param term The current server term.
    * @return The metastore.
    */
-  public MetaStore storeTerm(long term) {
+  public synchronized MetaStore storeTerm(long term) {
+    LOGGER.debug("Store term {}", term);
     buffer.writeLong(0, term).flush();
     return this;
   }
@@ -66,7 +70,7 @@ public class MetaStore implements AutoCloseable {
    *
    * @return The stored server term.
    */
-  public long loadTerm() {
+  public synchronized long loadTerm() {
     return buffer.readLong(0);
   }
 
@@ -76,7 +80,8 @@ public class MetaStore implements AutoCloseable {
    * @param vote The server vote.
    * @return The metastore.
    */
-  public MetaStore storeVote(int vote) {
+  public synchronized MetaStore storeVote(int vote) {
+    LOGGER.debug("Store vote {}", vote);
     buffer.writeInt(8, vote).flush();
     return this;
   }
@@ -86,7 +91,7 @@ public class MetaStore implements AutoCloseable {
    *
    * @return The last vote for the server.
    */
-  public int loadVote() {
+  public synchronized int loadVote() {
     return buffer.readInt(8);
   }
 
@@ -96,9 +101,9 @@ public class MetaStore implements AutoCloseable {
    * @param configuration The current cluster configuration.
    * @return The metastore.
    */
-  public MetaStore storeConfiguration(Configuration configuration) {
-    buffer.position(12).writeLong(configuration.index());
-    storage.serializer().writeObject(configuration.members(), buffer);
+  public synchronized MetaStore storeConfiguration(Configuration configuration) {
+    LOGGER.debug("Store configuration {}", configuration);
+    storage.serializer().writeObject(configuration.members(), buffer.position(12).writeByte(1).writeLong(configuration.index()));
     buffer.flush();
     return this;
   }
@@ -108,11 +113,10 @@ public class MetaStore implements AutoCloseable {
    *
    * @return The current cluster configuration.
    */
-  public Configuration loadConfiguration() {
-    long index = buffer.position(12).readLong();
-    if (index > 0) {
+  public synchronized Configuration loadConfiguration() {
+    if (buffer.position(12).readByte() == 1) {
       return new Configuration(
-        index,
+        buffer.readLong(),
         storage.serializer().readObject(buffer)
       );
     }
@@ -120,14 +124,14 @@ public class MetaStore implements AutoCloseable {
   }
 
   @Override
-  public void close() {
+  public synchronized void close() {
     buffer.close();
   }
 
   /**
    * Deletes the metastore.
    */
-  public void delete() {
+  public synchronized void delete() {
     if (buffer instanceof FileBuffer) {
       ((FileBuffer) buffer).delete();
     }

@@ -179,7 +179,7 @@ final class LeaderAppender extends AbstractAppender {
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getVersion()) {
+    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getConfiguration().index()) {
       if (canConfigure(member)) {
         sendConfigureRequest(member, buildConfigureRequest(member));
       }

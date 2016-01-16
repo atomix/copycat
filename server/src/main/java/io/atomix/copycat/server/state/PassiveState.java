@@ -71,15 +71,10 @@ class PassiveState extends ReserveState {
   @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
+    logRequest(request);
+    updateTermAndLeader(request.term(), request.leader());
 
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
-    }
-
-    return CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
+    return CompletableFuture.completedFuture(logResponse(handleAppend(request)));
   }
 
   /**
@@ -138,10 +133,9 @@ class PassiveState extends ReserveState {
       }
     }
 
-    // If we've made it this far, apply commits and send a successful response.
-    // Apply commits to the state machine asynchronously so the append request isn't blocked on I/O.
+    // Update the context commit index and apply commits to the state machine.
     context.setCommitIndex(commitIndex);
-    context.getThreadContext().execute(() -> context.getStateMachine().applyAll(commitIndex));
+    context.getStateMachine().applyAll(context.getCommitIndex());
 
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
@@ -251,6 +245,7 @@ class PassiveState extends ReserveState {
   protected CompletableFuture<InstallResponse> install(InstallRequest request) {
     context.checkThread();
     logRequest(request);
+    updateTermAndLeader(request.term(), request.leader());
 
     // If the request is for a lesser term, reject the request.
     if (request.term() < context.getTerm()) {
@@ -258,13 +253,6 @@ class PassiveState extends ReserveState {
         .withStatus(Response.Status.ERROR)
         .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
-    }
-
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
     }
 
     // If a snapshot is currently being received and the snapshot versions don't match, simply

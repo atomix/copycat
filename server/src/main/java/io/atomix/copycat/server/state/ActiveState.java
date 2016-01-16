@@ -45,22 +45,18 @@ abstract class ActiveState extends PassiveState {
   @Override
   protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
+    logRequest(request);
 
     // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    boolean transition = false;
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
-      transition = true;
-    }
+    // assign that term and leader to the current context and transition to follower.
+    boolean transition = updateTermAndLeader(request.term(), request.leader());
 
-    CompletableFuture<AppendResponse> future = CompletableFuture.completedFuture(logResponse(handleAppend(logRequest(request))));
+    CompletableFuture<AppendResponse> future = CompletableFuture.completedFuture(logResponse(handleAppend(request)));
 
     // If a transition is required then transition back to the follower state.
     // If the node is already a follower then the transition will be ignored.
     if (transition) {
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(CopycatServer.State.FOLLOWER);
     }
     return future;
   }
@@ -168,8 +164,8 @@ abstract class ActiveState extends PassiveState {
     // If we've made it this far, apply commits and send a successful response.
     // Apply commits to the state machine asynchronously so the append request isn't blocked on I/O.
     long commitIndex = request.commitIndex();
-    context.setCommitIndex(Math.max(context.getCommitIndex(), commitIndex));
-    context.getThreadContext().execute(() -> context.getStateMachine().applyAll(commitIndex));
+    context.setCommitIndex(commitIndex);
+    context.getStateMachine().applyAll(context.getCommitIndex());
 
     return AppendResponse.builder()
       .withStatus(Response.Status.OK)
@@ -182,20 +178,15 @@ abstract class ActiveState extends PassiveState {
   @Override
   protected CompletableFuture<PollResponse> poll(PollRequest request) {
     context.checkThread();
-    return CompletableFuture.completedFuture(logResponse(handlePoll(logRequest(request))));
+    logRequest(request);
+    updateTermAndLeader(request.term(), 0);
+    return CompletableFuture.completedFuture(logResponse(handlePoll(request)));
   }
 
   /**
    * Handles a poll request.
    */
   protected PollResponse handlePoll(PollRequest request) {
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context.
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
-    }
-
-
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
@@ -224,18 +215,15 @@ abstract class ActiveState extends PassiveState {
   @Override
   protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
+    logRequest(request);
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context.
-    boolean transition = false;
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
-      transition = true;
-    }
+    boolean transition = updateTermAndLeader(request.term(), 0);
 
-    CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(logRequest(request))));
+    CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(request)));
     if (transition) {
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(CopycatServer.State.FOLLOWER);
     }
     return future;
   }
