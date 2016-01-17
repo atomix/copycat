@@ -26,6 +26,8 @@ import io.atomix.copycat.server.response.VoteResponse;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.util.Collections;
+
 import static org.testng.Assert.*;
 
 /**
@@ -42,12 +44,14 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
     };
   }
 
+  @SuppressWarnings("unchecked")
   public void testAppendUpdatesLeaderAndTerm() throws Throwable {
     runOnServer(() -> {
       serverContext.setTerm(1);
       AppendRequest request = AppendRequest.builder()
           .withTerm(2)
           .withLeader(members.get(1).hashCode())
+          .withEntries(Collections.EMPTY_LIST)
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
@@ -64,11 +68,13 @@ public class ActiveStateTest extends AbstractStateTest<ActiveState> {
     });
   }
 
+  @SuppressWarnings("unchecked")
   public void testAppendTermUpdatedAndTransitionedToFollower() throws Throwable {
     runOnServer(() -> {
       serverContext.setTerm(1);
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
+        .withEntries(Collections.EMPTY_LIST)
         .withCommitIndex(0)
         .withGlobalIndex(0)
         .build();
