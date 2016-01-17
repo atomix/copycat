@@ -81,7 +81,18 @@ class PassiveState extends ReserveState {
    * Handles an append request.
    */
   private AppendResponse handleAppend(AppendRequest request) {
-    if (request.logIndex() > 0) {
+    // If the request term is less than the current term then immediately
+    // reply false and return our current term. The leader will receive
+    // the updated term and step down.
+    if (request.term() < context.getTerm()) {
+      LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
+      return AppendResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withSucceeded(false)
+        .withLogIndex(context.getLog().lastIndex())
+        .build();
+    } else if (request.logIndex() != 0) {
       return checkPreviousEntry(request);
     } else {
       return appendEntries(request);
@@ -121,7 +132,7 @@ class PassiveState extends ReserveState {
     for (Entry entry : request.entries()) {
       // If the entry index is greater than the last index and less than the commit index, append the entry.
       // We perform no additional consistency checks here since passive members may only receive committed entries.
-      if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() < commitIndex) {
+      if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
       }
