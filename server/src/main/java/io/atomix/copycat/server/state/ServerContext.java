@@ -59,7 +59,7 @@ public class ServerContext implements AutoCloseable {
   private final Storage storage;
   private final MetaStore meta;
   private Log log;
-  private final SnapshotStore snapshot;
+  private SnapshotStore snapshot;
   private ServerStateMachine stateMachine;
   private final ThreadContext stateContext;
   private final ConnectionManager connections;
@@ -84,9 +84,6 @@ public class ServerContext implements AutoCloseable {
 
     // Open the meta store.
     this.meta = storage.openMetaStore(name);
-
-    // Open the snapshot store.
-    this.snapshot = storage.openSnapshotStore(name);
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
@@ -422,13 +419,23 @@ public class ServerContext implements AutoCloseable {
    * @return The server context.
    */
   ServerContext reset() {
+    // Delete the existing log.
     if (log != null) {
       log.close();
       log.delete();
     }
 
+    // Delete the existing snapshot store.
+    if (snapshot != null) {
+      snapshot.close();
+      snapshot.delete();
+    }
+
     // Open the log.
     log = storage.openLog(name);
+
+    // Open the snapshot store.
+    snapshot = storage.openSnapshotStore(name);
 
     // Create a new user state machine.
     StateMachine stateMachine = stateMachineFactory.get();
