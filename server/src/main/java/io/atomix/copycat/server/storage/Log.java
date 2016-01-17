@@ -323,6 +323,12 @@ public class Log implements AutoCloseable {
     // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
     // based on the type of entry and whether it has been cleaned.
     if (entry != null) {
+      // The last entry in the log is always visible. This is necessary to ensure that candidates
+      // can properly read the last entry term for the voting protocol.
+      if (index == lastIndex()) {
+        return entry;
+      }
+
       Compaction.Mode mode = entry.getCompactionMode();
       if (mode == Compaction.Mode.DEFAULT) {
         mode = compactor.getDefaultCompactionMode();
