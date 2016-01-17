@@ -335,7 +335,7 @@ abstract class AbstractAppender implements AutoCloseable {
       resetNextIndex(member);
 
       // If there are more entries to send then attempt to send another commit.
-      if (hasMoreEntries(member)) {
+      if (response.logIndex() != request.logIndex() && hasMoreEntries(member)) {
         appendEntries(member);
       }
     }
