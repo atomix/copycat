@@ -111,7 +111,7 @@ final class FollowerState extends ActiveState {
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
       LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
-      transition(CopycatServer.State.LEADER);
+      context.transition(CopycatServer.State.LEADER);
       return;
     }
 
@@ -119,7 +119,7 @@ final class FollowerState extends ActiveState {
       // If a majority of the cluster indicated they would vote for us then transition to candidate.
       complete.set(true);
       if (elected) {
-        transition(CopycatServer.State.CANDIDATE);
+        context.transition(CopycatServer.State.CANDIDATE);
       } else {
         resetHeartbeatTimeout();
       }

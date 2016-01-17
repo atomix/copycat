@@ -23,6 +23,7 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -53,38 +54,11 @@ class ReserveState extends AbstractState {
     }).thenApply(v -> this);
   }
 
-  /**
-   * Forwards the given request to the leader if possible.
-   */
-  protected <T extends Request, U extends Response> CompletableFuture<U> forward(T request) {
-    CompletableFuture<U> future = new CompletableFuture<>();
-    context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
-      if (connectError == null) {
-        connection.<T, U>send(request).whenComplete((response, responseError) -> {
-          if (responseError == null) {
-            future.complete(response);
-          } else {
-            future.completeExceptionally(responseError);
-          }
-        });
-      } else {
-        future.completeExceptionally(connectError);
-      }
-    });
-    return future;
-  }
-
   @Override
   protected CompletableFuture<AppendResponse> append(AppendRequest request) {
     context.checkThread();
     logRequest(request);
-
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
-    }
+    updateTermAndLeader(request.term(), request.leader());
 
     return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
       .withStatus(Response.Status.OK)
@@ -109,6 +83,7 @@ class ReserveState extends AbstractState {
   protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
+    updateTermAndLeader(request.term(), 0);
 
     return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
       .withStatus(Response.Status.ERROR)
@@ -120,6 +95,7 @@ class ReserveState extends AbstractState {
   protected CompletableFuture<CommandResponse> command(CommandRequest request) {
     context.checkThread();
     logRequest(request);
+
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -134,6 +110,7 @@ class ReserveState extends AbstractState {
   protected CompletableFuture<QueryResponse> query(QueryRequest request) {
     context.checkThread();
     logRequest(request);
+
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -296,40 +273,11 @@ class ReserveState extends AbstractState {
   protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
     context.checkThread();
     logRequest(request);
+    updateTermAndLeader(request.term(), request.leader());
 
-    // If the request indicates a term that is greater than the current term then
-    // assign that term and leader to the current context and step down as leader.
-    if (request.term() > context.getTerm() || (request.term() == context.getTerm() && context.getLeader() == null)) {
-      context.setTerm(request.term());
-      context.setLeader(request.leader());
-    }
-
-    // Store the previous member type for comparison to determine whether this node should transition.
-    Member.Type previousType = context.getCluster().member().type();
-
-    // Configure the cluster membership.
-    context.getClusterState().configure(request.index(), request.members());
-
-    // If the local member type changed, transition the state as appropriate.
-    // ACTIVE servers are initialized to the FOLLOWER state but may transition to CANDIDATE or LEADER.
-    // PASSIVE servers are transitioned to the PASSIVE state.
-    Member.Type type = context.getCluster().member().type();
-    if (previousType != type) {
-      switch (type) {
-        case ACTIVE:
-          context.transition(CopycatServer.State.FOLLOWER);
-          break;
-        case PROMOTABLE:
-        case PASSIVE:
-          context.transition(CopycatServer.State.PASSIVE);
-          break;
-        case RESERVE:
-          context.transition(CopycatServer.State.RESERVE);
-          break;
-        default:
-          transition(CopycatServer.State.INACTIVE);
-      }
-    }
+    // Configure the cluster membership. This will cause this server to transition to the
+    // appropriate state if its type has changed.
+    context.getClusterState().configure(new Configuration(request.index(), request.members()));
 
     return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
       .withStatus(Response.Status.OK)

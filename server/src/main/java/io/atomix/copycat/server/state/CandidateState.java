@@ -103,7 +103,7 @@ final class CandidateState extends ActiveState {
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
       LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
-      transition(CopycatServer.State.LEADER);
+      context.transition(CopycatServer.State.LEADER);
       return;
     }
 
@@ -114,9 +114,9 @@ final class CandidateState extends ActiveState {
     final Quorum quorum = new Quorum(context.getClusterState().getQuorum(), (elected) -> {
       complete.set(true);
       if (elected) {
-        transition(CopycatServer.State.LEADER);
+        context.transition(CopycatServer.State.LEADER);
       } else {
-        transition(CopycatServer.State.FOLLOWER);
+        context.transition(CopycatServer.State.FOLLOWER);
       }
     });
 
@@ -158,7 +158,7 @@ final class CandidateState extends ActiveState {
                 LOGGER.debug("{} - Received greater term from {}", context.getCluster().member().address(), member);
                 context.setTerm(response.term());
                 complete.set(true);
-                transition(CopycatServer.State.FOLLOWER);
+                context.transition(CopycatServer.State.FOLLOWER);
               } else if (!response.voted()) {
                 LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().member().address(), member);
                 quorum.fail();
@@ -184,7 +184,7 @@ final class CandidateState extends ActiveState {
     // assign that term and leader to the current context and step down as a candidate.
     if (request.term() >= context.getTerm()) {
       context.setTerm(request.term());
-      transition(CopycatServer.State.FOLLOWER);
+      context.transition(CopycatServer.State.FOLLOWER);
     }
     return super.append(request);
   }
@@ -192,12 +192,11 @@ final class CandidateState extends ActiveState {
   @Override
   public CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
+    logRequest(request);
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as a candidate.
-    if (request.term() > context.getTerm()) {
-      context.setTerm(request.term());
-      transition(CopycatServer.State.FOLLOWER);
+    if (updateTermAndLeader(request.term(), 0)) {
       return super.vote(request);
     }
 

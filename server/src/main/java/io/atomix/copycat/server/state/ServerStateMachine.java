@@ -29,12 +29,12 @@ import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
+import io.atomix.copycat.server.storage.system.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Internal server state machine.
@@ -252,38 +252,23 @@ final class ServerStateMachine implements AutoCloseable {
    * made internally since linearizable events don't have to be waited to complete the command.
    *
    * @param index The index up to which to apply commits.
-   * @return A completable future to be completed once all commits have been applied.
    */
-  public CompletableFuture<Void> applyAll(long index) {
+  public void applyAll(long index) {
     if (!state.getLog().isOpen())
-      return CompletableFuture.completedFuture(null);
+      return;
 
     // If the effective commit index is greater than the last index applied to the state machine then apply remaining entries.
     long lastIndex = Math.min(index, state.getLog().lastIndex());
     if (lastIndex > lastApplied) {
-      long entriesToApply = lastIndex - lastApplied;
-
-      CompletableFuture<Void> future = new CompletableFuture<>();
-
-      AtomicInteger counter = new AtomicInteger();
       for (long i = lastApplied + 1; i <= lastIndex; i++) {
         Entry entry = state.getLog().get(i);
         if (entry != null) {
           LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
-          apply(entry, false).whenComplete((result, error) -> {
-            if (counter.incrementAndGet() == entriesToApply) {
-              future.complete(null);
-            }
-            entry.release();
-          });
-        } else {
-          counter.incrementAndGet();
+          apply(entry, false).whenComplete((result, error) -> entry.release());
         }
         setLastApplied(i);
       }
-      return future;
     }
-    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -297,20 +282,21 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once the commit has been applied.
    */
   public CompletableFuture<?> apply(long index) {
+    // If entries remain to be applied prior to this entry then synchronously apply them.
     if (index > lastApplied + 1) {
       applyAll(index - 1);
     }
 
-    Entry entry = state.getLog().get(index);
-    if (entry != null) {
-      try {
-        return apply(entry).whenComplete((result, error) -> entry.release());
-      } finally {
-        setLastApplied(index);
+    // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
+    // simply update the last applied index and return a null result.
+    try (Entry entry = state.getLog().get(index)) {
+      if (entry != null) {
+        return apply(entry);
+      } else {
+        return CompletableFuture.completedFuture(null);
       }
-    } else {
+    } finally {
       setLastApplied(index);
-      return CompletableFuture.completedFuture(null);
     }
   }
 
@@ -364,13 +350,18 @@ final class ServerStateMachine implements AutoCloseable {
    * entry since it was overwritten by a more recent committed configuration entry.
    */
   private CompletableFuture<Void> apply(ConfigurationEntry entry) {
-    long previousConfiguration = configuration;
-    configuration = entry.getIndex();
-    // Immediately clean the commit for the previous configuration since configuration entries
-    // completely override the previous configuration.
-    if (previousConfiguration > 0) {
-      state.getLog().clean(previousConfiguration);
+    // Commit the configuration to disk in a separate configuration file. We commit the configuration change
+    // in the state machine to ensure that it's only persisted to disk once it's committed. Server clusters
+    // will use the persisted configuration to reset the cluster state in the event of a leader change.
+    state.getClusterState().commit(new Configuration(entry.getIndex(), entry.getMembers()));
+
+    // Immediately clean the commit for the existing configuration since configuration entries
+    // completely override the existing configuration.
+    if (configuration > 0) {
+      state.getLog().clean(configuration);
     }
+    configuration = entry.getIndex();
+
     return CompletableFuture.completedFuture(null);
   }
 

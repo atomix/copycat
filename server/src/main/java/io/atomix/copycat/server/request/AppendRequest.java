@@ -63,7 +63,7 @@ public class AppendRequest extends AbstractRequest {
   private int leader;
   private long logIndex;
   private long logTerm;
-  private List<Entry> entries = new ArrayList<>(128);
+  private List<Entry> entries;
   private long commitIndex = -1;
   private long globalIndex = -1;
 
@@ -156,7 +156,7 @@ public class AppendRequest extends AbstractRequest {
     globalIndex = buffer.readLong();
 
     int numEntries = buffer.readInt();
-    entries.clear();
+    entries = new ArrayList<>(numEntries);
     for (int i = 0; i < numEntries; i++) {
       long index = buffer.readLong();
       Entry entry = serializer.readObject(buffer);
@@ -307,8 +307,8 @@ public class AppendRequest extends AbstractRequest {
     }
 
     /**
-     * @throws IllegalStateException if the term, log term, log index, commit index, or global index are not positive, or 
-     * if entries is null 
+     * @throws IllegalStateException if the term, log term, log index, commit index, or global index are not positive, or
+     * if entries is null
      */
     @Override
     public AppendRequest build() {

@@ -43,19 +43,9 @@ final class FollowerAppender extends AbstractAppender {
     if (!open)
       return;
 
-    // If the member term is less than the current term or the member's configuration index is less
-    // than the local configuration index, send a configuration update to the member.
-    // Ensure that only one configuration attempt per member is attempted at any given time by storing the
-    // member state in a set of configuring members.
-    // Once the configuration is complete sendAppendRequest will be called recursively.
-    if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getVersion()) {
-      if (canConfigure(member)) {
-        sendConfigureRequest(member, buildConfigureRequest(member));
-      }
-    }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
-    else if (context.getSnapshotStore().currentSnapshot() != null
+    if (context.getSnapshotStore().currentSnapshot() != null
       && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (canInstall(member)) {

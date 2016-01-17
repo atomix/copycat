@@ -93,19 +93,6 @@ public interface Member {
     PASSIVE,
 
     /**
-     * Represents a member that is being caught up by the leader to be {@link #promote() promoted} to
-     * a full {@link #ACTIVE} voting member.
-     * <p>
-     * The {@code PROMOTABLE} member type is a transitive member type that is a prerequisite to becoming
-     * a full {@link #ACTIVE} voting member. While in this state, promotable nodes receive replicated
-     * log entries from leaders via normal Raft replication mechanisms, but promotable members do not
-     * participate in the Raft voting algorithm. This allows leaders to catch up promotable members without
-     * negatively impacting availability. Once a promotable member has caught up with the leader, the leader
-     * will promote the promotable member to {@link #ACTIVE}.
-     */
-    PROMOTABLE,
-
-    /**
      * Represents a full voting member of the Raft cluster which participates fully in leader election
      * and replication algorithms.
      * <p>

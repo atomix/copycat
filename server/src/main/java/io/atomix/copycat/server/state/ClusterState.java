@@ -38,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Cluster state.
@@ -50,7 +51,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final ServerContext context;
   private final ServerMember member;
   private final Member.Type initialType;
-  private long index = -1;
+  private Configuration configuration;
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
   private final Map<Address, MemberState> addressMap = new ConcurrentHashMap<>();
   private final List<MemberState> members = new ArrayList<>();
@@ -62,10 +63,60 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final Listeners<Member> joinListeners = new Listeners<>();
   private final Listeners<Member> leaveListeners = new Listeners<>();
 
-  ClusterState(ServerContext context, ServerMember member, Member.Type initialType) {
+  ClusterState(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, ServerContext context) {
+    this.initialType = Assert.notNull(type, "type");
+    this.member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress);
     this.context = Assert.notNull(context, "context");
-    this.member = Assert.notNull(member, "member");
-    this.initialType = Assert.notNull(initialType, "initialType");
+
+    // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
+    configuration = context.getMetaStore().loadConfiguration();
+    if (configuration == null) {
+      Set<Member> activeMembers;
+
+      // If the provided server members set contains the local server member, create an active members
+      // list including the local member.
+      if (members.contains(serverAddress)) {
+        activeMembers = members.stream()
+          .filter(m -> !m.equals(member.serverAddress()))
+          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null))
+          .collect(Collectors.toSet());
+        activeMembers.add(new ServerMember(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
+      }
+      // If the provided members set does not contain the local server member, exclude it from active members.
+      else {
+        activeMembers = members.stream()
+          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null))
+          .collect(Collectors.toSet());
+      }
+
+      // Create a configuration for the 0 index.
+      configuration = new Configuration(0, activeMembers);
+    }
+
+    // Iterate through members in the new configuration and add remote members.
+    for (Member member : configuration.members()) {
+      if (member.equals(this.member)) {
+        this.member.update(member.type()).update(member.clientAddress());
+      } else {
+        // If the member state doesn't already exist, create it.
+        MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress()), this);
+        state.resetState(context.getLog());
+        this.members.add(state);
+        membersMap.put(member.id(), state);
+        addressMap.put(member.address(), state);
+
+        // Add the member to a type specific map.
+        List<MemberState> memberType = memberTypes.get(member.type());
+        if (memberType == null) {
+          memberType = new ArrayList<>();
+          memberTypes.put(member.type(), memberType);
+        }
+        memberType.add(state);
+      }
+    }
+
+    // Store the configuration on disk to ensure that the cluster can fall back to the previous configuration.
+    context.getMetaStore().storeConfiguration(configuration);
   }
 
   /**
@@ -75,6 +126,15 @@ final class ClusterState implements Cluster, AutoCloseable {
    */
   ServerContext getContext() {
     return context;
+  }
+
+  /**
+   * Returns the cluster configuration.
+   *
+   * @return The cluster configuration.
+   */
+  Configuration getConfiguration() {
+    return configuration;
   }
 
   @Override
@@ -152,15 +212,6 @@ final class ClusterState implements Cluster, AutoCloseable {
   }
 
   /**
-   * Returns the cluster state index.
-   *
-   * @return The cluster state index.
-   */
-  long getVersion() {
-    return index;
-  }
-
-  /**
    * Returns a member by ID.
    *
    * @param id The member ID.
@@ -210,27 +261,6 @@ final class ClusterState implements Cluster, AutoCloseable {
     List<MemberState> activeMembers = getActiveMemberStates();
     Collections.sort(activeMembers, comparator);
     return activeMembers;
-  }
-
-  /**
-   * Returns a list of promotable members.
-   *
-   * @return A list of promotable members.
-   */
-  List<MemberState> getPromotableMemberStates() {
-    return getRemoteMemberStates(Member.Type.PROMOTABLE);
-  }
-
-  /**
-   * Returns a list of promotable members.
-   *
-   * @param comparator A comparator with which to sort the members list.
-   * @return The sorted members list.
-   */
-  List<MemberState> getPromotableMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> promotableMembers = getPromotableMemberStates();
-    Collections.sort(promotableMembers, comparator);
-    return promotableMembers;
   }
 
   /**
@@ -292,24 +322,16 @@ final class ClusterState implements Cluster, AutoCloseable {
     joinFuture = new CompletableFuture<>();
 
     context.getThreadContext().executor().execute(() -> {
-      // If the server type is defined, that indicates it's a member of the current configuration and
-      // doesn't need to be added to the configuration. Immediately transition to the appropriate state.
-      // Note that we don't complete the join future when transitioning to a valid state since we need
-      // to ensure that the server's configuration has been updated in the cluster before completing the join.
-      switch (member.type()) {
-        case INACTIVE:
-          join(getActiveMemberStates().iterator(), 1);
-          break;
-        case RESERVE:
-          context.transition(CopycatServer.State.RESERVE);
-          break;
-        case PASSIVE:
-        case PROMOTABLE:
-          context.transition(CopycatServer.State.PASSIVE);
-          break;
-        case ACTIVE:
-          context.transition(CopycatServer.State.FOLLOWER);
-          break;
+      // Transition the server to the appropriate state for the local member type.
+      context.transition(member.type());
+
+      // If the local member type is INACTIVE, send a join request to the cluster.
+      // The join future is not completed here in any case - even if the local server is already a member
+      // of the cluster - because the server needs to identify itself to the leader in order to complete
+      // the join. Once the server transitions to an active state, the server will identify itself to the
+      // leader upon learning of the leader. Once the server has identified itself the join will be completed.
+      if (member.type() == Member.Type.INACTIVE) {
+        join(getActiveMemberStates().iterator(), 1);
       }
     });
 
@@ -334,27 +356,23 @@ final class ClusterState implements Cluster, AutoCloseable {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
 
+            Configuration configuration = new Configuration(response.index(), response.members());
+
             // Configure the cluster with the join response.
-            configure(response.index(), response.members());
+            configure(configuration);
+
+            // Commit the configuration as we know it was committed via the successful join response.
+            commit(configuration);
 
             // Cancel the join timer.
             cancelJoinTimer();
 
             // If the local member type is null, that indicates it's not a part of the configuration.
             Member.Type type = member().type();
-            if (type == null) {
+            if (type == null || type == Member.Type.INACTIVE) {
               joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
-            } else if (type == Member.Type.ACTIVE) {
-              context.transition(CopycatServer.State.FOLLOWER);
-              joinFuture.complete(null);
-            } else if (type == Member.Type.PASSIVE || type == Member.Type.PROMOTABLE) {
-              context.transition(CopycatServer.State.PASSIVE);
-              joinFuture.complete(null);
-            } else if (type == Member.Type.RESERVE) {
-              context.transition(CopycatServer.State.RESERVE);
-              joinFuture.complete(null);
             } else {
-              joinFuture.completeExceptionally(new IllegalStateException("unknown member type: " + type));
+              joinFuture.complete(null);
             }
           } else if (response.error() == null) {
             // If the response error is null, that indicates that no error occurred but the leader was
@@ -407,7 +425,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         LOGGER.debug("{} - Sending server identification to {}", member().address(), leader.address());
         context.getConnections().getConnection(leader.serverAddress()).thenCompose(connection -> {
           ReconfigureRequest request = ReconfigureRequest.builder()
-            .withIndex(getVersion())
+            .withIndex(configuration.index())
             .withMember(member())
             .build();
           return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
@@ -473,8 +491,11 @@ final class ClusterState implements Cluster, AutoCloseable {
       .build()).whenComplete((response, error) -> {
       if (error == null && response.status() == Response.Status.OK) {
         cancelLeaveTimer();
-        configure(response.index(), response.members());
-        context.transition(CopycatServer.State.INACTIVE);
+        Configuration configuration = new Configuration(response.index(), response.members());
+
+        // Configure the cluster and commit the configuration as we know the successful response
+        // indicates commitment.
+        configure(configuration).commit(configuration);
         future.complete(null);
       }
     });
@@ -492,23 +513,48 @@ final class ClusterState implements Cluster, AutoCloseable {
   }
 
   /**
-   * Configures the cluster state.
+   * Resets the cluster state to the persisted state.
    *
-   * @param index The cluster state index.
-   * @param members The cluster members.
    * @return The cluster state.
    */
-  ClusterState configure(long index, Collection<Member> members) {
-    if (index <= this.index)
-      return this;
+  ClusterState reset() {
+    configure(context.getMetaStore().loadConfiguration());
+    return this;
+  }
+
+  /**
+   * Commit the given configuration to disk.
+   *
+   * @param configuration The configuration to commit.
+   * @return The cluster state.
+   */
+  ClusterState commit(Configuration configuration) {
+    // If the local member has been removed from the committed configuration, transition the local member.
+    if (!configuration.members().contains(member))
+      context.transition(Member.Type.INACTIVE);
+
+    // If the local stored configuration is older than the committed configuration, overwrite it.
+    if (context.getMetaStore().loadConfiguration().index() < configuration.index())
+      context.getMetaStore().storeConfiguration(configuration);
+    return this;
+  }
+
+  /**
+   * Configures the cluster state.
+   *
+   * @param configuration The cluster configuration.
+   * @return The cluster state.
+   */
+  ClusterState configure(Configuration configuration) {
+    Assert.notNull(configuration, "configuration");
 
     // If the configuration index is less than the currently configured index, ignore it.
     // Configurations can be persisted and applying old configurations can revert newer configurations.
-    if (index <= this.index)
+    if (this.configuration != null && configuration.index() <= this.configuration.index())
       return this;
 
     // Iterate through members in the new configuration, add any missing members, and update existing members.
-    for (Member member : members) {
+    for (Member member : configuration.members()) {
       if (member.equals(this.member)) {
         this.member.update(member.type()).update(member.clientAddress());
       } else {
@@ -550,15 +596,23 @@ final class ClusterState implements Cluster, AutoCloseable {
     }
 
     // If the local member is not part of the configuration, set its type to null.
-    if (!members.contains(this.member)) {
+    if (!configuration.members().contains(this.member)) {
       this.member.update(Member.Type.INACTIVE);
+    }
+
+    // Transition the local member only if the member is not listed as INACTIVE.
+    // Configuration changes that remove the local member from the cluster are only applied
+    // to the local server upon commitment. This ensures that e.g. a leader that's removing
+    // itself from the configuration can commit the configuration change prior to shutting down.
+    if (this.member.type() != Member.Type.INACTIVE) {
+      context.transition(this.member.type());
     }
 
     // Iterate through configured members and remove any that no longer exist in the configuration.
     Iterator<MemberState> iterator = this.members.iterator();
     while (iterator.hasNext()) {
       MemberState member = iterator.next();
-      if (!members.contains(member.getMember())) {
+      if (!configuration.members().contains(member.getMember())) {
         iterator.remove();
         for (List<MemberState> memberType : memberTypes.values()) {
           memberType.remove(member);
@@ -569,10 +623,12 @@ final class ClusterState implements Cluster, AutoCloseable {
       }
     }
 
-    this.index = index;
+    this.configuration = configuration;
 
-    // Store the configuration to ensure it can be easily loaded on server restart.
-    context.getMetaStore().storeConfiguration(new Configuration(index, members));
+    // Store the configuration if it's already committed.
+    if (context.getCommitIndex() >= configuration.index()) {
+      context.getMetaStore().storeConfiguration(configuration);
+    }
 
     // Reassign members based on availability.
     reassign();

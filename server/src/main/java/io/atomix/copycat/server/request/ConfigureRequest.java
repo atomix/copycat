@@ -60,8 +60,8 @@ public class ConfigureRequest extends AbstractRequest {
 
   private long term;
   private int leader;
-  protected long index;
-  protected Collection<Member> members;
+  private long index;
+  private Collection<Member> members;
 
   /**
    * Returns the requesting node's current term.

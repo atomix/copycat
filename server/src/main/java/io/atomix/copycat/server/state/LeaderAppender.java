@@ -96,7 +96,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   public CompletableFuture<Long> appendEntries() {
     // If there are no other active members in the cluster, simply complete the append operation.
-    if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getClusterState().getPromotableMemberStates().isEmpty())
+    if (context.getClusterState().getRemoteMemberStates().isEmpty())
       return CompletableFuture.completedFuture(null);
 
     // If no commit future already exists, that indicates there's no heartbeat currently under way.
@@ -137,7 +137,7 @@ final class LeaderAppender extends AbstractAppender {
       return CompletableFuture.completedFuture(index);
 
     // If there are no other stateful servers in the cluster, immediately commit the index.
-    if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getClusterState().getPromotableMemberStates().isEmpty() && context.getClusterState().getPassiveMemberStates().isEmpty()) {
+    if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getClusterState().getPassiveMemberStates().isEmpty()) {
       context.setCommitIndex(index);
       context.setGlobalIndex(index);
       return CompletableFuture.completedFuture(index);
@@ -179,7 +179,7 @@ final class LeaderAppender extends AbstractAppender {
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getVersion()) {
+    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getConfiguration().index()) {
       if (canConfigure(member)) {
         sendConfigureRequest(member, buildConfigureRequest(member));
       }
@@ -192,7 +192,7 @@ final class LeaderAppender extends AbstractAppender {
     }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
-    else if (context.getSnapshotStore().currentSnapshot() != null
+    else if (member.getMember().type() == Member.Type.ACTIVE && context.getSnapshotStore().currentSnapshot() != null
       && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (canInstall(member)) {
@@ -372,7 +372,6 @@ final class LeaderAppender extends AbstractAppender {
     if (response.succeeded()) {
       updateMatchIndex(member, response);
       updateNextIndex(member);
-      updateConfiguration(member);
 
       // If entries were committed to the replica then check commit indexes.
       if (!request.entries().isEmpty()) {
@@ -446,16 +445,6 @@ final class LeaderAppender extends AbstractAppender {
         member.getMember().update(ServerMember.Status.UNAVAILABLE);
         leader.configure(context.getCluster().members());
       }
-    }
-  }
-
-  /**
-   * Updates the cluster configuration for the given member.
-   */
-  private void updateConfiguration(MemberState member) {
-    if (member.getMember().type() == Member.Type.PROMOTABLE && !leader.configuring() && member.getMatchIndex() >= context.getCommitIndex()) {
-      member.getMember().update(Member.Type.ACTIVE);
-      leader.configure(context.getCluster().members());
     }
   }
 
