@@ -150,14 +150,13 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   protected AppendRequest buildAppendEmptyRequest(MemberState member) {
-    long prevIndex = getPrevIndex(member);
-    Entry prevEntry = getPrevEntry(member, prevIndex);
+    Entry prevEntry = getPrevEntry(member);
 
     ServerMember leader = context.getLeader();
     return AppendRequest.builder()
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
-      .withLogIndex(prevIndex)
+      .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withEntries(Collections.EMPTY_LIST)
       .withCommitIndex(context.getCommitIndex())
@@ -170,20 +169,19 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   protected AppendRequest buildAppendEntriesRequest(MemberState member) {
-    long prevIndex = getPrevIndex(member);
-    Entry prevEntry = getPrevEntry(member, prevIndex);
+    Entry prevEntry = getPrevEntry(member);
 
     ServerMember leader = context.getLeader();
     AppendRequest.Builder builder = AppendRequest.builder()
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
-      .withLogIndex(prevIndex)
+      .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
       .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
       .withCommitIndex(context.getCommitIndex())
       .withGlobalIndex(context.getGlobalIndex());
 
     // Calculate the starting index of the list of entries.
-    final long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
+    final long index = prevEntry != null ? prevEntry.getIndex() + 1 : context.getLog().firstIndex();
 
     // Build a list of entries to send to the member.
     List<Entry> entries = new ArrayList<>((int) Math.min(8, context.getLog().lastIndex() - index + 1));
@@ -220,19 +218,17 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
-   * Gets the previous index.
-   */
-  protected long getPrevIndex(MemberState member) {
-    return member.getNextIndex() - 1;
-  }
-
-  /**
    * Gets the previous entry.
    */
   @SuppressWarnings("unused")
-  protected Entry getPrevEntry(MemberState member, long prevIndex) {
-    if (prevIndex > 0) {
-      return context.getLog().get(prevIndex);
+  protected Entry getPrevEntry(MemberState member) {
+    long prevIndex = member.getNextIndex() - 1;
+    while (prevIndex > 0) {
+      Entry entry = context.getLog().get(prevIndex);
+      if (entry != null) {
+        return entry;
+      }
+      prevIndex--;
     }
     return null;
   }

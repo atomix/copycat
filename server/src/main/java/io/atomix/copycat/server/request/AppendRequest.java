@@ -315,7 +315,11 @@ public class AppendRequest extends AbstractRequest {
       super.build();
       Assert.stateNot(request.term <= 0, "term must be positive");
       Assert.stateNot(request.logIndex < 0, "log index must not be negative");
-      Assert.stateNot(request.logTerm < 0, "log term must not be negative");
+      if (request.logIndex > 0) {
+        Assert.stateNot(request.logTerm == 0, "log term must be specified");
+      } else {
+        Assert.stateNot(request.logTerm < 0, "log term must not be negative");
+      }
       Assert.stateNot(request.entries == null, "entries cannot be null");
       Assert.stateNot(request.commitIndex < 0, "commit index must not be negative");
       Assert.stateNot(request.globalIndex < 0, "global index must not be negative");
