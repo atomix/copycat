@@ -82,7 +82,7 @@ final class CandidateState extends ActiveState {
 
     // When the election timer is reset, increment the current term and
     // restart the election.
-    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getCluster().member().address().hashCode());
+    context.setTerm(context.getTerm() + 1).setLastVotedFor(context.getCluster().member().id());
 
     Duration delay = context.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) context.getElectionTimeout().toMillis())));
     currentTimer = context.getThreadContext().schedule(delay, () -> {
@@ -141,7 +141,7 @@ final class CandidateState extends ActiveState {
       LOGGER.debug("{} - Requesting vote from {} for term {}", context.getCluster().member().address(), member, context.getTerm());
       VoteRequest request = VoteRequest.builder()
         .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().member().address().hashCode())
+        .withCandidate(context.getCluster().member().id())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
