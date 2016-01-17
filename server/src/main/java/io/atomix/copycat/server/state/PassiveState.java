@@ -133,8 +133,11 @@ class PassiveState extends ReserveState {
       }
     }
 
-    // Update the context commit index and apply commits to the state machine.
+    // Update the context commit and global indices.
     context.setCommitIndex(commitIndex);
+    context.setGlobalIndex(request.globalIndex());
+
+    // Apply commits to the state machine in batch.
     context.getStateMachine().applyAll(context.getCommitIndex());
 
     return AppendResponse.builder()
