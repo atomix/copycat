@@ -60,6 +60,10 @@ class ReserveState extends AbstractState {
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
 
+    // Update the local commitIndex and globalIndex.
+    context.setCommitIndex(request.commitIndex());
+    context.setGlobalIndex(request.globalIndex());
+
     return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
       .withStatus(Response.Status.OK)
       .withTerm(context.getTerm())
@@ -275,9 +279,18 @@ class ReserveState extends AbstractState {
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
 
+    Configuration configuration = new Configuration(request.index(), request.members());
+
     // Configure the cluster membership. This will cause this server to transition to the
     // appropriate state if its type has changed.
-    context.getClusterState().configure(new Configuration(request.index(), request.members()));
+    context.getClusterState().configure(configuration);
+
+    // If the configuration is already committed, commit it to disk.
+    // Check against the actual cluster Configuration rather than the received configuration in
+    // case the received configuration was an older configuration that was not applied.
+    if (context.getCommitIndex() >= context.getClusterState().getConfiguration().index()) {
+      context.getClusterState().commit();
+    }
 
     return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
       .withStatus(Response.Status.OK)

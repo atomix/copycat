@@ -359,10 +359,8 @@ final class ClusterState implements Cluster, AutoCloseable {
             Configuration configuration = new Configuration(response.index(), response.members());
 
             // Configure the cluster with the join response.
-            configure(configuration);
-
             // Commit the configuration as we know it was committed via the successful join response.
-            commit(configuration);
+            configure(configuration).commit();
 
             // Cancel the join timer.
             cancelJoinTimer();
@@ -495,7 +493,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
         // Configure the cluster and commit the configuration as we know the successful response
         // indicates commitment.
-        configure(configuration).commit(configuration);
+        configure(configuration).commit();
         future.complete(null);
       }
     });
@@ -523,12 +521,11 @@ final class ClusterState implements Cluster, AutoCloseable {
   }
 
   /**
-   * Commit the given configuration to disk.
+   * Commit the current configuration to disk.
    *
-   * @param configuration The configuration to commit.
    * @return The cluster state.
    */
-  ClusterState commit(Configuration configuration) {
+  ClusterState commit() {
     // If the local member has been removed from the committed configuration, transition the local member.
     if (!configuration.members().contains(member))
       context.transition(Member.Type.INACTIVE);

@@ -334,6 +334,9 @@ public class ServerContext implements AutoCloseable {
     Assert.argNot(commitIndex < 0, "commit index must be positive");
     this.commitIndex = Math.max(this.commitIndex, commitIndex);
     log.commit(Math.min(this.commitIndex, log.lastIndex()));
+    if (cluster.getConfiguration().index() <= commitIndex) {
+      cluster.commit();
+    }
     return this;
   }
 
