@@ -103,7 +103,7 @@ abstract class AbstractState implements Managed<AbstractState> {
   protected boolean updateTermAndLeader(long term, int leader) {
     // If the request indicates a term that is greater than the current term or no leader has been
     // set for the current term, update leader and term.
-    if (term > context.getTerm() || (term == context.getTerm() && context.getLeader() == null)) {
+    if (term > context.getTerm() || (term == context.getTerm() && context.getLeader() == null && leader != 0)) {
       context.setTerm(term);
       context.setLeader(leader);
 
