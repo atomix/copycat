@@ -162,8 +162,8 @@ abstract class ActiveState extends PassiveState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    long commitIndex = request.commitIndex();
-    context.setCommitIndex(commitIndex);
+    context.setCommitIndex(request.commitIndex());
+    context.setGlobalIndex(request.globalIndex());
 
     // Apply commits to the local state machine.
     context.getStateMachine().applyAll(context.getCommitIndex());
