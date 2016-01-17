@@ -25,6 +25,8 @@ import io.atomix.copycat.server.response.VoteResponse;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.util.Collections;
+
 /**
  * Follower state test.
  */
@@ -325,6 +327,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
   /**
    * Tests that a follower updates a leader on append request with new term.
    */
+  @SuppressWarnings("unchecked")
   public void testFollowerUpdatesLeaderAndTermOnAppend() throws Throwable {
     runOnServer(() -> {
       serverContext.setTerm(2).setLeader(0);
@@ -345,6 +348,7 @@ public class FollowerStateTest extends AbstractStateTest<FollowerState> {
       AppendRequest request2 = AppendRequest.builder()
           .withTerm(3)
           .withLeader(members.get(2).hashCode())
+          .withEntries(Collections.EMPTY_LIST)
           .withLogIndex(0)
           .withLogTerm(0)
           .withCommitIndex(0)
