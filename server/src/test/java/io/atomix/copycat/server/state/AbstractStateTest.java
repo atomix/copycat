@@ -49,7 +49,6 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected T state;
   protected Serializer serializer;
   protected Storage storage;
-  protected TestStateMachine stateMachine;
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
   protected ServerContext serverContext;
@@ -66,12 +65,11 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     storage = new Storage(StorageLevel.MEMORY);
     storage.serializer().resolve(new ServiceLoaderTypeResolver());
 
-    stateMachine = new TestStateMachine();
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, stateMachine, new ConnectionManager(transport.client()), serverCtx);
+    serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx);
   }
 
   /**

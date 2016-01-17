@@ -49,6 +49,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Provides a standalone implementation of the <a href="http://raft.github.io/">Raft consensus algorithm</a>.
@@ -659,7 +660,7 @@ public class CopycatServer implements Managed<CopycatServer> {
     private Transport serverTransport;
     private Storage storage;
     private Serializer serializer;
-    private StateMachine stateMachine;
+    private Supplier<StateMachine> stateMachineFactory;
     private Address clientAddress;
     private Address serverAddress;
     private Set<Address> cluster;
@@ -761,14 +762,14 @@ public class CopycatServer implements Managed<CopycatServer> {
     }
 
     /**
-     * Sets the Raft state machine.
+     * Sets the Raft state machine factory.
      *
-     * @param stateMachine The Raft state machine.
-     * @return The Raft builder.
-     * @throws NullPointerException if {@code stateMachine} is null
+     * @param factory The Raft state machine factory.
+     * @return The server builder.
+     * @throws NullPointerException if the {@code factory} is {@code null}
      */
-    public Builder withStateMachine(StateMachine stateMachine) {
-      this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
+    public Builder withStateMachine(Supplier<StateMachine> factory) {
+      this.stateMachineFactory = Assert.notNull(factory, "factory");
       return this;
     }
 
@@ -822,7 +823,7 @@ public class CopycatServer implements Managed<CopycatServer> {
      */
     @Override
     public CopycatServer build() {
-      if (stateMachine == null)
+      if (stateMachineFactory == null)
         throw new ConfigurationException("state machine not configured");
 
       // If the transport is not configured, attempt to use the default Netty transport.
@@ -860,7 +861,7 @@ public class CopycatServer implements Managed<CopycatServer> {
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
       ThreadContext threadContext = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
 
-      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, stateMachine, connections, threadContext);
+      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, stateMachineFactory, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout);

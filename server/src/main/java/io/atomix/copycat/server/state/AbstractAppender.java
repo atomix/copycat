@@ -183,17 +183,20 @@ abstract class AbstractAppender implements AutoCloseable {
       .withGlobalIndex(context.getGlobalIndex());
 
     // Calculate the starting index of the list of entries.
-    long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
+    final long index = prevIndex != 0 ? prevIndex + 1 : context.getLog().firstIndex();
 
     // Build a list of entries to send to the member.
     List<Entry> entries = new ArrayList<>((int) Math.min(8, context.getLog().lastIndex() - index + 1));
 
-    // We build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
+    // Build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
     // be null if they've been compacted and the member to which we're sending entries is just
     // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
     // counted towards the size of the batch.
     int size = 0;
-    while (index <= context.getLog().lastIndex()) {
+    final long lastIndex = context.getLog().lastIndex();
+
+    // Iterate through remaining entries in the log up to the last index.
+    for (long i = index; i <= lastIndex; i++) {
       // Get the entry from the log and append it if it's not null. Entries in the log can be null
       // if they've been cleaned or compacted from the log. Each entry sent in the append request
       // has a unique index to handle gaps in the log.
@@ -205,7 +208,6 @@ abstract class AbstractAppender implements AutoCloseable {
         size += entry.size();
         entries.add(entry);
       }
-      index++;
     }
 
     // Release the previous entry back to the entry pool.

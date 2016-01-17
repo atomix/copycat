@@ -41,6 +41,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Raft server state.
@@ -53,13 +54,14 @@ public class ServerContext implements AutoCloseable {
   private final Listeners<Member> electionListeners = new Listeners<>();
   private final String name;
   private final ThreadContext threadContext;
-  private final StateMachine userStateMachine;
+  private final Supplier<StateMachine> stateMachineFactory;
   private final ClusterState cluster;
   private final Storage storage;
   private final MetaStore meta;
   private Log log;
   private final SnapshotStore snapshot;
-  private final ServerStateMachine stateMachine;
+  private ServerStateMachine stateMachine;
+  private final ThreadContext stateContext;
   private final ConnectionManager connections;
   private AbstractState state = new InactiveState(this);
   private Duration electionTimeout = Duration.ofMillis(500);
@@ -72,12 +74,13 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, StateMachine stateMachine, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
-    this.userStateMachine = Assert.notNull(stateMachine, "stateMachine");
+    this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
+    this.stateContext = new SingleThreadContext("copycat-server-" + serverAddress + "-state-%d", threadContext.serializer().clone());
 
     // Open the meta store.
     this.meta = storage.openMetaStore(name);
@@ -85,16 +88,12 @@ public class ServerContext implements AutoCloseable {
     // Open the snapshot store.
     this.snapshot = storage.openSnapshotStore(name);
 
-    // Open the log.
-    resetLog();
-
-    // Create a state machine executor and configure the state machine.
-    ThreadContext stateContext = new SingleThreadContext("copycat-server-" + serverAddress + "-state-%d", threadContext.serializer().clone());
-    this.stateMachine = new ServerStateMachine(userStateMachine, this, stateContext);
-
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
+
+    // Reset the state machine.
+    reset();
 
     this.cluster = new ClusterState(type, serverAddress, clientAddress, members, this);
   }
@@ -419,22 +418,28 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The server context.
    */
-  ServerContext resetLog() {
+  ServerContext reset() {
     if (log != null) {
       log.close();
       log.delete();
     }
 
+    // Open the log.
     log = storage.openLog(name);
+
+    // Create a new user state machine.
+    StateMachine stateMachine = stateMachineFactory.get();
 
     // Configure the log compaction mode. If the state machine supports snapshotting, the default
     // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
-    if (userStateMachine instanceof Snapshottable) {
+    if (stateMachine instanceof Snapshottable) {
       log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
     } else {
       log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
     }
 
+    // Create a new internal server state machine.
+    this.stateMachine = new ServerStateMachine(stateMachine, this, stateContext);
     return this;
   }
 
