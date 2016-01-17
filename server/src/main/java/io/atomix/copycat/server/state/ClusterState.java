@@ -60,6 +60,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private Scheduled joinTimeout;
   private volatile CompletableFuture<Void> joinFuture;
   private Scheduled leaveTimeout;
+  private volatile CompletableFuture<Void> leaveFuture;
   private final Listeners<Member> joinListeners = new Listeners<>();
   private final Listeners<Member> leaveListeners = new Listeners<>();
 
@@ -315,7 +316,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   }
 
   @Override
-  public CompletableFuture<Void> join() {
+  public synchronized CompletableFuture<Void> join() {
     if (joinFuture != null)
       return joinFuture;
 
@@ -458,18 +459,23 @@ final class ClusterState implements Cluster, AutoCloseable {
   /**
    * Leaves the cluster.
    */
-  public CompletableFuture<Void> leave() {
-    CompletableFuture<Void> future = new CompletableFuture<>();
+  public synchronized CompletableFuture<Void> leave() {
+    if (leaveFuture != null)
+      return leaveFuture;
+
+    leaveFuture = new CompletableFuture<>();
+
     context.getThreadContext().executor().execute(() -> {
       if (getActiveMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member().address());
         context.transition(CopycatServer.State.INACTIVE);
-        future.complete(null);
+        leaveFuture.complete(null);
       } else {
-        leave(future);
+        leave(leaveFuture);
       }
     });
-    return future;
+
+    return leaveFuture.whenComplete((result, error) -> leaveFuture = null);
   }
 
   /**
@@ -527,12 +533,18 @@ final class ClusterState implements Cluster, AutoCloseable {
    */
   ClusterState commit() {
     // If the local member has been removed from the committed configuration, transition the local member.
-    if (!configuration.members().contains(member))
+    if (!configuration.members().contains(member)) {
       context.transition(Member.Type.INACTIVE);
 
+      if (leaveFuture != null) {
+        leaveFuture.complete(null);
+      }
+    }
+
     // If the local stored configuration is older than the committed configuration, overwrite it.
-    if (context.getMetaStore().loadConfiguration().index() < configuration.index())
+    if (context.getMetaStore().loadConfiguration().index() < configuration.index()) {
       context.getMetaStore().storeConfiguration(configuration);
+    }
     return this;
   }
 
