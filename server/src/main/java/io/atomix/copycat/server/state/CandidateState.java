@@ -197,7 +197,9 @@ final class CandidateState extends ActiveState {
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as a candidate.
     if (updateTermAndLeader(request.term(), 0)) {
-      return super.vote(request);
+      CompletableFuture<VoteResponse> future = super.vote(request);
+      context.transition(CopycatServer.State.FOLLOWER);
+      return future;
     }
 
     // If the vote request is not for this candidate then reject the vote.

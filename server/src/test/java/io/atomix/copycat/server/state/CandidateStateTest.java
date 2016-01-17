@@ -26,6 +26,7 @@ import io.atomix.copycat.server.response.VoteResponse;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
 import static org.testng.Assert.*;
@@ -43,6 +44,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     state = new CandidateState(serverContext);
   }
 
+  @SuppressWarnings("unchecked")
   public void testCandidateAppendAndTransitionOnTerm() throws Throwable {
     runOnServer(() -> {
       int leader = serverContext.getClusterState().getActiveMemberStates().iterator().next().getMember().id();
@@ -50,6 +52,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       AppendRequest request = AppendRequest.builder()
         .withTerm(2)
         .withLeader(leader)
+        .withEntries(Collections.EMPTY_LIST)
         .withCommitIndex(0)
         .withGlobalIndex(0)
         .build();
