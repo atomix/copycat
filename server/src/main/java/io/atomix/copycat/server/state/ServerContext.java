@@ -358,7 +358,7 @@ public class ServerContext implements AutoCloseable {
   ServerContext setGlobalIndex(long globalIndex) {
     Assert.argNot(globalIndex < 0, "global index must be positive");
     this.globalIndex = Math.max(this.globalIndex, globalIndex);
-    log.compactor().majorIndex(globalIndex);
+    log.compactor().majorIndex(this.globalIndex - 1);
     return this;
   }
 
