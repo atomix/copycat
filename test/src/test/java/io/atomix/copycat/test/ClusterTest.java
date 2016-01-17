@@ -1360,7 +1360,7 @@ public class ClusterTest extends ConcurrentTestCase {
         .withMaxSegmentSize(1024 * 1024)
         .withCompactionThreads(1)
         .build())
-      .withStateMachine(new TestStateMachine());
+      .withStateMachine(TestStateMachine::new);
 
     if (member.type() != Member.Type.INACTIVE) {
       builder.withType(member.type());

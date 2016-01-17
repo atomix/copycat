@@ -73,7 +73,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
       new Address("localhost", 5000),
       new Address("localhost", 5000)
     );
-    state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, new TestStateMachine(), new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+    state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

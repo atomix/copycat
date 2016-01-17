@@ -52,11 +52,11 @@ public class ValueStateMachineExample {
     }
 
     CopycatServer server = CopycatServer.builder(clientAddress, serverAddress, members)
-      .withStateMachine(new ValueStateMachine())
+      .withStateMachine(ValueStateMachine::new)
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withDirectory(System.getProperty("user.dir") + "/logs/" + serverPort)
-        // Limit the number of entries per segment and compaction intervals to demonstrate compaction.
+          // Limit the number of entries per segment and compaction intervals to demonstrate compaction.
         .withMaxEntriesPerSegment(1024)
         .withMinorCompactionInterval(Duration.ofSeconds(27))
         .withMajorCompactionInterval(Duration.ofSeconds(31))
