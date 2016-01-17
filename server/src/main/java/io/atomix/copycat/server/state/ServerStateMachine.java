@@ -29,7 +29,6 @@ import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
-import io.atomix.copycat.server.storage.system.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -350,18 +349,9 @@ final class ServerStateMachine implements AutoCloseable {
    * entry since it was overwritten by a more recent committed configuration entry.
    */
   private CompletableFuture<Void> apply(ConfigurationEntry entry) {
-    // Commit the configuration to disk in a separate configuration file. We commit the configuration change
-    // in the state machine to ensure that it's only persisted to disk once it's committed. Server clusters
-    // will use the persisted configuration to reset the cluster state in the event of a leader change.
-    state.getClusterState().commit(new Configuration(entry.getIndex(), entry.getMembers()));
-
-    // Immediately clean the commit for the existing configuration since configuration entries
-    // completely override the existing configuration.
-    if (configuration > 0) {
-      state.getLog().clean(configuration);
-    }
-    configuration = entry.getIndex();
-
+    // Clean the configuration entry from the log. The entry will be retained until it has been stored
+    // on all servers.
+    state.getLog().clean(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 

@@ -301,7 +301,7 @@ final class LeaderAppender extends AbstractAppender {
     long commitIndex = members.get(quorumIndex()).getMatchIndex();
 
     // If the commit index has increased then update the commit index. Note that in order to ensure
-    // the leader completeness property holds, verify that the commit index is greater than or equal to
+    // the leader completeness property holds, we verify that the commit index is greater than or equal to
     // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
     long previousCommitIndex = context.getCommitIndex();
     if (commitIndex > 0 && commitIndex > previousCommitIndex && (leaderIndex > 0 && commitIndex >= leaderIndex)) {

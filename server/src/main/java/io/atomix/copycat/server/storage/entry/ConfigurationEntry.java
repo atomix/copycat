@@ -22,6 +22,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 
 import java.util.Collection;
 
@@ -44,6 +45,11 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
 
   public ConfigurationEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
+  }
+
+  @Override
+  public Compaction.Mode getCompactionMode() {
+    return Compaction.Mode.FULL;
   }
 
   /**

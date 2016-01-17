@@ -162,9 +162,10 @@ abstract class ActiveState extends PassiveState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    // Apply commits to the state machine asynchronously so the append request isn't blocked on I/O.
     long commitIndex = request.commitIndex();
     context.setCommitIndex(commitIndex);
+
+    // Apply commits to the local state machine.
     context.getStateMachine().applyAll(context.getCommitIndex());
 
     return AppendResponse.builder()
