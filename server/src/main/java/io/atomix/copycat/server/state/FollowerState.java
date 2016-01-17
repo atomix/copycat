@@ -83,13 +83,8 @@ final class FollowerState extends ActiveState {
       heartbeatTimer = null;
       if (isOpen()) {
         context.setLeader(0);
-        if (context.getLastVotedFor() == 0) {
-          LOGGER.debug("{} - Heartbeat timed out in {}", context.getCluster().member().address(), delay);
-          sendPollRequests();
-        } else {
-          // If the node voted for a candidate then reset the election timer.
-          resetHeartbeatTimeout();
-        }
+        LOGGER.debug("{} - Heartbeat timed out in {}", context.getCluster().member().address(), delay);
+        sendPollRequests();
       }
     });
   }
