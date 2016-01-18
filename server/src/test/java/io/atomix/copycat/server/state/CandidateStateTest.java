@@ -176,11 +176,9 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
             .withTerm(2)
             .withVoted(true)
             .build()));
-        }).thenRunAsync(this::resume);
+        });
       }
     });
-
-    await(1000, serverContext.getCluster().members().size());
 
     runOnServer(() -> {
       int self = serverContext.getCluster().member().id();
@@ -208,11 +206,9 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
             .withTerm(2)
             .withVoted(false)
             .build()));
-        }).thenRunAsync(this::resume);
+        });
       }
     });
-
-    await(1000, serverContext.getCluster().members().size());
 
     runOnServer(() -> {
       int self = serverContext.getCluster().member().id();
