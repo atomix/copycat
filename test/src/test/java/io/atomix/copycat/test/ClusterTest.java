@@ -1206,7 +1206,7 @@ public class ClusterTest extends ConcurrentTestCase {
         resume();
       });
 
-      await(2000, 4);
+      await(10000, 4);
     }
   }
 
