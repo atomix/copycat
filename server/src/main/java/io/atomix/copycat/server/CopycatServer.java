@@ -486,26 +486,25 @@ public class CopycatServer implements Managed<CopycatServer> {
           Function<Void, CompletionStage<CopycatServer>> completionFunction = state -> {
             CompletableFuture<CopycatServer> future = new CompletableFuture<>();
             openFuture = null;
-            cluster().join()
-              .whenComplete((result, error) -> {
-                if (error == null) {
-                  if (cluster().leader() != null) {
-                    open = true;
-                    future.complete(this);
-                  } else {
-                    electionListener = cluster().onLeaderElection(leader -> {
-                      if (electionListener != null) {
-                        open = true;
-                        future.complete(this);
-                        electionListener.close();
-                        electionListener = null;
-                      }
-                    });
-                  }
+            cluster().join().whenComplete((result, error) -> {
+              if (error == null) {
+                if (cluster().leader() != null) {
+                  open = true;
+                  future.complete(this);
                 } else {
-                  future.completeExceptionally(error);
+                  electionListener = cluster().onLeaderElection(leader -> {
+                    if (electionListener != null) {
+                      open = true;
+                      future.complete(this);
+                      electionListener.close();
+                      electionListener = null;
+                    }
+                  });
                 }
-              });
+              } else {
+                future.completeExceptionally(error);
+              }
+            });
             return future;
           };
 

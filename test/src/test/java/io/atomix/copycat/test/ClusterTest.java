@@ -283,20 +283,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests an active member join event.
    */
   public void testActiveJoinEvent() throws Throwable {
-    List<CopycatServer> servers = createServers(3);
-
-    Member member = nextMember(Member.Type.ACTIVE);
-
-    CopycatServer server = servers.get(0);
-    server.cluster().onJoin(m -> {
-      threadAssertEquals(m.address(), member.address());
-      threadAssertEquals(m.type(), Member.Type.ACTIVE);
-      resume();
-    });
-
-    CopycatServer joiner = createServer(members, member);
-    joiner.open().thenRun(this::resume);
-    await(10000, 2);
+    testJoinEvent(Member.Type.ACTIVE);
   }
 
   /**
