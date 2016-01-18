@@ -22,6 +22,7 @@ import io.atomix.copycat.client.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -39,6 +40,30 @@ class InactiveState extends AbstractState {
   @Override
   public CopycatServer.State type() {
     return CopycatServer.State.INACTIVE;
+  }
+
+  @Override
+  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+    context.checkThread();
+    logRequest(request);
+    updateTermAndLeader(request.term(), request.leader());
+
+    Configuration configuration = new Configuration(request.index(), request.members());
+
+    // Configure the cluster membership. This will cause this server to transition to the
+    // appropriate state if its type has changed.
+    context.getClusterState().configure(configuration);
+
+    // If the configuration is already committed, commit it to disk.
+    // Check against the actual cluster Configuration rather than the received configuration in
+    // case the received configuration was an older configuration that was not applied.
+    if (context.getCommitIndex() >= context.getClusterState().getConfiguration().index()) {
+      context.getClusterState().commit();
+    }
+
+    return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
+      .withStatus(Response.Status.OK)
+      .build()));
   }
 
   @Override
@@ -68,11 +93,6 @@ class InactiveState extends AbstractState {
 
   @Override
   protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
-  }
-
-  @Override
-  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

@@ -23,7 +23,6 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.*;
 import io.atomix.copycat.server.response.*;
-import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -34,7 +33,7 @@ import java.util.stream.Collectors;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ReserveState extends AbstractState {
+class ReserveState extends InactiveState {
 
   public ReserveState(ServerContext context) {
     super(context);
@@ -271,30 +270,6 @@ class ReserveState extends AbstractState {
     } else {
       return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
     }
-  }
-
-  @Override
-  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
-    context.checkThread();
-    logRequest(request);
-    updateTermAndLeader(request.term(), request.leader());
-
-    Configuration configuration = new Configuration(request.index(), request.members());
-
-    // Configure the cluster membership. This will cause this server to transition to the
-    // appropriate state if its type has changed.
-    context.getClusterState().configure(configuration);
-
-    // If the configuration is already committed, commit it to disk.
-    // Check against the actual cluster Configuration rather than the received configuration in
-    // case the received configuration was an older configuration that was not applied.
-    if (context.getCommitIndex() >= context.getClusterState().getConfiguration().index()) {
-      context.getClusterState().commit();
-    }
-
-    return CompletableFuture.completedFuture(logResponse(ConfigureResponse.builder()
-      .withStatus(Response.Status.OK)
-      .build()));
   }
 
   @Override
