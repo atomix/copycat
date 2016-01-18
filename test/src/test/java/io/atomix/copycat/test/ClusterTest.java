@@ -242,15 +242,21 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
     passive.open().thenRun(this::resume);
 
-    CopycatServer reserve = createServer(members, nextMember(Member.Type.RESERVE));
+    await(10000);
+
+    Member reserveMember = nextMember(Member.Type.RESERVE);
+    passive.cluster().onJoin(member -> {
+      threadAssertEquals(member.address(), reserveMember.address());
+      member.onStatusChange(s -> {
+        threadAssertEquals(s, Member.Status.UNAVAILABLE);
+        resume();
+      });
+    });
+
+    CopycatServer reserve = createServer(members, reserveMember);
     reserve.open().thenRun(this::resume);
 
-    await(10000, 2);
-
-    passive.cluster().member(reserve.cluster().member().address()).onStatusChange(s -> {
-      threadAssertEquals(s, Member.Status.UNAVAILABLE);
-      resume();
-    });
+    await(10000);
 
     reserve.kill().thenRun(this::resume);
     await(10000, 2);
