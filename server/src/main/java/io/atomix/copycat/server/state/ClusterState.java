@@ -260,7 +260,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return The sorted members list.
    */
   List<MemberState> getActiveMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> activeMembers = getActiveMemberStates();
+    List<MemberState> activeMembers = new ArrayList<>(getActiveMemberStates());
     Collections.sort(activeMembers, comparator);
     return activeMembers;
   }
@@ -281,7 +281,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return The sorted members list.
    */
   List<MemberState> getPassiveMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> passiveMembers = getPassiveMemberStates();
+    List<MemberState> passiveMembers = new ArrayList<>(getPassiveMemberStates());
     Collections.sort(passiveMembers, comparator);
     return passiveMembers;
   }
@@ -302,7 +302,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return The sorted members list.
    */
   List<MemberState> getReserveMemberStates(Comparator<MemberState> comparator) {
-    List<MemberState> reserveMembers = getReserveMemberStates();
+    List<MemberState> reserveMembers = new ArrayList<>(getReserveMemberStates());
     Collections.sort(reserveMembers, comparator);
     return reserveMembers;
   }
