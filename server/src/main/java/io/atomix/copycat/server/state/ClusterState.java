@@ -56,11 +56,11 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
   private final Map<Address, MemberState> addressMap = new ConcurrentHashMap<>();
   private final List<MemberState> members = new CopyOnWriteArrayList<>();
-  private List<MemberState> assignedPassiveMembers = new ArrayList<>();
+  private List<MemberState> assignedMembers = new ArrayList<>();
   private final Map<Member.Type, List<MemberState>> memberTypes = new HashMap<>();
-  private Scheduled joinTimeout;
+  private volatile Scheduled joinTimeout;
   private volatile CompletableFuture<Void> joinFuture;
-  private Scheduled leaveTimeout;
+  private volatile Scheduled leaveTimeout;
   private volatile CompletableFuture<Void> leaveFuture;
   private final Listeners<Member> joinListeners = new Listeners<>();
   private final Listeners<Member> leaveListeners = new Listeners<>();
@@ -313,7 +313,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return A list of assigned passive member states.
    */
   List<MemberState> getAssignedPassiveMemberStates() {
-    return assignedPassiveMembers;
+    return assignedMembers;
   }
 
   @Override
@@ -619,17 +619,19 @@ final class ClusterState implements Cluster, AutoCloseable {
     }
 
     // Iterate through configured members and remove any that no longer exist in the configuration.
-    Iterator<MemberState> iterator = this.members.iterator();
-    while (iterator.hasNext()) {
-      MemberState member = iterator.next();
+    int i = 0;
+    while (i < this.members.size()) {
+      MemberState member = this.members.get(i);
       if (!configuration.members().contains(member.getMember())) {
-        iterator.remove();
+        this.members.remove(i);
         for (List<MemberState> memberType : memberTypes.values()) {
           memberType.remove(member);
         }
         membersMap.remove(member.getMember().id());
         addressMap.remove(member.getMember().address());
         leaveListeners.accept(member.getMember());
+      } else {
+        i++;
       }
     }
 
@@ -666,9 +668,9 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       // Intersect the active members list with a sorted list of passive members to get assignments.
       List<MemberState> sortedPassiveMembers = getPassiveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id());
-      assignedPassiveMembers = assignMembers(index, sortedPassiveMembers);
+      assignedMembers = assignMembers(index, sortedPassiveMembers);
     } else {
-      assignedPassiveMembers = new ArrayList<>(0);
+      assignedMembers = new ArrayList<>(0);
     }
   }
 
