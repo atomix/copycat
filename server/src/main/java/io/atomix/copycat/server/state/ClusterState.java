@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -54,7 +55,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private Configuration configuration;
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
   private final Map<Address, MemberState> addressMap = new ConcurrentHashMap<>();
-  private final List<MemberState> members = new ArrayList<>();
+  private final List<MemberState> members = new CopyOnWriteArrayList<>();
   private List<MemberState> assignedPassiveMembers = new ArrayList<>();
   private final Map<Member.Type, List<MemberState>> memberTypes = new HashMap<>();
   private Scheduled joinTimeout;
@@ -109,7 +110,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // Add the member to a type specific map.
         List<MemberState> memberType = memberTypes.get(member.type());
         if (memberType == null) {
-          memberType = new ArrayList<>();
+          memberType = new CopyOnWriteArrayList<>();
           memberTypes.put(member.type(), memberType);
         }
         memberType.add(state);
@@ -597,7 +598,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
         List<MemberState> memberType = memberTypes.get(member.type());
         if (memberType == null) {
-          memberType = new ArrayList<>();
+          memberType = new CopyOnWriteArrayList<>();
           memberTypes.put(member.type(), memberType);
         }
         memberType.add(state);
