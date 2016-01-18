@@ -399,7 +399,7 @@ final class ClusterState implements Cluster, AutoCloseable {
     // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
     // for servers to potentially timeout and elect a leader.
     else {
-      LOGGER.debug("{} - Failed to join cluster, retrying...")
+      LOGGER.debug("{} - Failed to join cluster, retrying...");
       resetJoinTimer();
     }
   }
