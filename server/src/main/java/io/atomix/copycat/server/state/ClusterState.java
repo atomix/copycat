@@ -333,7 +333,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       // the join. Once the server transitions to an active state, the server will identify itself to the
       // leader upon learning of the leader. Once the server has identified itself the join will be completed.
       if (member.type() == Member.Type.INACTIVE) {
-        join(getActiveMemberStates().iterator(), 1);
+        join(getActiveMemberStates().iterator());
       }
     });
 
@@ -343,8 +343,13 @@ final class ClusterState implements Cluster, AutoCloseable {
   /**
    * Recursively attempts to join the cluster.
    */
-  private void join(Iterator<MemberState> iterator, int attempts) {
+  private void join(Iterator<MemberState> iterator) {
     if (iterator.hasNext()) {
+      cancelJoinTimer();
+      joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), () -> {
+        join(iterator);
+      });
+
       MemberState member = iterator.next();
       LOGGER.debug("{} - Attempting to join via {}", member().address(), member.getMember().serverAddress());
 
@@ -354,6 +359,9 @@ final class ClusterState implements Cluster, AutoCloseable {
           .build();
         return connection.<JoinRequest, JoinResponse>send(request);
       }).whenComplete((response, error) -> {
+        // Cancel the join timer.
+        cancelJoinTimer();
+
         if (error == null) {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
@@ -363,9 +371,6 @@ final class ClusterState implements Cluster, AutoCloseable {
             // Configure the cluster with the join response.
             // Commit the configuration as we know it was committed via the successful join response.
             configure(configuration).commit();
-
-            // Cancel the join timer.
-            cancelJoinTimer();
 
             // If the local member type is null, that indicates it's not a part of the configuration.
             Member.Type type = member().type();
@@ -379,32 +384,23 @@ final class ClusterState implements Cluster, AutoCloseable {
             // in a state that was incapable of handling the join request. Attempt to join the leader
             // again after an election timeout.
             LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
-            cancelJoinTimer();
-            joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
-              join(getActiveMemberStates().iterator(), attempts);
-            });
+            resetJoinTimer();
           } else {
             // If the response error was non-null, attempt to join via the next server in the members list.
             LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
-            join(iterator, attempts);
+            join(iterator);
           }
         } else {
           LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
-          join(iterator, attempts);
+          join(iterator);
         }
       });
-    }
-    // If the maximum number of join attempts has been reached, fail the join.
-    else if (attempts >= MAX_JOIN_ATTEMPTS) {
-      joinFuture.completeExceptionally(new IllegalStateException("failed to join the cluster"));
     }
     // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
     // for servers to potentially timeout and elect a leader.
     else {
-      cancelJoinTimer();
-      joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), () -> {
-        join(getActiveMemberStates().iterator(), attempts + 1);
-      });
+      LOGGER.debug("{} - Failed to join cluster, retrying...")
+      resetJoinTimer();
     }
   }
 
@@ -422,6 +418,9 @@ final class ClusterState implements Cluster, AutoCloseable {
           joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
         }
       } else {
+        cancelJoinTimer();
+        joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
+
         LOGGER.debug("{} - Sending server identification to {}", member().address(), leader.address());
         context.getConnections().getConnection(leader.serverAddress()).thenCompose(connection -> {
           ReconfigureRequest request = ReconfigureRequest.builder()
@@ -430,13 +429,13 @@ final class ClusterState implements Cluster, AutoCloseable {
             .build();
           return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
         }).whenComplete((response, error) -> {
+          cancelJoinTimer();
           if (error == null) {
             if (response.status() == Response.Status.OK) {
               cancelJoinTimer();
               if (joinFuture != null)
                 joinFuture.complete(null);
             } else if (response.error() == null) {
-              cancelJoinTimer();
               joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
             }
           }
@@ -444,6 +443,16 @@ final class ClusterState implements Cluster, AutoCloseable {
       }
     }
     return joinFuture;
+  }
+
+  /**
+   * Resets the join timer.
+   */
+  private void resetJoinTimer() {
+    cancelJoinTimer();
+    joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), () -> {
+      join(getActiveMemberStates().iterator());
+    });
   }
 
   /**
@@ -467,6 +476,13 @@ final class ClusterState implements Cluster, AutoCloseable {
     leaveFuture = new CompletableFuture<>();
 
     context.getThreadContext().executor().execute(() -> {
+      // If a join attempt is still underway, cancel the join and complete the join future exceptionally.
+      // The join future will be set to null once completed.
+      cancelJoinTimer();
+      if (joinFuture != null)
+        joinFuture.completeExceptionally(new IllegalStateException("failed to join cluster"));
+
+      // If there are no remote members to leave, simply transition the server to INACTIVE.
       if (getActiveMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member().address());
         context.transition(CopycatServer.State.INACTIVE);
@@ -494,14 +510,21 @@ final class ClusterState implements Cluster, AutoCloseable {
     context.getAbstractState().leave(LeaveRequest.builder()
       .withMember(member())
       .build()).whenComplete((response, error) -> {
+      // Cancel the leave timer.
+      cancelLeaveTimer();
+
       if (error == null && response.status() == Response.Status.OK) {
-        cancelLeaveTimer();
         Configuration configuration = new Configuration(response.index(), response.members());
 
         // Configure the cluster and commit the configuration as we know the successful response
         // indicates commitment.
         configure(configuration).commit();
         future.complete(null);
+      } else {
+        // Reset the leave timer.
+        leaveTimeout = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
+          leave(future);
+        });
       }
     });
   }
