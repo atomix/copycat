@@ -198,7 +198,7 @@ abstract class AbstractAppender implements AutoCloseable {
       // Get the entry from the log and append it if it's not null. Entries in the log can be null
       // if they've been cleaned or compacted from the log. Each entry sent in the append request
       // has a unique index to handle gaps in the log.
-      Entry entry = context.getLog().get(index);
+      Entry entry = context.getLog().get(i);
       if (entry != null) {
         if (size + entry.size() > MAX_BATCH_SIZE) {
           break;
