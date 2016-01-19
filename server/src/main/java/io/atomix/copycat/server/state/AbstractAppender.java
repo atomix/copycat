@@ -222,7 +222,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   @SuppressWarnings("unused")
   protected Entry getPrevEntry(MemberState member) {
-    long prevIndex = member.getNextIndex() - 1;
+    long prevIndex = Math.min(member.getNextIndex() - 1, context.getLog().lastIndex());
     while (prevIndex > 0) {
       Entry entry = context.getLog().get(prevIndex);
       if (entry != null) {
