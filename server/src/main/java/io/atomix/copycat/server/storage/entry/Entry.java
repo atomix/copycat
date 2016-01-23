@@ -146,12 +146,10 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    term = buffer.readLong();
   }
 
   @Override
