@@ -69,7 +69,7 @@ public abstract class AbstractLogTest {
     TestEntry entry = new TestEntry();
     entry.setPadding(entryPadding);
     serializer.writeObject(entry, buffer);
-    return (int) buffer.position() + Short.BYTES + Long.BYTES;
+    return (int) buffer.position() + Short.BYTES + Long.BYTES + Byte.BYTES;
   }
 
   @BeforeMethod

@@ -106,18 +106,17 @@ abstract class ActiveState extends PassiveState {
     }
 
     // If the previous entry term doesn't match the local previous term then reject the request.
-    try (Entry entry = context.getLog().get(request.logIndex())) {
-      if (entry == null || entry.getTerm() != request.logTerm()) {
-        LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, entry != null ? entry.getTerm() : "unknown");
-        return AppendResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withTerm(context.getTerm())
-          .withSucceeded(false)
-          .withLogIndex(request.logIndex() <= context.getLog().lastIndex() ? request.logIndex() - 1 : context.getLog().lastIndex())
-          .build();
-      } else {
-        return appendEntries(request);
-      }
+    long term = context.getLog().term(request.logIndex());
+    if (term == 0 || term != request.logTerm()) {
+      LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, term);
+      return AppendResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withTerm(context.getTerm())
+        .withSucceeded(false)
+        .withLogIndex(request.logIndex() <= context.getLog().lastIndex() ? request.logIndex() - 1 : context.getLog().lastIndex())
+        .build();
+    } else {
+      return appendEntries(request);
     }
   }
 
@@ -139,19 +138,18 @@ abstract class ActiveState extends PassiveState {
           continue;
         } else {
           // Compare the term of the received entry with the matching entry in the log.
-          try (Entry match = context.getLog().get(entry.getIndex())) {
-            if (match != null) {
-              if (entry.getTerm() != match.getTerm()) {
-                // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
-                // If appending to the log fails, apply commits and reply false to the append request.
-                LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
-                context.getLog().truncate(entry.getIndex() - 1).append(entry);
-                LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-              }
-            } else {
+          long term = context.getLog().term(entry.getIndex());
+          if (term != 0) {
+            if (entry.getTerm() != term) {
+              // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
+              // If appending to the log fails, apply commits and reply false to the append request.
+              LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
               context.getLog().truncate(entry.getIndex() - 1).append(entry);
               LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
             }
+          } else {
+            context.getLog().truncate(entry.getIndex() - 1).append(entry);
+            LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
           }
         }
 
@@ -314,27 +312,23 @@ abstract class ActiveState extends PassiveState {
       // Otherwise, load the last entry in the log. The last entry should be
       // at least as up to date as the candidates entry and term.
       long lastIndex = context.getLog().lastIndex();
-      Entry entry = context.getLog().get(lastIndex);
-      if (entry == null) {
+      long lastTerm = context.getLog().term(lastIndex);
+      if (lastTerm == 0) {
         LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
         return true;
       }
 
-      try {
-        if (index != 0 && index >= lastIndex) {
-          if (term >= entry.getTerm()) {
-            LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
-            return true;
-          } else {
-            LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getCluster().member().address(), request, term, entry.getTerm());
-            return false;
-          }
+      if (index != 0 && index >= lastIndex) {
+        if (term >= lastTerm) {
+          LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
+          return true;
         } else {
-          LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().member().address(), request, index, lastIndex);
+          LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getCluster().member().address(), request, term, lastTerm);
           return false;
         }
-      } finally {
-        entry.close();
+      } else {
+        LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().member().address(), request, index, lastIndex);
+        return false;
       }
     }
   }

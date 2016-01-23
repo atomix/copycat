@@ -15,10 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.MappedBuffer;
-import io.atomix.catalyst.buffer.SlicedBuffer;
+import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -47,6 +44,14 @@ import java.util.function.Predicate;
  * Additionally, segments are responsible for keeping track of entries that have been {@link #clean(long) cleaned}.
  * Cleaned entries are tracked in an internal {@link io.atomix.catalyst.buffer.util.BitArray} with a size equal
  * to the segment's entry {@link #count()}.
+ * <p>
+ * An entry in the log is written in binary format. The binary format of an entry is as follows:
+ * <ul>
+ *   <li>Required 16-bit unsigned entry length</li>
+ *   <li>Required 64-bit offset</li>
+ *   <li>Required 8-bit term flag</li>
+ *   <li>Optional 64-bit term</li>
+ * </ul>
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -56,6 +61,7 @@ public class Segment implements AutoCloseable {
   private final Buffer buffer;
   private final OffsetIndex offsetIndex;
   private final OffsetCleaner cleaner;
+  private final TermIndex termIndex = new TermIndex();
   private final SegmentManager manager;
   private long skip = 0;
   private boolean open = true;
@@ -76,6 +82,9 @@ public class Segment implements AutoCloseable {
     int length = buffer.readUnsignedShort();
     while (length != 0) {
       long offset = buffer.readLong();
+      if (buffer.readBoolean()) {
+        termIndex.index(offset, buffer.readLong());
+      }
       offsetIndex.index(offset, position);
       position = buffer.skip(length).position();
       length = buffer.mark().readUnsignedShort();
@@ -261,34 +270,80 @@ public class Segment implements AutoCloseable {
   public long append(Entry entry) {
     Assert.notNull(entry, "entry");
     Assert.stateNot(isFull(), "segment is full");
+
     long index = nextIndex();
     Assert.index(index == entry.getIndex(), "inconsistent index: %s", entry.getIndex());
 
     // Calculate the offset of the entry.
     long offset = relativeOffset(index);
 
+    // Get the term from the entry.
+    long term = entry.getTerm();
+
+    // Get the highest term in the index.
+    long lastTerm = termIndex.term();
+
+    // The entry term must be positive and >= the last term in the segment.
+    Assert.arg(term > 0 && term >= lastTerm, "term must be monotonically increasing");
+
     // Mark the starting position of the record and record the starting position of the new entry.
     long position = buffer.mark().position();
 
+    // Determine whether to skip writing the term to the segment.
+    boolean skipTerm = term == lastTerm;
+
+    // Calculate the length of the entry header bytes.
+    int headerLength = Bytes.SHORT + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG);
+
     // Serialize the object into the segment buffer.
-    serializer.writeObject(entry, buffer.skip(Short.BYTES + Long.BYTES));
+    serializer.writeObject(entry, buffer.skip(headerLength));
 
     // Calculate the length of the serialized bytes based on the resulting buffer position and the starting position.
-    int length = (int) (buffer.position() - (position + Short.BYTES + Long.BYTES));
+    int length = (int) (buffer.position() - (position + headerLength));
 
     // Set the entry size.
     entry.setSize(length);
 
     // Write the length of the entry for indexing.
-    buffer.reset().writeUnsignedShort(length).writeLong(offset).skip(length);
+    buffer.reset().writeUnsignedShort(length).writeLong(offset);
+
+    // If the term has not yet been written, write the term to this entry.
+    if (skipTerm) {
+      buffer.writeBoolean(false).skip(length);
+    } else {
+      buffer.writeBoolean(true).writeLong(entry.getTerm()).skip(length);
+    }
 
     // Index the offset, position, and length.
     offsetIndex.index(offset, position);
+
+    // If the entry term is greater than the last indexed term, index the term.
+    if (term > lastTerm) {
+      termIndex.index(offset, term);
+    }
 
     // Reset skip to zero since we wrote a new entry.
     skip = 0;
 
     return index;
+  }
+
+  /**
+   * Reads the term for the entry at the given index.
+   *
+   * @param index The index for which to read the term.
+   * @return The term for the given index.
+   * @throws IllegalStateException if the segment is not open or {@code index} is inconsistent
+   */
+  public long term(long index) {
+    assertSegmentOpen();
+    checkRange(index);
+
+    // Get the offset of the index within this segment.
+    long offset = relativeOffset(index);
+
+    // Look up the term for the offset in the term index.
+    return termIndex.lookup(offset);
   }
 
   /**
@@ -315,13 +370,16 @@ public class Segment implements AutoCloseable {
       int length = buffer.readUnsignedShort(position);
 
       // Verify that the entry at the given offset matches.
-      long entryOffset = buffer.readLong(position + Short.BYTES);
+      long entryOffset = buffer.readLong(position + Bytes.SHORT);
       Assert.state(entryOffset == offset, "inconsistent index: %s", index);
 
+      // Determine whether to skip reading the term from this entry.
+      boolean skipTerm = !buffer.readBoolean(position + Bytes.SHORT + Bytes.LONG);
+
       // Read the entry buffer and deserialize the entry.
-      try (Buffer value = buffer.slice(position + Short.BYTES + Long.BYTES, length)) {
+      try (Buffer value = buffer.slice(position + Bytes.SHORT + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG), length)) {
         T entry = serializer.readObject(value);
-        entry.setIndex(index).setSize(length);
+        entry.setIndex(index).setTerm(termIndex.lookup(offset)).setSize(length);
         return entry;
       }
     }
@@ -438,6 +496,7 @@ public class Segment implements AutoCloseable {
       buffer.position(position)
         .zero(position)
         .flush();
+      termIndex.truncate(offset);
     }
     return this;
   }

@@ -289,6 +289,29 @@ public class Log implements AutoCloseable {
   }
 
   /**
+   * Returns the term for the entry at the given index.
+   * <p>
+   * This method provides a more efficient means of reading an entry term without deserializing the entire entry.
+   * Servers should use this method when performing consistency checks that don't require reading the full entry
+   * object. Terms can typically be read in O(1) time with no disk access on segments that haven't been compacted.
+   * <p>
+   * If the given index is outside of the bounds of the log then a {@link IndexOutOfBoundsException} will be thrown. If
+   * the entry at the given index has been compacted then the returned entry will be {@code null}.
+   *
+   * @param index The index for which to return the term.
+   * @return The term for the entry at the given index.
+   */
+  public long term(long index) {
+    assertIsOpen();
+    assertValidIndex(index);
+
+    Segment segment = segments.segment(index);
+    Assert.index(segment != null, "invalid index: " + index);
+
+    return segment.term(index);
+  }
+
+  /**
    * Gets an entry from the log at the given index.
    * <p>
    * If the given index is outside of the bounds of the log then a {@link IndexOutOfBoundsException} will be thrown. If

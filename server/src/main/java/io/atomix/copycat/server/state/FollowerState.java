@@ -105,8 +105,7 @@ final class FollowerState extends ActiveState {
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
-      context.transition(CopycatServer.State.LEADER);
+      context.transition(CopycatServer.State.CANDIDATE);
       return;
     }
 

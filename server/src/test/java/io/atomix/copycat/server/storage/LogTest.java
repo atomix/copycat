@@ -275,30 +275,6 @@ public abstract class LogTest extends AbstractLogTest {
   }
 
   /**
-   * Tests {@link Log#size()} across segments.
-   */
-  public void testSize() {
-    assertEquals(log.size(), 64);
-
-    appendEntries(entriesPerSegment * 3);
-    assertEquals(log.segments.segments().size(), 3);
-    assertEquals(log.size(), fullSegmentSize() * 3);
-    assertFalse(log.isEmpty());
-
-    appendEntries(entriesPerSegment * 2);
-    assertEquals(log.segments.segments().size(), 5);
-    assertEquals(log.size(), fullSegmentSize() * 5);
-
-    log.commit(entriesPerSegment * 5).compactor().minorIndex(entriesPerSegment * 5).majorIndex(entriesPerSegment * 5);
-
-    // Compact 2nd and 3rd segments
-    cleanAndCompact(entriesPerSegment + 1, entriesPerSegment * 3);
-
-    // Asserts that size() is changed after compaction
-    assertEquals(log.size(), (entrySize() * entriesPerSegment * 3) + (log.segments.segments().size() * SegmentDescriptor.BYTES));
-  }
-
-  /**
    * Tests skipping entries in the log across segments.
    */
   public void testSkip() throws Throwable {
