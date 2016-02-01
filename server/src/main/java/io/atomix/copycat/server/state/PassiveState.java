@@ -112,7 +112,7 @@ class PassiveState extends ReserveState {
     long nextGlobalIndex = request.globalIndex();
     if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && !context.getLog().contains(nextGlobalIndex)) {
       context.setGlobalIndex(nextGlobalIndex);
-      context.getLog().truncate(0);
+      context.reset();
     }
 
     // If an entry was provided, check the entry against the local log.
