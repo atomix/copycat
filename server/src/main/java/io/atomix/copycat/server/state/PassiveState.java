@@ -80,7 +80,7 @@ class PassiveState extends ReserveState {
   /**
    * Handles an append request.
    */
-  private AppendResponse handleAppend(AppendRequest request) {
+  protected AppendResponse handleAppend(AppendRequest request) {
     // If the request term is less than the current term then immediately
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
@@ -92,7 +92,31 @@ class PassiveState extends ReserveState {
         .withSucceeded(false)
         .withLogIndex(context.getLog().lastIndex())
         .build();
-    } else if (request.logIndex() != 0) {
+    } else {
+      return checkGlobalIndex(request);
+    }
+  }
+
+  /**
+   * Checks whether the log needs to be truncated based on the globalIndex.
+   */
+  protected AppendResponse checkGlobalIndex(AppendRequest request) {
+    // If the globalIndex has changed and is not present in the local log, truncate the log.
+    // This ensures that if major compaction progressed on any server beyond the entries in this
+    // server's log that this server receives all entries after compaction.
+    // If the current global index is 0 then do not perform the index check. This ensures that
+    // servers don't truncate their logs at startup.
+    // Ensure that the globalIndex is updated here to prevent endlessly truncating the log
+    // if the AppendRequest is rejected.
+    long currentGlobalIndex = context.getGlobalIndex();
+    long nextGlobalIndex = request.globalIndex();
+    if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && !context.getLog().contains(nextGlobalIndex)) {
+      context.setGlobalIndex(nextGlobalIndex);
+      context.reset();
+    }
+
+    // If an entry was provided, check the entry against the local log.
+    if (request.logIndex() != 0) {
       return checkPreviousEntry(request);
     } else {
       return appendEntries(request);
@@ -102,7 +126,7 @@ class PassiveState extends ReserveState {
   /**
    * Checks the previous entry in the append request for consistency.
    */
-  private AppendResponse checkPreviousEntry(AppendRequest request) {
+  protected AppendResponse checkPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
       LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
@@ -126,7 +150,7 @@ class PassiveState extends ReserveState {
   /**
    * Appends entries to the local log.
    */
-  private AppendResponse appendEntries(AppendRequest request) {
+  protected AppendResponse appendEntries(AppendRequest request) {
     // Append entries to the log starting at the last log index.
     long commitIndex = Math.max(context.getCommitIndex(), request.commitIndex());
     for (Entry entry : request.entries()) {

@@ -61,32 +61,8 @@ abstract class ActiveState extends PassiveState {
     return future;
   }
 
-  /**
-   * Starts the append process.
-   */
-  private AppendResponse handleAppend(AppendRequest request) {
-    // If the request term is less than the current term then immediately
-    // reply false and return our current term. The leader will receive
-    // the updated term and step down.
-    if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
-        .build();
-    } else if (request.logIndex() != 0) {
-      return checkPreviousEntry(request);
-    } else {
-      return appendEntries(request);
-    }
-  }
-
-  /**
-   * Checks the previous log entry for consistency.
-   */
-  private AppendResponse checkPreviousEntry(AppendRequest request) {
+  @Override
+  protected AppendResponse checkPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
       LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
@@ -120,10 +96,8 @@ abstract class ActiveState extends PassiveState {
     }
   }
 
-  /**
-   * Appends entries to the local log.
-   */
-  private AppendResponse appendEntries(AppendRequest request) {
+  @Override
+  protected AppendResponse appendEntries(AppendRequest request) {
     // If the log contains entries after the request's previous log index
     // then remove those entries to be replaced by the request entries.
     if (!request.entries().isEmpty()) {

@@ -274,7 +274,7 @@ final class LeaderAppender extends AbstractAppender {
     // important to ensure that tombstones are applied to their state machines.
     // If the members list is empty, use the local server's last log index as the global index.
     long globalMatchIndex = context.getClusterState().getRemoteMemberStates().stream()
-      .filter(m -> m.getMember().type() != Member.Type.RESERVE)
+      .filter(m -> m.getMember().type() != Member.Type.RESERVE && m.getMember().status() == Member.Status.AVAILABLE)
       .mapToLong(MemberState::getMatchIndex)
       .min()
       .orElse(context.getLog().lastIndex());
