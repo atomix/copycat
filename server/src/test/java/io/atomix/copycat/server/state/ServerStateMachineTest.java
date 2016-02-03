@@ -60,20 +60,27 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
   private AtomicLong sequence;
 
   @BeforeMethod
-  public void createStateMachine() {
-    callerContext = new SingleThreadContext("caller", new Serializer(new ServiceLoaderTypeResolver()));
-    stateContext = new SingleThreadContext("state", new Serializer(new ServiceLoaderTypeResolver()));
+  public void createStateMachine() throws Throwable {
+    Serializer serializer = new Serializer(new ServiceLoaderTypeResolver());
+    serializer.disableWhitelist();
+
+    callerContext = new SingleThreadContext("caller", serializer.clone());
+    stateContext = new SingleThreadContext("state", serializer.clone());
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
     Storage storage = new Storage(StorageLevel.MEMORY);
-    storage.serializer().resolve(new ServiceLoaderTypeResolver());
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
     Collection<Address> members = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5000),
       new Address("localhost", 5000)
     );
-    state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+
+    callerContext.executor().execute(() -> {
+      state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, serializer, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+      resume();
+    });
+    await();
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }

@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage.system;
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -40,10 +41,12 @@ import java.io.File;
 public class MetaStore implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(MetaStore.class);
   private final Storage storage;
+  private final Serializer serializer;
   private final Buffer buffer;
 
-  public MetaStore(String name, Storage storage) {
+  public MetaStore(String name, Storage storage, Serializer serializer) {
     this.storage = Assert.notNull(storage, "storage");
+    this.serializer = Assert.notNull(serializer, "serializer");
     if (storage.level() == StorageLevel.MEMORY) {
       buffer = HeapBuffer.allocate(12);
     } else {
@@ -51,6 +54,15 @@ public class MetaStore implements AutoCloseable {
       File file = new File(storage.directory(), String.format("%s.meta", name));
       buffer = FileBuffer.allocate(file, 12);
     }
+  }
+
+  /**
+   * Returns the metastore serializer.
+   *
+   * @return The metastore serializer.
+   */
+  public Serializer serializer() {
+    return serializer;
   }
 
   /**
@@ -103,7 +115,7 @@ public class MetaStore implements AutoCloseable {
    */
   public synchronized MetaStore storeConfiguration(Configuration configuration) {
     LOGGER.debug("Store configuration {}", configuration);
-    storage.serializer().writeObject(configuration.members(), buffer.position(12).writeByte(1).writeLong(configuration.index()));
+    serializer.writeObject(configuration.members(), buffer.position(12).writeByte(1).writeLong(configuration.index()));
     buffer.flush();
     return this;
   }
@@ -117,7 +129,7 @@ public class MetaStore implements AutoCloseable {
     if (buffer.position(12).readByte() == 1) {
       return new Configuration(
         buffer.readLong(),
-        storage.serializer().readObject(buffer)
+        serializer.readObject(buffer)
       );
     }
     return null;

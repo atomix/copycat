@@ -33,11 +33,10 @@ import static org.testng.Assert.*;
 public class MinorCompactionTest extends AbstractLogTest {
 
   protected Log createLog() {
-    return tempStorageBuilder()
-        .withMaxEntriesPerSegment(10)
-        .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
-        .build()
-        .openLog("copycat");
+    Storage storage = tempStorageBuilder()
+      .withMaxEntriesPerSegment(10)
+      .build();
+    return new Log("copycat", storage, new Serializer(new ServiceLoaderTypeResolver()));
   }
   
   /**

@@ -404,6 +404,15 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
+   * Returns the server serializer.
+   *
+   * @return The server serializer.
+   */
+  public Serializer serializer() {
+    return context.getSerializer();
+  }
+
+  /**
    * Returns the Copycat server state.
    * <p>
    * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
@@ -849,18 +858,13 @@ public class CopycatServer implements Managed<CopycatServer> {
 
       // If the storage is not configured, create a new Storage instance with the configured serializer.
       if (storage == null) {
-        storage = Storage.builder()
-          .withSerializer(serializer)
-          .build();
+        storage = new Storage();
       }
-
-      storage.serializer().resolve(new ServiceLoaderTypeResolver());
-      serializer.resolve(new ServiceLoaderTypeResolver());
 
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
       ThreadContext threadContext = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
 
-      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, stateMachineFactory, connections, threadContext);
+      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, serializer, stateMachineFactory, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout);

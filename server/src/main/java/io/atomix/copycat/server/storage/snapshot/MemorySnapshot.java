@@ -50,7 +50,7 @@ final class MemorySnapshot extends Snapshot {
   @Override
   public SnapshotWriter writer() {
     checkWriter();
-    return new SnapshotWriter(buffer.reset().slice(), this, store.storage.serializer());
+    return new SnapshotWriter(buffer.reset().slice(), this, store.serializer());
   }
 
   @Override
@@ -61,7 +61,7 @@ final class MemorySnapshot extends Snapshot {
 
   @Override
   public synchronized SnapshotReader reader() {
-    return openReader(new SnapshotReader(buffer.reset().slice(), this, store.storage.serializer()), descriptor);
+    return openReader(new SnapshotReader(buffer.reset().slice(), this, store.serializer()), descriptor);
   }
 
   @Override

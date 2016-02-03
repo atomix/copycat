@@ -55,11 +55,10 @@ public class MetaStoreTest {
    * Returns a new metastore.
    */
   protected MetaStore createMetaStore() {
-    return Storage.builder()
-      .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
+    Storage storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
-      .build()
-      .openMetaStore("test");
+      .build();
+    return new MetaStore("test", storage, new Serializer(new ServiceLoaderTypeResolver()));
   }
 
   /**

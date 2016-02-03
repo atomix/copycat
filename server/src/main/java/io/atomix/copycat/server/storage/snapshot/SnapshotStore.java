@@ -17,6 +17,7 @@ package io.atomix.copycat.server.storage.snapshot;
 
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -72,12 +73,14 @@ public class SnapshotStore implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(SnapshotStore.class);
   private final String name;
   final Storage storage;
+  private final Serializer serializer;
   private final TreeMap<Long, Snapshot> snapshots = new TreeMap<>();
   private Snapshot currentSnapshot;
 
-  public SnapshotStore(String name, Storage storage) {
+  public SnapshotStore(String name, Storage storage, Serializer serializer) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
+    this.serializer = Assert.notNull(serializer, "serializer");
     open();
   }
 
@@ -92,6 +95,15 @@ public class SnapshotStore implements AutoCloseable {
     if (!snapshots.isEmpty()) {
       currentSnapshot = snapshots.lastEntry().getValue();
     }
+  }
+
+  /**
+   * Returns the snapshot store serializer.
+   *
+   * @return The snapshot store serializer.
+   */
+  public Serializer serializer() {
+    return serializer;
   }
 
   /**

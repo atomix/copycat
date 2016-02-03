@@ -38,13 +38,12 @@ public abstract class LogTest extends AbstractLogTest {
    */
   @Override
   protected Log createLog() {
-    return tempStorageBuilder().withDirectory(new File(String.format("target/test-logs/%s", logId)))
+    Storage storage = tempStorageBuilder().withDirectory(new File(String.format("target/test-logs/%s", logId)))
         .withMaxSegmentSize(Integer.MAX_VALUE)
         .withMaxEntriesPerSegment(entriesPerSegment)
         .withStorageLevel(storageLevel())
-        .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
-        .build()
-        .openLog("copycat");
+        .build();
+    return new Log("copycat", storage, new Serializer(new ServiceLoaderTypeResolver()));
   }
 
   /**

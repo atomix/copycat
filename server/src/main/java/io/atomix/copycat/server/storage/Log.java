@@ -122,8 +122,8 @@ public class Log implements AutoCloseable {
   /**
    * @throws NullPointerException if {@code name} or {@code storage} is null
    */
-  protected Log(String name, Storage storage) {
-    this.segments = new SegmentManager(name, storage);
+  protected Log(String name, Storage storage, Serializer serializer) {
+    this.segments = new SegmentManager(name, storage, serializer);
     this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-compactor-%d")));
   }
 
