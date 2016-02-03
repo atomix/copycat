@@ -70,11 +70,11 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    serverCtx.executor().execute(() -> {
+    new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
       serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx);
       resume();
     });
-    await();
+    await(1000);
   }
 
   /**

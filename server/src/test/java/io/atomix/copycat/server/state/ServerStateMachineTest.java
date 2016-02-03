@@ -76,11 +76,11 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
       new Address("localhost", 5000)
     );
 
-    callerContext.executor().execute(() -> {
+    new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
       state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, serializer, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
       resume();
     });
-    await();
+    await(1000);
     timestamp = System.currentTimeMillis();
     sequence = new AtomicLong();
   }
