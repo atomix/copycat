@@ -15,9 +15,8 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.PooledDirectAllocator;
-import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -70,7 +69,6 @@ public class Storage {
   private static final double DEFAULT_COMPACTION_THRESHOLD = 0.5;
 
   private StorageLevel storageLevel = StorageLevel.DISK;
-  private Serializer serializer = new Serializer(new PooledDirectAllocator());
   private File directory = new File(DEFAULT_DIRECTORY);
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
@@ -105,27 +103,6 @@ public class Storage {
   /**
    * @throws NullPointerException if {@code directory} is null
    */
-  public Storage(Serializer serializer) {
-    this(StorageLevel.DISK, serializer);
-  }
-
-  /**
-   * @throws NullPointerException if {@code directory} or {@code serializer} are null
-   */
-  public Storage(String directory, Serializer serializer) {
-    this(new File(Assert.notNull(directory, "directory")), serializer);
-  }
-
-  /**
-   * @throws NullPointerException if {@code directory} or {@code serializer} are null
-   */
-  public Storage(File directory, Serializer serializer) {
-    this(directory, StorageLevel.DISK, serializer);
-  }
-
-  /**
-   * @throws NullPointerException if {@code directory} is null
-   */
   public Storage(String directory, StorageLevel storageLevel) {
     this(new File(Assert.notNull(directory, "directory")), storageLevel);
   }
@@ -136,44 +113,6 @@ public class Storage {
   public Storage(File directory, StorageLevel storageLevel) {
     this.directory = Assert.notNull(directory, "directory");
     this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
-  }
-
-  /**
-   * @throws NullPointerException if {@code directory} is null
-   */
-  public Storage(StorageLevel storageLevel, Serializer serializer) {
-    this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
-    this.serializer = Assert.notNull(serializer, "serializer");
-  }
-
-  /**
-   * @throws NullPointerException if {@code directory} or {@code serializer} are null
-   */
-  public Storage(String directory, StorageLevel storageLevel, Serializer serializer) {
-    this(new File(Assert.notNull(directory, "directory")), storageLevel, serializer);
-  }
-
-  /**
-   * @throws NullPointerException if {@code directory} or {@code serializer} are null
-   */
-  public Storage(File directory, StorageLevel storageLevel, Serializer serializer) {
-    this.directory = Assert.notNull(directory, "directory");
-    this.storageLevel = Assert.notNull(storageLevel, "storageLevel");
-    this.serializer = Assert.notNull(serializer, "serializer");
-  }
-
-  /**
-   * Returns the storage serializer.
-   * <p>
-   * The serializer is be used to serialize and deserialize entries written to the log. Entries written
-   * to the log must be recognized by the {@link Serializer} either by implementing {@link java.io.Serializable}
-   * or {@link io.atomix.catalyst.serializer.CatalystSerializable} or by registering a custom
-   * {@link io.atomix.catalyst.serializer.TypeSerializer} with the serializer.
-   *
-   * @return The storage serializer.
-   */
-  public Serializer serializer() {
-    return serializer;
   }
 
   /**
@@ -306,7 +245,7 @@ public class Storage {
    * @return The metastore.
    */
   public MetaStore openMetaStore(String name) {
-    return new MetaStore(name, this);
+    return new MetaStore(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
   }
 
   /**
@@ -316,7 +255,7 @@ public class Storage {
    * @return The snapshot store.
    */
   public SnapshotStore openSnapshotStore(String name) {
-    return new SnapshotStore(name, this);
+    return new SnapshotStore(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
   }
 
   /**
@@ -329,7 +268,7 @@ public class Storage {
    * @return The opened log.
    */
   public Log openLog(String name) {
-    return new Log(name, this);
+    return new Log(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
   }
 
   @Override
@@ -370,23 +309,6 @@ public class Storage {
      */
     public Builder withStorageLevel(StorageLevel storageLevel) {
       storage.storageLevel = Assert.notNull(storageLevel, "storageLevel");
-      return this;
-    }
-
-    /**
-     * Sets the log entry {@link Serializer}, returning the builder for method chaining.
-     * <p>
-     * The serializer will be used to serialize and deserialize entries written to the log. Entries written
-     * to the log must be recognized by the provided {@link Serializer} either by implementing {@link java.io.Serializable}
-     * or {@link io.atomix.catalyst.serializer.CatalystSerializable} or by registering a custom
-     * {@link io.atomix.catalyst.serializer.TypeSerializer} with the serializer.
-     *
-     * @param serializer The log entry serializer.
-     * @return The storage builder.
-     * @throws NullPointerException If the serializer is {@code null}
-     */
-    public Builder withSerializer(Serializer serializer) {
-      storage.serializer = Assert.notNull(serializer, "serializer");
       return this;
     }
 

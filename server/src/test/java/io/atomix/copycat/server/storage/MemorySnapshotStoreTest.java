@@ -32,11 +32,10 @@ public class MemorySnapshotStoreTest extends AbstractSnapshotStoreTest {
    * Returns a new snapshot store.
    */
   protected SnapshotStore createSnapshotStore() {
-    return Storage.builder()
+    Storage storage = Storage.builder()
       .withStorageLevel(StorageLevel.MEMORY)
-      .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
-      .build()
-      .openSnapshotStore("test");
+      .build();
+    return new SnapshotStore("test", storage, new Serializer(new ServiceLoaderTypeResolver()));
   }
 
 }

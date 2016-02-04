@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
@@ -57,7 +58,8 @@ public class ServerContext implements AutoCloseable {
   private final Supplier<StateMachine> stateMachineFactory;
   private final ClusterState cluster;
   private final Storage storage;
-  private final MetaStore meta;
+  private final Serializer serializer;
+  private MetaStore meta;
   private Log log;
   private SnapshotStore snapshot;
   private ServerStateMachine stateMachine;
@@ -74,23 +76,24 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, Serializer serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
+    this.serializer = Assert.notNull(serializer, "serializer");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
     this.stateContext = new SingleThreadContext("copycat-server-" + serverAddress + "-state-%d", threadContext.serializer().clone());
 
     // Open the meta store.
-    this.meta = storage.openMetaStore(name);
+    threadContext.execute(() -> this.meta = storage.openMetaStore(name)).join();
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
 
     // Reset the state machine.
-    reset();
+    threadContext.execute(this::reset).join();
 
     this.cluster = new ClusterState(type, serverAddress, clientAddress, members, this);
   }
@@ -131,6 +134,15 @@ public class ServerContext implements AutoCloseable {
    */
   public Storage getStorage() {
     return storage;
+  }
+
+  /**
+   * Returns the server serializer.
+   *
+   * @return The server serializer.
+   */
+  public Serializer getSerializer() {
+    return serializer;
   }
 
   /**

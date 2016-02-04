@@ -46,12 +46,11 @@ public class FileSnapshotStoreTest extends AbstractSnapshotStoreTest {
    * Returns a new snapshot store.
    */
   protected SnapshotStore createSnapshotStore() {
-    return Storage.builder()
+    Storage storage = Storage.builder()
       .withStorageLevel(StorageLevel.DISK)
-      .withSerializer(new Serializer(new ServiceLoaderTypeResolver()))
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
-      .build()
-      .openSnapshotStore("test");
+      .build();
+    return new SnapshotStore("test", storage, new Serializer(new ServiceLoaderTypeResolver()));
   }
 
   /**

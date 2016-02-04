@@ -1360,6 +1360,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     CopycatServer server = builder.build();
+    server.serializer().disableWhitelist();
     servers.add(server);
     return server;
   }
@@ -1373,6 +1374,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
+    client.serializer().disableWhitelist();
     client.open().thenRun(this::resume);
     await(30000);
     clients.add(client);
