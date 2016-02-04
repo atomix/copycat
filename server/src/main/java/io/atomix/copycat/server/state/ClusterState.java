@@ -48,7 +48,6 @@ import java.util.stream.Collectors;
  */
 final class ClusterState implements Cluster, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClusterState.class);
-  private static final int MAX_JOIN_ATTEMPTS = 3;
   private final ServerContext context;
   private final ServerMember member;
   private final Member.Type initialType;
@@ -67,7 +66,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
   ClusterState(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, ServerContext context) {
     this.initialType = Assert.notNull(type, "type");
-    this.member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress);
+    this.member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress).setCluster(this);
     this.context = Assert.notNull(context, "context");
 
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
