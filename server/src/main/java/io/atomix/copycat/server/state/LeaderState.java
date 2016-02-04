@@ -941,9 +941,21 @@ final class LeaderState extends ActiveState {
     }
   }
 
+  /**
+   * Ensures the local server is not the leader.
+   */
+  private void stepDown() {
+    if (context.getLeader().equals(context.getCluster().member())) {
+      context.setLeader(0);
+    }
+  }
+
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return super.close().thenRun(appender::close).thenRun(this::cancelAppendTimer);
+    return super.close()
+      .thenRun(appender::close)
+      .thenRun(this::cancelAppendTimer)
+      .thenRun(this::stepDown);
   }
 
 }
