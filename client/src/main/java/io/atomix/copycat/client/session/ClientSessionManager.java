@@ -98,6 +98,13 @@ final class ClientSessionManager {
    * Sends a keep-alive request to the cluster.
    */
   private void keepAlive() {
+    keepAlive(true);
+  }
+
+  /**
+   * Sends a keep-alive request to the cluster.
+   */
+  private void keepAlive(boolean retryOnFailure) {
     long sessionId = state.getSessionId();
 
     // If the current sessions state is unstable, reset the connection before sending a keep-alive.
@@ -127,9 +134,9 @@ final class ClientSessionManager {
           }
           // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
           // This will ensure that the address selector selects all servers without filtering on the leader.
-          else if (connection.leader() != null) {
+          else if (retryOnFailure && connection.leader() != null) {
             connection.reset(null, connection.servers());
-            keepAlive();
+            keepAlive(false);
           }
           // If no leader was set, set the session state to unstable and schedule another keep-alive.
           else {
@@ -139,9 +146,9 @@ final class ClientSessionManager {
         }
         // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
         // This will ensure that the address selector selects all servers without filtering on the leader.
-        else if (connection.leader() != null) {
+        else if (retryOnFailure && connection.leader() != null) {
           connection.reset(null, connection.servers());
-          keepAlive();
+          keepAlive(false);
         }
         // If no leader was set, set the session state to unstable and schedule another keep-alive.
         else {
@@ -172,10 +179,17 @@ final class ClientSessionManager {
 
   /**
    * Unregisters the session.
+   */
+  private void unregister(CompletableFuture<Void> future) {
+    unregister(true, future);
+  }
+
+  /**
+   * Unregisters the session.
    *
    * @param future A completable future to be completed once the session is unregistered.
    */
-  private void unregister(CompletableFuture<Void> future) {
+  private void unregister(boolean retryOnFailure, CompletableFuture<Void> future) {
     long sessionId = state.getSessionId();
     state.getLogger().debug("Unregistering session: {}", sessionId);
 
@@ -208,9 +222,9 @@ final class ClientSessionManager {
           }
           // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
           // This will ensure that the address selector selects all servers without filtering on the leader.
-          else if (connection.leader() != null) {
+          else if (retryOnFailure && connection.leader() != null) {
             connection.reset(null, connection.servers());
-            unregister(future);
+            unregister(false, future);
           }
           // If no leader was set, set the session state to unstable and schedule another unregister attempt.
           else {
@@ -220,9 +234,9 @@ final class ClientSessionManager {
         }
         // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
         // This will ensure that the address selector selects all servers without filtering on the leader.
-        else if (connection.leader() != null) {
+        else if (retryOnFailure && connection.leader() != null) {
           connection.reset(null, connection.servers());
-          unregister(future);
+          unregister(false, future);
         }
         // If no leader was set, set the session state to unstable and schedule another unregister attempt.
         else {
