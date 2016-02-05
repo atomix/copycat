@@ -945,7 +945,7 @@ final class LeaderState extends ActiveState {
    * Ensures the local server is not the leader.
    */
   private void stepDown() {
-    if (context.getLeader().equals(context.getCluster().member())) {
+    if (context.getLeader() != null && context.getLeader().equals(context.getCluster().member())) {
       context.setLeader(0);
     }
   }
