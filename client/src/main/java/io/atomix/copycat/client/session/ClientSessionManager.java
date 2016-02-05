@@ -83,6 +83,7 @@ final class ClientSessionManager {
           connection.reset(response.leader(), response.members());
           state.setSessionId(response.session())
             .setState(Session.State.OPEN);
+          state.getLogger().info("Registered session {}", response.session());
           attempt.complete();
           keepAlive();
         } else {

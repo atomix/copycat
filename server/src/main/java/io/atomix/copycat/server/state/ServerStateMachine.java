@@ -22,6 +22,7 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.error.InternalException;
 import io.atomix.copycat.client.error.UnknownSessionException;
+import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.session.SessionListener;
@@ -51,7 +52,6 @@ final class ServerStateMachine implements AutoCloseable {
   private final ServerCommitPool commits;
   private volatile long lastApplied;
   private long lastCompleted;
-  private long configuration;
   private Snapshot pendingSnapshot;
 
   ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
@@ -617,7 +617,6 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the server session is null, the session either never existed or already expired.
     if (session == null) {
-      LOGGER.warn("Unknown session: " + entry.getSession());
       future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
     }
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
@@ -753,66 +752,68 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private CompletableFuture<Object> apply(CommandEntry entry, boolean synchronous) {
     final CompletableFuture<Object> future = new CompletableFuture<>();
+    final ThreadContext context = ThreadContext.currentContextOrThrow();
 
     // First check to ensure that the session exists.
     ServerSession session = executor.context().sessions().getSession(entry.getSession());
 
-    // If the session is null then that indicates that the session already timed out or it never existed.
-    // Return with an UnknownSessionException.
+    // If the session is null, that indicates that the session already timed out and may have been
+    // compacted from the log. In that case, we must still apply commands for the session to the state
+    // machine to ensure that state is properly constructed on a replay of the log.
     if (session == null) {
-      LOGGER.warn("Unknown session: " + entry.getSession());
-      future.completeExceptionally(new UnknownSessionException("unknown session: " + entry.getSession()));
+      return executeDummyCommand(entry, future, context);
     }
+
     // If the command's sequence number is less than the next session sequence number then that indicates that
     // we've received a command that was previously applied to the state machine. Ensure linearizability by
     // returning the cached response instead of applying it to the user defined state machine.
-    else if (entry.getSequence() > 0 && entry.getSequence() < session.nextCommandSequence()) {
-      // Ensure the response check is executed in the state machine thread in order to ensure the
-      // command was applied, otherwise there will be a race condition and concurrent modification issues.
-      ThreadContext context = ThreadContext.currentContextOrThrow();
-      long sequence = entry.getSequence();
+    if (entry.getSequence() > 0 && entry.getSequence() < session.nextCommandSequence()) {
+      return sequenceCommand(entry, session, synchronous, future, context);
+    }
+    // If we've made it this far, the command must have been applied in the proper order as sequenced by the
+    // session. This should be the case for most commands applied to the state machine.
+    else {
+      return executeCommand(entry, session, synchronous, future, ThreadContext.currentContextOrThrow());
+    }
+  }
 
-      // Get the consistency level of the command. This should match the consistency level of the original command.
-      Command.ConsistencyLevel consistency = entry.getCommand().consistency();
+  /**
+   * Sequences a command according to the command sequence number.
+   */
+  private CompletableFuture<Object> sequenceCommand(CommandEntry entry, ServerSession session, boolean synchronous, CompletableFuture<Object> future, ThreadContext context) {
+    // Ensure the response check is executed in the state machine thread in order to ensure the
+    // command was applied, otherwise there will be a race condition and concurrent modification issues.
+    long sequence = entry.getSequence();
 
-      // Switch to the state machine thread and get the existing response.
-      executor.executor().execute(() -> {
-        if (!state.getLog().isOpen()) {
-          future.completeExceptionally(new IllegalStateException("log closed"));
-          return;
-        }
+    // Get the consistency level of the command. This should match the consistency level of the original command.
+    Command.ConsistencyLevel consistency = entry.getCommand().consistency();
 
-        // If the command's consistency level is not LINEARIZABLE or null (which are equivalent), return the
-        // cached response immediately in the server thread.
-        if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
-          Object response = session.getResponse(sequence);
-          if (response == null) {
-            context.executor().execute(() -> future.complete(null));
-          } else if (response instanceof Throwable) {
-            context.executor().execute(() -> future.completeExceptionally((Throwable) response));
-          } else {
-            context.executor().execute(() -> future.complete(response));
-          }
+    // Switch to the state machine thread and get the existing response.
+    executor.executor().execute(() -> {
+      if (!state.getLog().isOpen()) {
+        future.completeExceptionally(new IllegalStateException("log closed"));
+        return;
+      }
+
+      // If the command's consistency level is not LINEARIZABLE or null (which are equivalent), return the
+      // cached response immediately in the server thread.
+      if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
+        Object response = session.getResponse(sequence);
+        if (response == null) {
+          context.executor().execute(() -> future.complete(null));
+        } else if (response instanceof Throwable) {
+          context.executor().execute(() -> future.completeExceptionally((Throwable) response));
         } else {
-          // For linearizable commands, check whether a future is registered for the command. A future will be
-          // registered if the original command resulted in publishing events to any session. For linearizable
-          // commands, we wait until the event future is completed, indicating that all sessions to which event
-          // messages were sent have received/acked the messages.
-          CompletableFuture<Void> sessionFuture = session.getResponseFuture(sequence);
-          if (sessionFuture != null) {
-            sessionFuture.whenComplete((result, error) -> {
-              Object response = session.getResponse(sequence);
-              if (response == null) {
-                context.executor().execute(() -> future.complete(null));
-              } else if (response instanceof Throwable) {
-                context.executor().execute(() -> future.completeExceptionally((Throwable) response));
-              } else {
-                context.executor().execute(() -> future.complete(response));
-              }
-            });
-          } else {
-            // If no event future was registered for the original command, return the cached response in the
-            // server thread.
+          context.executor().execute(() -> future.complete(response));
+        }
+      } else {
+        // For linearizable commands, check whether a future is registered for the command. A future will be
+        // registered if the original command resulted in publishing events to any session. For linearizable
+        // commands, we wait until the event future is completed, indicating that all sessions to which event
+        // messages were sent have received/acked the messages.
+        CompletableFuture<Void> sessionFuture = session.getResponseFuture(sequence);
+        if (sessionFuture != null) {
+          sessionFuture.whenComplete((result, error) -> {
             Object response = session.getResponse(sequence);
             if (response == null) {
               context.executor().execute(() -> future.complete(null));
@@ -821,16 +822,21 @@ final class ServerStateMachine implements AutoCloseable {
             } else {
               context.executor().execute(() -> future.complete(response));
             }
+          });
+        } else {
+          // If no event future was registered for the original command, return the cached response in the
+          // server thread.
+          Object response = session.getResponse(sequence);
+          if (response == null) {
+            context.executor().execute(() -> future.complete(null));
+          } else if (response instanceof Throwable) {
+            context.executor().execute(() -> future.completeExceptionally((Throwable) response));
+          } else {
+            context.executor().execute(() -> future.complete(response));
           }
         }
-      });
-    }
-    // If we've made it this far, the command must have been applied in the proper order as sequenced by the
-    // session. This should be the case for most commands applied to the state machine.
-    else {
-      executeCommand(entry, session, synchronous, future, ThreadContext.currentContextOrThrow());
-    }
-
+      }
+    });
     return future;
   }
 
@@ -838,8 +844,6 @@ final class ServerStateMachine implements AutoCloseable {
    * Executes a state machine command.
    */
   private CompletableFuture<Object> executeCommand(CommandEntry entry, ServerSession session, boolean synchronous, CompletableFuture<Object> future, ThreadContext context) {
-    context.checkThread();
-
     // Allow the executor to execute any scheduled events.
     long timestamp = executor.tick(entry.getTimestamp());
     long sequence = entry.getSequence();
@@ -848,7 +852,7 @@ final class ServerStateMachine implements AutoCloseable {
 
     // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
     // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-    ServerCommit commit = commits.acquire(entry, timestamp);
+    ServerCommit commit = commits.acquire(entry, session, timestamp);
     executor.executor().execute(() -> {
       if (!state.getLog().isOpen()) {
         future.completeExceptionally(new IllegalStateException("log closed"));
@@ -889,6 +893,41 @@ final class ServerStateMachine implements AutoCloseable {
     // timestamp/index/sequence checks are done in this thread prior to executing operations on the state machine thread.
     session.setTimestamp(timestamp).setCommandSequence(sequence);
 
+    return future;
+  }
+
+  /**
+   * Executes a command for an unknown session.
+   */
+  private CompletableFuture<Object> executeDummyCommand(CommandEntry entry, CompletableFuture<Object> future, ThreadContext context) {
+    // Allow the executor to execute any scheduled events.
+    long timestamp = executor.tick(entry.getTimestamp());
+
+    // Create a dummy session for the state machine.
+    Session session = new DummySession(entry.getSession());
+
+    // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
+    // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
+    ServerCommit commit = commits.acquire(entry, session, timestamp);
+    executor.executor().execute(() -> {
+      if (!state.getLog().isOpen()) {
+        future.completeExceptionally(new IllegalStateException("log closed"));
+        return;
+      }
+
+      // Update the state machine context with the commit index and local server context. The synchronous flag
+      // indicates whether the server expects linearizable completion of published events. Events will be published
+      // based on the configured consistency level for the context.
+      executor.init(commit.index(), commit.time(), false, Command.ConsistencyLevel.SEQUENTIAL);
+
+      try {
+        // Execute the state machine operation and get the result.
+        Object result = executor.executeOperation(commit);
+        context.executor().execute(() -> future.complete(result));
+      } catch (Exception e) {
+        context.executor().execute(() -> future.completeExceptionally(e));
+      }
+    });
     return future;
   }
 
@@ -934,7 +973,7 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Once the query has met its sequence requirement, check whether it has also met its index requirement. If the index
       // requirement is not yet met, queue the query for the state machine to catch up to the required index.
-      ServerCommit commit = commits.acquire(entry, executor.timestamp());
+      ServerCommit commit = commits.acquire(entry, session, executor.timestamp());
       session.registerSequenceQuery(sequence, () -> {
         context.checkThread();
         if (index > session.getLastApplied()) {
@@ -954,14 +993,14 @@ final class ServerStateMachine implements AutoCloseable {
 
       ThreadContext context = ThreadContext.currentContextOrThrow();
 
-      ServerCommit commit = commits.acquire(entry, executor.timestamp());
+      ServerCommit commit = commits.acquire(entry, session, executor.timestamp());
       session.registerIndexQuery(entry.getIndex(), () -> {
         context.checkThread();
         executeQuery(commit, future, context);
       });
       return future;
     } else {
-      return executeQuery(commits.acquire(entry, executor.timestamp()), new CompletableFuture<>(), ThreadContext.currentContextOrThrow());
+      return executeQuery(commits.acquire(entry, session, executor.timestamp()), new CompletableFuture<>(), ThreadContext.currentContextOrThrow());
     }
   }
 

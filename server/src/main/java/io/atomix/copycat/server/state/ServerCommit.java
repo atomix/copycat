@@ -33,17 +33,15 @@ import java.time.Instant;
 final class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
   private final Log log;
-  private final ServerSessionManager sessions;
   private long index;
   private Session session;
   private Instant instant;
   private Operation operation;
   private volatile boolean open;
 
-  public ServerCommit(ServerCommitPool pool, Log log, ServerSessionManager sessions) {
+  public ServerCommit(ServerCommitPool pool, Log log) {
     this.pool = pool;
     this.log = log;
-    this.sessions = sessions;
   }
 
   /**
@@ -51,9 +49,9 @@ final class ServerCommit implements Commit<Operation<?>> {
    *
    * @param entry The entry.
    */
-  void reset(OperationEntry<?> entry, long timestamp) {
+  void reset(OperationEntry<?> entry, Session session, long timestamp) {
     this.index = entry.getIndex();
-    this.session = sessions.getSession(entry.getSession());
+    this.session = session;
     this.instant = Instant.ofEpochMilli(timestamp);
     this.operation = entry.getOperation();
     open = true;
