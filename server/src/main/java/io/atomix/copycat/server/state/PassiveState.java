@@ -15,15 +15,21 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.client.Query;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.error.RaftException;
+import io.atomix.copycat.client.request.ConnectRequest;
 import io.atomix.copycat.client.request.QueryRequest;
+import io.atomix.copycat.client.response.ConnectResponse;
 import io.atomix.copycat.client.response.QueryResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.request.AcceptRequest;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.InstallRequest;
+import io.atomix.copycat.server.response.AcceptResponse;
 import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.InstallResponse;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
@@ -33,6 +39,7 @@ import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * Passive state.
@@ -65,6 +72,37 @@ class PassiveState extends ReserveState {
   private void truncateUncommittedEntries() {
     if (type() == CopycatServer.State.PASSIVE) {
       context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+    }
+  }
+
+  @Override
+  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      // Immediately register the session connection and send an accept request to the leader.
+      context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
+
+      AcceptRequest acceptRequest = AcceptRequest.builder()
+        .withClient(request.client())
+        .withAddress(context.getCluster().member().serverAddress())
+        .build();
+      return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
+        .thenApply(acceptResponse -> ConnectResponse.builder()
+          .withStatus(Response.Status.OK)
+          .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
+          .withMembers(context.getCluster().members().stream()
+            .map(Member::clientAddress)
+            .filter(m -> m != null)
+            .collect(Collectors.toList()))
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
