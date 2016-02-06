@@ -568,6 +568,7 @@ class ServerSession implements Session {
   ServerSession resendEvents(long index) {
     clearEvents(index);
     for (EventHolder event : events) {
+      // TODO: Sequential events cannot be sent to clients connected to reserve members
       sendSequentialEvent(event);
     }
     return this;
