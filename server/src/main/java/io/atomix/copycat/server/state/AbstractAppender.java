@@ -21,7 +21,6 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.AppendRequest;
 import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.request.InstallRequest;
@@ -130,16 +129,16 @@ abstract class AbstractAppender implements AutoCloseable {
    * @param member The member to which to send the request.
    * @return The append request.
    */
-  protected AppendRequest buildAppendRequest(MemberState member) {
+  protected AppendRequest buildAppendRequest(MemberState member, long lastIndex) {
     // If the log is empty then send an empty commit.
     // If the next index hasn't yet been set then we send an empty commit first.
     // If the next index is greater than the last index then send an empty commit.
     // If the member failed to respond to recent communication send an empty commit. This
     // helps avoid doing expensive work until we can ascertain the member is back up.
-    if (context.getLog().isEmpty() || member.getNextIndex() > context.getLog().lastIndex() || member.getFailureCount() > 0) {
+    if (context.getLog().isEmpty() || member.getNextIndex() > lastIndex || member.getFailureCount() > 0) {
       return buildAppendEmptyRequest(member);
     } else {
-      return buildAppendEntriesRequest(member);
+      return buildAppendEntriesRequest(member, lastIndex);
     }
   }
 
@@ -168,7 +167,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Builds a populated AppendEntries request.
    */
   @SuppressWarnings("unchecked")
-  protected AppendRequest buildAppendEntriesRequest(MemberState member) {
+  protected AppendRequest buildAppendEntriesRequest(MemberState member, long lastIndex) {
     Entry prevEntry = getPrevEntry(member);
 
     ServerMember leader = context.getLeader();
@@ -191,7 +190,6 @@ abstract class AbstractAppender implements AutoCloseable {
     // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
     // counted towards the size of the batch.
     int size = 0;
-    final long lastIndex = context.getLog().lastIndex();
 
     // Iterate through remaining entries in the log up to the last index.
     for (long i = index; i <= lastIndex; i++) {
@@ -319,7 +317,7 @@ abstract class AbstractAppender implements AutoCloseable {
       updateNextIndex(member);
 
       // If there are more entries to send then attempt to send another commit.
-      if (hasMoreEntries(member)) {
+      if (request.logIndex() != response.logIndex() && hasMoreEntries(member)) {
         appendEntries(member);
       }
     }
@@ -381,12 +379,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Returns a boolean value indicating whether there are more entries to send.
    */
-  protected boolean hasMoreEntries(MemberState member) {
-    // If the member's nextIndex is an entry in the local log then more entries can be sent.
-    return member.getMember().type() != Member.Type.RESERVE
-      && member.getMember().type() != Member.Type.PASSIVE
-      && member.getNextIndex() <= context.getLog().lastIndex();
-  }
+  protected abstract boolean hasMoreEntries(MemberState member);
 
   /**
    * Updates the match index when a response is received.
@@ -401,7 +394,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void updateNextIndex(MemberState member) {
     // If the match index was set, update the next index to be greater than the match index if necessary.
-    member.setNextIndex(Math.max(member.getNextIndex(), Math.max(member.getMatchIndex() + 1, 1)));
+    member.setNextIndex(Math.max(member.getMatchIndex() + 1, 1));
   }
 
   /**

@@ -198,8 +198,16 @@ final class LeaderAppender extends AbstractAppender {
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (canAppend(member)) {
-      sendAppendRequest(member, buildAppendRequest(member));
+      sendAppendRequest(member, buildAppendRequest(member, context.getLog().lastIndex()));
     }
+  }
+
+  @Override
+  protected boolean hasMoreEntries(MemberState member) {
+    // If the member's nextIndex is an entry in the local log then more entries can be sent.
+    return member.getMember().type() != Member.Type.RESERVE
+      && member.getMember().type() != Member.Type.PASSIVE
+      && member.getNextIndex() <= context.getLog().lastIndex();
   }
 
   /**
