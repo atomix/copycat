@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.copycat.server.cluster.Member;
+
 /**
  * Follower appender.
  *
@@ -38,6 +40,11 @@ final class FollowerAppender extends AbstractAppender {
   }
 
   @Override
+  protected boolean hasMoreEntries(MemberState member) {
+    return member.getMember().type() == Member.Type.PASSIVE && member.getNextIndex() <= context.getCommitIndex();
+  }
+
+  @Override
   protected void appendEntries(MemberState member) {
     // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
     if (!open)
@@ -53,8 +60,8 @@ final class FollowerAppender extends AbstractAppender {
       }
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
-    else if (canAppend(member)) {
-      sendAppendRequest(member, buildAppendRequest(member));
+    else if (canAppend(member) && hasMoreEntries(member)) {
+      sendAppendRequest(member, buildAppendRequest(member, context.getCommitIndex()));
     }
   }
 
