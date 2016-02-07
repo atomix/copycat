@@ -327,6 +327,30 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests demoting the leader.
+   */
+  public void testDemoteLeader() throws Throwable {
+    List<CopycatServer> servers = createServers(3);
+
+    CopycatServer leader = servers.stream()
+      .filter(s -> s.cluster().member().equals(s.cluster().leader()))
+      .findFirst()
+      .get();
+
+    CopycatServer follower = servers.stream()
+      .filter(s -> !s.cluster().member().equals(s.cluster().leader()))
+      .findFirst()
+      .get();
+
+    follower.cluster().member(leader.cluster().member().address()).onTypeChange(t -> {
+      threadAssertEquals(t, Member.Type.PASSIVE);
+      resume();
+    });
+    leader.cluster().member().demote(Member.Type.PASSIVE).thenRun(this::resume);
+    await(10000, 2);
+  }
+
+  /**
    * Tests submitting a command.
    */
   public void testOneNodeSubmitCommandWithNoneConsistency() throws Throwable {
