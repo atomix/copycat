@@ -134,7 +134,7 @@ public class DefaultCopycatClient implements CopycatClient {
     changeListener = session.onStateChange(this::onStateChange);
 
     // Register all event listeners.
-    eventListeners.forEach(EventListener::register);
+    eventListeners.forEach(l -> l.register(session));
     return session;
   }
 
@@ -249,7 +249,7 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
     EventListener<T> listener = new EventListener<>(event, callback);
-    listener.register();
+    listener.register(session);
     return listener;
   }
 
@@ -399,7 +399,7 @@ public class DefaultCopycatClient implements CopycatClient {
     /**
      * Registers the session event listener.
      */
-    public void register() {
+    public void register(Session session) {
       if (ThreadContext.currentContext() == context) {
         parent = session.onEvent(event, callback);
       } else {
