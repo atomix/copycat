@@ -434,13 +434,13 @@ public class ServerContext implements AutoCloseable {
     // Delete the existing log.
     if (log != null) {
       log.close();
-      log.delete();
+      storage.deleteLog(name);
     }
 
     // Delete the existing snapshot store.
     if (snapshot != null) {
       snapshot.close();
-      snapshot.delete();
+      storage.deleteSnapshotStore(name);
     }
 
     // Open the log.
@@ -630,20 +630,14 @@ public class ServerContext implements AutoCloseable {
    * Deletes the server context.
    */
   public void delete() {
-    // Delete the metadata store.
-    MetaStore meta = storage.openMetaStore(name);
-    meta.close();
-    meta.delete();
-
     // Delete the log.
-    Log log = storage.openLog(name);
-    log.close();
-    log.delete();
+    storage.deleteLog(name);
 
     // Delete the snapshot store.
-    SnapshotStore snapshot = storage.openSnapshotStore(name);
-    snapshot.close();
-    snapshot.delete();
+    storage.deleteSnapshotStore(name);
+
+    // Delete the metadata store.
+    storage.deleteMetaStore(name);
   }
 
   @Override

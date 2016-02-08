@@ -555,13 +555,10 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return The cluster state.
    */
   ClusterState commit() {
-    // If the local member has been removed from the committed configuration, transition the local member.
-    if (!configuration.members().contains(member)) {
-      context.transition(Member.Type.INACTIVE);
-
-      if (leaveFuture != null) {
-        leaveFuture.complete(null);
-      }
+    // Apply the configuration to the local server state.
+    context.transition(member.type());
+    if (!configuration.members().contains(member) && leaveFuture != null) {
+      leaveFuture.complete(null);
     }
 
     // If the local stored configuration is older than the committed configuration, overwrite it.
@@ -586,8 +583,10 @@ final class ClusterState implements Cluster, AutoCloseable {
       return this;
 
     // Iterate through members in the new configuration, add any missing members, and update existing members.
+    boolean transition = false;
     for (Member member : configuration.members()) {
       if (member.equals(this.member)) {
+        transition = this.member.type().ordinal() < member.type().ordinal();
         this.member.update(member.type()).update(member.clientAddress());
       } else {
         // If the member state doesn't already exist, create it.
@@ -632,11 +631,11 @@ final class ClusterState implements Cluster, AutoCloseable {
       this.member.update(Member.Type.INACTIVE);
     }
 
-    // Transition the local member only if the member is not listed as INACTIVE.
-    // Configuration changes that remove the local member from the cluster are only applied
-    // to the local server upon commitment. This ensures that e.g. a leader that's removing
-    // itself from the configuration can commit the configuration change prior to shutting down.
-    if (this.member.type() != Member.Type.INACTIVE) {
+    // Transition the local member only if the member is being promoted and not demoted.
+    // Configuration changes that demote the local member are only applied to the local server
+    // upon commitment. This ensures that e.g. a leader that's removing itself from the quorum
+    // can commit the configuration change prior to shutting down.
+    if (transition) {
       context.transition(this.member.type());
     }
 

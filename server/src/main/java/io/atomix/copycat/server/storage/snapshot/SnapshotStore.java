@@ -254,16 +254,6 @@ public class SnapshotStore implements AutoCloseable {
   public void close() {
   }
 
-  /**
-   * Deletes the metastore.
-   */
-  public void delete() {
-    loadSnapshots().forEach(s -> {
-      s.close();
-      s.delete();
-    });
-  }
-
   @Override
   public String toString() {
     return getClass().getSimpleName();

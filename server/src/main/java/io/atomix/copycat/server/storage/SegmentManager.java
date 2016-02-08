@@ -482,16 +482,6 @@ public class SegmentManager implements AutoCloseable {
     currentSegment = null;
   }
 
-  /**
-   * Deletes all segments.
-   */
-  public void delete() {
-    segments.values().forEach(s -> {
-      LOGGER.debug("Deleting segment: {}", s.descriptor().id());
-      s.delete();
-    });
-  }
-
   @Override
   public String toString() {
     return String.format("%s[directory=%s, segments=%d]", getClass().getSimpleName(), storage.directory(), segments.size());

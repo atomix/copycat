@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import org.testng.annotations.Test;
 
@@ -33,17 +31,14 @@ import static org.testng.Assert.*;
  */
 @Test
 public abstract class LogTest extends AbstractLogTest {
-  /**
-   * Creates a new log.
-   */
+
   @Override
-  protected Log createLog() {
-    Storage storage = tempStorageBuilder().withDirectory(new File(String.format("target/test-logs/%s", logId)))
-        .withMaxSegmentSize(Integer.MAX_VALUE)
-        .withMaxEntriesPerSegment(entriesPerSegment)
-        .withStorageLevel(storageLevel())
-        .build();
-    return new Log("copycat", storage, new Serializer(new ServiceLoaderTypeResolver()));
+  protected Storage createStorage() {
+    return tempStorageBuilder().withDirectory(new File(String.format("target/test-logs/%s", logId)))
+      .withMaxSegmentSize(Integer.MAX_VALUE)
+      .withMaxEntriesPerSegment(entriesPerSegment)
+      .withStorageLevel(storageLevel())
+      .build();
   }
 
   /**

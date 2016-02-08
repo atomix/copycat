@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
+import io.atomix.copycat.server.storage.snapshot.SnapshotFile;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
 
@@ -249,6 +250,16 @@ public class Storage {
   }
 
   /**
+   * Deletes a {@link MetaStore}.
+   *
+   * @param name The metastore name.
+   */
+  public void deleteMetaStore(String name) {
+    StorageCleaner cleaner = new StorageCleaner(this);
+    cleaner.cleanFiles(f -> f.getName().equals(String.format("%s.meta", name)));
+  }
+
+  /**
    * Opens a new {@link SnapshotStore}.
    *
    * @param name The snapshot store name.
@@ -259,16 +270,37 @@ public class Storage {
   }
 
   /**
+   * Deletes a {@link SnapshotStore}.
+   *
+   * @param name The snapshot store name.
+   */
+  public void deleteSnapshotStore(String name) {
+    StorageCleaner cleaner = new StorageCleaner(this);
+    cleaner.cleanFiles(f -> SnapshotFile.isSnapshotFile(name, f));
+  }
+
+  /**
    * Opens a new {@link Log}.
    * <p>
    * When a log is opened, the log will attempt to load {@link Segment}s from the storage {@link #directory()}
    * according to the provided log {@code name}. If segments for the given log name are present on disk, segments
    * will be loaded and indexes will be rebuilt from disk. If no segments are found, an empty log will be created.
    *
+   * @param name The log name.
    * @return The opened log.
    */
   public Log openLog(String name) {
     return new Log(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
+  }
+
+  /**
+   * Deletes a {@link Log}.
+   *
+   * @param name The log name.
+   */
+  public void deleteLog(String name) {
+    StorageCleaner cleaner = new StorageCleaner(this);
+    cleaner.cleanFiles(f -> SegmentFile.isSegmentFile(name, f));
   }
 
   @Override

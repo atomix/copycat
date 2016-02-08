@@ -50,12 +50,13 @@ import static org.testng.Assert.assertTrue;
 @Test
 public class MetaStoreTest {
   private String testId;
+  private Storage storage;
 
   /**
    * Returns a new metastore.
    */
   protected MetaStore createMetaStore() {
-    Storage storage = Storage.builder()
+    storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
     return new MetaStore("test", storage, new Serializer(new ServiceLoaderTypeResolver()));
@@ -105,7 +106,7 @@ public class MetaStoreTest {
     meta = createMetaStore();
     assertEquals(meta.loadTerm(), 1);
     assertEquals(meta.loadVote(), 2);
-    meta.delete();
+    storage.deleteMetaStore("test");
     meta = createMetaStore();
     assertEquals(meta.loadTerm(), 0);
     assertEquals(meta.loadVote(), 0);
