@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import org.testng.annotations.Test;
 
@@ -32,11 +30,11 @@ import static org.testng.Assert.*;
 @Test
 public class MinorCompactionTest extends AbstractLogTest {
 
-  protected Log createLog() {
-    Storage storage = tempStorageBuilder()
+  @Override
+  protected Storage createStorage() {
+    return tempStorageBuilder()
       .withMaxEntriesPerSegment(10)
       .build();
-    return new Log("copycat", storage, new Serializer(new ServiceLoaderTypeResolver()));
   }
   
   /**

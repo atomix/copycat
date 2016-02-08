@@ -30,7 +30,6 @@ import static org.testng.Assert.*;
  */
 @Test
 public abstract class AbstractSnapshotStoreTest {
-  private String testId;
 
   /**
    * Returns a new snapshot store.

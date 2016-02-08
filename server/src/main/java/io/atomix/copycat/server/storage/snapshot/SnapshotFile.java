@@ -26,7 +26,7 @@ import java.util.Date;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class SnapshotFile {
+public final class SnapshotFile {
   private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddHHmmss");
   private static final char PART_SEPARATOR = '-';
   private static final char EXTENSION_SEPARATOR = '.';
@@ -38,7 +38,7 @@ final class SnapshotFile {
    *
    * @throws NullPointerException if {@code file} is null
    */
-  static boolean isSnapshotFile(String name, File file) {
+  public static boolean isSnapshotFile(String name, File file) {
     Assert.notNull(name, "name");
     Assert.notNull(file, "file");
     String fileName = file.getName();

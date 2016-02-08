@@ -24,7 +24,7 @@ import java.io.File;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class SegmentFile {
+public final class SegmentFile {
   private static final char PART_SEPARATOR = '-';
   private static final char EXTENSION_SEPARATOR = '.';
   private static final String EXTENSION = "log";
@@ -35,7 +35,7 @@ final class SegmentFile {
    * 
    * @throws NullPointerException if {@code file} is null
    */
-  static boolean isSegmentFile(String name, File file) {
+  public static boolean isSegmentFile(String name, File file) {
     Assert.notNull(name, "name");
     Assert.notNull(file, "file");
     String fileName = file.getName();
