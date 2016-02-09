@@ -74,7 +74,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
           .executor()
           .context()
           .sessions()
-          .registerSession(new ServerSession(1, UUID.randomUUID(), serverContext.getStateMachine().executor().context(), 1000));
+          .registerSession(new ServerSession(1, UUID.randomUUID(), l -> {}, serverContext.getStateMachine().executor().context(), 1000));
       CommandRequest request1 = CommandRequest.builder()
           .withSession(1)
           .withSequence(2)
