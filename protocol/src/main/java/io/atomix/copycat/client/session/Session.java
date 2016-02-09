@@ -79,7 +79,7 @@ public interface Session {
      * Clients withe a session in the {@code OPEN} state can be assumed to be operating normally and are guaranteed
      * to benefit from linearizable reads and writes.
      */
-    OPEN,
+    OPEN(true),
 
     /**
      * Indicates that the session in an unstable state and may or may not be {@link #EXPIRED}.
@@ -99,7 +99,7 @@ public interface Session {
      * {@link #OPEN} state or {@link #EXPIRED} based on feedback from the cluster. Only the cluster can explicitly
      * expire a session.
      */
-    UNSTABLE,
+    UNSTABLE(true),
 
     /**
      * Indicates that the session is expired.
@@ -112,15 +112,31 @@ public interface Session {
      * may or may not be applied to server state machines. Linearizability is guaranteed only within the context of a
      * session, and so linearizability may be broken if operations are resubmitted across sessions.
      */
-    EXPIRED,
+    EXPIRED(false),
 
     /**
      * Indicates that the session has been closed.
      * <p>
      * This state indicates that the client's session was explicitly unregistered and the session was closed safely.
      */
-    CLOSED,
+    CLOSED(false);
 
+    private final boolean active;
+
+    State(boolean active) {
+      this.active = active;
+    }
+
+    /**
+     * Returns a boolean value indicating whether the state is an active state.
+     * <p>
+     * Sessions can only submit commands and receive events while in an active state.
+     *
+     * @return Indicates whether the state is an active state.
+     */
+    public boolean active() {
+      return active;
+    }
   }
 
   /**
