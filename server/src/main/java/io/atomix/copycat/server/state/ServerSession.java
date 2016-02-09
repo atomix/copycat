@@ -300,9 +300,9 @@ class ServerSession implements Session {
    */
   ServerSession setCommandSequence(long sequence) {
     // For each increment of the sequence number, trigger query callbacks that are dependent on the specific sequence.
-    for (long i = this.commandSequence + 1; i <= sequence; i++) {
-      this.commandSequence = i;
-      List<Runnable> queries = this.sequenceQueries.remove(this.commandSequence);
+    for (long i = commandSequence + 1; i <= sequence; i++) {
+      commandSequence = i;
+      List<Runnable> queries = this.sequenceQueries.remove(commandSequence);
       if (queries != null) {
         for (Runnable query : queries) {
           query.run();
@@ -353,9 +353,9 @@ class ServerSession implements Session {
     // Query callbacks for this session are added to the indexQueries map to be executed once the required index
     // for the query is reached. For each increment of the index, trigger query callbacks that are dependent
     // on the specific index.
-    for (long i = this.lastApplied + 1; i <= index; i++) {
-      this.lastApplied = i;
-      List<Runnable> queries = this.indexQueries.remove(this.lastApplied);
+    for (long i = lastApplied + 1; i <= index; i++) {
+      lastApplied = i;
+      List<Runnable> queries = this.indexQueries.remove(lastApplied);
       if (queries != null) {
         for (Runnable query : queries) {
           query.run();

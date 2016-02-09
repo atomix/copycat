@@ -353,13 +353,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testOneNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(1, Command.ConsistencyLevel.NONE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
   public void testOneNodeSubmitCommandWithSequentialConsistency() throws Throwable {
     testSubmitCommand(1, Command.ConsistencyLevel.SEQUENTIAL);
   }
@@ -369,13 +362,6 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testOneNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
     testSubmitCommand(1, Command.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testTwoNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(2, Command.ConsistencyLevel.NONE);
   }
 
   /**
@@ -395,13 +381,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testThreeNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(3, Command.ConsistencyLevel.NONE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
   public void testThreeNodeSubmitCommandWithSequentialConsistency() throws Throwable {
     testSubmitCommand(3, Command.ConsistencyLevel.SEQUENTIAL);
   }
@@ -416,13 +395,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testFourNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(4, Command.ConsistencyLevel.NONE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
   public void testFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
     testSubmitCommand(4, Command.ConsistencyLevel.SEQUENTIAL);
   }
@@ -432,13 +404,6 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
     testSubmitCommand(4, Command.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testFiveNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(5, Command.ConsistencyLevel.NONE);
   }
 
   /**
@@ -473,13 +438,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testTwoOfThreeNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(2, 3, Command.ConsistencyLevel.NONE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
   public void testTwoOfThreeNodeSubmitCommandWithSequentialConsistency() throws Throwable {
     testSubmitCommand(2, 3, Command.ConsistencyLevel.SEQUENTIAL);
   }
@@ -494,13 +452,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testThreeOfFourNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(3, 4, Command.ConsistencyLevel.NONE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
   public void testThreeOfFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
     testSubmitCommand(3, 4, Command.ConsistencyLevel.SEQUENTIAL);
   }
@@ -510,13 +461,6 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testThreeOfFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
     testSubmitCommand(3, 4, Command.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testThreeOfFiveNodeSubmitCommandWithNoneConsistency() throws Throwable {
-    testSubmitCommand(3, 5, Command.ConsistencyLevel.NONE);
   }
 
   /**

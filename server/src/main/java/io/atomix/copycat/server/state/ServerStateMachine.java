@@ -841,7 +841,7 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the command's consistency level is not LINEARIZABLE or null (which are equivalent), return the
     // cached response immediately in the server thread.
-    if (consistency == Command.ConsistencyLevel.NONE || consistency == Command.ConsistencyLevel.SEQUENTIAL) {
+    if (consistency == Command.ConsistencyLevel.SEQUENTIAL) {
       Object response = session.getResponse(sequence);
       if (response == null) {
         context.executor().execute(() -> future.complete(null));
