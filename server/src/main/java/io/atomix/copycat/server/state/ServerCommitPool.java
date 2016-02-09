@@ -16,7 +16,6 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 import org.slf4j.Logger;
@@ -47,7 +46,7 @@ final class ServerCommitPool implements AutoCloseable {
    * @param entry The entry for which to acquire the commit.
    * @return The commit to acquire.
    */
-  public ServerCommit acquire(OperationEntry entry, Session session, long timestamp) {
+  public ServerCommit acquire(OperationEntry entry, ServerSession session, long timestamp) {
     ServerCommit commit = pool.poll();
     if (commit == null) {
       commit = new ServerCommit(this, log);

@@ -34,7 +34,7 @@ final class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
   private final Log log;
   private long index;
-  private Session session;
+  private ServerSession session;
   private Instant instant;
   private Operation operation;
   private volatile boolean open;
@@ -49,11 +49,12 @@ final class ServerCommit implements Commit<Operation<?>> {
    *
    * @param entry The entry.
    */
-  void reset(OperationEntry<?> entry, Session session, long timestamp) {
+  void reset(OperationEntry<?> entry, ServerSession session, long timestamp) {
     this.index = entry.getIndex();
     this.session = session;
     this.instant = Instant.ofEpochMilli(timestamp);
     this.operation = entry.getOperation();
+    session.acquire();
     open = true;
   }
 
@@ -104,6 +105,8 @@ final class ServerCommit implements Commit<Operation<?>> {
         } catch (IllegalStateException e) {
         }
       }
+
+      session.release();
 
       index = 0;
       session = null;

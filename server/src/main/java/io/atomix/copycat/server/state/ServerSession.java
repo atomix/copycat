@@ -26,6 +26,7 @@ import io.atomix.copycat.client.response.PublishResponse;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.client.session.Event;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.storage.LogCleaner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,11 +44,13 @@ class ServerSession implements Session {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSession.class);
   private final long id;
   private final UUID client;
+  private final LogCleaner cleaner;
   private final ServerStateMachineContext context;
-  private State state = State.CLOSED;
+  private volatile State state = State.CLOSED;
   private final long timeout;
   private Connection connection;
   private Address address;
+  private volatile long references;
   private long connectIndex;
   private long keepAliveIndex;
   private long requestSequence;
@@ -56,6 +59,7 @@ class ServerSession implements Session {
   private long commandLowWaterMark;
   private long eventIndex;
   private long completeIndex;
+  private long closeIndex;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
@@ -69,9 +73,10 @@ class ServerSession implements Session {
   private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSession(long id, UUID client, ServerStateMachineContext context, long timeout) {
+  ServerSession(long id, UUID client, LogCleaner cleaner, ServerStateMachineContext context, long timeout) {
     this.id = id;
     this.client = Assert.notNull(client, "client");
+    this.cleaner = Assert.notNull(cleaner, "cleaner");
     this.eventIndex = id;
     this.completeIndex = id;
     this.lastApplied = id - 1;
@@ -124,6 +129,36 @@ class ServerSession implements Session {
   }
 
   /**
+   * Acquires a reference to the session.
+   */
+  void acquire() {
+    references++;
+  }
+
+  /**
+   * Releases a reference to the session.
+   */
+  void release() {
+    long references = --this.references;
+    if (!state.active() && references == 0) {
+      context.sessions().unregisterSession(id);
+      cleaner.clean(id);
+      if (closeIndex > 0) {
+        cleaner.clean(closeIndex);
+      }
+    }
+  }
+
+  /**
+   * Returns the number of open command references for the session.
+   *
+   * @return The number of open command references for the session.
+   */
+  long references() {
+    return references;
+  }
+
+  /**
    * Returns the session timeout.
    *
    * @return The session timeout.
@@ -168,7 +203,11 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setConnectIndex(long connectIndex) {
+    long previousConnectIndex = this.connectIndex;
     this.connectIndex = connectIndex;
+    if (previousConnectIndex > 0) {
+      cleaner.clean(previousConnectIndex);
+    }
     return this;
   }
 
@@ -188,7 +227,11 @@ class ServerSession implements Session {
    * @return The server session.
    */
   ServerSession setKeepAliveIndex(long keepAliveIndex) {
+    long previousKeepAliveIndex = this.keepAliveIndex;
     this.keepAliveIndex = keepAliveIndex;
+    if (previousKeepAliveIndex > 0) {
+      cleaner.clean(previousKeepAliveIndex);
+    }
     return this;
   }
 
@@ -568,7 +611,6 @@ class ServerSession implements Session {
   ServerSession resendEvents(long index) {
     clearEvents(index);
     for (EventHolder event : events) {
-      // TODO: Sequential events cannot be sent to clients connected to reserve members
       sendSequentialEvent(event);
     }
     return this;
@@ -656,13 +698,6 @@ class ServerSession implements Session {
   }
 
   /**
-   * Closes the session.
-   */
-  void close() {
-    setState(State.CLOSED);
-  }
-
-  /**
    * Sets the session as suspect.
    */
   void suspect() {
@@ -692,12 +727,54 @@ class ServerSession implements Session {
 
   /**
    * Expires the session.
+   *
+   * @param index The index at which to expire the session.
    */
-  void expire() {
-    for (EventHolder event : events) {
-      event.future.complete(null);
-    }
+  void expire(long index) {
+    cleanEvents();
     setState(State.EXPIRED);
+    cleanState(index);
+  }
+
+  /**
+   * Closes the session.
+   *
+   * @param index The index at which to close the session.
+   */
+  void close(long index) {
+    cleanEvents();
+    setState(State.CLOSED);
+    cleanState(index);
+  }
+
+  /**
+   * Cleans up session events on close.
+   */
+  private void cleanEvents() {
+    for (EventHolder event : events) {
+      if (event.future != null) {
+        event.future.complete(null);
+      }
+    }
+  }
+
+  /**
+   * Cleans session entries on close.
+   */
+  private void cleanState(long index) {
+    // If the keep alive index is set, clean the entry.
+    if (keepAliveIndex > 0) {
+      cleaner.clean(keepAliveIndex);
+    }
+
+    // If no references to session commands are open, clean session-related entries.
+    if (references == 0) {
+      cleaner.clean(id);
+      cleaner.clean(index);
+      context.sessions().unregisterSession(id);
+    } else {
+      this.closeIndex = index;
+    }
   }
 
   @Override
