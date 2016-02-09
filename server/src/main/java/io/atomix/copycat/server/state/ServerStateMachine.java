@@ -540,7 +540,7 @@ final class ServerStateMachine implements AutoCloseable {
       executor.executor().execute(() -> keepAliveSession(index, timestamp, commandSequence, eventIndex, session, future, context));
 
       // Update the session keep alive index for log cleaning.
-      session.setKeepAliveIndex(entry.getIndex());
+      session.setKeepAliveIndex(entry.getIndex()).setRequestSequence(commandSequence);
     }
 
     return future;
