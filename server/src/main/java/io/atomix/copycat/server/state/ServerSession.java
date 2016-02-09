@@ -46,7 +46,8 @@ class ServerSession implements Session {
   private final UUID client;
   private final LogCleaner cleaner;
   private final ServerStateMachineContext context;
-  private volatile State state = State.CLOSED;
+  private boolean open;
+  private volatile State state = State.OPEN;
   private final long timeout;
   private Connection connection;
   private Address address;
@@ -102,7 +103,7 @@ class ServerSession implements Session {
    * Opens the session.
    */
   void open() {
-    setState(State.OPEN);
+    open = true;
   }
 
   @Override
@@ -514,6 +515,7 @@ class ServerSession implements Session {
 
   @Override
   public Session publish(String event, Object message) {
+    Assert.state(open, "cannot publish events during session registration");
     Assert.stateNot(state == State.CLOSED, "session is closed");
     Assert.stateNot(state == State.EXPIRED, "session is expired");
     Assert.state(context.consistency() != null, "session events can only be published during command execution");
