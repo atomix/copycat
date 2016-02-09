@@ -118,6 +118,8 @@ final class ClientSessionManager {
       .withEventIndex(state.getCompleteIndex())
       .build();
 
+    scheduleKeepAlive();
+
     state.getLogger().debug("{} - Sending {}", sessionId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
@@ -127,7 +129,7 @@ final class ClientSessionManager {
           if (response.status() == Response.Status.OK) {
             connection.reset(response.leader(), response.members());
             state.setState(Session.State.OPEN);
-            keepAlive = context.schedule(interval, this::keepAlive);
+            scheduleKeepAlive();
           }
           // If the session is unknown, immediate expire the session.
           else if (response.error() == RaftError.Type.UNKNOWN_SESSION_ERROR) {
@@ -142,7 +144,7 @@ final class ClientSessionManager {
           // If no leader was set, set the session state to unstable and schedule another keep-alive.
           else {
             state.setState(Session.State.UNSTABLE);
-            keepAlive = context.schedule(interval, this::keepAlive);
+            scheduleKeepAlive();
           }
         }
         // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
@@ -154,9 +156,21 @@ final class ClientSessionManager {
         // If no leader was set, set the session state to unstable and schedule another keep-alive.
         else {
           state.setState(Session.State.UNSTABLE);
-          keepAlive = context.schedule(interval, this::keepAlive);
+          scheduleKeepAlive();
         }
       }
+    });
+  }
+
+  /**
+   * Schedules a keep-alive request.
+   */
+  private void scheduleKeepAlive() {
+    if (keepAlive != null)
+      keepAlive.cancel();
+    keepAlive = context.schedule(interval, () -> {
+      keepAlive = null;
+      keepAlive();
     });
   }
 
