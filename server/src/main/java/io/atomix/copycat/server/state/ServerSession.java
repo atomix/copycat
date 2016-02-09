@@ -752,7 +752,9 @@ class ServerSession implements Session {
    */
   private void cleanEvents() {
     for (EventHolder event : events) {
-      event.future.complete(null);
+      if (event.future != null) {
+        event.future.complete(null);
+      }
     }
   }
 
