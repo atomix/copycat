@@ -375,7 +375,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             Member.Type type = member().type();
             if (type == null || type == Member.Type.INACTIVE) {
               joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
-            } else {
+            } else if (joinFuture != null) {
               joinFuture.complete(null);
             }
           } else if (response.error() == null) {
@@ -411,7 +411,8 @@ final class ClusterState implements Cluster, AutoCloseable {
     if (joinFuture != null && leader != null) {
       if (context.getLeader().equals(member())) {
         if (context.getState() == CopycatServer.State.LEADER && !((LeaderState) context.getAbstractState()).configuring()) {
-          joinFuture.complete(null);
+          if (joinFuture != null)
+            joinFuture.complete(null);
         } else {
           cancelJoinTimer();
           joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
