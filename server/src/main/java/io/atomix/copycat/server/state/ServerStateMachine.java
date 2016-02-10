@@ -412,7 +412,7 @@ final class ServerStateMachine implements AutoCloseable {
 
     // Determine whether any sessions appear to be expired. This won't immediately expire the session(s),
     // but it will make them available to be unregistered by the leader.
-    suspectSessions(timestamp);
+    suspectSessions(0, timestamp);
 
     ThreadContext context = ThreadContext.currentContextOrThrow();
     long index = entry.getIndex();
@@ -498,7 +498,7 @@ final class ServerStateMachine implements AutoCloseable {
     // but it will make them available to be unregistered by the leader. Note that it's safe to trigger
     // scheduled executor callbacks even if the keep-alive entry is for an unknown session since the
     // leader still committed the entry with its time and so time will still progress deterministically.
-    suspectSessions(timestamp);
+    suspectSessions(entry.getSession(), timestamp);
 
     CompletableFuture<Void> future;
 
@@ -620,7 +620,7 @@ final class ServerStateMachine implements AutoCloseable {
     // but it will make them available to be unregistered by the leader. Note that it's safe to trigger
     // scheduled executor callbacks even if the keep-alive entry is for an unknown session since the
     // leader still committed the entry with its time and so time will still progress deterministically.
-    suspectSessions(timestamp);
+    suspectSessions(entry.getSession(), timestamp);
 
     CompletableFuture<Void> future;
 
@@ -1066,9 +1066,9 @@ final class ServerStateMachine implements AutoCloseable {
    * from the log. Forcing the leader to expire sessions ensures that keep alives are not missed with
    * regard to session expiration.
    */
-  private void suspectSessions(long timestamp) {
+  private void suspectSessions(long exclude, long timestamp) {
     for (ServerSession session : executor.context().sessions().sessions.values()) {
-      if (timestamp - session.timeout() > session.getTimestamp()) {
+      if (session.id() != exclude && timestamp - session.timeout() > session.getTimestamp()) {
         session.suspect();
       }
     }
