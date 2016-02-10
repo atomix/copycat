@@ -81,15 +81,6 @@ public interface Command<T> extends Operation<T> {
   enum ConsistencyLevel {
 
     /**
-     * Enforces no command consistency.
-     * <p>
-     * Lack of consistency means that no guarantees are made with respect to when, how often, or in what order a command will
-     * be applied to server state machines. Inconsistent commands require no coordination, but they may be applied more than
-     * once or out of order.
-     */
-    NONE,
-
-    /**
      * Enforces sequential command consistency.
      * <p>
      * All commands are applied to the server state machine in program order and at some point between their invocation and
