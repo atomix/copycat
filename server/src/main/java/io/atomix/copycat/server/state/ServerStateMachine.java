@@ -980,10 +980,10 @@ final class ServerStateMachine implements AutoCloseable {
         if (index > session.getLastApplied()) {
           session.registerIndexQuery(index, () -> {
             context.checkThread();
-            executeQuery(commit, session, future, context);
+            executor.executor().execute(() -> executeQuery(commit, session, future, context));
           });
         } else {
-          executeQuery(commit, session, future, context);
+          executor.executor().execute(() -> executeQuery(commit, session, future, context));
         }
       });
       return future;
@@ -997,7 +997,7 @@ final class ServerStateMachine implements AutoCloseable {
       ServerCommit commit = commits.acquire(entry, session, executor.timestamp());
       session.registerIndexQuery(entry.getIndex(), () -> {
         context.checkThread();
-        executeQuery(commit, session, future, context);
+        executor.executor().execute(() -> executeQuery(commit, session, future, context));
       });
       return future;
     } else {
