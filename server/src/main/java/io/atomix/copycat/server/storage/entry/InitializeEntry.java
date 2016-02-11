@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
@@ -29,7 +28,6 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=224)
 public class InitializeEntry extends TimestampedEntry<InitializeEntry> {
 
   public InitializeEntry() {

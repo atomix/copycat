@@ -18,7 +18,6 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
@@ -39,7 +38,6 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-@SerializeWith(id=233)
 final class ServerMember implements Member, CatalystSerializable, AutoCloseable {
   private Member.Type type;
   private Status status = Status.AVAILABLE;

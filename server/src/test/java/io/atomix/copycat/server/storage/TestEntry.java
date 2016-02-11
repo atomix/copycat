@@ -17,7 +17,6 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 import io.atomix.copycat.server.storage.compaction.Compaction;
@@ -28,7 +27,6 @@ import io.atomix.copycat.server.storage.entry.Entry;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id = 1000)
 public class TestEntry extends Entry<TestEntry> {
   /** Padding to vary the stored size of an entry */
   private Compaction.Mode compaction = Compaction.Mode.QUORUM;

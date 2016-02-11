@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.client.response;
 
-import io.atomix.catalyst.serializer.SerializeWith;
-
 /**
  * Client query response.
  * <p>
@@ -30,7 +28,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=198)
 public class QueryResponse extends OperationResponse {
 
   /**

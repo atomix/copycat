@@ -16,8 +16,8 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
+import io.atomix.copycat.client.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
 import org.testng.annotations.Test;
 
@@ -48,7 +48,7 @@ public class MemberTest {
    */
   public void testSerializeDeserialize() {
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null);
-    Serializer serializer = new Serializer(new ServiceLoaderTypeResolver());
+    Serializer serializer = new Serializer(new SessionTypeResolver(), new StateTypeResolver());
     ServerMember result = serializer.readObject(serializer.writeObject(member).flip());
     assertEquals(result.type(), member.type());
   }

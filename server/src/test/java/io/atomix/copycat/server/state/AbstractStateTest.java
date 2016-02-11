@@ -16,22 +16,27 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.error.RaftError;
+import io.atomix.copycat.client.request.ClientRequestTypeResolver;
 import io.atomix.copycat.client.response.AbstractResponse;
+import io.atomix.copycat.client.response.ClientResponseTypeResolver;
 import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.client.session.SessionTypeResolver;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.request.ServerRequestTypeResolver;
+import io.atomix.copycat.server.response.ServerResponseTypeResolver;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.entry.EntryTypeResolver;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -60,11 +65,17 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   @BeforeMethod
   void beforeMethod() throws Throwable {
     serializer = new Serializer();
-    serializer.resolve(new ServiceLoaderTypeResolver());
+    serializer.resolve(
+      new ClientRequestTypeResolver(),
+      new ClientResponseTypeResolver(),
+      new SessionTypeResolver(),
+      new ServerRequestTypeResolver(),
+      new ServerResponseTypeResolver(),
+      new StateTypeResolver(),
+      new EntryTypeResolver()
+    ).disableWhitelist();
 
     storage = new Storage(StorageLevel.MEMORY);
-    Serializer serializer = new Serializer(new ServiceLoaderTypeResolver());
-    serializer.disableWhitelist();
 
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());

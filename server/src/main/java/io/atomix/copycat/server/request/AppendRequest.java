@@ -17,7 +17,6 @@ package io.atomix.copycat.server.request;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.request.AbstractRequest;
@@ -37,7 +36,6 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=207)
 public class AppendRequest extends AbstractRequest {
 
   /**
@@ -141,7 +139,7 @@ public class AppendRequest extends AbstractRequest {
 
     buffer.writeInt(entries.size());
     for (Entry entry : entries) {
-      buffer.writeLong(entry.getIndex());
+      buffer.writeLong(entry.getIndex()).writeLong(entry.getTerm());
       serializer.writeObject(entry, buffer);
     }
   }
@@ -159,8 +157,9 @@ public class AppendRequest extends AbstractRequest {
     entries = new ArrayList<>(numEntries);
     for (int i = 0; i < numEntries; i++) {
       long index = buffer.readLong();
+      long term = buffer.readLong();
       Entry entry = serializer.readObject(buffer);
-      entry.setIndex(index);
+      entry.setIndex(index).setTerm(term);
       entries.add(entry);
     }
   }

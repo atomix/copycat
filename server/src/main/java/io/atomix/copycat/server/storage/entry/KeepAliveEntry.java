@@ -17,7 +17,6 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.ReferenceManager;
 
@@ -33,7 +32,6 @@ import io.atomix.catalyst.util.ReferenceManager;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=223)
 public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   private long commandSequence;
   private long eventIndex;

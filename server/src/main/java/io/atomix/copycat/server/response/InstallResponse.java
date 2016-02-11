@@ -17,7 +17,6 @@ package io.atomix.copycat.server.response;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.client.error.RaftError;
 import io.atomix.copycat.client.response.AbstractResponse;
@@ -33,7 +32,6 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=230)
 public class InstallResponse extends AbstractResponse {
 
   /**

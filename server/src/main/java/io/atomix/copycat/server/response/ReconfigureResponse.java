@@ -15,14 +15,11 @@
  */
 package io.atomix.copycat.server.response;
 
-import io.atomix.catalyst.serializer.SerializeWith;
-
 /**
  * Server configuration change response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=232)
 public class ReconfigureResponse extends ConfigurationResponse {
 
   /**

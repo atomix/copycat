@@ -16,7 +16,6 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
@@ -25,11 +24,16 @@ import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.request.ClientRequestTypeResolver;
+import io.atomix.copycat.client.response.ClientResponseTypeResolver;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.client.session.SessionTypeResolver;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.request.ServerRequestTypeResolver;
+import io.atomix.copycat.server.response.ServerResponseTypeResolver;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
@@ -61,8 +65,15 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
   @BeforeMethod
   public void createStateMachine() throws Throwable {
-    Serializer serializer = new Serializer(new ServiceLoaderTypeResolver());
-    serializer.disableWhitelist();
+    Serializer serializer = new Serializer(
+      new ClientRequestTypeResolver(),
+      new ClientResponseTypeResolver(),
+      new SessionTypeResolver(),
+      new ServerRequestTypeResolver(),
+      new ServerResponseTypeResolver(),
+      new StateTypeResolver(),
+      new EntryTypeResolver()
+    ).disableWhitelist();
 
     callerContext = new SingleThreadContext("caller", serializer.clone());
     stateContext = new SingleThreadContext("state", serializer.clone());

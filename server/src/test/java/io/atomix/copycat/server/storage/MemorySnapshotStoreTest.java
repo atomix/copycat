@@ -16,7 +16,6 @@
 package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import org.testng.annotations.Test;
 
@@ -35,7 +34,7 @@ public class MemorySnapshotStoreTest extends AbstractSnapshotStoreTest {
     Storage storage = Storage.builder()
       .withStorageLevel(StorageLevel.MEMORY)
       .build();
-    return new SnapshotStore("test", storage, new Serializer(new ServiceLoaderTypeResolver()));
+    return new SnapshotStore("test", storage, new Serializer());
   }
 
 }
