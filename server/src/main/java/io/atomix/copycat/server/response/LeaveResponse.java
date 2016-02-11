@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.response;
 
-import io.atomix.catalyst.serializer.SerializeWith;
-
 /**
  * Server leave configuration change response.
  * <p>
@@ -27,7 +25,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=212)
 public class LeaveResponse extends ConfigurationResponse {
 
   /**

@@ -19,10 +19,11 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.copycat.client.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.state.StateTypeResolver;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import org.testng.annotations.AfterMethod;
@@ -59,7 +60,7 @@ public class MetaStoreTest {
     storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new MetaStore("test", storage, new Serializer(new ServiceLoaderTypeResolver()));
+    return new MetaStore("test", storage, new Serializer(new SessionTypeResolver(), new StateTypeResolver()).register(TestMember.class));
   }
 
   /**

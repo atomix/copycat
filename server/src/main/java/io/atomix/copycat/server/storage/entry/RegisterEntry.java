@@ -17,7 +17,6 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
@@ -35,7 +34,6 @@ import java.util.UUID;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=226)
 public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   private UUID client;
   private long timeout;

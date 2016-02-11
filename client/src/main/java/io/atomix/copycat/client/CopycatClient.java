@@ -16,7 +16,6 @@
 package io.atomix.copycat.client;
 
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
@@ -25,7 +24,10 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.client.request.ClientRequestTypeResolver;
+import io.atomix.copycat.client.response.ClientResponseTypeResolver;
 import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.client.session.SessionTypeResolver;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -365,7 +367,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
    * Registers a void event listener.
    * <p>
    * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
-   * from the Raft cluster for the client. {@link CopycatService} implementations must guarantee that consumers are
+   * from the Raft cluster for the client. {@link CopycatClient} implementations must guarantee that consumers are
    * always called in the same thread for the session. Therefore, no two events will be received concurrently
    * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
    * the state machine.
@@ -381,7 +383,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
    * Registers an event listener.
    * <p>
    * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
-   * from the Raft cluster for the session. {@link CopycatService} implementations must guarantee that consumers are
+   * from the Raft cluster for the session. {@link CopycatClient} implementations must guarantee that consumers are
    * always called in the same thread for the session. Therefore, no two events will be received concurrently
    * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
    * the state machine.
@@ -481,8 +483,6 @@ public interface CopycatClient extends Managed<CopycatClient> {
 
     /**
      * Sets the client serializer.
-     * <p>
-     * By default, the client will use a {@link Serializer} configured with the {@link ServiceLoaderTypeResolver}.
      *
      * @param serializer The client serializer.
      * @return The client builder.
@@ -582,7 +582,9 @@ public interface CopycatClient extends Managed<CopycatClient> {
 
       // If a thread context was provided, pass the context to the client.
       if (context != null) {
-        context.serializer().resolve(new ServiceLoaderTypeResolver());
+        context.serializer().resolve(new ClientRequestTypeResolver());
+        context.serializer().resolve(new ClientResponseTypeResolver());
+        context.serializer().resolve(new SessionTypeResolver());
 
         return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       } else {
@@ -592,7 +594,9 @@ public interface CopycatClient extends Managed<CopycatClient> {
         }
 
         // Add service loader types to the primary serializer.
-        serializer.resolve(new ServiceLoaderTypeResolver());
+        serializer.resolve(new ClientRequestTypeResolver());
+        serializer.resolve(new ClientResponseTypeResolver());
+        serializer.resolve(new SessionTypeResolver());
 
         return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       }

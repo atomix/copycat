@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.client.request;
 
-import io.atomix.catalyst.serializer.SerializeWith;
-
 import java.util.Objects;
 
 /**
@@ -28,7 +26,6 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=203)
 public class UnregisterRequest extends SessionRequest {
 
   /**

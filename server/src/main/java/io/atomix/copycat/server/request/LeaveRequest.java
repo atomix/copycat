@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.request;
 
-import io.atomix.catalyst.serializer.SerializeWith;
-
 /**
  * Server leave configuration request.
  * <p>
@@ -26,7 +24,6 @@ import io.atomix.catalyst.serializer.SerializeWith;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=211)
 public class LeaveRequest extends ConfigurationRequest {
 
   /**

@@ -18,7 +18,6 @@ package io.atomix.copycat.client;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 
 /**
@@ -32,7 +31,6 @@ import io.atomix.catalyst.serializer.Serializer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-@SerializeWith(id=217)
 public class NoOpCommand implements Command<Void>, CatalystSerializable {
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {

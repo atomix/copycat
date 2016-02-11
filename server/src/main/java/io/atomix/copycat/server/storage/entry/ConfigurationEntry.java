@@ -17,7 +17,6 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializeWith;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
@@ -36,7 +35,6 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-@SerializeWith(id=222)
 public class ConfigurationEntry extends Entry<ConfigurationEntry> {
   private Collection<Member> members;
 

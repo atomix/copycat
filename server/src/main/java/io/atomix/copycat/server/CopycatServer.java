@@ -17,7 +17,6 @@ package io.atomix.copycat.server;
 
 import io.atomix.catalyst.buffer.PooledHeapAllocator;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.serializer.ServiceLoaderTypeResolver;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Server;
 import io.atomix.catalyst.transport.Transport;
@@ -30,13 +29,20 @@ import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.Command;
 import io.atomix.copycat.client.Query;
+import io.atomix.copycat.client.request.ClientRequestTypeResolver;
+import io.atomix.copycat.client.response.ClientResponseTypeResolver;
+import io.atomix.copycat.client.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.request.ServerRequestTypeResolver;
+import io.atomix.copycat.server.response.ServerResponseTypeResolver;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
+import io.atomix.copycat.server.state.StateTypeResolver;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.entry.EntryTypeResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,10 +98,7 @@ import java.util.function.Supplier;
  *   .build();
  * }
  * </pre>
- * All serialization is performed with a Catalyst {@link Serializer}. By default, the serializer loads registered
- * {@link io.atomix.catalyst.serializer.CatalystSerializable} types with {@link ServiceLoaderTypeResolver}, but users
- * can provide a custom serializer via {@link CopycatServer.Builder#withSerializer(Serializer)}.
- * The server will still ensure that internal serializable types are properly registered on user-provided serializers.
+ * All serialization is performed with a Catalyst {@link Serializer}.
  * <p>
  * Once the server has been created, to connect to a cluster simply {@link #open()} the server. The server API is
  * fully asynchronous and relies on {@link CompletableFuture} to provide promises:
@@ -135,11 +138,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param address The address through which clients and servers connect to this server.
    * @param cluster The cluster members to which to connect.
@@ -155,11 +153,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param address The address through which clients and servers connect to this server.
    * @param cluster The cluster members to which to connect.
@@ -175,11 +168,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param type The server member type.
    * @param address The address through which clients and servers connect to this server.
@@ -196,11 +184,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param type The server member type.
    * @param address The address through which clients and servers connect to this server.
@@ -217,11 +200,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param clientAddress The address through which clients connect to the server.
    * @param serverAddress The local server member address.
@@ -238,11 +216,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param clientAddress The address through which clients connect to the server.
    * @param serverAddress The local server member address.
@@ -259,11 +232,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param type The server member type.
    * @param clientAddress The address through which clients connect to the server.
@@ -281,11 +249,6 @@ public class CopycatServer implements Managed<CopycatServer> {
    * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
    * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
    * not have to be present in the address list.
-   * <p>
-   * The returned server builder will use the {@code NettyTransport} by default. Additionally, serializable types will
-   * be registered using the {@link ServiceLoaderTypeResolver}. To register serializable types for the server, simply
-   * add a {@link io.atomix.catalyst.serializer.Serializer} or {@link io.atomix.catalyst.serializer.CatalystSerializable}
-   * file to your {@code META-INF/services} folder on the classpath.
    *
    * @param type The server member type.
    * @param clientAddress The address through which clients connect to the server.
@@ -853,8 +816,14 @@ public class CopycatServer implements Managed<CopycatServer> {
         serializer = new Serializer(new PooledHeapAllocator());
       }
 
-      // Resolve serializer serializable types with the ServiceLoaderTypeResolver.
-      serializer.resolve(new ServiceLoaderTypeResolver());
+      // Resolve serializable request/response and other types.
+      serializer.resolve(new ClientRequestTypeResolver());
+      serializer.resolve(new ClientResponseTypeResolver());
+      serializer.resolve(new SessionTypeResolver());
+      serializer.resolve(new ServerRequestTypeResolver());
+      serializer.resolve(new ServerResponseTypeResolver());
+      serializer.resolve(new EntryTypeResolver());
+      serializer.resolve(new StateTypeResolver());
 
       // If the storage is not configured, create a new Storage instance with the configured serializer.
       if (storage == null) {
