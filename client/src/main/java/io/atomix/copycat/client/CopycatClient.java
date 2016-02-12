@@ -451,7 +451,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
    *   }
    * </pre>
    */
-  final class Builder extends io.atomix.catalyst.util.Builder<CopycatClient> {
+  final class Builder implements io.atomix.catalyst.util.Builder<CopycatClient> {
     private Transport transport;
     private Serializer serializer;
     private CatalystThreadFactory threadFactory;

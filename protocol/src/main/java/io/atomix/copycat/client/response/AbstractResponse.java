@@ -61,7 +61,7 @@ public abstract class AbstractResponse implements Response {
    * @param <T> The builder type.
    * @param <U> The response type.
    */
-  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractResponse> extends Response.Builder<T, U> {
+  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractResponse> implements Response.Builder<T, U> {
     protected U response;
 
     /**

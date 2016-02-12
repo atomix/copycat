@@ -29,7 +29,7 @@ public interface Request extends CatalystSerializable {
    *
    * @param <T> The builder type.
    */
-  abstract class Builder<T extends Builder<T, U>, U extends Request> extends io.atomix.catalyst.util.Builder<U> {
+  interface Builder<T extends Builder<T, U>, U extends Request> extends io.atomix.catalyst.util.Builder<U> {
   }
 
 }

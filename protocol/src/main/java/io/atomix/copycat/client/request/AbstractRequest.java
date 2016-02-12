@@ -42,7 +42,7 @@ public abstract class AbstractRequest implements Request {
    * @param <T> The builder type.
    * @param <U> The request type.
    */
-  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractRequest> extends Request.Builder<T, U> {
+  protected static abstract class Builder<T extends Builder<T, U>, U extends AbstractRequest> implements Request.Builder<T, U> {
     protected final U request;
 
     /**

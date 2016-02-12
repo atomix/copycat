@@ -324,7 +324,7 @@ public class Storage {
    *   }
    * </pre>
    */
-  public static class Builder extends io.atomix.catalyst.util.Builder<Storage> {
+  public static class Builder implements io.atomix.catalyst.util.Builder<Storage> {
     private final Storage storage = new Storage();
 
     private Builder() {

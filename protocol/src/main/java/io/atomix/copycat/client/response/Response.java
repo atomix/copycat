@@ -98,7 +98,7 @@ public interface Response extends CatalystSerializable {
    * @param <T> The builder type.
    * @param <U> The response type.
    */
-  abstract class Builder<T extends Builder<T, U>, U extends Response> extends io.atomix.catalyst.util.Builder<U> {
+  interface Builder<T extends Builder<T, U>, U extends Response> extends io.atomix.catalyst.util.Builder<U> {
 
     /**
      * Sets the response status.
@@ -107,7 +107,7 @@ public interface Response extends CatalystSerializable {
      * @return The response builder.
      * @throws NullPointerException if {@code status} is null
      */
-    public abstract T withStatus(Status status);
+    T withStatus(Status status);
 
     /**
      * Sets the response error.
@@ -116,7 +116,7 @@ public interface Response extends CatalystSerializable {
      * @return The response builder.
      * @throws NullPointerException if {@code error} is null
      */
-    public abstract T withError(RaftError error);
+    T withError(RaftError error);
 
   }
 

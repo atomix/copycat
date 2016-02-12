@@ -619,7 +619,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   /**
    * Raft server builder.
    */
-  public static class Builder extends io.atomix.catalyst.util.Builder<CopycatServer> {
+  public static class Builder implements io.atomix.catalyst.util.Builder<CopycatServer> {
     private static final String DEFAULT_NAME = "copycat";
     private static final Duration DEFAULT_ELECTION_TIMEOUT = Duration.ofMillis(750);
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(250);
