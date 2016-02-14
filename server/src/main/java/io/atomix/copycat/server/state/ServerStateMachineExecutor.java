@@ -59,10 +59,22 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   /**
-   * Returns the executor timestamp.
+   * Returns the current executor timestamp.
+   *
+   * @return The current executor timestamp.
    */
   long timestamp() {
     return timestamp;
+  }
+
+  /**
+   * Returns an updated executor timestamp.
+   *
+   * @return The updated executor timestamp.
+   */
+  long timestamp(long timestamp) {
+    this.timestamp = Math.max(this.timestamp, timestamp);
+    return this.timestamp;
   }
 
   @Override
@@ -157,12 +169,8 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   /**
    * Executes scheduled callbacks based on the provided time.
-   *
-   * @return The updated executor timestamp. This timestamp is guaranteed to be monotonically increasing.
    */
-  long tick(long timestamp) {
-    this.timestamp = Math.max(this.timestamp, timestamp);
-
+  void tick(long index, long timestamp) {
     // Only create an iterator if there are actually tasks scheduled.
     if (!scheduledTasks.isEmpty()) {
 
@@ -171,11 +179,9 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       Iterator<ServerScheduledTask> iterator = scheduledTasks.iterator();
       while (iterator.hasNext()) {
         ServerScheduledTask task = iterator.next();
-        if (task.complete(this.timestamp)) {
-          executor.executor().execute(() -> {
-            context.update(context.index(), Instant.ofEpochMilli(task.time), false, Command.ConsistencyLevel.SEQUENTIAL);
-            task.execute();
-          });
+        if (task.complete(timestamp)) {
+          context.update(index, Instant.ofEpochMilli(task.time), false, Command.ConsistencyLevel.SEQUENTIAL);
+          task.execute();
           complete.add(task);
           iterator.remove();
         } else {
@@ -189,8 +195,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
       complete.clear();
     }
-
-    return this.timestamp;
   }
 
   @Override
