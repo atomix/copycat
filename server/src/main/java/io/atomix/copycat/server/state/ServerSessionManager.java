@@ -36,6 +36,11 @@ class ServerSessionManager implements Sessions {
   final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
   final Map<UUID, ServerSession> clients = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
+  private final ServerContext context;
+
+  public ServerSessionManager(ServerContext context) {
+    this.context = Assert.notNull(context, "context");
+  }
 
   @Override
   public Session session(long sessionId) {
@@ -61,6 +66,14 @@ class ServerSessionManager implements Sessions {
     ServerSession session = clients.get(client);
     if (session != null) {
       session.setAddress(address);
+      // If client was previously connected locally, close that connection.
+      if (!address.equals(context.getCluster().member().serverAddress())) {
+        Connection connection = connections.remove(client);
+        if (connection != null) {
+          connection.close();
+          session.setConnection(null);
+        }
+      }
     }
     addresses.put(client, address);
     return this;
