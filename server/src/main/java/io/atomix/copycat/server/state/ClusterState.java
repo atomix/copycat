@@ -483,7 +483,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         joinFuture.completeExceptionally(new IllegalStateException("failed to join cluster"));
 
       // If there are no remote members to leave, simply transition the server to INACTIVE.
-      if (getActiveMemberStates().isEmpty()) {
+      if (getActiveMemberStates().isEmpty() && configuration.index() <= context.getCommitIndex()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member().address());
         context.transition(CopycatServer.State.INACTIVE);
         leaveFuture.complete(null);
