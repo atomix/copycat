@@ -48,7 +48,7 @@ public class MemberTest {
    */
   public void testSerializeDeserialize() {
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null);
-    Serializer serializer = new Serializer(new SessionTypeResolver(), new StateTypeResolver());
+    Serializer serializer = new Serializer().resolve(new SessionTypeResolver(), new StateTypeResolver());
     ServerMember result = serializer.readObject(serializer.writeObject(member).flip());
     assertEquals(result.type(), member.type());
   }

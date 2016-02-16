@@ -34,6 +34,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.UUID;
@@ -60,7 +61,7 @@ public class MetaStoreTest {
     storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new MetaStore("test", storage, new Serializer(new SessionTypeResolver(), new StateTypeResolver()).register(TestMember.class));
+    return new MetaStore("test", storage, new Serializer().resolve(new SessionTypeResolver(), new StateTypeResolver()).register(TestMember.class));
   }
 
   /**
@@ -79,11 +80,11 @@ public class MetaStoreTest {
     assertEquals(meta.loadTerm(), 1);
     assertEquals(meta.loadVote(), 2);
 
-    Collection<Member> members = Arrays.asList(
+    Collection<Member> members = new ArrayList<>(Arrays.asList(
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000)),
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
-    );
+    ));
     meta.storeConfiguration(new Configuration(1, members));
 
     Configuration configuration = meta.loadConfiguration();

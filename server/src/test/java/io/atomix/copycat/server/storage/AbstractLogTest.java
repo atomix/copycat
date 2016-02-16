@@ -53,7 +53,7 @@ public abstract class AbstractLogTest {
    * Creates a new test log.
    */
   protected Log createLog() {
-    return new Log(logId, storage, new Serializer(new EntryTypeResolver()).register(TestEntry.class));
+    return new Log(logId, storage, new Serializer().resolve(new EntryTypeResolver()).register(TestEntry.class));
   }
 
   /**
@@ -85,7 +85,7 @@ public abstract class AbstractLogTest {
   void setLog() throws Exception {
     logId = UUID.randomUUID().toString();
     storage = createStorage();
-    log = new Log(logId, storage, new Serializer(new EntryTypeResolver()));
+    log = new Log(logId, storage, new Serializer().resolve(new EntryTypeResolver()));
     log.serializer().register(TestEntry.class);
     assertTrue(log.isOpen());
     assertFalse(log.isClosed());
