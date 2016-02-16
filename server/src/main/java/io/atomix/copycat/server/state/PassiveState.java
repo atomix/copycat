@@ -198,12 +198,7 @@ class PassiveState extends ReserveState {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
       }
-
-      // If the entry is a connect entry then immediately configure the connection.
-      if (entry instanceof ConnectEntry) {
-        ConnectEntry connectEntry = (ConnectEntry) entry;
-        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
-      }
+      applyConnectEntry(entry);
     }
 
     // Update the context commit and global indices.
@@ -219,6 +214,17 @@ class PassiveState extends ReserveState {
       .withSucceeded(true)
       .withLogIndex(context.getLog().lastIndex())
       .build();
+  }
+
+  /**
+   * Applies the given entry to the system state immediately if the entry is a configuration entry.
+   */
+  protected void applyConnectEntry(Entry entry) {
+    // If the entry is a connect entry then immediately configure the connection.
+    if (entry instanceof ConnectEntry) {
+      ConnectEntry connectEntry = (ConnectEntry) entry;
+      context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
+    }
   }
 
   @Override

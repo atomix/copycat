@@ -55,7 +55,8 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
   private final Map<Address, MemberState> addressMap = new ConcurrentHashMap<>();
   private final List<MemberState> members = new CopyOnWriteArrayList<>();
-  private List<MemberState> assignedMembers = new ArrayList<>();
+  private List<MemberState> assignedPassiveMembers = new ArrayList<>();
+  private List<MemberState> assignedReserveMembers = new ArrayList<>();
   private final Map<Member.Type, List<MemberState>> memberTypes = new HashMap<>();
   private volatile Scheduled joinTimeout;
   private volatile CompletableFuture<Void> joinFuture;
@@ -312,7 +313,16 @@ final class ClusterState implements Cluster, AutoCloseable {
    * @return A list of assigned passive member states.
    */
   List<MemberState> getAssignedPassiveMemberStates() {
-    return assignedMembers;
+    return assignedPassiveMembers;
+  }
+
+  /**
+   * Returns a list of assigned reserve member states.
+   *
+   * @return A list of assigned reserve member states.
+   */
+  List<MemberState> getAssignedReserveMemberStates() {
+    return assignedReserveMembers;
   }
 
   @Override
@@ -323,16 +333,29 @@ final class ClusterState implements Cluster, AutoCloseable {
     joinFuture = new CompletableFuture<>();
 
     context.getThreadContext().executor().execute(() -> {
-      // Transition the server to the appropriate state for the local member type.
-      context.transition(member.type());
-
       // If the local member type is INACTIVE, send a join request to the cluster.
       // The join future is not completed here in any case - even if the local server is already a member
       // of the cluster - because the server needs to identify itself to the leader in order to complete
       // the join. Once the server transitions to an active state, the server will identify itself to the
       // leader upon learning of the leader. Once the server has identified itself the join will be completed.
       if (member.type() == Member.Type.INACTIVE) {
+        switch (initialType) {
+          case RESERVE:
+            context.transition(CopycatServer.State.RESERVE);
+            break;
+          case PASSIVE:
+            context.transition(CopycatServer.State.PASSIVE);
+            break;
+          case ACTIVE:
+            context.transition(CopycatServer.State.JOIN);
+            break;
+        }
         join(getActiveMemberStates().iterator());
+      }
+      // If the local member type is not INACTIVE, simply transition to the appropriate member type. The
+      // join will be completed once the leader has been found and this server has been identified.
+      else {
+        context.transition(member.type());
       }
     });
 
@@ -485,7 +508,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       // If there are no remote members to leave, simply transition the server to INACTIVE.
       if (getActiveMemberStates().isEmpty()) {
         LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member().address());
-        context.transition(CopycatServer.State.INACTIVE);
+        context.transition(Member.Type.INACTIVE);
         leaveFuture.complete(null);
       } else {
         leave(leaveFuture);
@@ -690,9 +713,14 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       // Intersect the active members list with a sorted list of passive members to get assignments.
       List<MemberState> sortedPassiveMembers = getPassiveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id());
-      assignedMembers = assignMembers(index, sortedPassiveMembers);
+      assignedPassiveMembers = assignMembers(index, sortedPassiveMembers);
+
+      // Intersect the active members list with a sorted list of reserve members to get assignments.
+      List<MemberState> sortedReserveMembers = getReserveMemberStates((m1, m2) -> m1.getMember().id() - m2.getMember().id());
+      assignedReserveMembers = assignMembers(index, sortedReserveMembers);
     } else {
-      assignedMembers = new ArrayList<>(0);
+      assignedPassiveMembers = new ArrayList<>(0);
+      assignedReserveMembers = new ArrayList<>(0);
     }
   }
 

@@ -271,13 +271,6 @@ public class CopycatServer implements Managed<CopycatServer> {
   public enum State {
 
     /**
-     * Represents the state of an inactive server.
-     * <p>
-     * All servers start in this state and return to this state when {@link #close() stopped}.
-     */
-    INACTIVE,
-
-    /**
      * Represents the state of a server that is a reserve member of the cluster.
      * <p>
      * Reserve servers only receive notification of leader, term, and configuration changes.
@@ -291,6 +284,13 @@ public class CopycatServer implements Managed<CopycatServer> {
      * until the leader determines that the server has caught up enough to be promoted to a full member.
      */
     PASSIVE,
+
+    /**
+     * Represents the state of a server that is joining the cluster.
+     * <p>
+     * Joining servers may receive replicated entries, but cannot participate in elections.
+     */
+    JOIN,
 
     /**
      * Represents the state of a server participating in normal log replication.
@@ -378,7 +378,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   /**
    * Returns the Copycat server state.
    * <p>
-   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
+   * The initial state of a Raft server is {@link State#RESERVE}. Once the server is {@link #open() started} and
    * until it is explicitly shutdown, the server will be in one of the active states - {@link State#PASSIVE},
    * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
    *
@@ -596,7 +596,7 @@ public class CopycatServer implements Managed<CopycatServer> {
         }, context.getThreadContext().executor());
       }
 
-      context.transition(CopycatServer.State.INACTIVE);
+      context.transition(State.RESERVE);
     });
 
     return future.whenCompleteAsync((result, error) -> {

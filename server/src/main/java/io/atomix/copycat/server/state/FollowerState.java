@@ -17,8 +17,14 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.request.AppendRequest;
+import io.atomix.copycat.server.request.InstallRequest;
+import io.atomix.copycat.server.request.PollRequest;
+import io.atomix.copycat.server.request.VoteRequest;
+import io.atomix.copycat.server.response.AppendResponse;
+import io.atomix.copycat.server.response.InstallResponse;
+import io.atomix.copycat.server.response.PollResponse;
+import io.atomix.copycat.server.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 
@@ -176,13 +182,6 @@ final class FollowerState extends ActiveState {
   @Override
   protected CompletableFuture<InstallResponse> install(InstallRequest request) {
     CompletableFuture<InstallResponse> future = super.install(request);
-    resetHeartbeatTimeout();
-    return future;
-  }
-
-  @Override
-  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
-    CompletableFuture<ConfigureResponse> future = super.configure(request);
     resetHeartbeatTimeout();
     return future;
   }

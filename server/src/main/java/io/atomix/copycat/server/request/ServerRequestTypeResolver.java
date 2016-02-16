@@ -32,13 +32,12 @@ public final class ServerRequestTypeResolver implements SerializableTypeResolver
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
     put(AcceptRequest.class, -17);
     put(AppendRequest.class, -18);
-    put(ConfigureRequest.class, -19);
-    put(InstallRequest.class, -20);
-    put(JoinRequest.class, -21);
-    put(LeaveRequest.class, -22);
-    put(PollRequest.class, -23);
-    put(ReconfigureRequest.class, -24);
-    put(VoteRequest.class, -25);
+    put(InstallRequest.class, -19);
+    put(JoinRequest.class, -20);
+    put(LeaveRequest.class, -21);
+    put(PollRequest.class, -22);
+    put(ReconfigureRequest.class, -23);
+    put(VoteRequest.class, -24);
   }};
 
   @Override

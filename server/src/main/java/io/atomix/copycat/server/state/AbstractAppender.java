@@ -22,10 +22,8 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.request.InstallRequest;
 import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.ConfigureResponse;
 import io.atomix.copycat.server.response.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -45,7 +43,6 @@ abstract class AbstractAppender implements AutoCloseable {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerContext context;
   private final Set<MemberState> appending = new HashSet<>();
-  private final Set<MemberState> configuring = new HashSet<>();
   private final Set<MemberState> installing = new HashSet<>();
   protected boolean open = true;
 
@@ -72,27 +69,6 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected boolean unlockAppend(MemberState member) {
     return appending.remove(member);
-  }
-
-  /**
-   * Returns a boolean value indicating whether a {@link ConfigureRequest} can be sent to the given member.
-   */
-  protected boolean canConfigure(MemberState member) {
-    return !configuring.contains(member);
-  }
-
-  /**
-   * Locks the {@link ConfigureRequest} lock for the given member.
-   */
-  protected boolean lockConfigure(MemberState member) {
-    return configuring.add(member);
-  }
-
-  /**
-   * Unlocks the {@link ConfigureRequest} lock for the given member.
-   */
-  protected boolean unlockConfigure(MemberState member) {
-    return configuring.remove(member);
   }
 
   /**
@@ -313,6 +289,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
     // If replication succeeded then trigger commit futures.
     if (response.succeeded()) {
+      updateCommitIndex(member, request);
       updateMatchIndex(member, response);
       updateNextIndex(member);
 
@@ -382,6 +359,14 @@ abstract class AbstractAppender implements AutoCloseable {
   protected abstract boolean hasMoreEntries(MemberState member);
 
   /**
+   * Updates the commit index when a response is received.
+   */
+  protected void updateCommitIndex(MemberState member, AppendRequest request) {
+    // Update the member state with the request commit index.
+    member.setCommitIndex(request.commitIndex());
+  }
+
+  /**
    * Updates the match index when a response is received.
    */
   protected void updateMatchIndex(MemberState member, AppendResponse response) {
@@ -415,117 +400,6 @@ abstract class AbstractAppender implements AutoCloseable {
       member.setNextIndex(context.getLog().firstIndex());
     }
     LOGGER.debug("{} - Reset next index for {} to {}", context.getCluster().member().address(), member, member.getNextIndex());
-  }
-
-  /**
-   * Builds a configure request for the given member.
-   */
-  protected ConfigureRequest buildConfigureRequest(MemberState member) {
-    ServerMember leader = context.getLeader();
-    return ConfigureRequest.builder()
-      .withTerm(context.getTerm())
-      .withLeader(leader != null ? leader.id() : 0)
-      .withIndex(context.getClusterState().getConfiguration().index())
-      .withMembers(context.getClusterState().getConfiguration().members())
-      .build();
-  }
-
-  /**
-   * Connects to the member and sends a configure request.
-   */
-  protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
-    // Prevent concurrent configure requests to the member.
-    lockConfigure(member);
-
-    context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
-      context.checkThread();
-
-      if (open) {
-        if (error == null) {
-          sendConfigureRequest(connection, member, request);
-        } else {
-          // Remove the member from the configuring set to allow the next configure request.
-          unlockConfigure(member);
-
-          // Trigger reactions to the request failure.
-          handleConfigureRequestFailure(member, request, error);
-        }
-      }
-    });
-  }
-
-  /**
-   * Sends a configuration message.
-   */
-  protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
-      context.checkThread();
-
-      // Remove the member from the configuring list to allow a new configure request.
-      unlockConfigure(member);
-
-      if (open) {
-        if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
-          handleConfigureResponse(member, request, response);
-        } else {
-          LOGGER.warn("{} - Failed to configure {}", context.getCluster().member().address(), member.getMember().serverAddress());
-          handleConfigureResponseFailure(member, request, error);
-        }
-      }
-    });
-  }
-
-  /**
-   * Handles a configure failure.
-   */
-  protected void handleConfigureRequestFailure(MemberState member, ConfigureRequest request, Throwable error) {
-    // Log the failed attempt to contact the member.
-    failAttempt(member, error);
-  }
-
-  /**
-   * Handles a configure failure.
-   */
-  protected void handleConfigureResponseFailure(MemberState member, ConfigureRequest request, Throwable error) {
-    // Log the failed attempt to contact the member.
-    failAttempt(member, error);
-  }
-
-  /**
-   * Handles a configuration response.
-   */
-  protected void handleConfigureResponse(MemberState member, ConfigureRequest request, ConfigureResponse response) {
-    if (response.status() == Response.Status.OK) {
-      handleConfigureResponseOk(member, request, response);
-    } else {
-      handleConfigureResponseError(member, request, response);
-    }
-  }
-
-  /**
-   * Handles an OK configuration response.
-   */
-  @SuppressWarnings("unused")
-  protected void handleConfigureResponseOk(MemberState member, ConfigureRequest request, ConfigureResponse response) {
-    // Reset the member failure count and update the member's status if necessary.
-    succeedAttempt(member);
-
-    // Update the member's current configuration term and index according to the installed configuration.
-    member.setConfigTerm(request.term()).setConfigIndex(request.index());
-
-    // Recursively append entries to the member.
-    appendEntries(member);
-  }
-
-  /**
-   * Handles an ERROR configuration response.
-   */
-  @SuppressWarnings("unused")
-  protected void handleConfigureResponseError(MemberState member, ConfigureRequest request, ConfigureResponse response) {
-    // In the event of a configure response error, simply do nothing and await the next heartbeat.
-    // This prevents infinite loops when cluster configurations fail.
   }
 
   /**

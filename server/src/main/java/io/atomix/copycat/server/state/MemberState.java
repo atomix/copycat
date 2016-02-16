@@ -25,15 +25,14 @@ import io.atomix.copycat.server.storage.Log;
  */
 final class MemberState {
   private final ServerMember member;
-  private long term;
-  private long configIndex;
+  private long commitIndex;
   private long snapshotIndex;
   private long nextSnapshotIndex;
   private int nextSnapshotOffset;
   private long matchIndex;
   private long nextIndex;
-  private long commitTime;
-  private long commitStartTime;
+  private long heartbeatTime;
+  private long heartbeatStartTime;
   private int failures;
 
   public MemberState(ServerMember member, ClusterState cluster) {
@@ -44,12 +43,13 @@ final class MemberState {
    * Resets the member state.
    */
   void resetState(Log log) {
+    commitIndex = 0;
     nextSnapshotIndex = 0;
     nextSnapshotOffset = 0;
     matchIndex = 0;
     nextIndex = log.lastIndex() + 1;
-    commitTime = 0;
-    commitStartTime = 0;
+    heartbeatTime = 0;
+    heartbeatStartTime = 0;
     failures = 0;
   }
 
@@ -63,42 +63,22 @@ final class MemberState {
   }
 
   /**
-   * Returns the member term.
-   *
-   * @return The member term.
-   */
-  long getConfigTerm() {
-    return term;
-  }
-
-  /**
-   * Sets the member term.
-   *
-   * @param term The member term.
-   * @return The member state.
-   */
-  MemberState setConfigTerm(long term) {
-    this.term = term;
-    return this;
-  }
-
-  /**
    * Returns the member configuration index.
    *
    * @return The member configuration index.
    */
-  long getConfigIndex() {
-    return configIndex;
+  long getCommitIndex() {
+    return commitIndex;
   }
 
   /**
-   * Sets the member configuration index.
+   * Sets the member commit index.
    *
-   * @param configIndex The member configuration index.
+   * @param commitIndex The member commit index.
    * @return The member state.
    */
-  MemberState setConfigIndex(long configIndex) {
-    this.configIndex = configIndex;
+  MemberState setCommitIndex(long commitIndex) {
+    this.commitIndex = commitIndex;
     return this;
   }
 
@@ -203,42 +183,42 @@ final class MemberState {
   }
 
   /**
-   * Returns the member commit time.
+   * Returns the member heartbeat time.
    *
-   * @return The member commit time.
+   * @return The member heartbeat time.
    */
-  long getCommitTime() {
-    return commitTime;
+  long getHeartbeatTime() {
+    return heartbeatTime;
   }
 
   /**
-   * Sets the member commit time.
+   * Sets the member heartbeat time.
    *
-   * @param commitTime The member commit time.
+   * @param commitTime The member heartbeat time.
    * @return The member state.
    */
-  MemberState setCommitTime(long commitTime) {
-    this.commitTime = commitTime;
+  MemberState setHeartbeatTime(long commitTime) {
+    this.heartbeatTime = commitTime;
     return this;
   }
 
   /**
-   * Returns the member commit start time.
+   * Returns the member heartbeat start time.
    *
-   * @return The member commit start time.
+   * @return The member heartbeat start time.
    */
-  long getCommitStartTime() {
-    return commitStartTime;
+  long getHeartbeatStartTime() {
+    return heartbeatStartTime;
   }
 
   /**
-   * Sets the member commit start time.
+   * Sets the member heartbeat start time.
    *
-   * @param startTime The member commit attempt start time.
+   * @param startTime The member heartbeat attempt start time.
    * @return The member state.
    */
-  MemberState setCommitStartTime(long startTime) {
-    this.commitStartTime = startTime;
+  MemberState setHeartbeatStartTime(long startTime) {
+    this.heartbeatStartTime = startTime;
     return this;
   }
 

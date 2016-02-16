@@ -32,13 +32,12 @@ public final class ServerResponseTypeResolver implements SerializableTypeResolve
   private static final Map<Class<? extends Response>, Integer> TYPES = new HashMap() {{
     put(AcceptResponse.class, -26);
     put(AppendResponse.class, -27);
-    put(ConfigureResponse.class, -28);
-    put(InstallResponse.class, -29);
-    put(JoinResponse.class, -30);
-    put(LeaveResponse.class, -31);
-    put(PollResponse.class, -32);
-    put(ReconfigureResponse.class, -33);
-    put(VoteResponse.class, -34);
+    put(InstallResponse.class, -28);
+    put(JoinResponse.class, -29);
+    put(LeaveResponse.class, -30);
+    put(PollResponse.class, -31);
+    put(ReconfigureResponse.class, -32);
+    put(VoteResponse.class, -33);
   }};
 
   @Override

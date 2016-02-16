@@ -65,7 +65,7 @@ public class ServerContext implements AutoCloseable {
   private ServerStateMachine stateMachine;
   private final ThreadContext stateContext;
   private final ConnectionManager connections;
-  private AbstractState state = new InactiveState(this);
+  private AbstractState state = new ReserveState(this);
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
@@ -73,6 +73,7 @@ public class ServerContext implements AutoCloseable {
   private volatile long term;
   private int lastVotedFor;
   private long commitIndex;
+  private long completeIndex;
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
@@ -95,7 +96,13 @@ public class ServerContext implements AutoCloseable {
     // Reset the state machine.
     threadContext.execute(this::reset).join();
 
+    // Initialize the cluster state.
     this.cluster = new ClusterState(type, serverAddress, clientAddress, members, this);
+
+    // Initialize the commitIndex to the cluster configuration index. The most recent committed
+    // configuration is stored in a separate file on disk and persists the index. That is the
+    // highest persisted commit index.
+    this.commitIndex = cluster.getConfiguration().index();
   }
 
   /**
@@ -343,9 +350,6 @@ public class ServerContext implements AutoCloseable {
     Assert.argNot(commitIndex < 0, "commit index must be positive");
     this.commitIndex = Math.max(this.commitIndex, commitIndex);
     log.commit(Math.min(this.commitIndex, log.lastIndex()));
-    if (cluster.getConfiguration().index() <= commitIndex) {
-      cluster.commit();
-    }
     return this;
   }
 
@@ -356,6 +360,27 @@ public class ServerContext implements AutoCloseable {
    */
   long getCommitIndex() {
     return commitIndex;
+  }
+
+  /**
+   * Sets the complete index.
+   *
+   * @param completeIndex The complete index.
+   * @return The Raft context.
+   */
+  ServerContext setCompleteIndex(long completeIndex) {
+    Assert.argNot(completeIndex < 0, "complete index must be positive");
+    this.completeIndex = Math.max(this.completeIndex, completeIndex);
+    return this;
+  }
+
+  /**
+   * Returns the complete index.
+   *
+   * @return The complete index.
+   */
+  long getCompleteIndex() {
+    return completeIndex;
   }
 
   /**
@@ -514,7 +539,6 @@ public class ServerContext implements AutoCloseable {
     connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
     connection.handler(PublishRequest.class, request -> state.publish(request));
-    connection.handler(ConfigureRequest.class, request -> state.configure(request));
     connection.handler(InstallRequest.class, request -> state.install(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
     connection.handler(ReconfigureRequest.class, request -> state.reconfigure(request));
@@ -549,8 +573,8 @@ public class ServerContext implements AutoCloseable {
         }
         break;
       default:
-        if (this.state.type() != CopycatServer.State.INACTIVE) {
-          transition(CopycatServer.State.INACTIVE);
+        if (this.state.type() != CopycatServer.State.RESERVE) {
+          transition(CopycatServer.State.RESERVE);
         }
         break;
     }
@@ -591,12 +615,12 @@ public class ServerContext implements AutoCloseable {
    */
   private AbstractState createState(CopycatServer.State state) {
     switch (state) {
-      case INACTIVE:
-        return new InactiveState(this);
       case RESERVE:
         return new ReserveState(this);
       case PASSIVE:
         return new PassiveState(this);
+      case JOIN:
+        return new JoinState(this);
       case FOLLOWER:
         return new FollowerState(this);
       case CANDIDATE:

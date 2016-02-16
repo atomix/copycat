@@ -64,10 +64,13 @@ final class LeaderState extends ActiveState {
     takeLeadership();
 
     // Append initial entries to the log, including an initial no-op entry and the server's configuration.
-    appendInitialEntries();
+    appendInitializeEntry();
 
     // Commit the initial leader entries.
-    commitInitialEntries();
+    commitInitializeEntry();
+
+    // Append a configuration entry to propagate the leader's cluster configuration.
+    configure(context.getCluster().members());
 
     return super.open()
       .thenRun(this::startAppendTimer)
@@ -85,7 +88,7 @@ final class LeaderState extends ActiveState {
   /**
    * Appends initial entries to the log to take leadership.
    */
-  private void appendInitialEntries() {
+  private void appendInitializeEntry() {
     final long term = context.getTerm();
 
     // Append a no-op entry to reset session timeouts and commit entries from prior terms.
@@ -95,15 +98,12 @@ final class LeaderState extends ActiveState {
       assert context.getLog().append(entry) == appender.index();
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
-
-    // Append a configuration entry to propagate the leader's cluster configuration.
-    configure(context.getCluster().members());
   }
 
   /**
    * Commits a no-op entry to the log, ensuring any entries from a previous term are committed.
    */
-  private CompletableFuture<Void> commitInitialEntries() {
+  private CompletableFuture<Void> commitInitializeEntry() {
     // The Raft protocol dictates that leaders cannot commit entries from previous terms until
     // at least one entry from their current term has been stored on a majority of servers. Thus,
     // we force entries to be appended up to the leader's no-op entry. The LeaderAppender will ensure
@@ -229,13 +229,16 @@ final class LeaderState extends ActiveState {
       context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getMembers()));
     }
 
-    return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
-      if (isOpen()) {
-        // Reset the configuration index to allow new configuration changes to be committed.
-        configuring = 0;
-      }
-    });
+    return appender.appendEntries(index)
+      .thenRun(() -> context.getStateMachine().applyAll(index))
+      .thenCompose(v -> appender.commit(index))
+      .whenComplete((commitIndex, commitError) -> {
+        context.checkThread();
+        if (isOpen()) {
+          // Reset the configuration index to allow new configuration changes to be committed.
+          configuring = 0;
+        }
+      });
   }
 
   @Override
@@ -945,9 +948,13 @@ final class LeaderState extends ActiveState {
    * Ensures the local server is not the leader.
    */
   private void stepDown() {
+    // Ensure the leader is unset.
     if (context.getLeader() != null && context.getLeader().equals(context.getCluster().member())) {
       context.setLeader(0);
     }
+
+    // Reset the cluster state to ensure any uncommitted configuration change is reverted.
+    context.getClusterState().reset();
   }
 
   @Override

@@ -149,6 +149,19 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests joining and leaving the cluster, resizing the quorum.
+   */
+  public void testResize() throws Throwable {
+    CopycatServer server = createServers(1).get(0);
+    CopycatServer joiner = createServer(members, nextMember(Member.Type.ACTIVE));
+    joiner.open().thenRun(this::resume);
+    await(10000);
+    server.close().thenRun(this::resume);
+    await(10000);
+    joiner.close().thenRun(this::resume);
+  }
+
+  /**
    * Tests keeping a client session alive.
    */
   public void testClientKeepAlive() throws Throwable {

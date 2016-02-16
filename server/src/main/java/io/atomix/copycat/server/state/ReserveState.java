@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-class ReserveState extends InactiveState {
+class ReserveState extends AbstractState {
 
   public ReserveState(ServerContext context) {
     super(context);

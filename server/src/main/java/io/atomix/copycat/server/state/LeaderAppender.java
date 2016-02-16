@@ -21,10 +21,8 @@ import io.atomix.copycat.client.response.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.ConfigureRequest;
 import io.atomix.copycat.server.request.InstallRequest;
 import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.ConfigureResponse;
 import io.atomix.copycat.server.response.InstallResponse;
 
 import java.util.HashMap;
@@ -42,10 +40,11 @@ final class LeaderAppender extends AbstractAppender {
   private final LeaderState leader;
   private final long leaderTime;
   private final long leaderIndex;
-  private long commitTime;
-  private int commitFailures;
-  private CompletableFuture<Long> commitFuture;
-  private CompletableFuture<Long> nextCommitFuture;
+  private long heartbeatTime;
+  private int appendFailures;
+  private CompletableFuture<Long> heartbeatFuture;
+  private CompletableFuture<Long> nextHeartbeatFuture;
+  private final Map<Long, CompletableFuture<Long>> appendFutures = new HashMap<>();
   private final Map<Long, CompletableFuture<Long>> commitFutures = new HashMap<>();
 
   LeaderAppender(LeaderState leader) {
@@ -53,7 +52,7 @@ final class LeaderAppender extends AbstractAppender {
     this.leader = Assert.notNull(leader, "leader");
     this.leaderTime = System.currentTimeMillis();
     this.leaderIndex = context.getLog().nextIndex();
-    this.commitTime = leaderTime;
+    this.heartbeatTime = leaderTime;
   }
 
   /**
@@ -62,7 +61,7 @@ final class LeaderAppender extends AbstractAppender {
    * @return The current commit time.
    */
   public long time() {
-    return commitTime;
+    return heartbeatTime;
   }
 
   /**
@@ -101,26 +100,57 @@ final class LeaderAppender extends AbstractAppender {
 
     // If no commit future already exists, that indicates there's no heartbeat currently under way.
     // Create a new commit future and commit to all members in the cluster.
-    if (commitFuture == null) {
-      CompletableFuture<Long> newCommitFuture = new CompletableFuture<>();
-      commitFuture = newCommitFuture;
-      commitTime = System.currentTimeMillis();
+    if (heartbeatFuture == null) {
+      CompletableFuture<Long> newHeartbeatFuture = new CompletableFuture<>();
+      heartbeatFuture = newHeartbeatFuture;
+      heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
         appendEntries(member);
       }
-      return newCommitFuture;
+      return newHeartbeatFuture;
     }
     // If a commit future already exists, that indicates there is a heartbeat currently underway.
     // We don't want to allow callers to be completed by a heartbeat that may already almost be done.
     // So, we create the next commit future if necessary and return that. Once the current heartbeat
     // completes the next future will be used to do another heartbeat. This ensures that only one
     // heartbeat can be outstanding at any given point in time.
-    else if (nextCommitFuture == null) {
-      nextCommitFuture = new CompletableFuture<>();
-      return nextCommitFuture;
+    else if (nextHeartbeatFuture == null) {
+      nextHeartbeatFuture = new CompletableFuture<>();
+      return nextHeartbeatFuture;
     } else {
-      return nextCommitFuture;
+      return nextHeartbeatFuture;
     }
+  }
+
+  /**
+   * Commits entries up to the given index.
+   * <p>
+   * The returned {@link CompletableFuture} will be completed once the given index has been <em>committed</em>
+   * on a majority of servers in the cluster. To determine when an index has been committed, the leader tracks
+   * the {@code commitIndex} send in each {@link AppendRequest} and updates the {@link MemberState} with that
+   * index upon successful {@link AppendResponse}.
+   *
+   * @param index The index up to which to commit entries.
+   * @return A completable future to be completed once the given index has been committed on a majority
+   * of followers.
+   */
+  public CompletableFuture<Long> commit(long index) {
+    // If the index has already been completed, return a completed future.
+    if (index <= context.getCompleteIndex())
+      return CompletableFuture.completedFuture(index);
+
+    // If there are no other active members in the cluster, immediately update the complete index.
+    if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getCommitIndex() >= index) {
+      context.setCompleteIndex(index);
+      return CompletableFuture.completedFuture(index);
+    }
+
+    CompletableFuture<Long> future = commitFutures.get(index);
+    if (future == null) {
+      future = new CompletableFuture<>();
+      commitFutures.put(index, future);
+    }
+    return future;
   }
 
   /**
@@ -136,21 +166,22 @@ final class LeaderAppender extends AbstractAppender {
     if (index <= context.getCommitIndex())
       return CompletableFuture.completedFuture(index);
 
-    // If there are no other stateful servers in the cluster, immediately commit the index.
-    if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getClusterState().getPassiveMemberStates().isEmpty()) {
-      context.setCommitIndex(index);
-      context.setGlobalIndex(index);
-      return CompletableFuture.completedFuture(index);
-    }
-    // If there are no other active members in the cluster, update the commit index and complete the commit.
-    // The updated commit index will be sent to passive/reserve members on heartbeats.
-    else if (context.getClusterState().getActiveMemberStates().isEmpty()) {
-      context.setCommitIndex(index);
-      return CompletableFuture.completedFuture(index);
+    if (context.getClusterState().getActiveMemberStates().isEmpty()) {
+      // If there are no other stateful servers in the cluster, immediately commit the index and update the global index.
+      if (context.getClusterState().getPassiveMemberStates().isEmpty()) {
+        context.setCommitIndex(index);
+        context.setGlobalIndex(index);
+        return CompletableFuture.completedFuture(index);
+      }
+      // If there are only passive members in the cluster, immediately commit the index.
+      else {
+        context.setCommitIndex(index);
+        return CompletableFuture.completedFuture(index);
+      }
     }
 
     // Only send entry-specific AppendRequests to active members of the cluster.
-    return commitFutures.computeIfAbsent(index, i -> {
+    return appendFutures.computeIfAbsent(index, i -> {
       for (MemberState member : context.getClusterState().getActiveMemberStates()) {
         appendEntries(member);
       }
@@ -169,16 +200,6 @@ final class LeaderAppender extends AbstractAppender {
     if (member.getFailureCount() > 0) {
       if (canAppend(member)) {
         sendAppendRequest(member, buildAppendEmptyRequest(member));
-      }
-    }
-    // If the member term is less than the current term or the member's configuration index is less
-    // than the local configuration index, send a configuration update to the member.
-    // Ensure that only one configuration attempt per member is attempted at any given time by storing the
-    // member state in a set of configuring members.
-    // Once the configuration is complete sendAppendRequest will be called recursively.
-    else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getConfiguration().index()) {
-      if (canConfigure(member)) {
-        sendConfigureRequest(member, buildConfigureRequest(member));
       }
     }
     // If the member is a reserve or passive member, send an empty AppendRequest to it.
@@ -217,57 +238,102 @@ final class LeaderAppender extends AbstractAppender {
    * the cluster was contacted based on the index of a majority of the members. So, in a list of 3 ACTIVE
    * members, index 1 (the second member) will be used to determine the commit time in a sorted members list.
    */
-  private long commitTime() {
+  private long majorityHeartbeatTime() {
     int quorumIndex = quorumIndex();
     if (quorumIndex >= 0) {
-      return context.getClusterState().getActiveMemberStates((m1, m2)-> Long.compare(m2.getCommitTime(), m1.getCommitTime())).get(quorumIndex).getCommitTime();
+      return context.getClusterState().getActiveMemberStates((m1, m2)-> Long.compare(m2.getHeartbeatTime(), m1.getHeartbeatTime())).get(quorumIndex).getHeartbeatTime();
     }
     return System.currentTimeMillis();
   }
 
   /**
-   * Sets a commit time or fails the commit if a quorum of successful responses cannot be achieved.
+   * Sets a heartbeat time or fails the heartbeat if a quorum of successful responses cannot be achieved.
    */
-  private void commitTime(MemberState member, Throwable error) {
-    if (commitFuture == null) {
+  private void updateHeartbeatTime(MemberState member, Throwable error) {
+    if (heartbeatFuture == null) {
       return;
     }
 
-    if (error != null && member.getCommitStartTime() == commitTime) {
+    if (error != null && member.getHeartbeatStartTime() == heartbeatTime) {
       int votingMemberSize = context.getClusterState().getActiveMemberStates().size() + (context.getCluster().member().type() == Member.Type.ACTIVE ? 1 : 0);
       int quorumSize = context.getClusterState().getQuorum();
       // If a quorum of successful responses cannot be achieved, fail this commit.
-      if (votingMemberSize - quorumSize + 1 <= ++commitFailures) {
-        commitFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
-        completeCommit();
+      if (votingMemberSize - quorumSize + 1 <= ++appendFailures) {
+        heartbeatFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
+        completeHeartbeat();
       }
     } else {
-      member.setCommitTime(System.currentTimeMillis());
+      member.setHeartbeatTime(System.currentTimeMillis());
 
       // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
-      // was contacted. If the current commitFuture's time is less than the commit time then trigger the
+      // was contacted. If the current heartbeatFuture's time is less than the commit time then trigger the
       // commit future and reset it to the next commit future.
-      if (commitTime <= commitTime()) {
-        commitFuture.complete(null);
-        completeCommit();
+      if (heartbeatTime <= majorityHeartbeatTime()) {
+        heartbeatFuture.complete(null);
+        completeHeartbeat();
       }
     }
   }
 
   /**
-   * Completes a heartbeat by replacing the current commitFuture with the nextCommitFuture, updating the
-   * current commitTime, and starting a new {@link AppendRequest} to all active members.
+   * Completes a heartbeat by replacing the current heartbeatFuture with the nextHeartbeatFuture, updating the
+   * current heartbeatTime, and starting a new {@link AppendRequest} to all active members.
    */
-  private void completeCommit() {
-    commitFailures = 0;
-    commitFuture = nextCommitFuture;
-    nextCommitFuture = null;
-    if (commitFuture != null) {
-      commitTime = System.currentTimeMillis();
+  private void completeHeartbeat() {
+    appendFailures = 0;
+    heartbeatFuture = nextHeartbeatFuture;
+    nextHeartbeatFuture = null;
+    if (heartbeatFuture != null) {
+      heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
         appendEntries(member);
       }
     }
+  }
+
+  /**
+   * Calculates the highest index that has been stored on all available, stateful servers.
+   */
+  private long calculateGlobalIndex() {
+    // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
+    // passive members. This is critical since passive members still have state machines and thus it's still
+    // important to ensure that tombstones are applied to their state machines.
+    // If the members list is empty, use the local server's last log index as the global index.
+    return context.getClusterState().getRemoteMemberStates().stream()
+      .filter(m -> m.getMember().type() != Member.Type.RESERVE && m.getMember().status() == Member.Status.AVAILABLE)
+      .mapToLong(MemberState::getMatchIndex)
+      .min()
+      .orElse(context.getLog().lastIndex());
+  }
+
+  /**
+   * Calculates the highest index that has been stored on a majority of nodes in the current configuration.
+   */
+  private long calculateCommitIndex() {
+    // Sort the list of replicas, order by the last index that was replicated
+    // to the replica. This will allow us to determine the median index
+    // for all known replicated entries across all cluster members.
+    List<MemberState> members = context.getClusterState().getActiveMemberStates((m1, m2) ->
+      Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
+    if (members.isEmpty()) {
+      return context.getLog().lastIndex();
+    }
+    return members.get(quorumIndex()).getMatchIndex();
+  }
+
+  /**
+   * Calculates the highest index that has been committed on a majority of nodes in the current configuration.
+   */
+  private long calculateCompleteIndex() {
+    // Sort the list of replicas, order by the last index that was committed
+    // by the replica. This will allow us to determine the median index
+    // for all known committed entries across all cluster members.
+    List<MemberState> members = context.getClusterState().getActiveMemberStates((m1, m2) ->
+      Long.compare(m2.getCommitIndex() != 0 ? m2.getCommitIndex() : 0l, m1.getCommitIndex() != 0 ? m1.getCommitIndex() : 0l));
+    if (members.isEmpty()) {
+      return context.getCommitIndex();
+    }
+    return members.get(quorumIndex()).getCommitIndex();
   }
 
   /**
@@ -276,50 +342,45 @@ final class LeaderAppender extends AbstractAppender {
   private void commitEntries() {
     context.checkThread();
 
-    // The global index may have increased even if the commit index didn't. Update the global index.
-    // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
-    // passive members. This is critical since passive members still have state machines and thus it's still
-    // important to ensure that tombstones are applied to their state machines.
-    // If the members list is empty, use the local server's last log index as the global index.
-    long globalMatchIndex = context.getClusterState().getRemoteMemberStates().stream()
-      .filter(m -> m.getMember().type() != Member.Type.RESERVE && m.getMember().status() == Member.Status.AVAILABLE)
-      .mapToLong(MemberState::getMatchIndex)
-      .min()
-      .orElse(context.getLog().lastIndex());
-    context.setGlobalIndex(globalMatchIndex);
+    // The global index may have increased even if the commit index didn't.
+    long globalIndex = calculateGlobalIndex();
 
-    // Sort the list of replicas, order by the last index that was replicated
-    // to the replica. This will allow us to determine the median index
-    // for all known replicated entries across all cluster members.
-    List<MemberState> members = context.getClusterState().getActiveMemberStates((m1, m2) ->
-      Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
+    // Calculate the commit index. The commit index is the highest index stored on a majority of nodes.
+    long commitIndex = calculateCommitIndex();
 
-    // If the active members list is empty (a configuration change occurred between an append request/response)
-    // ensure all commit futures are completed and cleared.
-    if (members.isEmpty()) {
-      context.setCommitIndex(context.getLog().lastIndex());
-      for (Map.Entry<Long, CompletableFuture<Long>> entry : commitFutures.entrySet()) {
-        entry.getValue().complete(entry.getKey());
+    // Calculate the complete index. The complete index is the highest index committed on a majority of nodes.
+    long completeIndex = calculateCompleteIndex();
+
+    // If the commitIndex has not surpassed the start of the leader's term in the log, do not commit entries.
+    if (leaderIndex > 0 && commitIndex >= leaderIndex) {
+      // Set the global index.
+      context.setGlobalIndex(globalIndex);
+
+      // If the commit index has increased, update the commit index.
+      long previousCommitIndex = context.getCommitIndex();
+      if (commitIndex > 0 && commitIndex > previousCommitIndex) {
+        context.setCommitIndex(commitIndex);
+
+        // Iterate from the previous commitIndex to the updated commitIndex and remove and complete futures.
+        for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
+          CompletableFuture<Long> future = appendFutures.remove(i);
+          if (future != null) {
+            future.complete(i);
+          }
+        }
       }
-      commitFutures.clear();
-      return;
-    }
 
-    // Calculate the current commit index as the median matchIndex.
-    long commitIndex = members.get(quorumIndex()).getMatchIndex();
+      // If the complete index has increased, update the complete index.
+      long previousCompleteIndex = context.getCompleteIndex();
+      if (completeIndex > 0 && completeIndex > previousCompleteIndex) {
+        context.setCompleteIndex(completeIndex);
 
-    // If the commit index has increased then update the commit index. Note that in order to ensure
-    // the leader completeness property holds, we verify that the commit index is greater than or equal to
-    // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
-    long previousCommitIndex = context.getCommitIndex();
-    if (commitIndex > 0 && commitIndex > previousCommitIndex && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
-      context.setCommitIndex(commitIndex);
-
-      // Iterate from the previous commitIndex to the updated commitIndex and remove and complete futures.
-      for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
-        CompletableFuture<Long> future = commitFutures.remove(i);
-        if (future != null) {
-          future.complete(i);
+        // Iterate from the previous completeIndex to the updated completeIndex and remove and complete futures.
+        for (long i = previousCompleteIndex + 1; i <= completeIndex; i++) {
+          CompletableFuture<Long> future = commitFutures.remove(i);
+          if (future != null) {
+            future.complete(i);
+          }
         }
       }
     }
@@ -331,7 +392,7 @@ final class LeaderAppender extends AbstractAppender {
   protected void sendAppendRequest(MemberState member, AppendRequest request) {
     // Set the start time of the member's current commit. This will be used to associate responses
     // with the current commit request.
-    member.setCommitStartTime(commitTime);
+    member.setHeartbeatStartTime(heartbeatTime);
 
     super.sendAppendRequest(member, request);
   }
@@ -343,7 +404,7 @@ final class LeaderAppender extends AbstractAppender {
     super.handleAppendRequestFailure(member, request, error);
 
     // Trigger commit futures if necessary.
-    commitTime(member, error);
+    updateHeartbeatTime(member, error);
   }
 
   /**
@@ -351,7 +412,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   protected void handleAppendResponseFailure(MemberState member, AppendRequest request, Throwable error) {
     // Trigger commit futures if necessary.
-    commitTime(member, error);
+    updateHeartbeatTime(member, error);
 
     super.handleAppendResponseFailure(member, request, error);
   }
@@ -361,7 +422,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
     // Trigger commit futures if necessary.
-    commitTime(member, null);
+    updateHeartbeatTime(member, null);
 
     super.handleAppendResponse(member, request, response);
   }
@@ -438,7 +499,7 @@ final class LeaderAppender extends AbstractAppender {
     // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
     // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
     // that a partition occurred and transition back to the FOLLOWER state.
-    if (System.currentTimeMillis() - Math.max(commitTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
+    if (System.currentTimeMillis() - Math.max(majorityHeartbeatTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
       LOGGER.warn("{} - Suspected network partition. Stepping down", context.getCluster().member().address());
       context.setLeader(0);
       context.transition(CopycatServer.State.FOLLOWER);
@@ -454,33 +515,9 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   @Override
-  protected void handleConfigureResponse(MemberState member, ConfigureRequest request, ConfigureResponse response) {
-    // Trigger commit futures if necessary.
-    commitTime(member, null);
-
-    super.handleConfigureResponse(member, request, response);
-  }
-
-  @Override
-  protected void handleConfigureRequestFailure(MemberState member, ConfigureRequest request, Throwable error) {
-    super.handleConfigureRequestFailure(member, request, error);
-
-    // Trigger commit futures if necessary.
-    commitTime(member, error);
-  }
-
-  @Override
-  protected void handleConfigureResponseFailure(MemberState member, ConfigureRequest request, Throwable error) {
-    // Trigger commit futures if necessary.
-    commitTime(member, error);
-
-    super.handleConfigureResponseFailure(member, request, error);
-  }
-
-  @Override
   protected void handleInstallResponse(MemberState member, InstallRequest request, InstallResponse response) {
     // Trigger commit futures if necessary.
-    commitTime(member, null);
+    updateHeartbeatTime(member, null);
 
     super.handleInstallResponse(member, request, response);
   }
@@ -490,13 +527,13 @@ final class LeaderAppender extends AbstractAppender {
     super.handleInstallRequestFailure(member, request, error);
 
     // Trigger commit futures if necessary.
-    commitTime(member, error);
+    updateHeartbeatTime(member, error);
   }
 
   @Override
   protected void handleInstallResponseFailure(MemberState member, InstallRequest request, Throwable error) {
     // Trigger commit futures if necessary.
-    commitTime(member, error);
+    updateHeartbeatTime(member, error);
 
     super.handleInstallResponseFailure(member, request, error);
   }
