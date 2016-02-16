@@ -32,8 +32,8 @@ final class MemberState {
   private int nextSnapshotOffset;
   private long matchIndex;
   private long nextIndex;
-  private long commitTime;
-  private long commitStartTime;
+  private long heartbeatTime;
+  private long heartbeatStartTime;
   private int failures;
 
   public MemberState(ServerMember member, ClusterState cluster) {
@@ -48,8 +48,8 @@ final class MemberState {
     nextSnapshotOffset = 0;
     matchIndex = 0;
     nextIndex = log.lastIndex() + 1;
-    commitTime = 0;
-    commitStartTime = 0;
+    heartbeatTime = 0;
+    heartbeatStartTime = 0;
     failures = 0;
   }
 
@@ -203,42 +203,42 @@ final class MemberState {
   }
 
   /**
-   * Returns the member commit time.
+   * Returns the member heartbeat time.
    *
-   * @return The member commit time.
+   * @return The member heartbeat time.
    */
-  long getCommitTime() {
-    return commitTime;
+  long getHeartbeatTime() {
+    return heartbeatTime;
   }
 
   /**
-   * Sets the member commit time.
+   * Sets the member heartbeat time.
    *
-   * @param commitTime The member commit time.
+   * @param heartbeatTime The member heartbeat time.
    * @return The member state.
    */
-  MemberState setCommitTime(long commitTime) {
-    this.commitTime = commitTime;
+  MemberState setHeartbeatTime(long heartbeatTime) {
+    this.heartbeatTime = heartbeatTime;
     return this;
   }
 
   /**
-   * Returns the member commit start time.
+   * Returns the member heartbeat start time.
    *
-   * @return The member commit start time.
+   * @return The member heartbeat start time.
    */
-  long getCommitStartTime() {
-    return commitStartTime;
+  long getHeartbeatStartTime() {
+    return heartbeatStartTime;
   }
 
   /**
-   * Sets the member commit start time.
+   * Sets the member heartbeat start time.
    *
-   * @param startTime The member commit attempt start time.
+   * @param startTime The member heartbeat attempt start time.
    * @return The member state.
    */
-  MemberState setCommitStartTime(long startTime) {
-    this.commitStartTime = startTime;
+  MemberState setHeartbeatStartTime(long startTime) {
+    this.heartbeatStartTime = startTime;
     return this;
   }
 
