@@ -235,9 +235,11 @@ final class LeaderAppender extends AbstractAppender {
 
     if (error != null && member.getHeartbeatStartTime() == heartbeatTime) {
       int votingMemberSize = context.getClusterState().getActiveMemberStates().size() + (context.getCluster().member().type() == Member.Type.ACTIVE ? 1 : 0);
-      int quorumSize = context.getClusterState().getQuorum();
-      // If a quorum of successful responses cannot be achieved, fail this commit.
-      if (votingMemberSize - quorumSize + 1 <= ++heartbeatFailures) {
+      int quorumSize = (int) Math.floor(votingMemberSize / 2) + 1;
+      // If a quorum of successful responses cannot be achieved, fail this heartbeat. Ensure that only
+      // ACTIVE members are considered. A member could have been transitioned to another state while the
+      // heartbeat was being sent.
+      if (member.getMember().type() == Member.Type.ACTIVE && ++heartbeatFailures > votingMemberSize - quorumSize) {
         heartbeatFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
         completeHeartbeat();
       }
