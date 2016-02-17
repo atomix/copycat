@@ -138,14 +138,18 @@ final class LeaderAppender extends AbstractAppender {
 
     // If there are no other stateful servers in the cluster, immediately commit the index.
     if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getClusterState().getPassiveMemberStates().isEmpty()) {
+      long previousCommitIndex = context.getCommitIndex();
       context.setCommitIndex(index);
       context.setGlobalIndex(index);
+      completeCommits(previousCommitIndex, index);
       return CompletableFuture.completedFuture(index);
     }
     // If there are no other active members in the cluster, update the commit index and complete the commit.
     // The updated commit index will be sent to passive/reserve members on heartbeats.
     else if (context.getClusterState().getActiveMemberStates().isEmpty()) {
+      long previousCommitIndex = context.getCommitIndex();
       context.setCommitIndex(index);
+      completeCommits(previousCommitIndex, index);
       return CompletableFuture.completedFuture(index);
     }
 
@@ -297,11 +301,10 @@ final class LeaderAppender extends AbstractAppender {
     // If the active members list is empty (a configuration change occurred between an append request/response)
     // ensure all commit futures are completed and cleared.
     if (members.isEmpty()) {
-      context.setCommitIndex(context.getLog().lastIndex());
-      for (Map.Entry<Long, CompletableFuture<Long>> entry : appendFutures.entrySet()) {
-        entry.getValue().complete(entry.getKey());
-      }
-      appendFutures.clear();
+      long previousCommitIndex = context.getCommitIndex();
+      long commitIndex = context.getLog().lastIndex();
+      context.setCommitIndex(commitIndex);
+      completeCommits(previousCommitIndex, commitIndex);
       return;
     }
 
@@ -314,13 +317,18 @@ final class LeaderAppender extends AbstractAppender {
     long previousCommitIndex = context.getCommitIndex();
     if (commitIndex > 0 && commitIndex > previousCommitIndex && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
       context.setCommitIndex(commitIndex);
+      completeCommits(previousCommitIndex, commitIndex);
+    }
+  }
 
-      // Iterate from the previous commitIndex to the updated commitIndex and remove and complete futures.
-      for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
-        CompletableFuture<Long> future = appendFutures.remove(i);
-        if (future != null) {
-          future.complete(i);
-        }
+  /**
+   * Completes append entries attempts up to the given index.
+   */
+  private void completeCommits(long previousCommitIndex, long commitIndex) {
+    for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
+      CompletableFuture<Long> future = appendFutures.remove(i);
+      if (future != null) {
+        future.complete(i);
       }
     }
   }
