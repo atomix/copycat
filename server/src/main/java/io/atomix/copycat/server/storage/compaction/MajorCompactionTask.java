@@ -260,6 +260,8 @@ public final class MajorCompactionTask implements CompactionTask {
           transferEntry(entry, compactSegment);
         }
         break;
+      default:
+        break;
     }
   }
 

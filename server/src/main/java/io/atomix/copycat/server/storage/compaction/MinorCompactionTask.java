@@ -163,6 +163,8 @@ public final class MinorCompactionTask implements CompactionTask {
       case UNKNOWN:
         transferEntry(index, entry, compactSegment);
         break;
+      default:
+        break;
     }
   }
 

@@ -382,6 +382,8 @@ public class Log implements AutoCloseable {
             return entry;
           }
           break;
+        default:
+          break;
       }
     }
     return null;

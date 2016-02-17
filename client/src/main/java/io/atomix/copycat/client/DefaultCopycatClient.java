@@ -159,6 +159,8 @@ public class DefaultCopycatClient implements CopycatClient {
       case CLOSED:
         setState(State.CLOSED);
         break;
+      default:
+        break;
     }
   }
 

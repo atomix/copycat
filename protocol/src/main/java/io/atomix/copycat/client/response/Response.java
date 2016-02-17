@@ -57,6 +57,8 @@ public interface Response extends CatalystSerializable {
           return OK;
         case 0:
           return ERROR;
+        default:
+          break;
       }
       throw new IllegalArgumentException("invalid status identifier: " + id);
     }
