@@ -24,7 +24,7 @@
 
   <artifactId>copycat-examples-parent</artifactId>
   <packaging>pom</packaging>
-  <name>Copycat Examples Parent Pom</name>
+  <name>Copycat Examples Parent</name>
   <description>Example projects for Copycat.</description>
   <url>http://github.com/atomix/copycat</url>
   <inceptionYear>2013</inceptionYear>

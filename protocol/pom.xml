@@ -23,7 +23,7 @@
   </parent>
 
   <artifactId>copycat-protocol</artifactId>
-  <name>Copycat Raft Protocol</name>
+  <name>Copycat Protocol</name>
 
   <dependencies>
     <dependency>
