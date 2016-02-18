@@ -258,25 +258,24 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public synchronized CompletableFuture<CopycatClient> recover() {
     if (recoverFuture == null) {
-      LOGGER.debug("Recovering session");
-
+      LOGGER.debug("Recovering session {}", this.session.id());
       // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
-      recoverFuture = new CompletableFuture<>();
-
       ClientSession session = newSession();
-      session.open().whenCompleteAsync((result, error) -> {
-        // If the session was opened successfully, resubmit any pending operations.
+      recoverFuture = session.open().handleAsync((result, error) -> {
         if (error == null) {
+          LOGGER.debug("Recovered by replacing session {} with session {}", this.session.id(), session.id());
+          ClientSession oldSession = this.session;
           this.session = session;
+          // If the session was opened successfully, resubmit any pending operations.
           for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
             resubmit(entry.getKey(), entry.getValue());
           }
-          recoverFuture.complete(this);
+          return oldSession.close();
         } else {
           setState(State.CLOSED);
-          recoverFuture.completeExceptionally(error);
+          return Futures.exceptionalFuture(error);
         }
-      }, context.executor());
+      }, context.executor()).thenApply(v -> this);
     }
     return recoverFuture;
   }
