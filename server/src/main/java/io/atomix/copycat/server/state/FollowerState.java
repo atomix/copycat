@@ -59,7 +59,7 @@ final class FollowerState extends ActiveState {
    * Starts the heartbeat timer.
    */
   private void startHeartbeatTimeout() {
-    LOGGER.debug("{} - Starting heartbeat timer", context.getCluster().member().address());
+    logger.debug("{} - Starting heartbeat timer", context.getCluster().member().address());
     resetHeartbeatTimeout();
   }
 
@@ -83,7 +83,7 @@ final class FollowerState extends ActiveState {
       heartbeatTimer = null;
       if (isOpen()) {
         context.setLeader(0);
-        LOGGER.debug("{} - Heartbeat timed out in {}", context.getCluster().member().address(), delay);
+        logger.debug("{} - Heartbeat timed out in {}", context.getCluster().member().address(), delay);
         sendPollRequests();
       }
     });
@@ -95,7 +95,7 @@ final class FollowerState extends ActiveState {
   private void sendPollRequests() {
     // Set a new timer within which other nodes must respond in order for this node to transition to candidate.
     heartbeatTimer = context.getThreadContext().schedule(context.getElectionTimeout(), () -> {
-      LOGGER.debug("{} - Failed to poll a majority of the cluster in {}", context.getCluster().member().address(), context.getElectionTimeout());
+      logger.debug("{} - Failed to poll a majority of the cluster in {}", context.getCluster().member().address(), context.getElectionTimeout());
       resetHeartbeatTimeout();
     });
 
@@ -132,12 +132,12 @@ final class FollowerState extends ActiveState {
       lastTerm = 0;
     }
 
-    LOGGER.info("{} - Polling members {}", context.getCluster().member().address(), votingMembers);
+    logger.info("{} - Polling members {}", context.getCluster().member().address(), votingMembers);
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
     for (ServerMember member : votingMembers) {
-      LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
+      logger.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
       PollRequest request = PollRequest.builder()
         .withTerm(context.getTerm())
         .withCandidate(context.getCluster().member().address().hashCode())
@@ -149,7 +149,7 @@ final class FollowerState extends ActiveState {
           context.checkThread();
           if (isOpen() && !complete.get()) {
             if (error != null) {
-              LOGGER.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
+              logger.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
               quorum.fail();
             } else {
               if (response.term() > context.getTerm()) {
@@ -157,13 +157,13 @@ final class FollowerState extends ActiveState {
               }
 
               if (!response.accepted()) {
-                LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
+                logger.debug("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
+                logger.debug("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
+                logger.debug("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
                 quorum.succeed();
               }
             }
@@ -214,7 +214,7 @@ final class FollowerState extends ActiveState {
    */
   private void cancelHeartbeatTimeout() {
     if (heartbeatTimer != null) {
-      LOGGER.debug("{} - Cancelling heartbeat timer", context.getCluster().member().address());
+      logger.debug("{} - Cancelling heartbeat timer", context.getCluster().member().address());
       heartbeatTimer.cancel();
     }
   }

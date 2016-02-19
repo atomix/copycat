@@ -310,7 +310,7 @@ public class ServerContext implements AutoCloseable {
    */
   ServerContext setLastVotedFor(int candidate) {
     // If we've already voted for another candidate in this term then the last voted for candidate cannot be overridden.
-    Assert.stateNot(lastVotedFor != 0 && candidate != 0l, "Already voted for another candidate");
+    Assert.stateNot(lastVotedFor != 0 && candidate != 0L, "Already voted for another candidate");
     ServerMember member = cluster.member(candidate);
     Assert.state(member != null, "unknown candidate: %d", candidate);
     this.lastVotedFor = candidate;

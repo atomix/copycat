@@ -298,7 +298,7 @@ final class LeaderAppender extends AbstractAppender {
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
     List<MemberState> members = context.getClusterState().getActiveMemberStates((m1, m2) ->
-      Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
+      Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0L, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0L));
 
     // If the active members list is empty (a configuration change occurred between an append request/response)
     // ensure all commit futures are completed and cleared.
@@ -422,7 +422,7 @@ final class LeaderAppender extends AbstractAppender {
   protected void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     // If we've received a greater term, update the term and transition back to follower.
     if (response.term() > context.getTerm()) {
-      LOGGER.debug("{} - Received higher term from {}", context.getClusterState().member().address(), member.getMember().serverAddress());
+      logger.debug("{} - Received higher term from {}", context.getClusterState().member().address(), member.getMember().serverAddress());
       context.setTerm(response.term()).setLeader(0);
       context.transition(CopycatServer.State.FOLLOWER);
     } else {
@@ -449,7 +449,7 @@ final class LeaderAppender extends AbstractAppender {
     // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
     // that a partition occurred and transition back to the FOLLOWER state.
     if (System.currentTimeMillis() - Math.max(heartbeatTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
-      LOGGER.warn("{} - Suspected network partition. Stepping down", context.getCluster().member().address());
+      logger.warn("{} - Suspected network partition. Stepping down", context.getCluster().member().address());
       context.setLeader(0);
       context.transition(CopycatServer.State.FOLLOWER);
     }

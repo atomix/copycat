@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 abstract class AbstractState implements Managed<AbstractState> {
-  protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
+  protected final Logger logger = LoggerFactory.getLogger(getClass());
   protected final ServerContext context;
   private boolean open = true;
 
@@ -52,7 +52,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getCluster().member().address(), request);
+    logger.debug("{} - Received {}", context.getCluster().member().address(), request);
     return request;
   }
 
@@ -60,7 +60,7 @@ abstract class AbstractState implements Managed<AbstractState> {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getCluster().member().address(), response);
+    logger.debug("{} - Sent {}", context.getCluster().member().address(), response);
     return response;
   }
 

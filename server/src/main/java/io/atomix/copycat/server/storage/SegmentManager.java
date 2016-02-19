@@ -116,7 +116,7 @@ public class SegmentManager implements AutoCloseable {
       currentSegment.descriptor().update(System.currentTimeMillis());
       currentSegment.descriptor().lock();
 
-      segments.put(1l, currentSegment);
+      segments.put(1L, currentSegment);
     }
   }
 

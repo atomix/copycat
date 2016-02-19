@@ -42,7 +42,7 @@ import java.util.*;
  */
 abstract class AbstractAppender implements AutoCloseable {
   private static final int MAX_BATCH_SIZE = 1024 * 32;
-  protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
+  protected final Logger logger = LoggerFactory.getLogger(getClass());
   protected final ServerContext context;
   private final Set<MemberState> appending = new HashSet<>();
   private final Set<MemberState> configuring = new HashSet<>();
@@ -238,7 +238,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // Lock appending to this member.
     lockAppend(member);
 
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
+    logger.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
     context.getConnections().getConnection(member.getMember().address()).whenComplete((connection, error) -> {
       context.checkThread();
 
@@ -268,7 +268,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().address());
+          logger.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().address());
           handleAppendResponse(member, request, response);
         } else {
           handleAppendResponseFailure(member, request, error);
@@ -348,7 +348,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // when attempting to send entries to down followers.
     int failures = member.incrementFailureCount();
     if (failures <= 3 || failures % 100 == 0) {
-      LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getCluster().member().address(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
+      logger.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getCluster().member().address(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
     }
   }
 
@@ -372,7 +372,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // when attempting to send entries to down followers.
     int failures = member.incrementFailureCount();
     if (failures <= 3 || failures % 100 == 0) {
-      LOGGER.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
+      logger.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
     }
   }
 
@@ -402,7 +402,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void resetMatchIndex(MemberState member, AppendResponse response) {
     member.setMatchIndex(response.logIndex());
-    LOGGER.debug("{} - Reset match index for {} to {}", context.getCluster().member().address(), member, member.getMatchIndex());
+    logger.debug("{} - Reset match index for {} to {}", context.getCluster().member().address(), member, member.getMatchIndex());
   }
 
   /**
@@ -414,7 +414,7 @@ abstract class AbstractAppender implements AutoCloseable {
     } else {
       member.setNextIndex(context.getLog().firstIndex());
     }
-    LOGGER.debug("{} - Reset next index for {} to {}", context.getCluster().member().address(), member, member.getNextIndex());
+    logger.debug("{} - Reset next index for {} to {}", context.getCluster().member().address(), member, member.getNextIndex());
   }
 
   /**
@@ -458,7 +458,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a configuration message.
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
+    logger.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
@@ -467,10 +467,10 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
+          logger.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
           handleConfigureResponse(member, request, response);
         } else {
-          LOGGER.warn("{} - Failed to configure {}", context.getCluster().member().address(), member.getMember().serverAddress());
+          logger.warn("{} - Failed to configure {}", context.getCluster().member().address(), member.getMember().serverAddress());
           handleConfigureResponseFailure(member, request, error);
         }
       }
@@ -591,7 +591,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a snapshot message.
    */
   protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
+    logger.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
@@ -600,10 +600,10 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
+          logger.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
           handleInstallResponse(member, request, response);
         } else {
-          LOGGER.warn("{} - Failed to install {}", context.getCluster().member().address(), member.getMember().serverAddress());
+          logger.warn("{} - Failed to install {}", context.getCluster().member().address(), member.getMember().serverAddress());
 
           // Trigger reactions to the install response failure.
           handleInstallResponseFailure(member, request, error);
@@ -672,7 +672,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   @SuppressWarnings("unused")
   protected void handleInstallResponseError(MemberState member, InstallRequest request, InstallResponse response) {
-    LOGGER.warn("{} - Failed to install {}", context.getCluster().member().address(), member.getMember().serverAddress());
+    logger.warn("{} - Failed to install {}", context.getCluster().member().address(), member.getMember().serverAddress());
     member.setNextSnapshotIndex(0).setNextSnapshotOffset(0);
   }
 

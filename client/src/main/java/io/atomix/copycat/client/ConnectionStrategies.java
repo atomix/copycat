@@ -75,11 +75,11 @@ public enum ConnectionStrategies implements ConnectionStrategy {
    * client successfully connects to a server and registers a session.
    */
   FIBONACCI_BACKOFF {
-    private final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5, 8, 13};
+    private final int[] fibonacci = new int[]{1, 1, 2, 3, 5, 8, 13};
 
     @Override
     public void attemptFailed(Attempt attempt) {
-      attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt()-1, FIBONACCI.length-1)]));
+      attempt.retry(Duration.ofSeconds(fibonacci[Math.min(attempt.attempt()-1, fibonacci.length-1)]));
     }
   }
 

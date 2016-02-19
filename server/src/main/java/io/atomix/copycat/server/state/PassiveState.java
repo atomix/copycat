@@ -123,7 +123,7 @@ class PassiveState extends ReserveState {
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
     if (request.term() < context.getTerm()) {
-      LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
+      logger.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -166,7 +166,7 @@ class PassiveState extends ReserveState {
    */
   protected AppendResponse checkPreviousEntry(AppendRequest request) {
     if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
+      logger.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -174,7 +174,7 @@ class PassiveState extends ReserveState {
         .withLogIndex(context.getLog().lastIndex())
         .build();
     } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
+      logger.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
@@ -196,7 +196,7 @@ class PassiveState extends ReserveState {
       // We perform no additional consistency checks here since passive members may only receive committed entries.
       if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
+        logger.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
       }
 
       // If the entry is a connect entry then immediately configure the connection.
@@ -234,14 +234,14 @@ class PassiveState extends ReserveState {
       // query to the leader. This ensures that a follower does not tell the client its session
       // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
       if (context.getStateMachine().getLastApplied() < request.session()) {
-        LOGGER.debug("{} - State out of sync, forwarding query to leader");
+        logger.debug("{} - State out of sync, forwarding query to leader");
         return queryForward(request);
       }
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
       if (context.getLog().lastIndex() < context.getCommitIndex()) {
-        LOGGER.debug("{} - State out of sync, forwarding query to leader");
+        logger.debug("{} - State out of sync, forwarding query to leader");
         return queryForward(request);
       }
 
@@ -262,7 +262,7 @@ class PassiveState extends ReserveState {
         .build()));
     }
 
-    LOGGER.debug("{} - Forwarded {}", context.getCluster().member().address(), request);
+    logger.debug("{} - Forwarded {}", context.getCluster().member().address(), request);
     return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
   }
 
