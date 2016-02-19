@@ -148,7 +148,7 @@ class PassiveState extends ReserveState {
     // if the AppendRequest is rejected.
     long currentGlobalIndex = context.getGlobalIndex();
     long nextGlobalIndex = request.globalIndex();
-    if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && !context.getLog().contains(nextGlobalIndex)) {
+    if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && nextGlobalIndex > context.getLog().lastIndex()) {
       context.setGlobalIndex(nextGlobalIndex);
       context.reset();
     }
