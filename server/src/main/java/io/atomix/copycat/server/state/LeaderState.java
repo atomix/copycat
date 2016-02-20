@@ -33,6 +33,7 @@ import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -226,7 +227,7 @@ final class LeaderState extends ActiveState {
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getMembers()));
+      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getTimestamp(), entry.getMembers()));
     }
 
     return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
@@ -267,7 +268,7 @@ final class LeaderState extends ActiveState {
     // Add the joining member to the members list. If the joining member's type is ACTIVE, join the member in the
     // PROMOTABLE state to allow it to get caught up without impacting the quorum size.
     Collection<Member> members = context.getCluster().members();
-    members.add(new ServerMember(member.type(), member.serverAddress(), member.clientAddress()));
+    members.add(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), Instant.now()));
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
@@ -327,11 +328,11 @@ final class LeaderState extends ActiveState {
 
     // If the client address is being set or has changed, update the configuration.
     if (member.clientAddress() != null && (existingMember.clientAddress() == null || !existingMember.clientAddress().equals(member.clientAddress()))) {
-      existingMember.update(member.clientAddress());
+      existingMember.update(member.clientAddress(), Instant.now());
     }
 
     // Update the member type.
-    existingMember.update(request.member().type());
+    existingMember.update(request.member().type(), Instant.now());
 
     Collection<Member> members = context.getCluster().members();
 

@@ -18,6 +18,7 @@ package io.atomix.copycat.server.cluster;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Listener;
 
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -176,6 +177,13 @@ public interface Member {
    * @return The member status.
    */
   Status status();
+
+  /**
+   * Returns the time at which the member was updated.
+   *
+   * @return The time at which the member was updated.
+   */
+  Instant updated();
 
   /**
    * Registers a callback to be called when the member's status changes.

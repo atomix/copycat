@@ -27,6 +27,7 @@ import io.atomix.copycat.server.response.AppendResponse;
 import io.atomix.copycat.server.response.ConfigureResponse;
 import io.atomix.copycat.server.response.InstallResponse;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -288,8 +289,9 @@ final class LeaderAppender extends AbstractAppender {
     // passive members. This is critical since passive members still have state machines and thus it's still
     // important to ensure that tombstones are applied to their state machines.
     // If the members list is empty, use the local server's last log index as the global index.
+    long currentTime = System.currentTimeMillis();
     long globalMatchIndex = context.getClusterState().getRemoteMemberStates().stream()
-      .filter(m -> m.getMember().type() != Member.Type.RESERVE && m.getMember().status() == Member.Status.AVAILABLE)
+      .filter(m -> m.getMember().type() != Member.Type.RESERVE && (m.getMember().status() == Member.Status.AVAILABLE || currentTime - m.getMember().updated().toEpochMilli() < context.getGlobalSuspendTimeout().toMillis()))
       .mapToLong(MemberState::getMatchIndex)
       .min()
       .orElse(context.getLog().lastIndex());
@@ -444,7 +446,7 @@ final class LeaderAppender extends AbstractAppender {
 
     // If the member is currently marked as UNAVAILABLE, change its status to AVAILABLE and update the configuration.
     if (member.getMember().status() == ServerMember.Status.UNAVAILABLE && !leader.configuring()) {
-      member.getMember().update(ServerMember.Status.AVAILABLE);
+      member.getMember().update(ServerMember.Status.AVAILABLE, Instant.now());
       leader.configure(context.getCluster().members());
     }
   }
@@ -465,7 +467,7 @@ final class LeaderAppender extends AbstractAppender {
     else if (member.getFailureCount() >= 3) {
       // If the member is currently marked as AVAILABLE, change its status to UNAVAILABLE and update the configuration.
       if (member.getMember().status() == ServerMember.Status.AVAILABLE && !leader.configuring()) {
-        member.getMember().update(ServerMember.Status.UNAVAILABLE);
+        member.getMember().update(ServerMember.Status.UNAVAILABLE, Instant.now());
         leader.configure(context.getCluster().members());
       }
     }
