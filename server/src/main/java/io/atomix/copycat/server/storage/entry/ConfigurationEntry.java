@@ -35,7 +35,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigurationEntry extends Entry<ConfigurationEntry> {
+public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
   private Collection<Member> members;
 
   public ConfigurationEntry() {
@@ -85,7 +85,7 @@ public class ConfigurationEntry extends Entry<ConfigurationEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, members=%s]", getClass().getSimpleName(), getIndex(), getTerm(), members);
+    return String.format("%s[index=%d, term=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getTimestamp(), members);
   }
 
 }

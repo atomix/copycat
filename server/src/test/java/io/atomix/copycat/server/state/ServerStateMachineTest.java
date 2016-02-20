@@ -42,6 +42,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -81,7 +82,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
     Storage storage = new Storage(StorageLevel.MEMORY);
-    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
+    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000), Instant.now());
     Collection<Address> members = new ArrayList<>(Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5000),

@@ -115,7 +115,7 @@ public class MetaStore implements AutoCloseable {
    */
   public synchronized MetaStore storeConfiguration(Configuration configuration) {
     LOGGER.debug("Store configuration {}", configuration);
-    serializer.writeObject(configuration.members(), buffer.position(12).writeByte(1).writeLong(configuration.index()));
+    serializer.writeObject(configuration.members(), buffer.position(12).writeByte(1).writeLong(configuration.index()).writeLong(configuration.time()));
     buffer.flush();
     return this;
   }
@@ -128,6 +128,7 @@ public class MetaStore implements AutoCloseable {
   public synchronized Configuration loadConfiguration() {
     if (buffer.position(12).readByte() == 1) {
       return new Configuration(
+        buffer.readLong(),
         buffer.readLong(),
         serializer.readObject(buffer)
       );

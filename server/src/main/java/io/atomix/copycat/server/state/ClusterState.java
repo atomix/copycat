@@ -34,6 +34,7 @@ import io.atomix.copycat.server.storage.system.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -65,8 +66,9 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final Listeners<Member> leaveListeners = new Listeners<>();
 
   ClusterState(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, ServerContext context) {
+    Instant time = Instant.now();
     this.initialType = Assert.notNull(type, "type");
-    this.member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress).setCluster(this);
+    this.member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress, time).setCluster(this);
     this.context = Assert.notNull(context, "context");
 
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
@@ -79,28 +81,29 @@ final class ClusterState implements Cluster, AutoCloseable {
       if (members.contains(serverAddress)) {
         activeMembers = members.stream()
           .filter(m -> !m.equals(member.serverAddress()))
-          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null))
+          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, time))
           .collect(Collectors.toSet());
-        activeMembers.add(new ServerMember(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress()));
+        activeMembers.add(new ServerMember(Member.Type.ACTIVE, member.serverAddress(), member.clientAddress(), time));
       }
       // If the provided members set does not contain the local server member, exclude it from active members.
       else {
         activeMembers = members.stream()
-          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null))
+          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, time))
           .collect(Collectors.toSet());
       }
 
       // Create a configuration for the 0 index.
-      configuration = new Configuration(0, activeMembers);
+      configuration = new Configuration(0, time.toEpochMilli(), activeMembers);
     }
 
     // Iterate through members in the new configuration and add remote members.
+    Instant updateTime = Instant.ofEpochMilli(configuration.time());
     for (Member member : configuration.members()) {
       if (member.equals(this.member)) {
-        this.member.update(member.type()).update(member.clientAddress());
+        this.member.update(member.type(), updateTime).update(member.clientAddress(), updateTime);
       } else {
         // If the member state doesn't already exist, create it.
-        MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress()), this);
+        MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this);
         state.resetState(context.getLog());
         this.members.add(state);
         membersMap.put(member.id(), state);
@@ -354,7 +357,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       context.getConnections().getConnection(member.getMember().serverAddress()).thenCompose(connection -> {
         JoinRequest request = JoinRequest.builder()
-          .withMember(new ServerMember(initialType, member().serverAddress(), member().clientAddress()))
+          .withMember(new ServerMember(initialType, member().serverAddress(), member().clientAddress(), member().updated()))
           .build();
         return connection.<JoinRequest, JoinResponse>send(request);
       }).whenComplete((response, error) -> {
@@ -365,7 +368,7 @@ final class ClusterState implements Cluster, AutoCloseable {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
 
-            Configuration configuration = new Configuration(response.index(), response.members());
+            Configuration configuration = new Configuration(response.index(), response.timestamp(), response.members());
 
             // Configure the cluster with the join response.
             // Commit the configuration as we know it was committed via the successful join response.
@@ -514,7 +517,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       cancelLeaveTimer();
 
       if (error == null && response.status() == Response.Status.OK) {
-        Configuration configuration = new Configuration(response.index(), response.members());
+        Configuration configuration = new Configuration(response.index(), response.timestamp(), response.members());
 
         // Configure the cluster and commit the configuration as we know the successful response
         // indicates commitment.
@@ -583,17 +586,19 @@ final class ClusterState implements Cluster, AutoCloseable {
     if (this.configuration != null && configuration.index() <= this.configuration.index())
       return this;
 
+    Instant time = Instant.ofEpochMilli(configuration.time());
+
     // Iterate through members in the new configuration, add any missing members, and update existing members.
     boolean transition = false;
     for (Member member : configuration.members()) {
       if (member.equals(this.member)) {
         transition = this.member.type().ordinal() < member.type().ordinal();
-        this.member.update(member.type()).update(member.clientAddress());
+        this.member.update(member.type(), time).update(member.clientAddress(), time);
       } else {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
         if (state == null) {
-          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress()), this);
+          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this);
           state.resetState(context.getLog());
           this.members.add(state);
           membersMap.put(member.id(), state);
@@ -602,15 +607,15 @@ final class ClusterState implements Cluster, AutoCloseable {
         }
 
         // If the member type has changed, update the member type and reset its state.
-        state.getMember().update(member.clientAddress());
+        state.getMember().update(member.clientAddress(), time);
         if (state.getMember().type() != member.type()) {
-          state.getMember().update(member.type());
+          state.getMember().update(member.type(), time);
           state.resetState(context.getLog());
         }
 
         // If the member status has changed, update the local member status.
         if (state.getMember().status() != member.status()) {
-          state.getMember().update(member.status());
+          state.getMember().update(member.status(), time);
         }
 
         // Update the optimized member collections according to the member type.
@@ -629,7 +634,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
     // If the local member is not part of the configuration, set its type to null.
     if (!configuration.members().contains(this.member)) {
-      this.member.update(Member.Type.INACTIVE);
+      this.member.update(Member.Type.INACTIVE, time);
     }
 
     // Transition the local member only if the member is being promoted and not demoted.

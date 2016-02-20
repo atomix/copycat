@@ -42,6 +42,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -159,7 +160,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   private List<ServerMember> createMembers(int nodes) {
     List<ServerMember> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i)));
+      members.add(new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i), Instant.now()));
     }
     return members;
   }

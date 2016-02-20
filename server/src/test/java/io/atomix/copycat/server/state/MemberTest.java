@@ -21,6 +21,8 @@ import io.atomix.copycat.client.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
 import org.testng.annotations.Test;
 
+import java.time.Instant;
+
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 
@@ -36,35 +38,46 @@ public class MemberTest {
    * Tests member getters.
    */
   public void testMemberGetters() {
-    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000));
+    Instant instant = Instant.now();
+    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000), instant);
     assertEquals(member.type(), Member.Type.ACTIVE);
     assertEquals(member.status(), ServerMember.Status.AVAILABLE);
     assertEquals(member.serverAddress(), new Address("localhost", 5000));
     assertEquals(member.clientAddress(), new Address("localhost", 6000));
+    assertEquals(member.updated(), instant);
   }
 
   /**
    * Tests serializing and deserializing a member.
    */
   public void testSerializeDeserialize() {
-    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null);
+    Instant instant = Instant.now();
+    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null, instant);
     Serializer serializer = new Serializer().resolve(new SessionTypeResolver(), new StateTypeResolver());
     ServerMember result = serializer.readObject(serializer.writeObject(member).flip());
     assertEquals(result.type(), member.type());
+    assertEquals(result.updated(), member.updated());
   }
 
   /**
    * Tests updating a member.
    */
   public void testMemberUpdate() {
-    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null);
-    member.update(Member.Type.INACTIVE);
+    Instant instant = Instant.now();
+    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null, instant);
+    instant = Instant.now();
+    member.update(Member.Type.INACTIVE, instant);
     assertEquals(member.type(), Member.Type.INACTIVE);
-    member.update(ServerMember.Status.UNAVAILABLE);
+    assertEquals(member.updated(), instant);
+    member.update(ServerMember.Status.UNAVAILABLE, instant);
+    instant = Instant.now();
     assertEquals(member.status(), ServerMember.Status.UNAVAILABLE);
     assertNull(member.clientAddress());
-    member.update(new Address("localhost", 6000));
+    assertEquals(member.updated(), instant);
+    instant = Instant.now();
+    member.update(new Address("localhost", 6000), instant);
     assertEquals(member.clientAddress(), new Address("localhost", 6000));
+    assertEquals(member.updated(), instant);
   }
 
 }

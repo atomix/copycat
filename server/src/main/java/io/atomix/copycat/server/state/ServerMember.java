@@ -30,6 +30,7 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.request.ReconfigureRequest;
 import io.atomix.copycat.server.storage.system.Configuration;
 
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -41,6 +42,7 @@ import java.util.function.Consumer;
 final class ServerMember implements Member, CatalystSerializable, AutoCloseable {
   private Member.Type type;
   private Status status = Status.AVAILABLE;
+  private Instant updated;
   private Address serverAddress;
   private Address clientAddress;
   private transient Scheduled configureTimeout;
@@ -51,10 +53,11 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   ServerMember() {
   }
 
-  public ServerMember(Member.Type type, Address serverAddress, Address clientAddress) {
+  public ServerMember(Member.Type type, Address serverAddress, Address clientAddress, Instant updated) {
     this.type = Assert.notNull(type, "type");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
+    this.updated = Assert.notNull(updated, "updated");
   }
 
   /**
@@ -78,6 +81,11 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   @Override
   public Status status() {
     return status;
+  }
+
+  @Override
+  public Instant updated() {
+    return updated;
   }
 
   @Override
@@ -148,9 +156,12 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
    * @param type The member type.
    * @return The member.
    */
-  ServerMember update(Member.Type type) {
+  ServerMember update(Member.Type type, Instant time) {
     if (this.type != type) {
       this.type = Assert.notNull(type, "type");
+      if (time.isAfter(updated)) {
+        this.updated = Assert.notNull(time, "time");
+      }
       if (typeChangeListeners != null) {
         typeChangeListeners.accept(type);
       }
@@ -164,9 +175,12 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
    * @param status The member status.
    * @return The member.
    */
-  ServerMember update(Status status) {
+  ServerMember update(Status status, Instant time) {
     if (this.status != status) {
       this.status = Assert.notNull(status, "status");
+      if (time.isAfter(updated)) {
+        this.updated = Assert.notNull(time, "time");
+      }
       if (statusChangeListeners != null) {
         statusChangeListeners.accept(status);
       }
@@ -180,9 +194,12 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
    * @param clientAddress The member client address.
    * @return The member.
    */
-  ServerMember update(Address clientAddress) {
+  ServerMember update(Address clientAddress, Instant time) {
     if (clientAddress != null) {
       this.clientAddress = clientAddress;
+      if (time.isAfter(updated)) {
+        this.updated = Assert.notNull(time, "time");
+      }
     }
     return this;
   }
@@ -210,12 +227,12 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
     // will log, replicate, and commit the reconfiguration.
     cluster.getContext().getAbstractState().reconfigure(ReconfigureRequest.builder()
       .withIndex(cluster.getConfiguration().index())
-      .withMember(new ServerMember(type, serverAddress(), clientAddress()))
+      .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))
       .build()).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           cancelConfigureTimer();
-          cluster.configure(new Configuration(response.index(), response.members()));
+          cluster.configure(new Configuration(response.index(), response.timestamp(), response.members()));
           future.complete(null);
         } else if (response.error() == null || response.error() == RaftError.Type.NO_LEADER_ERROR) {
           cancelConfigureTimer();
@@ -242,6 +259,7 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(type.ordinal());
     buffer.writeByte(status.ordinal());
+    buffer.writeLong(updated.toEpochMilli());
     serializer.writeObject(serverAddress, buffer);
     serializer.writeObject(clientAddress, buffer);
   }
@@ -250,6 +268,7 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     type = Member.Type.values()[buffer.readByte()];
     status = Status.values()[buffer.readByte()];
+    updated = Instant.ofEpochMilli(buffer.readLong());
     serverAddress = serializer.readObject(buffer);
     clientAddress = serializer.readObject(buffer);
   }

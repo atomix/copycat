@@ -624,6 +624,7 @@ public class CopycatServer implements Managed<CopycatServer> {
     private static final Duration DEFAULT_ELECTION_TIMEOUT = Duration.ofMillis(750);
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(250);
     private static final Duration DEFAULT_SESSION_TIMEOUT = Duration.ofMillis(5000);
+    private static final Duration DEFAULT_GLOBAL_SUSPEND_TIMEOUT = Duration.ofHours(1);
 
     private String name = DEFAULT_NAME;
     private Member.Type type = Member.Type.ACTIVE;
@@ -638,6 +639,7 @@ public class CopycatServer implements Managed<CopycatServer> {
     private Duration electionTimeout = DEFAULT_ELECTION_TIMEOUT;
     private Duration heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
     private Duration sessionTimeout = DEFAULT_SESSION_TIMEOUT;
+    private Duration globalSuspendTimeout = DEFAULT_GLOBAL_SUSPEND_TIMEOUT;
 
     private Builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
@@ -778,7 +780,7 @@ public class CopycatServer implements Managed<CopycatServer> {
      * Sets the Raft session timeout, returning the Raft configuration for method chaining.
      *
      * @param sessionTimeout The Raft session timeout duration.
-     * @return The Raft configuration.
+     * @return The server builder.
      * @throws IllegalArgumentException If the session timeout is not positive
      * @throws NullPointerException if {@code sessionTimeout} is null
      */
@@ -786,6 +788,19 @@ public class CopycatServer implements Managed<CopycatServer> {
       Assert.argNot(sessionTimeout.isNegative() || sessionTimeout.isZero(), "sessionTimeout must be positive");
       Assert.argNot(sessionTimeout.toMillis() <= electionTimeout.toMillis(), "sessionTimeout must be greater than electionTimeout");
       this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
+      return this;
+    }
+
+    /**
+     * Sets the timeout after which suspended global replication will resume and force a partitioned follower
+     * to truncate its log once the partition heals.
+     *
+     * @param globalSuspendTimeout The timeout after which to resume global replication.
+     * @return The server builder.
+     */
+    public Builder withGlobalSuspendTimeout(Duration globalSuspendTimeout) {
+      Assert.notNull(globalSuspendTimeout, "globalSuspendTimeout");
+      this.globalSuspendTimeout = Assert.argNot(globalSuspendTimeout, globalSuspendTimeout.isNegative() || globalSuspendTimeout.isZero(), "globalSuspendTimeout must be positive");
       return this;
     }
 
@@ -836,7 +851,8 @@ public class CopycatServer implements Managed<CopycatServer> {
       ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, serializer, stateMachineFactory, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
-        .setSessionTimeout(sessionTimeout);
+        .setSessionTimeout(sessionTimeout)
+        .setGlobalSuspendTimeout(globalSuspendTimeout);
 
       return new CopycatServer(name, clientTransport, serverTransport, context);
     }

@@ -356,7 +356,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Succeeds an attempt to contact a member.
    */
   protected void succeedAttempt(MemberState member) {
-    // Reset the member failure count.
+    // Reset the member failure count and time.
     member.resetFailureCount();
   }
 

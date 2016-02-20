@@ -38,6 +38,7 @@ import org.testng.annotations.Test;
 
 import java.io.Serializable;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -1614,6 +1615,11 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public Status status() {
+      return null;
+    }
+
+    @Override
+    public Instant updated() {
       return null;
     }
 

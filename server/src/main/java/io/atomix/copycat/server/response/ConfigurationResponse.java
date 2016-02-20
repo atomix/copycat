@@ -40,6 +40,7 @@ import java.util.Objects;
  */
 public abstract class ConfigurationResponse extends AbstractResponse {
   protected long index;
+  protected long timestamp;
   protected Collection<Member> members;
 
   /**
@@ -49,6 +50,15 @@ public abstract class ConfigurationResponse extends AbstractResponse {
    */
   public long index() {
     return index;
+  }
+
+  /**
+   * Returns the response configuration time.
+   *
+   * @return The response time.
+   */
+  public long timestamp() {
+    return timestamp;
   }
 
   /**
@@ -66,6 +76,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
     if (status == Status.OK) {
       error = null;
       index = buffer.readLong();
+      timestamp = buffer.readLong();
       members = serializer.readObject(buffer);
     } else {
       int errorCode = buffer.readByte();
@@ -80,6 +91,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(index);
+      buffer.writeLong(timestamp);
       serializer.writeObject(members, buffer);
     } else {
       buffer.writeByte(error != null ? error.id() : 0);
@@ -97,6 +109,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
       ConfigurationResponse response = (ConfigurationResponse) object;
       return response.status == status
         && response.index == index
+        && response.timestamp == timestamp
         && response.members.equals(members);
     }
     return false;
@@ -104,7 +117,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d, members=%s]", getClass().getSimpleName(), status, index, members);
+    return String.format("%s[status=%s, index=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), status, index, timestamp, members);
   }
 
   /**
@@ -125,6 +138,19 @@ public abstract class ConfigurationResponse extends AbstractResponse {
     @SuppressWarnings("unchecked")
     public T withIndex(long index) {
       response.index = Assert.argNot(index, index < 0, "index cannot be negative");
+      return (T) this;
+    }
+
+    /**
+     * Sets the response time.
+     *
+     * @param time The response time.
+     * @return The response builder.
+     * @throws IllegalArgumentException if {@code time} is negative
+     */
+    @SuppressWarnings("unchecked")
+    public T withTime(long time) {
+      response.timestamp = Assert.argNot(time, time <= 0, "timestamp cannot be negative");
       return (T) this;
     }
 

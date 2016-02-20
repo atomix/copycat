@@ -34,6 +34,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -85,7 +86,7 @@ public class MetaStoreTest {
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
     ));
-    meta.storeConfiguration(new Configuration(1, members));
+    meta.storeConfiguration(new Configuration(1, System.currentTimeMillis(), members));
 
     Configuration configuration = meta.loadConfiguration();
     assertEquals(configuration.index(), 1);
@@ -185,6 +186,11 @@ public class MetaStoreTest {
 
     @Override
     public Status status() {
+      return null;
+    }
+
+    @Override
+    public Instant updated() {
       return null;
     }
 

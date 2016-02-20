@@ -31,10 +31,12 @@ import java.util.Collection;
  */
 public class Configuration {
   private final long index;
+  private final long time;
   private final Collection<Member> members;
 
-  public Configuration(long index, Collection<Member> members) {
+  public Configuration(long index, long time, Collection<Member> members) {
     this.index = index;
+    this.time = time;
     this.members = Assert.notNull(members, "members");
   }
 
@@ -51,6 +53,15 @@ public class Configuration {
   }
 
   /**
+   * Returns the configuration time.
+   *
+   * @return The time at which the configuration was committed.
+   */
+  public long time() {
+    return time;
+  }
+
+  /**
    * Returns the cluster membership for this configuration.
    *
    * @return The cluster membership.
@@ -61,7 +72,7 @@ public class Configuration {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, members=%s]", getClass().getSimpleName(), index, members);
+    return String.format("%s[index=%d, time=%d, members=%s]", getClass().getSimpleName(), index, time, members);
   }
 
 }

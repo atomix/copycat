@@ -69,6 +69,7 @@ public class ServerContext implements AutoCloseable {
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
+  private Duration globalSuspendTimeout = Duration.ofHours(1);
   private volatile int leader;
   private volatile long term;
   private int lastVotedFor;
@@ -181,7 +182,7 @@ public class ServerContext implements AutoCloseable {
    * @return The Raft context.
    */
   public ServerContext setHeartbeatInterval(Duration heartbeatInterval) {
-    this.heartbeatInterval = heartbeatInterval;
+    this.heartbeatInterval = Assert.notNull(heartbeatInterval, "heartbeatInterval");
     return this;
   }
 
@@ -210,7 +211,27 @@ public class ServerContext implements AutoCloseable {
    * @return The Raft state machine.
    */
   public ServerContext setSessionTimeout(Duration sessionTimeout) {
-    this.sessionTimeout = sessionTimeout;
+    this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
+    return this;
+  }
+
+  /**
+   * Returns the follower reset interval.
+   *
+   * @return The follower reset interval.
+   */
+  public Duration getGlobalSuspendTimeout() {
+    return globalSuspendTimeout;
+  }
+
+  /**
+   * Sets the global suspend timeout.
+   *
+   * @param globalSuspendTimeout The global suspend timeout.
+   * @return The Raft state machine.
+   */
+  public ServerContext setGlobalSuspendTimeout(Duration globalSuspendTimeout) {
+    this.globalSuspendTimeout = Assert.notNull(globalSuspendTimeout, "globalSuspendTimeout");
     return this;
   }
 

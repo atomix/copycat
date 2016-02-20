@@ -59,6 +59,7 @@ public class ConfigureRequest extends AbstractRequest {
   private long term;
   private int leader;
   private long index;
+  private long timestamp;
   private Collection<Member> members;
 
   /**
@@ -89,6 +90,15 @@ public class ConfigureRequest extends AbstractRequest {
   }
 
   /**
+   * Returns the configuration timestamp.
+   *
+   * @return The configuration timestamp.
+   */
+  public long timestamp() {
+    return timestamp;
+  }
+
+  /**
    * Returns the configuration members.
    *
    * @return The configuration members.
@@ -99,7 +109,7 @@ public class ConfigureRequest extends AbstractRequest {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term).writeInt(leader).writeLong(index);
+    buffer.writeLong(term).writeInt(leader).writeLong(index).writeLong(timestamp);
     serializer.writeObject(members, buffer);
   }
 
@@ -108,6 +118,7 @@ public class ConfigureRequest extends AbstractRequest {
     term = buffer.readLong();
     leader = buffer.readInt();
     index = buffer.readLong();
+    timestamp = buffer.readLong();
     members = serializer.readObject(buffer);
   }
 
@@ -123,6 +134,7 @@ public class ConfigureRequest extends AbstractRequest {
       return request.term == term
         && request.leader == leader
         && request.index == index
+        && request.timestamp == timestamp
         && request.members.equals(members);
     }
     return false;
@@ -130,7 +142,7 @@ public class ConfigureRequest extends AbstractRequest {
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, index=%d, members=%s]", getClass().getSimpleName(), term, leader, index, members);
+    return String.format("%s[term=%d, leader=%d, index=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), term, leader, index, timestamp, members);
   }
 
   /**
@@ -173,6 +185,17 @@ public class ConfigureRequest extends AbstractRequest {
      */
     public Builder withIndex(long index) {
       request.index = Assert.argNot(index, index < 0, "index must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the request timestamp.
+     *
+     * @param timestamp The request timestamp.
+     * @return The request builder.
+     */
+    public Builder withTimestamp(long timestamp) {
+      request.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp must be positive");
       return this;
     }
 
