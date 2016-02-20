@@ -268,6 +268,7 @@ final class LeaderAppender extends AbstractAppender {
     heartbeatFailures = 0;
     heartbeatFuture = nextHeartbeatFuture;
     nextHeartbeatFuture = null;
+    updateGlobalIndex();
     if (heartbeatFuture != null) {
       heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
@@ -277,9 +278,9 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   /**
-   * Checks whether any futures can be completed.
+   * Updates the global index.
    */
-  private void commitEntries() {
+  private void updateGlobalIndex() {
     context.checkThread();
 
     // The global index may have increased even if the commit index didn't. Update the global index.
@@ -293,6 +294,13 @@ final class LeaderAppender extends AbstractAppender {
       .min()
       .orElse(context.getLog().lastIndex());
     context.setGlobalIndex(globalMatchIndex);
+  }
+
+  /**
+   * Checks whether any futures can be completed.
+   */
+  private void commitEntries() {
+    context.checkThread();
 
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
