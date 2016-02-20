@@ -346,10 +346,6 @@ abstract class AbstractAppender implements AutoCloseable {
     // If any other error occurred, increment the failure count for the member. Log the first three failures,
     // and thereafter log 1% of the failures. This keeps the log from filling up with annoying error messages
     // when attempting to send entries to down followers.
-    if (member.getFailureTime() == 0) {
-      member.setFailureTime(System.currentTimeMillis());
-    }
-
     int failures = member.incrementFailureCount();
     if (failures <= 3 || failures % 100 == 0) {
       LOGGER.warn("{} - AppendRequest to {} failed. Reason: [{}]", context.getCluster().member().address(), member.getMember().serverAddress(), response.error() != null ? response.error() : "");
@@ -361,7 +357,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void succeedAttempt(MemberState member) {
     // Reset the member failure count and time.
-    member.resetFailureCount().resetFailureTime();
+    member.resetFailureCount();
   }
 
   /**

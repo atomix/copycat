@@ -159,7 +159,9 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   ServerMember update(Member.Type type, Instant time) {
     if (this.type != type) {
       this.type = Assert.notNull(type, "type");
-      this.updated = Assert.notNull(time, "time");
+      if (time.isAfter(updated)) {
+        this.updated = Assert.notNull(time, "time");
+      }
       if (typeChangeListeners != null) {
         typeChangeListeners.accept(type);
       }
@@ -176,7 +178,9 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   ServerMember update(Status status, Instant time) {
     if (this.status != status) {
       this.status = Assert.notNull(status, "status");
-      this.updated = Assert.notNull(time, "time");
+      if (time.isAfter(updated)) {
+        this.updated = Assert.notNull(time, "time");
+      }
       if (statusChangeListeners != null) {
         statusChangeListeners.accept(status);
       }
@@ -193,7 +197,9 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   ServerMember update(Address clientAddress, Instant time) {
     if (clientAddress != null) {
       this.clientAddress = clientAddress;
-      this.updated = Assert.notNull(time, "time");
+      if (time.isAfter(updated)) {
+        this.updated = Assert.notNull(time, "time");
+      }
     }
     return this;
   }

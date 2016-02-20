@@ -800,7 +800,7 @@ public class CopycatServer implements Managed<CopycatServer> {
      */
     public Builder withGlobalSuspendTimeout(Duration globalSuspendTimeout) {
       Assert.notNull(globalSuspendTimeout, "globalSuspendTimeout");
-      this.globalSuspendTimeout = Assert.argNot(globalSuspendTimeout, globalSuspendTimeout.isNegative() || globalSuspendTimeout.isZero(), "followerResetInterval must be positive");
+      this.globalSuspendTimeout = Assert.argNot(globalSuspendTimeout, globalSuspendTimeout.isNegative() || globalSuspendTimeout.isZero(), "globalSuspendTimeout must be positive");
       return this;
     }
 

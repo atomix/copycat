@@ -173,6 +173,12 @@ public interface Member {
 
   /**
    * Returns the member status.
+   * <p>
+   * The status is indicative of the leader's ability to communicate with this member. If this member is a local
+   * member, the member's status will be {@link Status#AVAILABLE} while the server is alive and will not change
+   * regardless of the leader's ability to communicate with the local member. Similarly, if the local server is
+   * partitioned from the leader then changes in statuses seen on other nodes may not be visible to this node.
+   * Status changes are guaranteed to occur in the same order on all nodes but without a real-time constraint.
    *
    * @return The member status.
    */
@@ -180,6 +186,9 @@ public interface Member {
 
   /**
    * Returns the time at which the member was updated.
+   * <p>
+   * The member update time is not guaranteed to be consistent across servers or consistent across server
+   * restarts. The update time is guaranteed to be monotonically increasing.
    *
    * @return The time at which the member was updated.
    */

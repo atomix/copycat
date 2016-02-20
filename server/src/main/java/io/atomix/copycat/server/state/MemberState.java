@@ -35,7 +35,6 @@ final class MemberState {
   private long heartbeatTime;
   private long heartbeatStartTime;
   private int failures;
-  private long failureTime;
 
   public MemberState(ServerMember member, ClusterState cluster) {
     this.member = Assert.notNull(member, "member").setCluster(cluster);
@@ -52,7 +51,6 @@ final class MemberState {
     heartbeatTime = 0;
     heartbeatStartTime = 0;
     failures = 0;
-    failureTime = 0;
   }
 
   /**
@@ -269,38 +267,6 @@ final class MemberState {
    */
   MemberState resetFailureCount() {
     failures = 0;
-    return this;
-  }
-
-  /**
-   * Returns the member failure time.
-   *
-   * @return The member failure time.
-   */
-  long getFailureTime() {
-    return failureTime;
-  }
-
-  /**
-   * Sets the member failure time.
-   *
-   * @param failureTime The member failure time.
-   * @return The member state.
-   */
-  MemberState setFailureTime(long failureTime) {
-    if (this.failureTime == 0) {
-      this.failureTime = failureTime;
-    }
-    return this;
-  }
-
-  /**
-   * Resets the member failure time.
-   *
-   * @return The member state.
-   */
-  MemberState resetFailureTime() {
-    this.failureTime = 0;
     return this;
   }
 

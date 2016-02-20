@@ -191,8 +191,6 @@ public class Compactor implements AutoCloseable {
     if (future != null)
       return future;
 
-    LOGGER.info("Compacting log with compaction: {}", compaction);
-
     future = new CompletableFuture<>();
 
     ThreadContext compactorThread = ThreadContext.currentContext();
@@ -202,6 +200,7 @@ public class Compactor implements AutoCloseable {
 
     Collection<CompactionTask> tasks = manager.buildTasks(storage, segments);
     if (!tasks.isEmpty()) {
+      LOGGER.info("Compacting log with compaction: {}", compaction);
       LOGGER.debug("Executing {} compaction task(s)", tasks.size());
       for (CompactionTask task : tasks) {
         LOGGER.debug("Executing {}", task);
