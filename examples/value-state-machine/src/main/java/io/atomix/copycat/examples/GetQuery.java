@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.copycat.client.Query;
+import io.atomix.copycat.Query;
 
 /**
  * Value get query.

@@ -15,16 +15,16 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.request.Request;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.protocol.Request;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.PollRequest;
-import io.atomix.copycat.server.request.VoteRequest;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.PollResponse;
-import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.VoteResponse;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 

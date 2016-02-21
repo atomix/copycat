@@ -15,7 +15,10 @@
  */
 
 /**
- * Provides a standalone, feature-complete implementation of the <a href="https://raft.github.io/">Raft consensus algorithm</a>.
+ * Standalone, feature-complete implementation of the <a href="https://raft.github.io/">Raft consensus algorithm</a>.
+ * <p>
+ * For information on the implementation of the Raft consensus algorithm, see the documentation on
+ * <a href="http://atomix.io/copycat/docs/internals/">Copycat internals</a>.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

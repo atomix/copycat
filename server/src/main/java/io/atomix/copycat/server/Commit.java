@@ -15,10 +15,11 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.session.Session;
 
 import java.time.Instant;
 
@@ -65,13 +66,13 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * Returns the session that submitted the operation.
    * <p>
    * The returned {@link Session} is representative of the session that submitted the operation
-   * that resulted in this {@link Commit}. The session can be used to {@link Session#publish(String, Object)}
+   * that resulted in this {@link Commit}. The session can be used to {@link ServerSession#publish(String, Object)}
    * event messages to the client.
    *
    * @return The session that created the commit.
    * @throws IllegalStateException If the commit is {@link #close() closed}
    */
-  Session session();
+  ServerSession session();
 
   /**
    * Returns the time at which the operation was committed.

@@ -24,10 +24,13 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.request.ClientRequestTypeResolver;
-import io.atomix.copycat.client.response.ClientResponseTypeResolver;
-import io.atomix.copycat.client.session.Session;
-import io.atomix.copycat.client.session.SessionTypeResolver;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.protocol.ClientRequestTypeResolver;
+import io.atomix.copycat.protocol.ClientResponseTypeResolver;
+import io.atomix.copycat.session.Session;
+import io.atomix.copycat.session.SessionTypeResolver;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -161,8 +164,8 @@ public interface CopycatClient extends Managed<CopycatClient> {
      * <p>
      * The {@code CONNECTED} state indicates that the client is healthy and operating normally. {@link Command commands}
      * and {@link Query queries} submitted and completed while the client is in this state are guaranteed to adhere to
-     * the respective {@link io.atomix.copycat.client.Command.ConsistencyLevel consistency}
-     * {@link io.atomix.copycat.client.Query.ConsistencyLevel levels}.
+     * the respective {@link Command.ConsistencyLevel consistency}
+     * {@link Query.ConsistencyLevel levels}.
      */
     CONNECTED,
 
@@ -290,19 +293,6 @@ public interface CopycatClient extends Managed<CopycatClient> {
 
   /**
    * Returns the client session.
-   * <p>
-   * The {@link Session} object can be used to receive session events from replicated state machines. Session events are
-   * named messages. To register a session event handler, use the {@link Session#onEvent(String, Consumer)} method:
-   * <pre>
-   *   {@code
-   *   client.session().onEvent("lock", v -> System.out.println("acquired lock!"));
-   *   }
-   * </pre>
-   * When a server-side state machine {@link Session#publish(String, Object) publishes} an event message to this session, the
-   * event message is guaranteed to be received in the order in which it was sent by the state machine. Note that the point
-   * in time at which events are received by the client is determined by the {@link Command#consistency()} of the command being
-   * executed when the state machine published the event. Events are not necessarily guaranteed to be received by the client
-   * during command execution. See the {@link Command.ConsistencyLevel} documentation for more info.
    * <p>
    * The returned {@link Session} instance will remain constant as long as the client maintains its session with the cluster.
    * Maintaining the client's session requires that the client be able to communicate with one server that can communicate

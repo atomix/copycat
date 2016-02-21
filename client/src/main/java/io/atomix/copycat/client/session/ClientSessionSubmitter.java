@@ -18,18 +18,24 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.NoOpCommand;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
 import io.atomix.copycat.client.*;
-import io.atomix.copycat.client.error.CommandException;
-import io.atomix.copycat.client.error.QueryException;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.request.CommandRequest;
-import io.atomix.copycat.client.request.OperationRequest;
-import io.atomix.copycat.client.request.QueryRequest;
-import io.atomix.copycat.client.response.CommandResponse;
-import io.atomix.copycat.client.response.OperationResponse;
-import io.atomix.copycat.client.response.QueryResponse;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.error.CommandException;
+import io.atomix.copycat.error.QueryException;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.OperationRequest;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.OperationResponse;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.client.util.ClientSequencer;
+import io.atomix.copycat.session.ClosedSessionException;
+import io.atomix.copycat.session.Session;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -184,9 +190,9 @@ final class ClientSessionSubmitter {
         state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
-        } else if (response.error() == RaftError.Type.COMMAND_ERROR || response.error() == RaftError.Type.QUERY_ERROR || response.error() == RaftError.Type.APPLICATION_ERROR) {
+        } else if (response.error() == CopycatError.Type.COMMAND_ERROR || response.error() == CopycatError.Type.QUERY_ERROR || response.error() == CopycatError.Type.APPLICATION_ERROR) {
           complete(response.error().createException());
-        } else if (response.error() != RaftError.Type.UNKNOWN_SESSION_ERROR) {
+        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
       } else {

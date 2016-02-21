@@ -16,12 +16,12 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.concurrent.Scheduled;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.VoteRequest;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 

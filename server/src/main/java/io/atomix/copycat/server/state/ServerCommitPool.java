@@ -46,7 +46,7 @@ final class ServerCommitPool implements AutoCloseable {
    * @param entry The entry for which to acquire the commit.
    * @return The commit to acquire.
    */
-  public ServerCommit acquire(OperationEntry entry, ServerSession session, long timestamp) {
+  public ServerCommit acquire(OperationEntry entry, ServerSessionContext session, long timestamp) {
     ServerCommit commit = pool.poll();
     if (commit == null) {
       commit = new ServerCommit(this, log);

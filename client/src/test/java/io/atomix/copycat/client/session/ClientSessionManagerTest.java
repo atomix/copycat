@@ -18,12 +18,13 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.client.request.RegisterRequest;
-import io.atomix.copycat.client.request.UnregisterRequest;
-import io.atomix.copycat.client.response.RegisterResponse;
-import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.client.response.UnregisterResponse;
+import io.atomix.copycat.protocol.RegisterRequest;
+import io.atomix.copycat.protocol.UnregisterRequest;
+import io.atomix.copycat.protocol.RegisterResponse;
+import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.UnregisterResponse;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.session.Session;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;

@@ -16,12 +16,10 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.protocol.*;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -76,7 +74,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -88,7 +86,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -100,7 +98,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
@@ -115,7 +113,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
@@ -130,7 +128,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<RegisterRequest, RegisterResponse>forward(request).thenApply(this::logResponse);
@@ -143,7 +141,7 @@ class ReserveState extends InactiveState {
     logRequest(request);
     return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -154,7 +152,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -166,7 +164,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<KeepAliveRequest, KeepAliveResponse>forward(request).thenApply(this::logResponse);
@@ -178,11 +176,11 @@ class ReserveState extends InactiveState {
     context.checkThread();
     logRequest(request);
 
-    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
     if (session == null || session.getConnection() == null) {
       return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
     } else {
       return session.getConnection().<PublishRequest, PublishResponse>send(request);
@@ -197,7 +195,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
@@ -212,7 +210,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
@@ -227,7 +225,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<ReconfigureRequest, ReconfigureResponse>forward(request).thenApply(this::logResponse);
@@ -242,7 +240,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
@@ -256,7 +254,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
       .withStatus(Response.Status.ERROR)
-      .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 

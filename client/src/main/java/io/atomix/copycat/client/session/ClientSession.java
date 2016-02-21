@@ -20,9 +20,14 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.*;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.client.ConnectionStrategy;
+import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.session.Session;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -126,24 +131,39 @@ public class ClientSession implements Session, Managed<Session> {
     return state.getState() == State.OPEN || state.getState() == State.UNSTABLE;
   }
 
-  @Override
-  public Session publish(String event) {
-    listener.publish(event);
-    return this;
-  }
-
-  @Override
-  public Session publish(String event, Object message) {
-    listener.publish(event, message);
-    return this;
-  }
-
-  @Override
+  /**
+   * Registers a void event listener.
+   * <p>
+   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
+   * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
+   * always called in the same thread for the session. Therefore, no two events will be received concurrently
+   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
+   * the state machine.
+   *
+   * @param event The event to which to listen.
+   * @param callback The session receive callback.
+   * @return The listener context.
+   * @throws NullPointerException if {@code event} or {@code callback} is null
+   */
   public Listener<Void> onEvent(String event, Runnable callback) {
     return listener.onEvent(event, callback);
   }
 
-  @Override
+  /**
+   * Registers an event listener.
+   * <p>
+   * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
+   * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
+   * always called in the same thread for the session. Therefore, no two events will be received concurrently
+   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
+   * the state machine.
+   *
+   * @param event The event to which to listen.
+   * @param callback The session receive callback.
+   * @param <T> The session event type.
+   * @return The listener context.
+   * @throws NullPointerException if {@code event} or {@code callback} is null
+   */
   public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
     return listener.onEvent(event, callback);
   }

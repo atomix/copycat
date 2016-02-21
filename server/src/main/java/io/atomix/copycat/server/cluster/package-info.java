@@ -15,7 +15,7 @@
  */
 
 /**
- * Provides interfaces for managing and interacting with the Copycat cluster.
+ * Interfaces for managing and interacting with the Copycat cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

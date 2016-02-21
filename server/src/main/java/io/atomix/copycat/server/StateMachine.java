@@ -16,11 +16,11 @@
 package io.atomix.copycat.server;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.error.CommandException;
-import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.error.CommandException;
+import io.atomix.copycat.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
@@ -200,7 +200,7 @@ import java.util.function.Function;
  * For snapshottable state machines, Copycat will periodically request a {@link io.atomix.copycat.server.storage.snapshot.Snapshot Snapshot}
  * of the state machine's state by calling the {@link Snapshottable#snapshot(SnapshotWriter)} method. Once the state
  * machine has written a snapshot of its state, Copycat will automatically remove all commands from the underlying log
- * marked with the {@link io.atomix.copycat.client.Command.CompactionMode#SNAPSHOT SNAPSHOT} compaction mode. Note that
+ * marked with the {@link Command.CompactionMode#SNAPSHOT SNAPSHOT} compaction mode. Note that
  * state machines should still ensure that snapshottable commits are {@link Commit#close() closed} once they've been
  * applied to the state machine, but state machines are free to immediately close all snapshottable commits.
  *

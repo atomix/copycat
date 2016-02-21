@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.request.CommandRequest;
+import io.atomix.copycat.protocol.CommandRequest;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
-import io.atomix.copycat.server.request.VoteRequest;
-import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
 import io.atomix.copycat.server.storage.entry.CommandEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -74,7 +74,7 @@ public class LeaderStateTest extends AbstractStateTest<LeaderState> {
           .executor()
           .context()
           .sessions()
-          .registerSession(new ServerSession(1, UUID.randomUUID(), l -> {}, serverContext.getStateMachine().executor().context(), 1000));
+          .registerSession(new ServerSessionContext(1, UUID.randomUUID(), l -> {}, serverContext.getStateMachine().executor().context(), 1000));
       CommandRequest request1 = CommandRequest.builder()
           .withSession(1)
           .withSequence(2)

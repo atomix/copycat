@@ -16,13 +16,13 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Server;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.VoteRequest;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.VoteResponse;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.VoteResponse;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 

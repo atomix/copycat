@@ -19,6 +19,7 @@ import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.Command;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import org.slf4j.Logger;
@@ -64,7 +65,7 @@ import java.util.*;
  * a snapshot may actually only represent a subset of the state machine's state. Indeed, internal Copycat
  * server state machines use log cleaning and store no state in snapshots. When a snapshot is taken of
  * the state machine state, only prior entries that contributed to the state stored in the snapshot -
- * commands marked with the {@link io.atomix.copycat.client.Command.CompactionMode#SNAPSHOT SNAPSHOT}
+ * commands marked with the {@link Command.CompactionMode#SNAPSHOT SNAPSHOT}
  * compaction mode - are removed from the log prior to the snapshot.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>

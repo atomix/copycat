@@ -18,7 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 
@@ -33,8 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 class ServerSessionManager implements Sessions {
   private final Map<UUID, Address> addresses = new ConcurrentHashMap<>();
   private final Map<UUID, Connection> connections = new ConcurrentHashMap<>();
-  final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
-  final Map<UUID, ServerSession> clients = new ConcurrentHashMap<>();
+  final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
+  final Map<UUID, ServerSessionContext> clients = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
   private final ServerContext context;
 
@@ -43,7 +43,7 @@ class ServerSessionManager implements Sessions {
   }
 
   @Override
-  public Session session(long sessionId) {
+  public ServerSession session(long sessionId) {
     return sessions.get(sessionId);
   }
 
@@ -63,7 +63,7 @@ class ServerSessionManager implements Sessions {
    * Registers an address.
    */
   ServerSessionManager registerAddress(UUID client, Address address) {
-    ServerSession session = clients.get(client);
+    ServerSessionContext session = clients.get(client);
     if (session != null) {
       session.setAddress(address);
       // If client was previously connected locally, close that connection.
@@ -83,7 +83,7 @@ class ServerSessionManager implements Sessions {
    * Registers a connection.
    */
   ServerSessionManager registerConnection(UUID client, Connection connection) {
-    ServerSession session = clients.get(client);
+    ServerSessionContext session = clients.get(client);
     if (session != null) {
       session.setConnection(connection);
     }
@@ -99,7 +99,7 @@ class ServerSessionManager implements Sessions {
     while (iterator.hasNext()) {
       Map.Entry<UUID, Connection> entry = iterator.next();
       if (entry.getValue().equals(connection)) {
-        ServerSession session = clients.get(entry.getKey());
+        ServerSessionContext session = clients.get(entry.getKey());
         if (session != null) {
           session.setConnection(null);
         }
@@ -112,7 +112,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers a session.
    */
-  ServerSession registerSession(ServerSession session) {
+  ServerSessionContext registerSession(ServerSessionContext session) {
     session.setAddress(addresses.get(session.client()));
     session.setConnection(connections.get(session.client()));
     sessions.put(session.id(), session);
@@ -123,8 +123,8 @@ class ServerSessionManager implements Sessions {
   /**
    * Unregisters a session.
    */
-  ServerSession unregisterSession(long sessionId) {
-    ServerSession session = sessions.remove(sessionId);
+  ServerSessionContext unregisterSession(long sessionId) {
+    ServerSessionContext session = sessions.remove(sessionId);
     if (session != null) {
       clients.remove(session.client());
       addresses.remove(session.client());
@@ -139,7 +139,7 @@ class ServerSessionManager implements Sessions {
    * @param sessionId The session ID.
    * @return The session or {@code null} if the session doesn't exist.
    */
-  ServerSession getSession(long sessionId) {
+  ServerSessionContext getSession(long sessionId) {
     return sessions.get(sessionId);
   }
 
@@ -149,13 +149,13 @@ class ServerSessionManager implements Sessions {
    * @param clientId The client ID.
    * @return The session or {@code null} if the session doesn't exist.
    */
-  ServerSession getSession(UUID clientId) {
+  ServerSessionContext getSession(UUID clientId) {
     return clients.get(clientId);
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public Iterator<Session> iterator() {
+  public Iterator<ServerSession> iterator() {
     return (Iterator) sessions.values().iterator();
   }
 

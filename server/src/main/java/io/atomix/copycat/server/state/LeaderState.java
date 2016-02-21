@@ -18,17 +18,15 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.error.RaftException;
-import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.*;
-import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.error.CopycatException;
+import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.session.Session;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.system.Configuration;
 
@@ -160,7 +158,7 @@ final class LeaderState extends ActiveState {
     long term = context.getTerm();
 
     // Iterate through all currently registered sessions.
-    for (ServerSession session : context.getStateMachine().executor().context().sessions().sessions.values()) {
+    for (ServerSessionContext session : context.getStateMachine().executor().context().sessions().sessions.values()) {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
       if (session.state() == Session.State.UNSTABLE && !session.isUnregistering()) {
@@ -283,7 +281,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(JoinResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -320,7 +318,7 @@ final class LeaderState extends ActiveState {
     if (existingMember == null) {
       return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
@@ -349,7 +347,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(ReconfigureResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -398,7 +396,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -459,11 +457,11 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSession session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
@@ -508,23 +506,23 @@ final class LeaderState extends ActiveState {
                   .withIndex(commitIndex)
                   .withResult(result)
                   .build()));
-              } else if (error instanceof CompletionException && error.getCause() instanceof RaftException) {
+              } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
                   .withIndex(commitIndex)
-                  .withError(((RaftException) error.getCause()).getType())
+                  .withError(((CopycatException) error.getCause()).getType())
                   .build()));
-              } else if (error instanceof RaftException) {
+              } else if (error instanceof CopycatException) {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
                   .withIndex(commitIndex)
-                  .withError(((RaftException) error).getType())
+                  .withError(((CopycatException) error).getType())
                   .build()));
               } else {
                 future.complete(logResponse(CommandResponse.builder()
                   .withStatus(Response.Status.ERROR)
                   .withIndex(commitIndex)
-                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -533,7 +531,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(CommandResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -612,7 +610,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.QUERY_ERROR)
+            .withError(CopycatError.Type.QUERY_ERROR)
             .build()));
         }
       }
@@ -636,20 +634,20 @@ final class LeaderState extends ActiveState {
             .withIndex(index)
             .withResult(result)
             .build()));
-        } else if (error instanceof CompletionException && error.getCause() instanceof RaftException) {
+        } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(((RaftException) error.getCause()).getType())
+            .withError(((CopycatException) error.getCause()).getType())
             .build()));
-        } else if (error instanceof RaftException) {
+        } else if (error instanceof CopycatException) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(((RaftException) error).getType())
+            .withError(((CopycatException) error).getType())
             .build()));
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
         checkSessions();
@@ -694,20 +692,20 @@ final class LeaderState extends ActiveState {
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
-              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof RaftException) {
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) sessionError.getCause()).getType())
+                  .withError(((CopycatException) sessionError.getCause()).getType())
                   .build()));
-              } else if (sessionError instanceof RaftException) {
+              } else if (sessionError instanceof CopycatException) {
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) sessionError).getType())
+                  .withError(((CopycatException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(RegisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -716,7 +714,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(RegisterResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -777,20 +775,20 @@ final class LeaderState extends ActiveState {
                 future.complete(logResponse(AcceptResponse.builder()
                   .withStatus(Response.Status.OK)
                   .build()));
-              } else if (connectError instanceof CompletionException && connectError.getCause() instanceof RaftException) {
+              } else if (connectError instanceof CompletionException && connectError.getCause() instanceof CopycatException) {
                 future.complete(logResponse(AcceptResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) connectError.getCause()).getType())
+                  .withError(((CopycatException) connectError.getCause()).getType())
                   .build()));
-              } else if (connectError instanceof RaftException) {
+              } else if (connectError instanceof CopycatException) {
                 future.complete(logResponse(AcceptResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) connectError).getType())
+                  .withError(((CopycatException) connectError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(AcceptResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -799,7 +797,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(AcceptResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -840,23 +838,23 @@ final class LeaderState extends ActiveState {
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
-              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof RaftException) {
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
-                  .withError(((RaftException) sessionError.getCause()).getType())
+                  .withError(((CopycatException) sessionError.getCause()).getType())
                   .build()));
-              } else if (sessionError instanceof RaftException) {
+              } else if (sessionError instanceof CopycatException) {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
-                  .withError(((RaftException) sessionError).getType())
+                  .withError(((CopycatException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(KeepAliveResponse.builder()
                   .withStatus(Response.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
-                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -866,7 +864,7 @@ final class LeaderState extends ActiveState {
           future.complete(logResponse(KeepAliveResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withLeader(context.getCluster().member().clientAddress())
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -902,20 +900,20 @@ final class LeaderState extends ActiveState {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.OK)
                   .build()));
-              } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof RaftException) {
+              } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof CopycatException) {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) unregisterError.getCause()).getType())
+                  .withError(((CopycatException) unregisterError.getCause()).getType())
                   .build()));
-              } else if (unregisterError instanceof RaftException) {
+              } else if (unregisterError instanceof CopycatException) {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(((RaftException) unregisterError).getType())
+                  .withError(((CopycatException) unregisterError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(UnregisterResponse.builder()
                   .withStatus(Response.Status.ERROR)
-                  .withError(RaftError.Type.INTERNAL_ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -924,7 +922,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(UnregisterResponse.builder()
             .withStatus(Response.Status.ERROR)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }

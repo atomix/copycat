@@ -16,8 +16,6 @@
 
 package io.atomix.copycat.server.session;
 
-import io.atomix.copycat.client.session.Session;
-
 /**
  * Provides a set of active server sessions.
  * <p>
@@ -25,11 +23,11 @@ import io.atomix.copycat.client.session.Session;
  * state machine. Session sets are guaranteed to be deterministic. All state machines will see the same set of
  * open sessions at the same point in the log except in cases where a session has already been closed and removed.
  * If a session has already been closed on another server, the session is guaranteed to have been expired on all
- * servers and thus operations like {@link Session#publish(String, Object)} are effectively no-ops.
+ * servers and thus operations like {@link ServerSession#publish(String, Object)} are effectively no-ops.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface Sessions extends Iterable<Session> {
+public interface Sessions extends Iterable<ServerSession> {
 
   /**
    * Returns a session by session ID.
@@ -37,7 +35,7 @@ public interface Sessions extends Iterable<Session> {
    * @param sessionId The session ID.
    * @return The session or {@code null} if no session with the given {@code sessionId} exists.
    */
-  Session session(long sessionId);
+  ServerSession session(long sessionId);
 
   /**
    * Adds a listener to the sessions.

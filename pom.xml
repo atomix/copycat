@@ -156,8 +156,9 @@
             -notimestamp
             -link http://docs.oracle.com/javase/8/docs/api/
             -link http://atomix.io/catalyst/api/latest/
-            -group "Raft client" io.atomix.copycat.client*
-            -group "Raft server" io.atomix.copycat.server:io.atomix.copycat.server.cluster:io.atomix.copycat.server.request:io.atomix.copycat.server.response:io.atomix.copycat.server.session:io.atomix.copycat.server.storage*:io.atomix.copycat.examples*
+            -group "Copycat protocol" io.atomix.copycat:io.atomix.copycat.error:io.atomix.copycat.protocol:io.atomix.copycat.session
+            -group "Copycat client" io.atomix.copycat.client*
+            -group "Copycat server" io.atomix.copycat.server:io.atomix.copycat.server.cluster:io.atomix.copycat.server.request:io.atomix.copycat.server.response:io.atomix.copycat.server.session:io.atomix.copycat.server.storage*:io.atomix.copycat.examples*
           </additionalparam>
         </configuration>
       </plugin>

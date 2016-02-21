@@ -18,9 +18,11 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.transport.MessageHandler;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.request.PublishRequest;
-import io.atomix.copycat.client.response.PublishResponse;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.protocol.PublishRequest;
+import io.atomix.copycat.protocol.PublishResponse;
+import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.session.Event;
+import io.atomix.copycat.session.Session;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 

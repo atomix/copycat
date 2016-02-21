@@ -17,8 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 

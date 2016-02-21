@@ -17,6 +17,7 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

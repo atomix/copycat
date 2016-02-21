@@ -18,6 +18,8 @@ package io.atomix.copycat.server.cluster;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.LeaveRequest;
 
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
@@ -157,7 +159,7 @@ public interface Cluster {
    * to open a new server and join the cluster in order to ensure all associated resources are property opened.
    * <p>
    * When a server joins the cluster, the server will connect to arbitrary {@link Member}s, attempting to locate
-   * the cluster leader and send a {@link io.atomix.copycat.server.request.JoinRequest}. Once the leader has been
+   * the cluster leader and send a {@link JoinRequest}. Once the leader has been
    * found, the leader will replicate and commit a configuration change, notifying other members of the cluster of
    * the joining server.
    * <p>
@@ -178,7 +180,7 @@ public interface Cluster {
    * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#close()}
    * to leave the cluster and close a server in order to ensure all associated resources are properly closed.
    * <p>
-   * When a server leaves the cluster, the server submits a {@link io.atomix.copycat.server.request.LeaveRequest}
+   * When a server leaves the cluster, the server submits a {@link LeaveRequest}
    * to the cluster leader. The leader will replicate and commit the configuration change in order to remove the
    * leaving server from the cluster and notify each member of the leaving server.
    * <p>
