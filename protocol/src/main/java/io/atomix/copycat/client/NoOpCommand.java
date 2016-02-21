@@ -32,6 +32,7 @@ import io.atomix.catalyst.serializer.Serializer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class NoOpCommand implements Command<Void>, CatalystSerializable {
+
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
   }

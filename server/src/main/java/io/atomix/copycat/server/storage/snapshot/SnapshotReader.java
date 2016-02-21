@@ -28,9 +28,9 @@ import io.atomix.catalyst.util.Assert;
  * Snapshot bytes are read from an underlying {@link Buffer} which is backed by either memory
  * or disk based on the configured {@link io.atomix.copycat.server.storage.StorageLevel}.
  * <p>
- * In addition to standard {@link BufferInput} methods, snapshot readers support reading
- * {@link java.io.Serializable} and {@link io.atomix.catalyst.serializer.CatalystSerializable} objects
- * from the snapshot via the {@link #readObject()}} method.
+ * In addition to standard {@link BufferInput} methods, snapshot readers support reading serializable objects
+ * from the snapshot via the {@link #readObject()} method. Serializable types must be registered on the
+ * {@link io.atomix.copycat.server.CopycatServer} serializer to be supported in snapshots.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

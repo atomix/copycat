@@ -130,6 +130,10 @@ public interface Member {
 
   /**
    * Returns the member ID.
+   * <p>
+   * The member ID is calculated as the hash of the member's server {@link Address} and is therefore
+   * equivalent to the return value of {@link Address#hashCode()}. The member ID simply provides a more
+   * compact identifier to send on the wire when communicating between servers.
    *
    * @return The member ID.
    */
@@ -137,27 +141,42 @@ public interface Member {
 
   /**
    * Returns the member server address.
+   * <p>
+   * This is the primary address through which servers in the cluster identify and communicate with one another.
+   * The server address is guaranteed to be unique to each member in the cluster.
    *
-   * @return The member server address.
+   * @return The member server address. This is the same address as {@link #serverAddress()}.
    */
   Address address();
 
   /**
    * Returns the member client address.
+   * <p>
+   * THis is the address through which clients communicate with the member. Depending on the member's configuration,
+   * the client address may or may not be the same as the {@link #serverAddress()}, but it will always be non-null.
    *
-   * @return The member client address.
+   * @return The address to which the member binds for client communication.
    */
   Address clientAddress();
 
   /**
    * Returns the member server address.
+   * <p>
+   * The server address is the primary address through which servers in the cluster communicate with one another.
+   * The server address is guaranteed to be unique to each member in the cluster.
    *
-   * @return The member server address.
+   * @return The address to which the member binds for server communication.
    */
   Address serverAddress();
 
   /**
    * Returns the member type.
+   * <p>
+   * The member type is indicative of the member's level of participation in the Raft consensus algorithm and
+   * asynchronous replication within the cluster. Member types may change throughout the lifetime of the cluster.
+   * Types can be changed by {@link #promote(Type) promoting} or {@link #demote(Type) demoting} the member. Member
+   * types for a given member are guaranteed to change in the same order on all nodes, but the type of a member
+   * may be different from the perspective of different nodes at any given time.
    *
    * @return The member type.
    */
@@ -165,6 +184,10 @@ public interface Member {
 
   /**
    * Registers a callback to be called when the member's type changes.
+   * <p>
+   * The type change callback will be called when the local server receives notification of the change in type
+   * to this member. Type changes may occur at different times from the perspective of different servers but are
+   * guaranteed to occur in the same order on all servers.
    *
    * @param callback The callback to be called when the member's type changes.
    * @return The member type change listener.
@@ -196,6 +219,10 @@ public interface Member {
 
   /**
    * Registers a callback to be called when the member's status changes.
+   * <p>
+   * The status change callback will be called when the local server receives notification of the change in status
+   * to this member. Status changes may occur at different times from the perspective of different servers but are
+   * guaranteed to occur in the same order on all servers.
    *
    * @param callback The callback to be called when the member's status changes.
    * @return The member status change listener.

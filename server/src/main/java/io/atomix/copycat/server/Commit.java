@@ -25,18 +25,21 @@ import java.time.Instant;
 /**
  * Represents the committed state and metadata of a Raft state machine operation.
  * <p>
+ * Commits are representative of a log {@link io.atomix.copycat.server.storage.entry.Entry} that has been replicated
+ * and committed via the Raft consensus algorithm.
  * When {@link Command commands} and {@link Query queries} are applied to the Raft {@link StateMachine}, they're
  * wrapped in a commit object. The commit object provides useful metadata regarding the location of the commit
  * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link Session} that
  * submitted the operation to the cluster.
  * <p>
- * When state machines are done using a commit object, users should always call {@link #close()}.
- * Failing to call either method is a bug, and Copycat will log a warning message in such cases.
- *
- * @see Command
- * @see Query
- * @see Session
- * @see Instant
+ * All metadata exposed by this interface is backed by disk and is guaranteed to be consistent across all servers
+ * in the cluster.
+ * <p>
+ * When state machines are done using a commit object, users should release the commit by calling {@link #close()}.
+ * This notifies Copycat that it's safe to remove the commit from the log as it no longer contributes to the state
+ * machine's state. Copycat guarantees that a commit will be retained in the log and replicated as long as it is
+ * held open by the state machine. Failing to call either method is a bug and will result in disk eventually filling
+ * up, and Copycat will log a warning message in such cases.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

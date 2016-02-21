@@ -23,7 +23,7 @@ package io.atomix.copycat.client;
  * forwarded to the cluster leader. Once the leader receives a command, it logs and replicates the command to a majority
  * of the cluster before applying it to its state machine and responding with the result.
  * <p>
- * <b>Consistency levels</b>
+ * <h3>Consistency levels</h3>
  * <p>
  * Commands are allow both to modify system state and to trigger {@link io.atomix.copycat.client.session.Session#publish(String, Object) events}
  * published to client {@link io.atomix.copycat.client.session.Session sessions}. Whereas {@link Query} consistency
@@ -36,7 +36,7 @@ package io.atomix.copycat.client;
  * {@link io.atomix.copycat.client.Command.ConsistencyLevel#LINEARIZABLE linearizable} consistency can be used to ensure
  * that lock holders are notified before the {@code unlock} operation completes.
  * <p>
- * <b>Compaction modes</b>
+ * <h3>Compaction modes</h3>
  * <p>
  * <em>Determinism is the number one rule of state machines!</em>
  * <p>
@@ -49,14 +49,13 @@ package io.atomix.copycat.client;
  * deterministic, particularly in the event of a failure and replay of the commit log. See the
  * {@link CompactionMode} documentation for more info.
  * <p>
- * <b>Serialization</b>
+ * <h3>Serialization</h3>
  * <p>
  * Commands must be serializable both by the client and by all servers in the cluster. By default, all operations use
  * Java serialization. However, default serialization in slow because it requires the full class name and does not allocate
  * memory efficiently. For this reason, it's recommended that commands implement {@link io.atomix.catalyst.serializer.CatalystSerializable}
  * or register a custom {@link io.atomix.catalyst.serializer.TypeSerializer} for better performance. Serializable types
- * can be registered in a {@code META-INF/services/io.atomix.catalyst.serializer.CatalystSerializable} service loader file
- * or on the associated client/server {@link io.atomix.catalyst.serializer.Serializer} instance.
+ * can be registered on the associated client/server {@link io.atomix.catalyst.serializer.Serializer} instance.
  *
  * @see io.atomix.copycat.client.Command.ConsistencyLevel
  * @see CompactionMode

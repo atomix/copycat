@@ -66,7 +66,7 @@ import java.util.function.Consumer;
  * All client methods are fully asynchronous and return {@link CompletableFuture}. To block until a method is complete, use
  * the {@link CompletableFuture#get()} or {@link CompletableFuture#join()} methods.
  * <p>
- * <b>Sessions</b>
+ * <h3>Sessions</h3>
  * <p>
  * Sessions work to provide linearizable semantics for client {@link Command commands}. When a command is submitted to the cluster,
  * the command will be forwarded to the leader where it will be logged and replicated. Once the command is stored on a majority
@@ -103,6 +103,22 @@ import java.util.function.Consumer;
  * the client cannot communicate with the cluster and consistency guarantees <em>may</em> have been broken. While in this
  * state, the client's session from the perspective of servers may timeout, the {@link Session} events sent to the client
  * by the cluster may be lost.
+ * <h3>Serialization</h3>
+ * All {@link Command commands}, {@link Query queries}, and session {@link #onEvent(String, Consumer) events} must be
+ * serializable by the {@link Serializer} associated with the client. Serializable types can be registered at any time.
+ * To register a serializable type and serializer, use the {@link Serializer#register(Class) register} methods.
+ * <pre>
+ *   {@code
+ *   client.serializer().register(SetCommand.class, new SetCommandSerializer());
+ *   }
+ * </pre>
+ * By default, all primitives and many collections are supported. Catalyst also provides support for common serialization
+ * frameworks like Kryo and Jackson:
+ * <pre>
+ *   {@code
+ *   client.serializer().register(SetCommand.class, new GenericKryoSerializer());
+ *   }
+ * </pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
