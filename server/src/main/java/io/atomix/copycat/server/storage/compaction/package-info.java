@@ -15,7 +15,7 @@
  */
 
 /**
- * Classes and interfaces that support efficient Raft {@link io.atomix.copycat.server.storage.Log log} compaction.
+ * Classes and interfaces that facilitate compaction of the Copycat {@link io.atomix.copycat.server.storage.Log log}.
  * <p>
  * The log compaction package implements compaction for Copycat {@link io.atomix.copycat.server.storage.Log logs} using
  * a custom log cleaning algorithm. As entries are written to the log and applied to the server's state machine, the

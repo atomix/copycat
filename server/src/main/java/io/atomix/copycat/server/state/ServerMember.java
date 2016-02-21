@@ -24,10 +24,10 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Scheduled;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.ReconfigureRequest;
 import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.time.Instant;
@@ -234,7 +234,7 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
           cancelConfigureTimer();
           cluster.configure(new Configuration(response.index(), response.timestamp(), response.members()));
           future.complete(null);
-        } else if (response.error() == null || response.error() == RaftError.Type.NO_LEADER_ERROR) {
+        } else if (response.error() == null || response.error() == CopycatError.Type.NO_LEADER_ERROR) {
           cancelConfigureTimer();
           configureTimeout = cluster.getContext().getThreadContext().schedule(cluster.getContext().getElectionTimeout().multipliedBy(2), () -> configure(type, future));
         } else {

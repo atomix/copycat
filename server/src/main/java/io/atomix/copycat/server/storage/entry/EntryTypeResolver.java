@@ -17,7 +17,7 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.serializer.SerializableTypeResolver;
 import io.atomix.catalyst.serializer.SerializerRegistry;
-import io.atomix.copycat.client.request.Request;
+import io.atomix.copycat.protocol.Request;
 
 import java.util.HashMap;
 import java.util.Map;

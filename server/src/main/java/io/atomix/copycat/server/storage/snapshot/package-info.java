@@ -15,7 +15,14 @@
  */
 
 /**
- * Utilities for storing and loading on-disk state machine snapshots.
+ * Classes and interfaces that aid in storing, loading, and installing on-disk state machine snapshots.
+ * <p>
+ * Snapshots are byte-level representations of the state machine's state taken periodically to allow entries
+ * to be removed from Copycat's {@link io.atomix.copycat.server.storage.Log} during log compaction.
+ * Copycat interacts with snapshots primarily through the {@link io.atomix.copycat.server.storage.snapshot.SnapshotStore}
+ * which is responsible for storing and loading snapshots. Each snapshot is stored as a separate file
+ * on disk, and old snapshots may or may not be retained depending on the {@link io.atomix.copycat.server.storage.Storage}
+ * configuration.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

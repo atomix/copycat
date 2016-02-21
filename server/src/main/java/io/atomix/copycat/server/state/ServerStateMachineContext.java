@@ -16,7 +16,7 @@
 
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.Command;
+import io.atomix.copycat.Command;
 import io.atomix.copycat.server.StateMachineContext;
 
 import java.time.Clock;
@@ -60,7 +60,7 @@ class ServerStateMachineContext implements StateMachineContext {
     long index = this.index;
 
     List<CompletableFuture<Void>> futures = null;
-    for (ServerSession session : sessions.sessions.values()) {
+    for (ServerSessionContext session : sessions.sessions.values()) {
       CompletableFuture<Void> future = session.commit(index);
       if (future != null) {
         if (futures == null)

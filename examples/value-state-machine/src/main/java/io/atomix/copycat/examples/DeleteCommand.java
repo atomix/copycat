@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.copycat.client.Command;
+import io.atomix.copycat.Command;
 
 /**
  * Value delete command.

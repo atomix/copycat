@@ -16,16 +16,16 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.error.InternalException;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.error.InternalException;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.ConfigureRequest;
-import io.atomix.copycat.server.request.InstallRequest;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.ConfigureResponse;
-import io.atomix.copycat.server.response.InstallResponse;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.ConfigureRequest;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.ConfigureResponse;
+import io.atomix.copycat.server.protocol.InstallResponse;
 
 import java.time.Instant;
 import java.util.HashMap;

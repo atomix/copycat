@@ -17,14 +17,15 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Query;
 import io.atomix.copycat.client.RetryStrategies;
-import io.atomix.copycat.client.request.CommandRequest;
-import io.atomix.copycat.client.request.QueryRequest;
-import io.atomix.copycat.client.response.CommandResponse;
-import io.atomix.copycat.client.response.QueryResponse;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.session.Session;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
 

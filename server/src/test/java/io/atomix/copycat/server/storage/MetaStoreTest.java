@@ -21,7 +21,7 @@ import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.copycat.client.session.SessionTypeResolver;
+import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.state.StateTypeResolver;
 import io.atomix.copycat.server.storage.system.Configuration;

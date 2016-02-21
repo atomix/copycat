@@ -21,10 +21,11 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.error.UnknownSessionException;
-import io.atomix.copycat.client.request.PublishRequest;
-import io.atomix.copycat.client.response.PublishResponse;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.error.UnknownSessionException;
+import io.atomix.copycat.protocol.PublishRequest;
+import io.atomix.copycat.protocol.PublishResponse;
+import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.session.Event;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,34 +48,6 @@ final class ClientSessionListener {
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     connection.handler(PublishRequest.class, this::handlePublish);
-  }
-
-  /**
-   * Publishes a session event.
-   *
-   * @param event The event to publish.
-   * @return The session listener.
-   */
-  public ClientSessionListener publish(String event) {
-    return publish(event, null);
-  }
-
-  /**
-   * Publishes a session event.
-   *
-   * @param event The event to publish.
-   * @param message The event message.
-   * @return The session listener.
-   */
-  public ClientSessionListener publish(String event, Object message) {
-    Assert.notNull(event, "event");
-    context.executor().execute(() -> {
-      Listeners<Object> listeners = eventListeners.get(event);
-      if (listeners != null) {
-        listeners.accept(message);
-      }
-    });
-    return this;
   }
 
   /**

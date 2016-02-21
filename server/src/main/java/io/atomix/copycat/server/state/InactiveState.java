@@ -17,11 +17,9 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.Futures;
-import io.atomix.copycat.client.request.*;
-import io.atomix.copycat.client.response.*;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.concurrent.CompletableFuture;

@@ -22,18 +22,18 @@ import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.request.ClientRequestTypeResolver;
-import io.atomix.copycat.client.response.ClientResponseTypeResolver;
-import io.atomix.copycat.client.session.Session;
-import io.atomix.copycat.client.session.SessionTypeResolver;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.protocol.ClientRequestTypeResolver;
+import io.atomix.copycat.protocol.ClientResponseTypeResolver;
+import io.atomix.copycat.session.Session;
+import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.ServerRequestTypeResolver;
-import io.atomix.copycat.server.response.ServerResponseTypeResolver;
+import io.atomix.copycat.server.protocol.ServerRequestTypeResolver;
+import io.atomix.copycat.server.protocol.ServerResponseTypeResolver;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
@@ -121,7 +121,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    ServerSessionContext session = state.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
@@ -172,7 +172,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    ServerSessionContext session = state.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
@@ -220,7 +220,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    ServerSessionContext session = state.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
@@ -271,7 +271,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    ServerSessionContext session = state.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
@@ -323,7 +323,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    ServerSessionContext session = state.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);
@@ -422,7 +422,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
 
     await();
 
-    ServerSession session = state.getStateMachine().executor().context().sessions().getSession(1);
+    ServerSessionContext session = state.getStateMachine().executor().context().sessions().getSession(1);
     assertNotNull(session);
     assertEquals(session.id(), 1);
     assertEquals(session.getTimestamp(), timestamp);

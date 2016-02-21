@@ -21,17 +21,17 @@ import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.request.ClientRequestTypeResolver;
-import io.atomix.copycat.client.response.AbstractResponse;
-import io.atomix.copycat.client.response.ClientResponseTypeResolver;
-import io.atomix.copycat.client.response.Response;
-import io.atomix.copycat.client.session.SessionTypeResolver;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.ClientRequestTypeResolver;
+import io.atomix.copycat.protocol.AbstractResponse;
+import io.atomix.copycat.protocol.ClientResponseTypeResolver;
+import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.ServerRequestTypeResolver;
-import io.atomix.copycat.server.response.ServerResponseTypeResolver;
+import io.atomix.copycat.server.protocol.ServerRequestTypeResolver;
+import io.atomix.copycat.server.protocol.ServerResponseTypeResolver;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
@@ -146,12 +146,12 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
 
   protected void assertNoLeaderError(AbstractResponse response) {
     threadAssertEquals(response.status(), Response.Status.ERROR);
-    threadAssertEquals(response.error(), RaftError.Type.NO_LEADER_ERROR);
+    threadAssertEquals(response.error(), CopycatError.Type.NO_LEADER_ERROR);
   }
 
   protected void assertIllegalMemberStateError(AbstractResponse response) {
     threadAssertEquals(response.status(), Response.Status.ERROR);
-    threadAssertEquals(response.error(), RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR);
+    threadAssertEquals(response.error(), CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR);
   }
 
   /**

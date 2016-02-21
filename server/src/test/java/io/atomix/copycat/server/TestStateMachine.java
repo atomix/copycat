@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Query;
 
 /**
  * Test state machine.

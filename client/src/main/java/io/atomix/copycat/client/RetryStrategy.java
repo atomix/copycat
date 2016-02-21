@@ -15,6 +15,13 @@
  */
 package io.atomix.copycat.client;
 
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.error.CommandException;
+import io.atomix.copycat.error.QueryException;
+import io.atomix.copycat.session.Session;
+
 import java.time.Duration;
 
 /**
@@ -77,7 +84,7 @@ public interface RetryStrategy {
      * When the operation is failed with no user-provided exception, the associated
      * {@link java.util.concurrent.CompletableFuture} will be
      * {@link java.util.concurrent.CompletableFuture#completeExceptionally(Throwable) completed exceptionally}
-     * with either a {@link io.atomix.copycat.client.error.CommandException} or {@link io.atomix.copycat.client.error.QueryException}
+     * with either a {@link CommandException} or {@link QueryException}
      * based on the type of the attempted {@link #operation() operation}.
      */
     void fail();
@@ -97,7 +104,7 @@ public interface RetryStrategy {
      * Immediately retries the operation.
      * <p>
      * The operation will immediately be resubmitted to the cluster via the client's current
-     * {@link io.atomix.copycat.client.session.Session Session}. If the client is in the
+     * {@link Session Session}. If the client is in the
      * {@link CopycatClient.State#SUSPENDED SUSPENDED} state, the operation may be enqueued to be resubmitted
      * once the client reestablishes communication with the cluster. In the event that the client transitions between
      * the {@link CopycatClient.State#SUSPENDED} and {@link CopycatClient.State#CONNECTED} states, the operation

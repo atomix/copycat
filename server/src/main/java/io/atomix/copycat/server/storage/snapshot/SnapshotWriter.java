@@ -28,9 +28,9 @@ import io.atomix.catalyst.util.Assert;
  * Snapshot bytes are written to an underlying {@link Buffer} which is backed by either memory
  * or disk based on the configured {@link io.atomix.copycat.server.storage.StorageLevel}.
  * <p>
- * In addition to standard {@link BufferOutput} methods, snapshot writers support writing
- * {@link java.io.Serializable} and {@link io.atomix.catalyst.serializer.CatalystSerializable} objects
- * to the snapshot via the {@link #writeObject(Object)} method.
+ * In addition to standard {@link BufferOutput} methods, snapshot readers support writing serializable objects
+ * to the snapshot via the {@link #writeObject(Object)} method. Serializable types must be registered on the
+ * {@link io.atomix.copycat.server.CopycatServer} serializer to be supported in snapshots.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

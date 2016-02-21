@@ -16,22 +16,22 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.error.RaftError;
-import io.atomix.copycat.client.error.RaftException;
-import io.atomix.copycat.client.request.ConnectRequest;
-import io.atomix.copycat.client.request.QueryRequest;
-import io.atomix.copycat.client.response.ConnectResponse;
-import io.atomix.copycat.client.response.QueryResponse;
-import io.atomix.copycat.client.response.Response;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.error.CopycatException;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.AcceptRequest;
-import io.atomix.copycat.server.request.AppendRequest;
-import io.atomix.copycat.server.request.InstallRequest;
-import io.atomix.copycat.server.response.AcceptResponse;
-import io.atomix.copycat.server.response.AppendResponse;
-import io.atomix.copycat.server.response.InstallResponse;
+import io.atomix.copycat.server.protocol.AcceptRequest;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.AcceptResponse;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.InstallResponse;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
@@ -83,7 +83,7 @@ class PassiveState extends ReserveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       // Immediately register the session connection and send an accept request to the leader.
@@ -258,7 +258,7 @@ class PassiveState extends ReserveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.NO_LEADER_ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     }
 
@@ -298,17 +298,17 @@ class PassiveState extends ReserveState {
             .withIndex(index)
             .withResult(result)
             .build()));
-        } else if (error instanceof RaftException) {
+        } else if (error instanceof CopycatException) {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withIndex(index)
-            .withError(((RaftException) error).getType())
+            .withError(((CopycatException) error).getType())
             .build()));
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withIndex(index)
-            .withError(RaftError.Type.INTERNAL_ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -327,7 +327,7 @@ class PassiveState extends ReserveState {
     if (request.term() < context.getTerm()) {
       return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
     }
 
@@ -350,7 +350,7 @@ class PassiveState extends ReserveState {
       if (request.offset() > 0) {
         return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
           .withStatus(Response.Status.ERROR)
-          .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+          .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
           .build()));
       }
 
@@ -362,7 +362,7 @@ class PassiveState extends ReserveState {
     if (request.offset() > nextSnapshotOffset) {
       return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
     }
 

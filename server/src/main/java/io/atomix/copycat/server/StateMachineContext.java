@@ -16,8 +16,8 @@
 
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Query;
 import io.atomix.copycat.server.session.Sessions;
 
 import java.time.Clock;

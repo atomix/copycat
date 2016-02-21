@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.copycat.protocol.RegisterRequest;
 
 import java.util.UUID;
 
@@ -27,7 +28,7 @@ import java.util.UUID;
  * Stores a client register request.
  * <p>
  * The {@code RegisterEntry} is stored and replicated when a client submits a
- * {@link io.atomix.copycat.client.request.RegisterRequest} to the cluster to register a new session.
+ * {@link RegisterRequest} to the cluster to register a new session.
  * Session registrations are replicated and applied on all state machines to ensure each server state
  * machine has a consistent view of the sessions in the cluster, and registration entries are not
  * removed from the underlying log until the session itself has been expired or closed.

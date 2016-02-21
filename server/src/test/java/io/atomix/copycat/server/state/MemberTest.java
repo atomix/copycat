@@ -17,7 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.client.session.SessionTypeResolver;
+import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
 import org.testng.annotations.Test;
 

@@ -27,15 +27,15 @@ import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Query;
-import io.atomix.copycat.client.request.ClientRequestTypeResolver;
-import io.atomix.copycat.client.response.ClientResponseTypeResolver;
-import io.atomix.copycat.client.session.SessionTypeResolver;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Query;
+import io.atomix.copycat.protocol.ClientRequestTypeResolver;
+import io.atomix.copycat.protocol.ClientResponseTypeResolver;
+import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.request.ServerRequestTypeResolver;
-import io.atomix.copycat.server.response.ServerResponseTypeResolver;
+import io.atomix.copycat.server.protocol.ServerRequestTypeResolver;
+import io.atomix.copycat.server.protocol.ServerResponseTypeResolver;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.state.StateTypeResolver;
@@ -66,15 +66,15 @@ import java.util.function.Supplier;
  * the cluster.
  * <p>
  * Underlying each server is a {@link StateMachine}. The state machine is responsible for maintaining the state with
- * relation to {@link Command}s and {@link Query}s submitted to the
- * server by a client.
+ * relation to {@link Command}s and {@link Query}s submitted to the server by a client. State machines are provided
+ * in a factory to allow servers to transition between stateful and stateless states.
  * <pre>
  *   {@code
  *   Address address = new Address("123.456.789.0", 5000);
  *   Collection<Address> members = Arrays.asList(new Address("123.456.789.1", 5000), new Address("123.456.789.2", 5000));
  *
  *   CopycatServer server = CopycatServer.builder(address, members)
- *     .withStateMachine(new MyStateMachine())
+ *     .withStateMachine(MyStateMachine::new)
  *     .build();
  *   }
  * </pre>
@@ -83,13 +83,13 @@ import java.util.function.Supplier;
  * that each server in a cluster have the same state machine with the same commands.</em>
  * <p>
  * By default, the server will use the {@code NettyTransport} for communication. You can configure the transport via
- * {@link CopycatServer.Builder#withTransport(Transport)}.
+ * {@link CopycatServer.Builder#withTransport(Transport)}. To use the Netty transport, ensure you have the
+ * {@code io.atomix.catalyst:catalyst-netty} jar on your classpath.
  * <p>
- * As {@link Command}s are received by the server, they're written to the Raft {@link Log}
- * and replicated to other members of the cluster. By default, the log is stored on disk, but users can override the default
- * {@link Storage} configuration via {@link CopycatServer.Builder#withStorage(Storage)}. Most notably,
- * to configure the storage module to store entries in memory instead of disk, configure the
- * {@link StorageLevel}.
+ * As {@link Command}s are received by the server, they're written to the Raft {@link Log} and replicated to other members
+ * of the cluster. By default, the log is stored on disk, but users can override the default {@link Storage} configuration
+ * via {@link CopycatServer.Builder#withStorage(Storage)}. Most notably, to configure the storage module to store entries in
+ * memory instead of disk, configure the {@link StorageLevel}.
  * <pre>
  * {@code
  * CopycatServer server = CopycatServer.builder(address, members)
@@ -98,7 +98,6 @@ import java.util.function.Supplier;
  *   .build();
  * }
  * </pre>
- * All serialization is performed with a Catalyst {@link Serializer}.
  * <p>
  * Once the server has been created, to connect to a cluster simply {@link #open()} the server. The server API is
  * fully asynchronous and relies on {@link CompletableFuture} to provide promises:
@@ -122,6 +121,16 @@ import java.util.function.Supplier;
  *   }
  * });
  * }
+ * </pre>
+ * <h3>Serialization</h3>
+ * All serialization is performed with a Catalyst {@link Serializer}. The serializer is shared across all components of
+ * the server. Users are responsible for ensuring that {@link Command commands} and {@link Query queries} submitted to the
+ * cluster can be serialized by the server serializer by registering serializable types as necessary. Types may be registered
+ * for serialization at any time.
+ * <pre>
+ *   {@code
+ *   server.serializer().register(MySerializable.class, MySerializableSerializer.class);
+ *   }
  * </pre>
  *
  * @see StateMachine

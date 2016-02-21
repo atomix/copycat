@@ -24,11 +24,14 @@ import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
+import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
-import io.atomix.copycat.client.session.ClosedSessionException;
-import io.atomix.copycat.client.session.Session;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientSequencer;
+import io.atomix.copycat.session.ClosedSessionException;
+import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -400,7 +403,7 @@ public class DefaultCopycatClient implements CopycatClient {
     /**
      * Registers the session event listener.
      */
-    public void register(Session session) {
+    public void register(ClientSession session) {
       if (ThreadContext.currentContext() == context) {
         parent = session.onEvent(event, callback);
       } else {

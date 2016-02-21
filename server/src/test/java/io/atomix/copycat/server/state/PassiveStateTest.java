@@ -15,15 +15,14 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.client.request.CommandRequest;
-import io.atomix.copycat.client.request.QueryRequest;
-import io.atomix.copycat.client.response.CommandResponse;
-import io.atomix.copycat.client.response.QueryResponse;
-import io.atomix.copycat.client.response.Response.Status;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response.Status;
 import io.atomix.copycat.server.TestStateMachine.TestCommand;
 import io.atomix.copycat.server.TestStateMachine.TestQuery;
-import io.atomix.copycat.server.request.*;
-import io.atomix.copycat.server.response.*;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.TestEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;

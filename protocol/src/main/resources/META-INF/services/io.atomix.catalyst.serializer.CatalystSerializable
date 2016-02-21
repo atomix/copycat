@@ -13,19 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-io.atomix.copycat.client.NoOpCommand
-io.atomix.copycat.client.session.Event
-io.atomix.copycat.client.request.CommandRequest
-io.atomix.copycat.client.response.CommandResponse
-io.atomix.copycat.client.request.KeepAliveRequest
-io.atomix.copycat.client.response.KeepAliveResponse
-io.atomix.copycat.client.request.PublishRequest
-io.atomix.copycat.client.response.PublishResponse
-io.atomix.copycat.client.request.QueryRequest
-io.atomix.copycat.client.response.QueryResponse
-io.atomix.copycat.client.request.RegisterRequest
-io.atomix.copycat.client.response.RegisterResponse
-io.atomix.copycat.client.request.ConnectRequest
-io.atomix.copycat.client.response.ConnectResponse
-io.atomix.copycat.client.request.UnregisterRequest
-io.atomix.copycat.client.response.UnregisterResponse
+io.atomix.copycat.NoOpCommand
+io.atomix.copycat.session.Event
+io.atomix.copycat.protocol.CommandRequest
+io.atomix.copycat.protocol.CommandResponse
+io.atomix.copycat.protocol.KeepAliveRequest
+io.atomix.copycat.protocol.KeepAliveResponse
+io.atomix.copycat.protocol.PublishRequest
+io.atomix.copycat.protocol.PublishResponse
+io.atomix.copycat.protocol.QueryRequest
+io.atomix.copycat.protocol.QueryResponse
+io.atomix.copycat.protocol.RegisterRequest
+io.atomix.copycat.protocol.RegisterResponse
+io.atomix.copycat.protocol.ConnectRequest
+io.atomix.copycat.protocol.ConnectResponse
+io.atomix.copycat.protocol.UnregisterRequest
+io.atomix.copycat.protocol.UnregisterResponse

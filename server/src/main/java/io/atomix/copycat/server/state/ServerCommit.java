@@ -16,10 +16,10 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
-import io.atomix.copycat.client.session.Session;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.Commit;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 
@@ -34,7 +34,7 @@ final class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
   private final Log log;
   private long index;
-  private ServerSession session;
+  private ServerSessionContext session;
   private Instant instant;
   private Operation operation;
   private volatile boolean open;
@@ -49,7 +49,7 @@ final class ServerCommit implements Commit<Operation<?>> {
    *
    * @param entry The entry.
    */
-  void reset(OperationEntry<?> entry, ServerSession session, long timestamp) {
+  void reset(OperationEntry<?> entry, ServerSessionContext session, long timestamp) {
     this.index = entry.getIndex();
     this.session = session;
     this.instant = Instant.ofEpochMilli(timestamp);
@@ -72,7 +72,7 @@ final class ServerCommit implements Commit<Operation<?>> {
   }
 
   @Override
-  public Session session() {
+  public ServerSession session() {
     checkOpen();
     return session;
   }

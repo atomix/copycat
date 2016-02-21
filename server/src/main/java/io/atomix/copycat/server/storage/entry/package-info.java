@@ -15,7 +15,8 @@
  */
 
 /**
- * Provides entry implementations for the Raft log.
+ * {@link io.atomix.copycat.server.storage.entry.Entry} implementations used internally to replicate
+ * state changes, sessions, and configuration changes in the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

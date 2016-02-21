@@ -20,8 +20,8 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ReferenceManager;
-import io.atomix.copycat.client.Command;
-import io.atomix.copycat.client.Operation;
+import io.atomix.copycat.Command;
+import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
