@@ -20,7 +20,6 @@ import io.atomix.catalyst.transport.NettyTransport;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.storage.Storage;
 
-import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,26 +36,24 @@ public class ValueStateMachineExample {
    */
   public static void main(String[] args) throws Exception {
     if (args.length < 2)
-      throw new IllegalArgumentException("must supply a local port and at least one remote host:port tuple");
+      throw new IllegalArgumentException("must supply a path and set of host:port tuples");
 
-    int clientPort = Integer.valueOf(args[0]);
-    int serverPort = Integer.valueOf(args[1]);
+    // Parse the address to which to bind the server.
+    String[] mainParts = args[1].split(":");
+    Address address = new Address(mainParts[0], Integer.valueOf(mainParts[1]));
 
-    Address clientAddress = new Address(InetAddress.getLocalHost().getHostName(), clientPort);
-    Address serverAddress = new Address(InetAddress.getLocalHost().getHostName(), serverPort);
-
+    // Build a list of all member addresses to which to connect.
     List<Address> members = new ArrayList<>();
     for (int i = 1; i < args.length; i++) {
       String[] parts = args[i].split(":");
       members.add(new Address(parts[0], Integer.valueOf(parts[1])));
     }
 
-    CopycatServer server = CopycatServer.builder(clientAddress, serverAddress, members)
+    CopycatServer server = CopycatServer.builder(address, members)
       .withStateMachine(ValueStateMachine::new)
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
-        .withDirectory(System.getProperty("user.dir") + "/logs/" + serverPort)
-          // Limit the number of entries per segment and compaction intervals to demonstrate compaction.
+        .withDirectory(args[0])
         .withMaxEntriesPerSegment(1024)
         .withMinorCompactionInterval(Duration.ofSeconds(27))
         .withMajorCompactionInterval(Duration.ofSeconds(31))
