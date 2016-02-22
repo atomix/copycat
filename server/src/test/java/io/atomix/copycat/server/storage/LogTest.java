@@ -118,7 +118,7 @@ public abstract class LogTest extends AbstractLogTest {
    * Asserts that {@link Log#clean(long)} prevents tombstone entries from being read if the globalIndex is greater than the tombstone index.
    */
   public void testCleanGetTombstones() {
-    appendEntries(entriesPerSegment * 3, Compaction.Mode.SEQUENTIAL);
+    appendEntries(entriesPerSegment * 3, Compaction.Mode.TOMBSTONE);
     for (int i = entriesPerSegment; i <= entriesPerSegment * 2 + 1; i++) {
       assertFalse(log.segments.segment(i).isClean(i));
       log.clean(i);

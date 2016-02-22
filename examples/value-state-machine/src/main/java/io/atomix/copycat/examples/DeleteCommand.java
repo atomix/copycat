@@ -25,6 +25,6 @@ import io.atomix.copycat.Command;
 public class DeleteCommand implements Command<Void> {
   @Override
   public CompactionMode compaction() {
-    return CompactionMode.SEQUENTIAL;
+    return CompactionMode.TOMBSTONE;
   }
 }
