@@ -245,6 +245,7 @@ public final class MajorCompactionTask implements CompactionTask {
       // and the entry has been cleaned.
       case FULL:
       case SEQUENTIAL:
+      case TOMBSTONE:
         if (index <= compactIndex && isClean(index, segment, cleaner)) {
           compactEntry(index, segment, compactSegment);
         } else {

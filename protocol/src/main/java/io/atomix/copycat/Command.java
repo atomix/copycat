@@ -27,7 +27,7 @@ import io.atomix.copycat.session.Session;
  * <p>
  * <h3>Consistency levels</h3>
  * <p>
- * Commands are allow both to modify system state and to trigger {@link Session#publish(String, Object) events}
+ * Commands are allow both to modify system state and to trigger events
  * published to client {@link Session sessions}. Whereas {@link Query} consistency
  * levels dictate when and how queries can be executed on follower nodes, command
  * {@link Command.ConsistencyLevel consistency levels} largely relate to how events triggered
@@ -69,11 +69,11 @@ public interface Command<T> extends Operation<T> {
   /**
    * Constants for specifying Raft {@link Command} consistency levels.
    * <p>
-   * This enum provides identifiers for configuring consistency levels for {@link Command queries}
+   * This enum provides identifiers for configuring consistency levels for {@link Command commands}
    * submitted to a Raft cluster.
    * <p>
-   * Consistency levels are used to dictate how queries are routed through the Raft cluster and the requirements for
-   * completing read operations based on submitted queries. For expectations of specific consistency levels, see below.
+   * Consistency levels are used to dictate how events associated with a command are published to clients.
+   * For expectations of specific consistency levels, see specific consistency levels.
    *
    * @see #consistency()
    *
@@ -119,8 +119,8 @@ public interface Command<T> extends Operation<T> {
    * Commands to a Copycat state machine typically come in one of two flavors; commands are either compacted from
    * the log via snapshotting or log cleaning. Log cleaning is the process of removing commands from the log when
    * they no longer contribute to the state machine's state. Commands compacted via log cleaning are represented
-   * by the {@link #QUORUM}, {@link #FULL}, and {@link #SEQUENTIAL} compaction modes. These types of commands
-   * are removed from the log in a manor consistent with the configured compaction mode.
+   * by the {@link #QUORUM}, {@link #FULL}, {@link #SEQUENTIAL}, and {@link #TOMBSTONE} compaction modes. These types
+   * of commands are removed from the log in a manor consistent with the configured compaction mode.
    * <p>
    * Alternatively, the simpler mode of compaction is snapshotting. Snapshotted commands are indicated by the
    * {@link #SNAPSHOT} compaction mode. When a server takes a snapshot of a state machine, all commands applied
@@ -215,11 +215,25 @@ public interface Command<T> extends Operation<T> {
      * The {@code SEQUENTIAL} compaction mode adds to the <em>full replication</em> requirement of the {@code FULL}
      * compaction mode to also require that commands be removed from the log <em>in sequential order</em>. Typically,
      * this compaction mode is used for so called <em>tombstone</em> commands. Sequential ordering is critical in
-     * the handling of tombstones since they essentially represent the absense of state. A tombstone cannot be safely
+     * the handling of tombstones since they essentially represent the absence of state. A tombstone cannot be safely
      * removed from the log until all prior related entries have been removed. Compacting tombstones sequentially ensures
      * that any prior related commands will have been compacted from the log prior to the tombstone being removed.
      */
     SEQUENTIAL,
+
+    /**
+     * The tombstone compaction mode is an alias for the {@link #SEQUENTIAL} compaction mode that is specifically intended
+     * for tombstone commands. Tombstones will be retained in the log until stored and applied on all servers, and tombstones
+     * will only be removed from the log once all prior released entries have been removed.
+     * <p>
+     * The {@code TOMBSTONE} compaction mode adds to the <em>full replication</em> requirement of the {@code FULL}
+     * compaction mode to also require that commands be removed from the log <em>in sequential order</em>. Typically,
+     * this compaction mode is used for so called <em>tombstone</em> commands. Sequential ordering is critical in
+     * the handling of tombstones since they essentially represent the absence of state. A tombstone cannot be safely
+     * removed from the log until all prior related entries have been removed. Compacting tombstones sequentially ensures
+     * that any prior related commands will have been compacted from the log prior to the tombstone being removed.
+     */
+    TOMBSTONE,
 
   }
 

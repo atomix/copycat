@@ -378,6 +378,7 @@ public class Log implements AutoCloseable {
         // if the entry hasn't been cleaned.
         case FULL:
         case SEQUENTIAL:
+        case TOMBSTONE:
           if (index > compactor.minorIndex() || index > compactor.majorIndex() || !segment.isClean(index)) {
             return entry;
           }

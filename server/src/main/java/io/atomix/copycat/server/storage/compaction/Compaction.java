@@ -111,11 +111,19 @@ public enum Compaction {
 
     /**
      * The {@code SEQUENTIAL} compaction mode retains the command in the log until it has been stored and
-     * applied on all servers in the cluster. Once the commit has been appleid to a state machine and closed,
+     * applied on all servers in the cluster. Once the commit has been applied to a state machine and closed,
      * it may be removed from the log <em>only during major compaction</em> to ensure that all prior completed
      * commits are removed first.
      */
     SEQUENTIAL,
+
+    /**
+     * The {@code TOMBSTONE} compaction mode is an alias of the {@link #SEQUENTIAL} mode. Tombstone entries are
+     * retained in the log until stored and applied on all servers. Once the commit has been applied to a state
+     * machine and closed, it may be removed from the log <em>only during major compaction</em> to ensure that
+     * all prior completed commits are removed first.
+     */
+    TOMBSTONE,
 
   }
 
