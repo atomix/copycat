@@ -36,8 +36,9 @@ public class ValueClientExample {
    */
   public static void main(String[] args) throws Exception {
     if (args.length < 1)
-      throw new IllegalArgumentException("must supply at least one server host:port");
+      throw new IllegalArgumentException("must supply a path and set of host:port tuples");
 
+    // Build a list of all member addresses to which to connect.
     List<Address> members = new ArrayList<>();
     for (int i = 0; i < args.length; i++) {
       String[] parts = args[i].split(":");
