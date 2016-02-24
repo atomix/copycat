@@ -31,18 +31,16 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
-import io.atomix.copycat.session.SessionTypeResolver;
+import io.atomix.copycat.util.ProtocolSerialization;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.ServerRequestTypeResolver;
-import io.atomix.copycat.server.protocol.ServerResponseTypeResolver;
+import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
-import io.atomix.copycat.server.state.StateTypeResolver;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.entry.EntryTypeResolver;
+import io.atomix.copycat.server.storage.util.StorageSerialization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +62,7 @@ import java.util.function.Supplier;
  * cluster membership information in order to perform communication. Each server must be provided a local {@link Address}
  * to which to bind the internal {@link io.atomix.catalyst.transport.Server} and a set of addresses for other members in
  * the cluster.
- * <p>
+ * <h2>State machines</h2>
  * Underlying each server is a {@link StateMachine}. The state machine is responsible for maintaining the state with
  * relation to {@link Command}s and {@link Query}s submitted to the server by a client. State machines are provided
  * in a factory to allow servers to transition between stateful and stateless states.
@@ -78,14 +76,26 @@ import java.util.function.Supplier;
  *     .build();
  *   }
  * </pre>
- * Server state machines are responsible for registering {@link Command}s which can be submitted
- * to the cluster. Raft relies upon determinism to ensure consistency throughout the cluster, so <em>it is imperative
- * that each server in a cluster have the same state machine with the same commands.</em>
- * <p>
+ * Server state machines are responsible for registering {@link Command}s which can be submitted to the cluster. Raft
+ * relies upon determinism to ensure consistency throughout the cluster, so <em>it is imperative that each server in
+ * a cluster have the same state machine with the same commands.</em> State machines are provided to the server as
+ * a {@link Supplier factory} to allow servers to {@link Member#promote(Member.Type) transition} between stateful
+ * and stateless states.
+ * <h2>Transports</h2>
  * By default, the server will use the {@code NettyTransport} for communication. You can configure the transport via
  * {@link CopycatServer.Builder#withTransport(Transport)}. To use the Netty transport, ensure you have the
  * {@code io.atomix.catalyst:catalyst-netty} jar on your classpath.
- * <p>
+ * <pre>
+ * {@code
+ * CopycatServer server = CopycatServer.builder(address, members)
+ *   .withStateMachine(MyStateMachine::new)
+ *   .withTransport(NettyTransport.builder()
+ *     .withThreads(4)
+ *     .build())
+ *   .build();
+ * }
+ * </pre>
+ * <h2>Storage</h2>
  * As {@link Command}s are received by the server, they're written to the Raft {@link Log} and replicated to other members
  * of the cluster. By default, the log is stored on disk, but users can override the default {@link Storage} configuration
  * via {@link CopycatServer.Builder#withStorage(Storage)}. Most notably, to configure the storage module to store entries in
@@ -93,12 +103,39 @@ import java.util.function.Supplier;
  * <pre>
  * {@code
  * CopycatServer server = CopycatServer.builder(address, members)
- *   .withStateMachine(new MyStateMachine())
- *   .withStorage(new Storage(StorageLevel.MEMORY))
+ *   .withStateMachine(MyStateMachine::new)
+ *   .withStorage(Storage.builder()
+ *     .withDirectory(new File("logs"))
+ *     .withStorageLevel(StorageLevel.DISK)
+ *     .build())
  *   .build();
  * }
  * </pre>
+ * Servers use the {@code Storage} object to manage the storage of cluster configurations, voting information, and
+ * state machine snapshots in addition to logs. See the {@link Storage} documentation for more information.
+ * <h2>Serialization</h2>
+ * All serialization is performed with a Catalyst {@link Serializer}. The serializer is shared across all components of
+ * the server. Users are responsible for ensuring that {@link Command commands} and {@link Query queries} submitted to the
+ * cluster can be serialized by the server serializer by registering serializable types as necessary.
  * <p>
+ * By default, the server serializer does not allow arbitrary classes to be serialized due to security concerns. However,
+ * users can enable arbitrary class serialization by disabling the {@link Serializer#disableWhitelist() whitelisting feature}
+ * on the Catalyst {@link Serializer}:
+ * <pre>
+ *   {@code
+ *   server.serializer().disableWhitelist();
+ *   }
+ * </pre>
+ * However, for more efficient serialization, users should explicitly register serializable classes and binary
+ * {@link io.atomix.catalyst.serializer.TypeSerializer serializers}. Explicit registration of serializable typs allows
+ * types to be serialized using more compact 8- 16- 24- and 32-bit serialization IDs rather than serializing complete
+ * class names. Thus, serializable type registration is strongly recommended for production systems.
+ * <pre>
+ *   {@code
+ *   server.serializer().register(MySerializable.class, 123, MySerializableSerializer.class);
+ *   }
+ * </pre>
+ * <h2>Running the server</h2>
  * Once the server has been created, to connect to a cluster simply {@link #open()} the server. The server API is
  * fully asynchronous and relies on {@link CompletableFuture} to provide promises:
  * <pre>
@@ -121,16 +158,6 @@ import java.util.function.Supplier;
  *   }
  * });
  * }
- * </pre>
- * <h3>Serialization</h3>
- * All serialization is performed with a Catalyst {@link Serializer}. The serializer is shared across all components of
- * the server. Users are responsible for ensuring that {@link Command commands} and {@link Query queries} submitted to the
- * cluster can be serialized by the server serializer by registering serializable types as necessary. Types may be registered
- * for serialization at any time.
- * <pre>
- *   {@code
- *   server.serializer().register(MySerializable.class, MySerializableSerializer.class);
- *   }
  * </pre>
  *
  * @see StateMachine
@@ -337,7 +364,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   private volatile CompletableFuture<CopycatServer> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
   private Listener<Member> electionListener;
-  private boolean open;
+  private volatile boolean open;
 
   private CopycatServer(String name, Transport clientTransport, Transport serverTransport, ServerContext context) {
     this.name = Assert.notNull(name, "name");
@@ -350,6 +377,12 @@ public class CopycatServer implements Managed<CopycatServer> {
 
   /**
    * Returns the server name.
+   * <p>
+   * The server name is provided to the server via the {@link Builder#withName(String) builder configuration}.
+   * The name is used internally to manage the server's on-disk state. {@link Log Log},
+   * {@link io.atomix.copycat.server.storage.snapshot.SnapshotStore snapshot},
+   * and {@link io.atomix.copycat.server.storage.system.MetaStore configuration} files stored on disk use
+   * the server name as the prefix.
    *
    * @return The server name.
    */
@@ -359,6 +392,14 @@ public class CopycatServer implements Managed<CopycatServer> {
 
   /**
    * Returns the server storage.
+   * <p>
+   * The returned {@link Storage} object is the object provided to the server via the {@link Builder#withStorage(Storage) builder}
+   * configuration. The storage object is immutable and is intended to provide runtime configuration information only. Users
+   * should <em>never open logs, snapshots, or other storage related files</em> through the {@link Storage} API. Doing so
+   * can conflict with internal server operations, resulting in the loss of state.
+   * <p>
+   * To delete the server's on-disk state, use the {@link #delete()} method rather than operating on the {@link Storage}
+   * object directly.
    *
    * @return The server storage.
    */
@@ -368,6 +409,15 @@ public class CopycatServer implements Managed<CopycatServer> {
 
   /**
    * Returns the server's cluster configuration.
+   * <p>
+   * The {@link Cluster} is representative of the server's current view of the cluster configuration. The first time
+   * the server is {@link #open() started}, the cluster configuration will be initialized using the {@link Address}
+   * list provided to the server {@link #builder(Address, Address...) builder}. For {@link StorageLevel#DISK persistent}
+   * servers, subsequent starts will result in the last known cluster configuration being loaded from disk.
+   * <p>
+   * The returned {@link Cluster} can be used to modify the state of the cluster to which this server belongs. Note,
+   * however, that users need not explicitly {@link Cluster#join() join} or {@link Cluster#leave() leave} the cluster
+   * since starting and stopping the server results in joining and leaving the cluster respectively.
    *
    * @return The server's cluster configuration.
    */
@@ -376,7 +426,40 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
-   * Returns the server serializer.
+   * Returns the server's binary serializer which is shared among the protocol, state machine, and storage.
+   * <p>
+   * The returned serializer is linked to all serialization performed within the Copycat server. Serializable types
+   * and associated {@link io.atomix.catalyst.serializer.TypeSerializer serializers} that are
+   * {@link Serializer#register(Class) registered} on the returned serializer will be reflected in serialization
+   * throughout the server, including in the state machine and logs.
+   * <p>
+   * By default, the returned serializer does not support serialization of arbitrary classes and class names for
+   * security reasons. Users must explicitly whitelist serializable types with the serializer to ensure the server
+   * can serialize and deserialize required objects, including state machine {@link Command commands} and
+   * {@link Query queries} and any objects that need to be serialized within them.
+   * <pre>
+   *   {@code
+   *   server.serializer().register(MySerializableType.class, 123, MySerializableSerializer.class);
+   *   }
+   * </pre>
+   * Alternatively, users can {@link Serializer#disableWhitelist() disable whitelisting} in the Catalyst serializer
+   * to ensure that the server can receive operations from any client.
+   * <pre>
+   *   {@code
+   *   server.serializer().disableWhitelist();
+   *   }
+   * </pre>
+   * When whitelisting is disabled, serializable types that are not explicitly {@link Serializer#register(Class) registered}
+   * with the serializer will be serialized with their fully qualified class name to be used during deserialization.
+   * However, while disabling whitelisting can improve usability, serializing class names can significantly impact the
+   * performance of serialization. Therefore, while it's an acceptable solution in development, it is recommended that
+   * users explicitly register serializable types for more efficient serialization in production.
+   * <p>
+   * <em>It's important to note that because the returned {@link Serializer} affects the on-disk binary representation
+   * of commands and queries and other objects submitted to the cluster, users must take care to avoid directly changing
+   * the binary format of serializable objects once they have been written to the server's logs. Doing so may result in
+   * errors during deserialization of objects in the log. To guard against this, serializable types can implement versioning
+   * by writing 8-bit version numbers as part of their normal serialization.</em>
    *
    * @return The server serializer.
    */
@@ -618,15 +701,52 @@ public class CopycatServer implements Managed<CopycatServer> {
 
   /**
    * Deletes the server and its logs.
+   * <p>
+   * If the server is not already closed, it will be closed upon calling this method. Once the server has been
+   * shut down, all state persisted on disk by the server will be deleted. On-disk state includes the last known
+   * cluster configuration and all logs and snapshots. In the event that the server is restarted after its state
+   * has been deleted, the server will start with a new log and no snapshots.
    *
-   * @return A completable future to be completed once the server has been deleted.
+   * @return A completable future to be completed once the server state has been deleted.
    */
   public CompletableFuture<Void> delete() {
     return close().thenRun(context::delete);
   }
 
   /**
-   * Raft server builder.
+   * Builds a single-use Copycat server.
+   * <p>
+   * This builder should be used to programmatically configure and construct a new {@link CopycatServer} instance.
+   * The builder provides methods for configuring all aspects of a Copycat server. The {@code CopycatServer.Builder}
+   * class cannot be instantiated directly. To create a new builder, use one of the
+   * {@link CopycatServer#builder(Address, Address...) server builder factory} methods.
+   * <pre>
+   *   {@code
+   *   CopycatServer.Builder builder = CopycatServer.builder(address, members);
+   *   }
+   * </pre>
+   * Once the server has been configured, use the {@link #build()} method to build the server instance:
+   * <pre>
+   *   {@code
+   *   CopycatServer server = CopycatServer.builder(address, members)
+   *     ...
+   *     .build();
+   *   }
+   * </pre>
+   * Each server <em>must</em> be configured with a {@link StateMachine}. The state machine is the component of the
+   * server that stores state and reacts to commands and queries submitted by clients to the cluster. State machines
+   * are provided to the server in the form of a state machine {@link Supplier factory} to allow the server to reconstruct
+   * its state when necessary.
+   * <pre>
+   *   {@code
+   *   CopycatServer server = CopycatServer.builder(address, members)
+   *     .withStateMachine(MyStateMachine::new)
+   *     .build();
+   *   }
+   * </pre>
+   * Similarly critical to the operation of the server are the {@link Transport} and {@link Storage} layers. By default,
+   * servers are configured with the {@code io.atomix.catalyst.transport.NettyTransport} transport if it's available on
+   * the classpath. Users should provide a {@link Storage} instance to specify how the server stores state changes.
    */
   public static class Builder implements io.atomix.catalyst.util.Builder<CopycatServer> {
     private static final String DEFAULT_NAME = "copycat";
@@ -843,11 +963,9 @@ public class CopycatServer implements Managed<CopycatServer> {
       // Resolve serializable request/response and other types.
       serializer.resolve(new ClientRequestTypeResolver());
       serializer.resolve(new ClientResponseTypeResolver());
-      serializer.resolve(new SessionTypeResolver());
-      serializer.resolve(new ServerRequestTypeResolver());
-      serializer.resolve(new ServerResponseTypeResolver());
-      serializer.resolve(new EntryTypeResolver());
-      serializer.resolve(new StateTypeResolver());
+      serializer.resolve(new ProtocolSerialization());
+      serializer.resolve(new ServerSerialization());
+      serializer.resolve(new StorageSerialization());
 
       // If the storage is not configured, create a new Storage instance with the configured serializer.
       if (storage == null) {

@@ -22,21 +22,20 @@ import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.AbstractResponse;
+import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
 import io.atomix.copycat.protocol.Response;
-import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.ServerRequestTypeResolver;
-import io.atomix.copycat.server.protocol.ServerResponseTypeResolver;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.entry.EntryTypeResolver;
+import io.atomix.copycat.server.storage.util.StorageSerialization;
+import io.atomix.copycat.server.util.ServerSerialization;
+import io.atomix.copycat.util.ProtocolSerialization;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -69,11 +68,9 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     serializer.resolve(
       new ClientRequestTypeResolver(),
       new ClientResponseTypeResolver(),
-      new SessionTypeResolver(),
-      new ServerRequestTypeResolver(),
-      new ServerResponseTypeResolver(),
-      new StateTypeResolver(),
-      new EntryTypeResolver()
+      new ProtocolSerialization(),
+      new ServerSerialization(),
+      new StorageSerialization()
     ).disableWhitelist();
 
     storage = new Storage(StorageLevel.MEMORY);

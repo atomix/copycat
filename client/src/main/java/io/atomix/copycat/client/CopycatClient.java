@@ -30,7 +30,7 @@ import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
 import io.atomix.copycat.session.Session;
-import io.atomix.copycat.session.SessionTypeResolver;
+import io.atomix.copycat.util.ProtocolSerialization;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -590,7 +590,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
       if (context != null) {
         context.serializer().resolve(new ClientRequestTypeResolver());
         context.serializer().resolve(new ClientResponseTypeResolver());
-        context.serializer().resolve(new SessionTypeResolver());
+        context.serializer().resolve(new ProtocolSerialization());
 
         return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       } else {
@@ -602,7 +602,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
         // Add service loader types to the primary serializer.
         serializer.resolve(new ClientRequestTypeResolver());
         serializer.resolve(new ClientResponseTypeResolver());
-        serializer.resolve(new SessionTypeResolver());
+        serializer.resolve(new ProtocolSerialization());
 
         return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       }

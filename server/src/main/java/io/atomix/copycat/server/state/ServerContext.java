@@ -45,7 +45,10 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Raft server state.
+ * Manages the volatile state and state transitions of a Copycat server.
+ * <p>
+ * This class is the primary vehicle for managing the state of a server. All state that is shared across roles (i.e. follower, candidate, leader)
+ * is stored in the cluster state. This includes Raft-specific state like the current leader and term, the log, and the cluster configuration.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

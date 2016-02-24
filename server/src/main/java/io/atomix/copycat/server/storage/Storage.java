@@ -35,7 +35,7 @@ import java.time.Duration;
  *   {@code
  *     Storage storage = Storage.builder()
  *       .withDirectory(new File("logs"))
- *       .withPersistenceLevel(PersistenceLevel.DISK)
+ *       .withStorageLevel(StorageLevel.DISK)
  *       .build();
  *   }
  * </pre>
@@ -240,7 +240,10 @@ public class Storage {
   }
 
   /**
-   * Opens a new {@link MetaStore}.
+   * Opens a new {@link MetaStore}, recovering metadata from disk if it exists.
+   * <p>
+   * The meta store will be loaded using based on the configured {@link StorageLevel}. If the storage level is persistent
+   * then the meta store will be loaded from disk, otherwise a new meta store will be created.
    *
    * @param name The metastore name.
    * @return The metastore.
@@ -250,7 +253,10 @@ public class Storage {
   }
 
   /**
-   * Deletes a {@link MetaStore}.
+   * Deletes a {@link MetaStore} from disk.
+   * <p>
+   * The meta store will be deleted by simply reading {@code meta} file names from disk and deleting metadata
+   * files directly. Deleting the meta store does not involve reading any metadata files into memory.
    *
    * @param name The metastore name.
    */
@@ -260,7 +266,10 @@ public class Storage {
   }
 
   /**
-   * Opens a new {@link SnapshotStore}.
+   * Opens a new {@link SnapshotStore}, recovering snapshots from disk if they exist.
+   * <p>
+   * The snapshot store will be loaded using based on the configured {@link StorageLevel}. If the storage level is persistent
+   * then the snapshot store will be loaded from disk, otherwise a new snapshot store will be created.
    *
    * @param name The snapshot store name.
    * @return The snapshot store.
@@ -270,7 +279,10 @@ public class Storage {
   }
 
   /**
-   * Deletes a {@link SnapshotStore}.
+   * Deletes a {@link SnapshotStore} from disk.
+   * <p>
+   * The snapshot store will be deleted by simply reading {@code snapshot} file names from disk and deleting snapshot
+   * files directly. Deleting the snapshot store does not involve reading any snapshot files into memory.
    *
    * @param name The snapshot store name.
    */
@@ -280,11 +292,13 @@ public class Storage {
   }
 
   /**
-   * Opens a new {@link Log}.
+   * Opens a new {@link Log}, recovering the log from disk if it exists.
    * <p>
    * When a log is opened, the log will attempt to load {@link Segment}s from the storage {@link #directory()}
    * according to the provided log {@code name}. If segments for the given log name are present on disk, segments
    * will be loaded and indexes will be rebuilt from disk. If no segments are found, an empty log will be created.
+   * <p>
+   * When log files are loaded from disk, the file names are expected to be based on the provided log {@code name}.
    *
    * @param name The log name.
    * @return The opened log.
@@ -294,7 +308,10 @@ public class Storage {
   }
 
   /**
-   * Deletes a {@link Log}.
+   * Deletes a {@link Log} from disk.
+   * <p>
+   * The log will be deleted by simply reading {@code log} file names from disk and deleting log files directly.
+   * Deleting log files does not involve rebuilding indexes or reading any logs into memory.
    *
    * @param name The log name.
    */
@@ -492,6 +509,7 @@ public class Storage {
      *
      * @param interval The minor compaction interval.
      * @return The storage builder.
+     * @throws NullPointerException if the interval is null
      */
     public Builder withMinorCompactionInterval(Duration interval) {
       storage.minorCompactionInterval = Assert.notNull(interval, "interval");
@@ -511,6 +529,7 @@ public class Storage {
      *
      * @param interval The major compaction interval.
      * @return The storage builder.
+     * @throws NullPointerException if the interval is null
      */
     public Builder withMajorCompactionInterval(Duration interval) {
       storage.majorCompactionInterval = Assert.notNull(interval, "interval");
@@ -532,6 +551,7 @@ public class Storage {
      *
      * @param threshold The segment compact threshold.
      * @return The storage builder.
+     * @throws IllegalArgumentException if the threashold is not positive
      */
     public Builder withCompactionThreshold(double threshold) {
       storage.compactionThreshold = Assert.argNot(threshold, threshold <= 0, "threshold must be positive");

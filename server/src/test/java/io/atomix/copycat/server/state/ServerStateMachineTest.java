@@ -26,17 +26,17 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
-import io.atomix.copycat.session.Session;
-import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.ServerRequestTypeResolver;
-import io.atomix.copycat.server.protocol.ServerResponseTypeResolver;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
+import io.atomix.copycat.server.storage.util.StorageSerialization;
+import io.atomix.copycat.server.util.ServerSerialization;
+import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.ProtocolSerialization;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -70,11 +70,9 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     Serializer serializer = new Serializer().resolve(
       new ClientRequestTypeResolver(),
       new ClientResponseTypeResolver(),
-      new SessionTypeResolver(),
-      new ServerRequestTypeResolver(),
-      new ServerResponseTypeResolver(),
-      new StateTypeResolver(),
-      new EntryTypeResolver()
+      new ProtocolSerialization(),
+      new ServerSerialization(),
+      new StorageSerialization()
     ).disableWhitelist();
 
     callerContext = new SingleThreadContext("caller", serializer.clone());

@@ -118,11 +118,20 @@ public interface Member {
 
     /**
      * Indicates that a member is reachable by the leader.
+     * <p>
+     * Availability is determined by the leader's ability to successfully send heartbeats to the member. If the
+     * last heartbeat attempt to the member was successful, its status will be available. For members whose status
+     * is {@link #UNAVAILABLE}, once the leader is able to heartbeat the member its status will be reset to available.
      */
     AVAILABLE,
 
     /**
      * Indicates that a member is unreachable by the leader.
+     * <p>
+     * Availability is determined by the leader's ability to successfully send heartbeats to the member. If the
+     * leader repeatedly fails to heartbeat a member, the leader will eventually commit a configuration change setting
+     * the member's status to unavailable. Once the leader is able to contact the member again, its status will be
+     * reset to {@link #AVAILABLE}.
      */
     UNAVAILABLE,
 

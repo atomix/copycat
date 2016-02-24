@@ -24,9 +24,7 @@ import io.atomix.copycat.session.Session;
  * is submitted to the cluster, if the command is received by a follower, the Raft protocol dictates that it must be
  * forwarded to the cluster leader. Once the leader receives a command, it logs and replicates the command to a majority
  * of the cluster before applying it to its state machine and responding with the result.
- * <p>
- * <h3>Consistency levels</h3>
- * <p>
+ * <h2>Consistency levels</h2>
  * Commands are allow both to modify system state and to trigger events
  * published to client {@link Session sessions}. Whereas {@link Query} consistency
  * levels dictate when and how queries can be executed on follower nodes, command
@@ -37,9 +35,7 @@ import io.atomix.copycat.session.Session;
  * and perhaps send a message to any lock waiters notifying them that the lock is available. In this case,
  * {@link Command.ConsistencyLevel#LINEARIZABLE linearizable} consistency can be used to ensure
  * that lock holders are notified before the {@code unlock} operation completes.
- * <p>
- * <h3>Compaction modes</h3>
- * <p>
+ * <h2>Compaction modes</h2>
  * <em>Determinism is the number one rule of state machines!</em>
  * <p>
  * When commands are submitted to the Raft cluster, they're written to a commit log on disk or in memory (based on the
@@ -50,9 +46,7 @@ import io.atomix.copycat.session.Session;
  * to safely handle the complexities of removing state from state machines while ensuring state machines remain
  * deterministic, particularly in the event of a failure and replay of the commit log. See the
  * {@link CompactionMode} documentation for more info.
- * <p>
  * <h3>Serialization</h3>
- * <p>
  * Commands must be serializable both by the client and by all servers in the cluster. By default, all operations use
  * Java serialization. However, default serialization in slow because it requires the full class name and does not allocate
  * memory efficiently. For this reason, it's recommended that commands implement {@link io.atomix.catalyst.serializer.CatalystSerializable}

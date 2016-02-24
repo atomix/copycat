@@ -21,9 +21,7 @@ package io.atomix.copycat;
  * Queries are submitted by clients to a Raft server to read Raft cluster-wide state. In contrast to
  * {@link Command commands}, queries allow for more flexible {@link ConsistencyLevel consistency levels} that trade
  * consistency for performance.
- * <p>
- * <h3>Consistency levels</h3>
- * <p>
+ * <h2>Consistency levels</h2>
  * All queries must specify a {@link #consistency()} with which to execute the query. The provided consistency level
  * dictates how queries are submitted to the Raft cluster. When a query is submitted to the cluster, the query is
  * sent in a message to the server to which the client is currently connected. The server handles the query requests
@@ -35,9 +33,7 @@ package io.atomix.copycat;
  * <p>
  * By default, all queries should use the strongest consistency level, {@link ConsistencyLevel#LINEARIZABLE}.
  * It is essential that users understand the trade-offs in the various consistency levels before using them.
- * <p>
- * <h3>Serialization</h3>
- * <p>
+ * <h2>Serialization</h2>
  * Queries must be serializable both by the client and by all servers in the cluster. By default, all operations use
  * Java serialization. However, default serialization in slow because it requires the full class name and does not allocate
  * memory efficiently. For this reason, it's recommended that commands implement {@link io.atomix.catalyst.serializer.CatalystSerializable}

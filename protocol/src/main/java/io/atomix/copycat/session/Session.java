@@ -20,7 +20,34 @@ import io.atomix.catalyst.util.Listener;
 import java.util.function.Consumer;
 
 /**
- * Provides event-based methods for monitoring Raft sessions and communicating between Raft clients and servers.
+ * Represents a client's connection to the Copycat cluster.
+ * <p>
+ * Each client that connects to a Raft cluster must open a {@link Session} in order to submit operations to the cluster.
+ * When a client first connects to a server, it must register a new session. Once the session has been registered,
+ * it can be used to submit {@link io.atomix.copycat.Command commands} and {@link io.atomix.copycat.Query queries}
+ * to the cluster.
+ * <p>
+ * Sessions represent a connection between a single client and all servers in a Raft cluster. Session information
+ * is replicated via the Raft consensus algorithm, and clients can safely switch connections between servers without
+ * losing their session. All consistency guarantees are provided within the context of a session. Once a session is
+ * expired or closed, linearizability, sequential consistency, and other guarantees for events and operations are
+ * effectively lost.
+ * <p>
+ * Throughout the lifetime of a session it can transition between a number of different
+ * {@link io.atomix.copycat.session.Session.State states}. Session states are indicative of the client's ability to
+ * maintain its connections to the cluster and the cluster's ability to provide certain semantics within the context
+ * of the session. The current state of a session can be read via the {@link #state()} method, and users can react to
+ * changes in the session state by registering a state change listener via {@link #onStateChange(Consumer)}.
+ * <p>
+ * The ideal state of a session is the {@link Session.State#OPEN OPEN} state which indicates that the client has
+ * registered a session and has successfully submitted a keep-alive request within the last session timeout. In the
+ * event that a client cannot communicate with any server in the cluster or the cluster has not received a keep-alive
+ * from a client within a session timeout, the session's state will be changed to {@link Session.State#UNSTABLE UNSTABLE},
+ * indicating that the session may be expired. While in the {@code UNSTABLE} state, Copycat cannot guarantee linearizable
+ * semantics for operations. From the {@code UNSTABLE} state, the session will either transition back to the
+ * {@code OPEN} state or into the {@link Session.State#EXPIRED EXPIRED} state, indicating that linearizability guarantees
+ * have been lost. Finally, sessions that are explicitly unregistered by a client will be transitioned to the
+ * {@link Session.State#CLOSED CLOSED} state.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -102,6 +129,7 @@ public interface Session {
     public boolean active() {
       return active;
     }
+
   }
 
   /**
