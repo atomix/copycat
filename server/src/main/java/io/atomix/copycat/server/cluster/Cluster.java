@@ -44,7 +44,7 @@ import java.util.function.Consumer;
  * Membership exposed via this interface is provided from the perspective of the local server and may not
  * necessarily be consistent with cluster membership from the perspective of other nodes. The only consistent
  * membership list is on the {@link #leader() leader} node.
- * <h3>Cluster management</h3>
+ * <h2>Cluster management</h2>
  * Users can use the {@code Cluster} to manage the Copycat cluster membership. Typically, servers join the
  * cluster by calling {@link CopycatServer#open()} or {@link #join()}, but in the event that a server fails
  * permanently and thus cannot remove itself, other nodes can remove arbitrary servers.
@@ -56,9 +56,17 @@ import java.util.function.Consumer;
  *   });
  *   }
  * </pre>
+ * When a member is removed from the cluster, the configuration change removing the member will be replicated to all
+ * the servers in the cluster and persisted to disk. Once a member has been removed, for that member to rejoin the cluster
+ * it must fully restart and request to rejoin the cluster. For servers configured with a persistent
+ * {@link io.atomix.copycat.server.storage.StorageLevel}, cluster configurations are stored on disk.
+ * <p>
  * Additionally, members can be {@link Member#promote() promoted} and {@link Member#demote() demoted} by any
- * other member of the cluster. See the {@link Member.Type} documentation for more information on promotion
- * and demotion of members.
+ * other member of the cluster. When a member state is changed, a cluster configuration change request is sent
+ * to the cluster leader where it's logged and replicated through the Raft consensus algorithm. <em>During</em>
+ * the configuration change, servers' cluster configurations will be updated. Once the configuration change is
+ * complete, it will be persisted to disk on all servers and is guaranteed not to be lost even in the event of a
+ * full cluster shutdown (assuming the server uses a persistent {@link io.atomix.copycat.server.storage.StorageLevel}).
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -79,8 +87,10 @@ public interface Cluster {
   /**
    * Returns the current cluster term.
    * <p>
-   * The term is a monotonically increasing number used by the Raft algorithm to represent a point in logical
-   * time. For any given term, only one {@link #leader() leader} may be elected.
+   * The term is representative of the epoch determined by the underlying Raft consensus algorithm. The term is a monotonically
+   * increasing number used by Raft to represent a point in logical time. If the cluster is persistent (i.e. all servers use a persistent
+   * {@link io.atomix.copycat.server.storage.StorageLevel}), the term is guaranteed to be unique and monotonically increasing even across
+   * cluster restarts. Additionally, for any given term, Raft guarantees that only a single {@link #leader() leader} can be elected.
    *
    * @return The current cluster term.
    */
@@ -89,10 +99,9 @@ public interface Cluster {
   /**
    * Registers a callback to be called when a leader is elected.
    * <p>
-   * The provided {@code callback} will be called when a new leader is elected for any given term. Once a
-   * leader election callback is called, the correct {@link #term()} for the leader is guaranteed to have
-   * already been set. Thus, to get the term for the provided leader, simply read the cluster {@link #term()}.
-   * <p>
+   * The provided {@code callback} will be called when a new leader is elected for a term. Because Raft ensures only a single leader
+   * can be elected for any given term, each election callback will be called at most once per term. However, note that a leader may
+   * not be elected for a term as well.
    * <pre>
    *   {@code
    *   server.cluster().onLeaderElection(member -> {
@@ -100,6 +109,9 @@ public interface Cluster {
    *   });
    *   }
    * </pre>
+   * The {@link Member} provided to the callback represents the member that was elected leader. Copycat guarantees that this member is
+   * a member of the {@link Cluster}. When a leader election callback is called, the correct {@link #term()} for the leader is guaranteed
+   * to have already been set. Thus, to get the term for the provided leader, simply read the cluster {@link #term()}.
    *
    * @param callback The callback to be called when a new leader is elected.
    * @return The leader election listener.
@@ -109,9 +121,8 @@ public interface Cluster {
   /**
    * Returns the local cluster member.
    * <p>
-   * The local member is representative of the parent {@link CopycatServer} to which this cluster
-   * perspective belongs. The local cluster member will always be non-null and
-   * {@link io.atomix.copycat.server.cluster.Member.Status#AVAILABLE AVAILABLE}.
+   * The local member is representative of the local {@link CopycatServer}. The local cluster member will always be non-null and
+   * {@link io.atomix.copycat.server.cluster.Member.Status#AVAILABLE AVAILABLE} if the server is running.
    *
    * @return The local cluster member.
    */

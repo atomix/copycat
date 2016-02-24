@@ -17,8 +17,10 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.storage.util.StorageSerialization;
+import io.atomix.copycat.server.util.ServerSerialization;
+import io.atomix.copycat.util.ProtocolSerialization;
 import org.testng.annotations.Test;
 
 import java.time.Instant;
@@ -53,7 +55,7 @@ public class MemberTest {
   public void testSerializeDeserialize() {
     Instant instant = Instant.now();
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), null, instant);
-    Serializer serializer = new Serializer().resolve(new SessionTypeResolver(), new StateTypeResolver());
+    Serializer serializer = new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization(), new StorageSerialization());
     ServerMember result = serializer.readObject(serializer.writeObject(member).flip());
     assertEquals(result.type(), member.type());
     assertEquals(result.updated(), member.updated());

@@ -13,37 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.protocol;
+package io.atomix.copycat.util;
 
 import io.atomix.catalyst.serializer.SerializableTypeResolver;
 import io.atomix.catalyst.serializer.SerializerRegistry;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.copycat.NoOpCommand;
+import io.atomix.copycat.protocol.Request;
+import io.atomix.copycat.session.Event;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Response serializable type resolver.
+ * Session serializable type resolver.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class ServerResponseTypeResolver implements SerializableTypeResolver {
+public final class ProtocolSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
-  private static final Map<Class<? extends Response>, Integer> TYPES = new HashMap() {{
-    put(AcceptResponse.class, -26);
-    put(AppendResponse.class, -27);
-    put(ConfigureResponse.class, -28);
-    put(InstallResponse.class, -29);
-    put(JoinResponse.class, -30);
-    put(LeaveResponse.class, -31);
-    put(PollResponse.class, -32);
-    put(ReconfigureResponse.class, -33);
-    put(VoteResponse.class, -34);
+  private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
+    put(Address.class, -1);
+    put(Event.class, -2);
+    put(NoOpCommand.class, -45);
   }};
 
   @Override
   public void resolve(SerializerRegistry registry) {
-    for (Map.Entry<Class<? extends Response>, Integer> entry : TYPES.entrySet()) {
+    for (Map.Entry<Class<? extends Request>, Integer> entry : TYPES.entrySet()) {
       registry.register(entry.getKey(), entry.getValue());
     }
   }

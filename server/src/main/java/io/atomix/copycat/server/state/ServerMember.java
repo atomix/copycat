@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class ServerMember implements Member, CatalystSerializable, AutoCloseable {
+public final class ServerMember implements Member, CatalystSerializable, AutoCloseable {
   private Member.Type type;
   private Status status = Status.AVAILABLE;
   private Instant updated;
@@ -207,7 +207,7 @@ final class ServerMember implements Member, CatalystSerializable, AutoCloseable 
   /**
    * Demotes the server to the given type.
    */
-  public CompletableFuture<Void> configure(Member.Type type) {
+  CompletableFuture<Void> configure(Member.Type type) {
     CompletableFuture<Void> future = new CompletableFuture<>();
     cluster.getContext().getThreadContext().executor().execute(() -> configure(type, future));
     return future;

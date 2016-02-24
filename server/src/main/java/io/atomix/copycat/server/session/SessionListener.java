@@ -29,7 +29,7 @@ import io.atomix.copycat.session.Session;
  * Copycat provides additional guarantees for clients like linearizability for writes and sequential consistency
  * for reads. Additionally, state machines can push messages to specific clients via sessions. Typically, all
  * state machines that rely on session-based messaging should implement this interface to track when a session
- * is {@link #close(Session) closed}.
+ * is {@link #close(ServerSession) closed}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -58,7 +58,8 @@ public interface SessionListener {
    * and notify the client before the event message is sent. Published event messages sent via this method will
    * be sent the next time an operation is applied to the state machine.
    *
-   * @param session The session that was registered.
+   * @param session The session that was registered. State machines <em>cannot</em> {@link ServerSession#publish(String, Object)} session
+   *                events to this session.
    */
   void register(ServerSession session);
 
@@ -67,13 +68,15 @@ public interface SessionListener {
    * <p>
    * This method is called only when a client explicitly unregisters its session by closing it. In other words,
    * calls to this method indicate that the session was closed by the client rather than {@link #expire(ServerSession) expired}
-   * by a server. This method will always be called for a given session before {@link #close(Session)}, and
-   * {@link #close(Session)} will always be called following this method.
+   * by a server. This method will always be called for a given session before {@link #close(ServerSession)}, and
+   * {@link #close(ServerSession)} will always be called following this method.
    * <p>
    * State machines are free to {@link ServerSession#publish(String, Object)} session event messages to any session except
-   * the one being unregistered. Session event messages sent to the session being unregistered will be lost.
+   * the one being unregistered. Session event messages sent to the session being unregistered will be lost since the session is
+   * closed once this method call completes.
    *
-   * @param session The session that was unregistered.
+   * @param session The session that was unregistered. State machines <em>cannot</em> {@link ServerSession#publish(String, Object)} session
+   *                events to this session.
    */
   void unregister(ServerSession session);
 
@@ -82,13 +85,15 @@ public interface SessionListener {
    * <p>
    * This method is called when a client fails to keep its session alive with the cluster. If the leader hasn't heard
    * from a client for a configurable time interval, the leader will expire the session to free the related memory.
-   * This method will always be called for a given session before {@link #close(Session)}, and {@link #close(Session)}
+   * This method will always be called for a given session before {@link #close(ServerSession)}, and {@link #close(ServerSession)}
    * will always be called following this method.
    * <p>
    * State machines are free to {@link ServerSession#publish(String, Object)} session event messages to any session except
-   * the one that expired. Session event messages sent to the session that expired will be lost.
+   * the one that expired. Session event messages sent to the session that expired will be lost since the session is closed once this
+   * method call completes.
    *
-   * @param session The session that was expired.
+   * @param session The session that was expired. State machines <em>cannot</em> {@link ServerSession#publish(String, Object)} session
+   *                events to this session.
    */
   void expire(ServerSession session);
 
@@ -100,8 +105,13 @@ public interface SessionListener {
    * removed from memory. This method will always be called for a specific session after either
    * {@link #unregister(ServerSession)} or {@link #expire(ServerSession)}, and one of those methods will always be called
    * before this method.
+   * <p>
+   * State machines are free to {@link ServerSession#publish(String, Object)} session event messages to any session except
+   * the one that was closed. Session event messages sent to the session that was closed will be lost since the session is closed once this
+   * method call completes.
    *
-   * @param session The session that was closed.
+   * @param session The session that was closed. State machines <em>cannot</em> {@link ServerSession#publish(String, Object)} session
+   *                events to this session.
    */
   void close(ServerSession session);
 

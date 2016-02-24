@@ -43,7 +43,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Cluster state.
+ * Manages the persistent state of the Copycat cluster from the perspective of a single server.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

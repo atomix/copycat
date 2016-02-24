@@ -26,21 +26,21 @@ package io.atomix.copycat.error;
 public abstract class CopycatException extends RuntimeException {
   private final CopycatError.Type type;
 
-  public CopycatException(CopycatError.Type type, String message, Object... args) {
+  protected CopycatException(CopycatError.Type type, String message, Object... args) {
     super(String.format(message, args));
     if (type == null)
       throw new NullPointerException("type cannot be null");
     this.type = type;
   }
 
-  public CopycatException(CopycatError.Type type, Throwable cause, String message, Object... args) {
+  protected CopycatException(CopycatError.Type type, Throwable cause, String message, Object... args) {
     super(String.format(message, args), cause);
     if (type == null)
       throw new NullPointerException("type cannot be null");
     this.type = type;
   }
 
-  public CopycatException(CopycatError.Type type, Throwable cause) {
+  protected CopycatException(CopycatError.Type type, Throwable cause) {
     super(cause);
     if (type == null)
       throw new NullPointerException("type cannot be null");

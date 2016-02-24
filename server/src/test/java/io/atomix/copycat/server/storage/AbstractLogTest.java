@@ -19,7 +19,7 @@ import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.DirectBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.server.storage.compaction.Compaction;
-import io.atomix.copycat.server.storage.entry.EntryTypeResolver;
+import io.atomix.copycat.server.storage.util.StorageSerialization;
 import org.testng.annotations.*;
 
 import java.io.File;
@@ -53,7 +53,7 @@ public abstract class AbstractLogTest {
    * Creates a new test log.
    */
   protected Log createLog() {
-    return new Log(logId, storage, new Serializer().resolve(new EntryTypeResolver()).register(TestEntry.class));
+    return new Log(logId, storage, new Serializer().resolve(new StorageSerialization()).register(TestEntry.class));
   }
 
   /**
@@ -85,7 +85,7 @@ public abstract class AbstractLogTest {
   void setLog() throws Exception {
     logId = UUID.randomUUID().toString();
     storage = createStorage();
-    log = new Log(logId, storage, new Serializer().resolve(new EntryTypeResolver()));
+    log = new Log(logId, storage, new Serializer().resolve(new StorageSerialization()));
     log.serializer().register(TestEntry.class);
     assertTrue(log.isOpen());
     assertFalse(log.isClosed());

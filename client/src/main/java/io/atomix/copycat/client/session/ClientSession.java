@@ -34,7 +34,22 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Client session.
+ * Handles submitting state machine {@link Command commands} and {@link Query queries} to the Copycat cluster.
+ * <p>
+ * The client session is responsible for maintaining a client's connection to a Copycat cluster and coordinating
+ * the submission of {@link Command commands} and {@link Query queries} to various nodes in the cluster. Client
+ * sessions are single-use objects that represent the context within which a cluster can guarantee linearizable
+ * semantics for state machine operations. When a session is {@link #open() opened}, the session will register
+ * itself with the cluster by attempting to contact each of the known servers. Once the session has been successfully
+ * registered, kee-alive requests will be periodically sent to keep the session alive.
+ * <p>
+ * Sessions are responsible for sequencing concurrent operations to ensure they're applied to the system state
+ * in the order in which they were submitted by the client. To do so, the session coordinates with its server-side
+ * counterpart using unique per-operation sequence numbers. The session relies upon the client's various configured
+ * {@link io.atomix.copycat.client.RetryStrategies strategies} to ensure fault-tolerance of state machine operations.
+ * <p>
+ * In the event that the client session expires, clients are responsible for opening a new session by creating and
+ * opening a new session object.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

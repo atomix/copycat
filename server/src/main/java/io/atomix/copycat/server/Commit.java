@@ -33,8 +33,8 @@ import java.time.Instant;
  * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link Session} that
  * submitted the operation to the cluster.
  * <p>
- * All metadata exposed by this interface is backed by disk and is guaranteed to be consistent across all servers
- * in the cluster.
+ * All metadata exposed by this interface is backed by disk. The {@link #operation() operation} and its metadata is
+ * guaranteed to be consistent for a given {@link #index() index} across all servers in the cluster.
  * <p>
  * When state machines are done using a commit object, users should release the commit by calling {@link #close()}.
  * This notifies Copycat that it's safe to remove the commit from the log as it no longer contributes to the state
@@ -58,7 +58,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * to have unique indexes.
    *
    * @return The commit index.
-   * @throws IllegalStateException If the commit is {@link #close() closed}
+   * @throws IllegalStateException if the commit is {@link #close() closed}
    */
   long index();
 
@@ -70,7 +70,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * event messages to the client.
    *
    * @return The session that created the commit.
-   * @throws IllegalStateException If the commit is {@link #close() closed}
+   * @throws IllegalStateException if the commit is {@link #close() closed}
    */
   ServerSession session();
 
@@ -86,7 +86,7 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * upon {@link Commit} times or use the {@link StateMachineExecutor} for time-based controls.
    *
    * @return The commit time.
-   * @throws IllegalStateException If the commit is {@link #close() closed}
+   * @throws IllegalStateException if the commit is {@link #close() closed}
    */
   Instant time();
 
@@ -96,17 +96,45 @@ public interface Commit<T extends Operation> extends AutoCloseable {
    * This is the {@link java.lang.Class} returned by the committed operation's {@link Object#getClass()} method.
    *
    * @return The commit type.
-   * @throws IllegalStateException If the commit is {@link #close() closed}
+   * @throws IllegalStateException if the commit is {@link #close() closed}
    */
   Class<T> type();
 
   /**
-   * Returns the operation submitted by the user.
+   * Returns the operation submitted by the client.
    *
-   * @return The operation submitted by the user.
-   * @throws IllegalStateException If the commit is {@link #close() closed}
+   * @return The operation submitted by the client.
+   * @throws IllegalStateException if the commit is {@link #close() closed}
    */
   T operation();
+
+  /**
+   * Returns the command submitted by the client.
+   * <p>
+   * This method is an alias for the {@link #operation()} method. It is intended to aid with clarity in code.
+   * This method does <em>not</em> perform any type checking of the operation to ensure it is in fact a
+   * {@link Command} object.
+   *
+   * @return The command submitted by the client.
+   * @throws IllegalStateException if the commit is {@link #close() closed}
+   */
+  default T command() {
+    return operation();
+  }
+
+  /**
+   * Returns the query submitted by the client.
+   * <p>
+   * This method is an alias for the {@link #operation()} method. It is intended to aid with clarity in code.
+   * This method does <em>not</em> perform any type checking of the operation to ensure it is in fact a
+   * {@link Query} object.
+   *
+   * @return The query submitted by the client.
+   * @throws IllegalStateException if the commit is {@link #close() closed}
+   */
+  default T query() {
+    return operation();
+  }
 
   /**
    * Closes the commit.

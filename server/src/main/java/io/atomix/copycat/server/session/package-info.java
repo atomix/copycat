@@ -15,8 +15,12 @@
  */
 
 /**
- * Interfaces for managing client {@link io.atomix.copycat.session.Session sessions} on a Raft
- * {@link io.atomix.copycat.server.RaftServer server}.
+ * Interfaces for managing client {@link io.atomix.copycat.session.Session sessions} on a {@link io.atomix.copycat.server.CopycatServer Copycat server}.
+ * <p>
+ * Client session information is exposed to server {@link io.atomix.copycat.server.StateMachine state machines} in the form of a
+ * {@link io.atomix.copycat.server.session.ServerSession} object. Server sessions provide functionality in addition to normal session state
+ * information to allow replicated state machines to {@link io.atomix.copycat.server.session.ServerSession#publish(java.lang.String, java.lang.Object) publish}
+ * event notifications to clients through their session.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

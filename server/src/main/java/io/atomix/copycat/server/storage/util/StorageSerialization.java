@@ -13,28 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.session;
+package io.atomix.copycat.server.storage.util;
 
 import io.atomix.catalyst.serializer.SerializableTypeResolver;
 import io.atomix.catalyst.serializer.SerializerRegistry;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.protocol.Request;
+import io.atomix.copycat.server.storage.entry.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Session serializable type resolver.
+ * Log entry serializable type resolver.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class SessionTypeResolver implements SerializableTypeResolver {
+public final class StorageSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
-    put(Address.class, -1);
-    put(Event.class, -2);
-    put(NoOpCommand.class, -45);
+    put(CommandEntry.class, -36);
+    put(ConfigurationEntry.class, -37);
+    put(KeepAliveEntry.class, -38);
+    put(InitializeEntry.class, -39);
+    put(QueryEntry.class, -40);
+    put(RegisterEntry.class, -41);
+    put(ConnectEntry.class, -42);
+    put(UnregisterEntry.class, -43);
   }};
 
   @Override

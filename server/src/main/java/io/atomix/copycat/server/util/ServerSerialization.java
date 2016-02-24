@@ -13,31 +13,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage.entry;
+package io.atomix.copycat.server.util;
 
 import io.atomix.catalyst.serializer.SerializableTypeResolver;
 import io.atomix.catalyst.serializer.SerializerRegistry;
 import io.atomix.copycat.protocol.Request;
+import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.state.ServerMember;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Log entry serializable type resolver.
+ * Request serializable type resolver.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class EntryTypeResolver implements SerializableTypeResolver {
+public final class ServerSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
-    put(CommandEntry.class, -36);
-    put(ConfigurationEntry.class, -37);
-    put(KeepAliveEntry.class, -38);
-    put(InitializeEntry.class, -39);
-    put(QueryEntry.class, -40);
-    put(RegisterEntry.class, -41);
-    put(ConnectEntry.class, -42);
-    put(UnregisterEntry.class, -43);
+    put(AcceptRequest.class, -17);
+    put(AppendRequest.class, -18);
+    put(ConfigureRequest.class, -19);
+    put(InstallRequest.class, -20);
+    put(JoinRequest.class, -21);
+    put(LeaveRequest.class, -22);
+    put(PollRequest.class, -23);
+    put(ReconfigureRequest.class, -24);
+    put(VoteRequest.class, -25);
+    put(AcceptResponse.class, -26);
+    put(AppendResponse.class, -27);
+    put(ConfigureResponse.class, -28);
+    put(InstallResponse.class, -29);
+    put(JoinResponse.class, -30);
+    put(LeaveResponse.class, -31);
+    put(PollResponse.class, -32);
+    put(ReconfigureResponse.class, -33);
+    put(VoteResponse.class, -34);
+    put(ServerMember.class, -35);
   }};
 
   @Override

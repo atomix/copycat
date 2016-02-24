@@ -21,11 +21,12 @@ import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.copycat.session.SessionTypeResolver;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.state.StateTypeResolver;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
+import io.atomix.copycat.server.storage.util.StorageSerialization;
+import io.atomix.copycat.server.util.ServerSerialization;
+import io.atomix.copycat.util.ProtocolSerialization;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -62,7 +63,7 @@ public class MetaStoreTest {
     storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new MetaStore("test", storage, new Serializer().resolve(new SessionTypeResolver(), new StateTypeResolver()).register(TestMember.class));
+    return new MetaStore("test", storage, new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization(), new StorageSerialization()).register(TestMember.class));
   }
 
   /**
