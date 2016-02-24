@@ -855,7 +855,7 @@ public class CopycatServer implements Managed<CopycatServer> {
       }
 
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
-      ThreadContext threadContext = new SingleThreadContext("copycat-server-" + serverAddress, serializer);
+      ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name), serializer);
 
       ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, serializer, stateMachineFactory, connections, threadContext);
       context.setElectionTimeout(electionTimeout)

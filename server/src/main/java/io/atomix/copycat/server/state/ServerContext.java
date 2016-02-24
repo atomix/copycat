@@ -84,7 +84,7 @@ public class ServerContext implements AutoCloseable {
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
-    this.stateContext = new SingleThreadContext("copycat-server-" + serverAddress + "-state-%d", threadContext.serializer().clone());
+    this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name), threadContext.serializer().clone());
 
     // Open the meta store.
     threadContext.execute(() -> this.meta = storage.openMetaStore(name)).join();
