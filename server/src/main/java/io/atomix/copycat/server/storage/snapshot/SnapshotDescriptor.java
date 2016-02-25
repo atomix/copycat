@@ -32,6 +32,22 @@ import io.atomix.catalyst.util.Assert;
 public final class SnapshotDescriptor implements AutoCloseable {
   public static final int BYTES = 64;
 
+  private Buffer buffer;
+  private final long index;
+  private final long timestamp;
+  private boolean locked;
+
+  /**
+   * @throws NullPointerException if {@code buffer} is null
+   */
+  public SnapshotDescriptor(Buffer buffer) {
+    this.buffer = Assert.notNull(buffer, "buffer");
+    this.index = buffer.readLong();
+    this.timestamp = buffer.readLong();
+    this.locked = buffer.readBoolean();
+    buffer.skip(BYTES - buffer.position());
+  }
+
   /**
    * Returns a descriptor builder.
    * <p>
@@ -52,22 +68,6 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   public static Builder builder(Buffer buffer) {
     return new Builder(buffer);
-  }
-
-  private Buffer buffer;
-  private final long index;
-  private final long timestamp;
-  private boolean locked;
-
-  /**
-   * @throws NullPointerException if {@code buffer} is null
-   */
-  public SnapshotDescriptor(Buffer buffer) {
-    this.buffer = Assert.notNull(buffer, "buffer");
-    this.index = buffer.readLong();
-    this.timestamp = buffer.readLong();
-    this.locked = buffer.readBoolean();
-    buffer.skip(BYTES - buffer.position());
   }
 
   /**
