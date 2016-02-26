@@ -79,7 +79,7 @@ public class Segment implements AutoCloseable {
 
     // Rebuild the index from the segment data.
     long position = buffer.mark().position();
-    int length = buffer.readUnsignedShort();
+    int length = buffer.readInt();
     while (length != 0) {
       long offset = buffer.readLong();
       if (buffer.readBoolean()) {
@@ -87,7 +87,7 @@ public class Segment implements AutoCloseable {
       }
       offsetIndex.index(offset, position);
       position = buffer.skip(length).position();
-      length = buffer.mark().readUnsignedShort();
+      length = buffer.mark().readInt();
     }
     buffer.reset();
   }
