@@ -293,7 +293,7 @@ public class Segment implements AutoCloseable {
     boolean skipTerm = term == lastTerm;
 
     // Calculate the length of the entry header bytes.
-    int headerLength = Bytes.SHORT + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG);
+    int headerLength = Bytes.INTEGER + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG);
 
     // Serialize the object into the segment buffer.
     serializer.writeObject(entry, buffer.skip(headerLength));
@@ -305,7 +305,7 @@ public class Segment implements AutoCloseable {
     entry.setSize(length);
 
     // Write the length of the entry for indexing.
-    buffer.reset().writeUnsignedShort(length).writeLong(offset);
+    buffer.reset().writeInt(length).writeLong(offset);
 
     // If the term has not yet been written, write the term to this entry.
     if (skipTerm) {
@@ -367,17 +367,17 @@ public class Segment implements AutoCloseable {
     if (position != -1) {
 
       // Read the length of the entry.
-      int length = buffer.readUnsignedShort(position);
+      int length = buffer.readInt(position);
 
       // Verify that the entry at the given offset matches.
-      long entryOffset = buffer.readLong(position + Bytes.SHORT);
+      long entryOffset = buffer.readLong(position + Bytes.INTEGER);
       Assert.state(entryOffset == offset, "inconsistent index: %s", index);
 
       // Determine whether to skip reading the term from this entry.
-      boolean skipTerm = !buffer.readBoolean(position + Bytes.SHORT + Bytes.LONG);
+      boolean skipTerm = !buffer.readBoolean(position + Bytes.INTEGER + Bytes.LONG);
 
       // Read the entry buffer and deserialize the entry.
-      try (Buffer value = buffer.slice(position + Bytes.SHORT + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG), length)) {
+      try (Buffer value = buffer.slice(position + Bytes.INTEGER + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG), length)) {
         T entry = serializer.readObject(value);
         entry.setIndex(index).setTerm(termIndex.lookup(offset)).setSize(length);
         return entry;
