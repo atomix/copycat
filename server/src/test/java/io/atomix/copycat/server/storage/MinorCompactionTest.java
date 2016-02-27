@@ -36,7 +36,7 @@ public class MinorCompactionTest extends AbstractLogTest {
       .withMaxEntriesPerSegment(10)
       .build();
   }
-  
+
   /**
    * Tests compacting the log.
    */

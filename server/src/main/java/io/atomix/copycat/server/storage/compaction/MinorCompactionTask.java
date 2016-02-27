@@ -23,7 +23,7 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
+import java.util.List;
 
 /**
  * Removes {@link io.atomix.copycat.server.storage.Log#release(long) released} entries from an individual
@@ -46,14 +46,14 @@ import java.util.Collections;
 public final class MinorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MinorCompactionTask.class);
   private final SegmentManager manager;
-  private final Segment segment;
+  private final List<Segment> segments;
   private final long snapshotIndex;
   private final long compactIndex;
   private final Compaction.Mode defaultCompactionMode;
 
-  MinorCompactionTask(SegmentManager manager, Segment segment, long snapshotIndex, long compactIndex, Compaction.Mode defaultCompactionMode) {
+  MinorCompactionTask(SegmentManager manager, List<Segment> segments, long snapshotIndex, long compactIndex, Compaction.Mode defaultCompactionMode) {
     this.manager = Assert.notNull(manager, "manager");
-    this.segment = Assert.notNull(segment, "segment");
+    this.segments = Assert.notNull(segments, "segments");
     this.snapshotIndex = snapshotIndex;
     this.compactIndex = compactIndex;
     this.defaultCompactionMode = Assert.notNull(defaultCompactionMode, "defaultCompactionMode");
@@ -68,26 +68,40 @@ public final class MinorCompactionTask implements CompactionTask {
    * Compacts all compactable segments.
    */
   private void compactSegments() {
+    Segment firstSegment = segments.get(0);
+
     // Create a compact segment with a newer version to which to rewrite the segment entries.
     Segment compactSegment = manager.createSegment(SegmentDescriptor.builder()
-      .withId(segment.descriptor().id())
-      .withVersion(segment.descriptor().version() + 1)
-      .withIndex(segment.descriptor().index())
-      .withMaxSegmentSize(segment.descriptor().maxSegmentSize())
-      .withMaxEntries(segment.descriptor().maxEntries())
+      .withId(firstSegment.descriptor().id())
+      .withVersion(firstSegment.descriptor().version() + 1)
+      .withIndex(firstSegment.descriptor().index())
+      .withMaxSegmentSize(firstSegment.descriptor().maxSegmentSize())
+      .withMaxEntries(firstSegment.descriptor().maxEntries())
       .build());
 
-    compactEntries(segment, compactSegment);
+    compactSegments(segments, compactSegment);
 
     // Replace the old segment with the compact segment.
-    manager.replaceSegments(Collections.singletonList(segment), compactSegment);
+    manager.replaceSegments(segments, compactSegment);
 
-    // Update the new segment with offsets that were released during compaction.
-    mergeReleasedEntries(segment, compactSegment);
+    // Merge released entries from uncompacted segments into compacted segments.
+    mergeReleasedEntries(segments, compactSegment);
 
-    // Delete the old segment.
-    segment.close();
-    segment.delete();
+    // Delete uncompacted segments.
+    deleteSegments(segments);
+  }
+
+  /**
+   * Compacts segments in a group sequentially.
+   *
+   * @param segments The segments to compact.
+   * @param compactSegment The compact segment.
+   */
+  private void compactSegments(List<Segment> segments, Segment compactSegment) {
+    // Iterate through all segments being compacted and write entries to a single compact segment.
+    for (int i = 0; i < segments.size(); i++) {
+      compactSegment(segments.get(i), compactSegment);
+    }
   }
 
   /**
@@ -96,7 +110,7 @@ public final class MinorCompactionTask implements CompactionTask {
    * @param segment The segment to compact.
    * @param compactSegment The compact segment.
    */
-  private void compactEntries(Segment segment, Segment compactSegment) {
+  private void compactSegment(Segment segment, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
       checkEntry(i, segment, compactSegment);
     }
@@ -140,7 +154,7 @@ public final class MinorCompactionTask implements CompactionTask {
         if (index <= snapshotIndex && !segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);
         } else {
-          transferEntry(index, entry, compactSegment);
+          transferEntry(index, entry, segment, compactSegment);
         }
         break;
       // QUORUM entries are compacted if the entry has been released in the segment.
@@ -148,7 +162,7 @@ public final class MinorCompactionTask implements CompactionTask {
         if (!segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);
         } else {
-          transferEntry(index, entry, compactSegment);
+          transferEntry(index, entry, segment, compactSegment);
         }
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index
@@ -157,7 +171,7 @@ public final class MinorCompactionTask implements CompactionTask {
         if (index <= compactIndex && !segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);
         } else {
-          transferEntry(index, entry, compactSegment);
+          transferEntry(index, entry, segment, compactSegment);
         }
         break;
       // SEQUENTIAL and TOMBSTONE entries can only be compacted during major compaction.
@@ -165,7 +179,7 @@ public final class MinorCompactionTask implements CompactionTask {
       case SEQUENTIAL:
       case TOMBSTONE:
       case UNKNOWN:
-        transferEntry(index, entry, compactSegment);
+        transferEntry(index, entry, segment, compactSegment);
         break;
       default:
         break;
@@ -183,12 +197,21 @@ public final class MinorCompactionTask implements CompactionTask {
   /**
    * Transfers an entry to the given compact segment.
    */
-  private void transferEntry(long index, Entry entry, Segment compactSegment) {
+  private void transferEntry(long index, Entry entry, Segment segment, Segment compactSegment) {
     compactSegment.append(entry);
 
     // If the entry was released in the prior segment, mark it as released in the compact segment.
     if (!segment.isLive(index)) {
       compactSegment.release(index);
+    }
+  }
+
+  /**
+   * Updates the new compact segment with entries that were released during compaction.
+   */
+  private void mergeReleasedEntries(List<Segment> segments, Segment compactSegment) {
+    for (int i = 0; i < segments.size(); i++) {
+      mergeReleasedEntries(segments.get(i), compactSegment);
     }
   }
 
@@ -200,6 +223,17 @@ public final class MinorCompactionTask implements CompactionTask {
       if (!segment.isLive(i)) {
         compactSegment.release(i);
       }
+    }
+  }
+
+  /**
+   * Completes compaction by deleting old segments.
+   */
+  private void deleteSegments(List<Segment> group) {
+    // Delete the old segments.
+    for (Segment oldSegment : group) {
+      oldSegment.close();
+      oldSegment.delete();
     }
   }
 
