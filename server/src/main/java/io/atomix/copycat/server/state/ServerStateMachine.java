@@ -402,7 +402,7 @@ final class ServerStateMachine implements AutoCloseable {
     long timestamp = executor.timestamp(entry.getTimestamp());
 
     long sessionId = entry.getIndex();
-    ServerSessionContext session = new ServerSessionContext(sessionId, entry.getClient(), log::release, executor.context(), entry.getTimeout());
+    ServerSessionContext session = new ServerSessionContext(sessionId, entry.getClient(), log, executor.context(), entry.getTimeout());
     executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
