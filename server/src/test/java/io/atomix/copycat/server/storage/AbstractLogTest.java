@@ -172,7 +172,7 @@ public abstract class AbstractLogTest {
 
   protected void cleanAndCompact(int startIndex, int endIndex) {
     for (int i = startIndex; i <= endIndex; i++) {
-      log.clean(i);
+      log.release(i);
     }
 
     log.compactor().compact(Compaction.MAJOR).join();

@@ -46,7 +46,7 @@ public class MinorCompactionTest extends AbstractLogTest {
     assertEquals(log.length(), 31L);
 
     for (long index = 21; index < 28; index++) {
-      log.clean(index);
+      log.release(index);
     }
     log.commit(31).compactor().minorIndex(31);
 

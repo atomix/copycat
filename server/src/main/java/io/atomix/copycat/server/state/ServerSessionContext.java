@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.server.storage.LogCleaner;
+import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
@@ -44,7 +44,7 @@ class ServerSessionContext implements ServerSession {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
   private final long id;
   private final UUID client;
-  private final LogCleaner cleaner;
+  private final Log log;
   private final ServerStateMachineContext context;
   private boolean open;
   private volatile State state = State.OPEN;
@@ -73,10 +73,10 @@ class ServerSessionContext implements ServerSession {
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, UUID client, LogCleaner cleaner, ServerStateMachineContext context, long timeout) {
+  ServerSessionContext(long id, UUID client, Log log, ServerStateMachineContext context, long timeout) {
     this.id = id;
     this.client = Assert.notNull(client, "client");
-    this.cleaner = Assert.notNull(cleaner, "cleaner");
+    this.log = Assert.notNull(log, "log");
     this.eventIndex = id;
     this.completeIndex = id;
     this.lastApplied = id - 1;
@@ -142,9 +142,9 @@ class ServerSessionContext implements ServerSession {
     long references = --this.references;
     if (!state.active() && references == 0) {
       context.sessions().unregisterSession(id);
-      cleaner.clean(id);
+      log.release(id);
       if (closeIndex > 0) {
-        cleaner.clean(closeIndex);
+        log.release(closeIndex);
       }
     }
   }
@@ -206,7 +206,7 @@ class ServerSessionContext implements ServerSession {
     long previousConnectIndex = this.connectIndex;
     this.connectIndex = connectIndex;
     if (previousConnectIndex > 0) {
-      cleaner.clean(previousConnectIndex);
+      log.release(previousConnectIndex);
     }
     return this;
   }
@@ -230,7 +230,7 @@ class ServerSessionContext implements ServerSession {
     long previousKeepAliveIndex = this.keepAliveIndex;
     this.keepAliveIndex = keepAliveIndex;
     if (previousKeepAliveIndex > 0) {
-      cleaner.clean(previousKeepAliveIndex);
+      log.release(previousKeepAliveIndex);
     }
     return this;
   }
@@ -725,15 +725,15 @@ class ServerSessionContext implements ServerSession {
    * Cleans session entries on close.
    */
   private void cleanState(long index) {
-    // If the keep alive index is set, clean the entry.
+    // If the keep alive index is set, release the entry.
     if (keepAliveIndex > 0) {
-      cleaner.clean(keepAliveIndex);
+      log.release(keepAliveIndex);
     }
 
-    // If no references to session commands are open, clean session-related entries.
+    // If no references to session commands are open, release session-related entries.
     if (references == 0) {
-      cleaner.clean(id);
-      cleaner.clean(index);
+      log.release(id);
+      log.release(index);
       context.sessions().unregisterSession(id);
     } else {
       this.closeIndex = index;

@@ -19,11 +19,12 @@ import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.entry.Entry;
-
-import java.util.function.Predicate;
+import io.atomix.copycat.server.storage.util.OffsetIndex;
+import io.atomix.copycat.server.storage.util.OffsetPredicate;
+import io.atomix.copycat.server.storage.util.TermIndex;
 
 /**
- * Stores a set of sequential entries in a single file or memory {@link Buffer}.
+ * Stores a sequence of entries with monotonically increasing indexes in a {@link Buffer}.
  * <p>
  * Segments are individual file or memory based groups of sequential entries. Each segment has a fixed capacity
  * in terms of either number of entries or size in bytes.
@@ -38,16 +39,16 @@ import java.util.function.Predicate;
  * the Raft consensus algorithm, readers should typically benefit from O(1) lookups.
  * <p>
  * When a segment is constructed, the segment will attempt to rebuild its index from the underlying segment
- * {@link Buffer}. This is done by reading a 16-bit unsigned length and 32-bit offset for each entry. Once the
- * segment has been built, new entries will be {@link #append(Entry) appended} at the end of the segment.
+ * {@link Buffer}. This is done by reading a 32-bit length and 64-bit offset for each entry. Once the segment
+ * has been built, new entries will be {@link #append(Entry) appended} at the end of the segment.
  * <p>
- * Additionally, segments are responsible for keeping track of entries that have been {@link #clean(long) cleaned}.
- * Cleaned entries are tracked in an internal {@link io.atomix.catalyst.buffer.util.BitArray} with a size equal
+ * Additionally, segments are responsible for keeping track of entries that have been {@link #release(long) released}.
+ * Entry liveness is tracked in an internal {@link io.atomix.catalyst.buffer.util.BitArray} with a size equal
  * to the segment's entry {@link #count()}.
  * <p>
  * An entry in the log is written in binary format. The binary format of an entry is as follows:
  * <ul>
- *   <li>Required 16-bit unsigned entry length</li>
+ *   <li>Required 32-bit entry length</li>
  *   <li>Required 64-bit offset</li>
  *   <li>Required 8-bit term flag</li>
  *   <li>Optional 64-bit term</li>
@@ -60,7 +61,7 @@ public class Segment implements AutoCloseable {
   private final Serializer serializer;
   private final Buffer buffer;
   private final OffsetIndex offsetIndex;
-  private final OffsetCleaner cleaner;
+  private final OffsetPredicate offsetPredicate;
   private final TermIndex termIndex = new TermIndex();
   private final SegmentManager manager;
   private long skip = 0;
@@ -69,12 +70,12 @@ public class Segment implements AutoCloseable {
   /**
    * @throws NullPointerException if any argument is null
    */
-  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetCleaner cleaner, Serializer serializer, SegmentManager manager) {
+  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetPredicate offsetPredicate, Serializer serializer, SegmentManager manager) {
     this.serializer = Assert.notNull(serializer, "serializer");
     this.buffer = Assert.notNull(buffer, "buffer");
     this.descriptor = Assert.notNull(descriptor, "descriptor");
     this.offsetIndex = Assert.notNull(offsetIndex, "offsetIndex");
-    this.cleaner = Assert.notNull(cleaner, "cleaner");
+    this.offsetPredicate = Assert.notNull(offsetPredicate, "offsetPredicate");
     this.manager = Assert.notNull(manager, "manager");
 
     // Rebuild the index from the segment data.
@@ -417,48 +418,48 @@ public class Segment implements AutoCloseable {
   }
 
   /**
-   * Cleans an entry from the segment.
+   * Releases an entry from the segment.
    *
-   * @param index The index of the entry to clean.
-   * @return Indicates whether the entry was newly cleaned from the segment.
+   * @param index The index of the entry to release.
+   * @return Indicates whether the entry was newly released from the segment.
    * @throws IllegalStateException if the segment is not open
    */
-  public boolean clean(long index) {
+  public boolean release(long index) {
     assertSegmentOpen();
     long offset = offsetIndex.find(relativeOffset(index));
-    return offset != -1 && cleaner.clean(offset);
+    return offset != -1 && offsetPredicate.release(offset);
   }
 
   /**
-   * Returns a boolean value indicating whether the given index was cleaned from the segment.
+   * Returns a boolean value indicating whether the given index was released from the segment.
    *
    * @param index The index of the entry to check.
-   * @return Indicates whether the given entry was cleaned from the segment.
+   * @return Indicates whether the given entry was released from the segment.
    * @throws IllegalStateException if the segment is not open
    */
-  public boolean isClean(long index) {
+  public boolean isLive(long index) {
     assertSegmentOpen();
-    return cleaner.isClean(offsetIndex.find(relativeOffset(index)));
+    return offsetPredicate.test(offsetIndex.find(relativeOffset(index)));
   }
 
   /**
-   * Returns the number of entries in the segment that have been cleaned.
+   * Returns the number of entries in the segment that have been released.
    *
-   * @return The number of entries in the segment that have been cleaned.
+   * @return The number of entries in the segment that have been released.
    * @throws IllegalStateException if the segment is not open
    */
-  public long cleanCount() {
+  public long releaseCount() {
     assertSegmentOpen();
-    return cleaner.count();
+    return offsetPredicate.count();
   }
 
   /**
-   * Returns a predicate for cleaned offsets in the segment.
+   * Returns a predicate for live offsets in the segment.
    *
-   * @return A predicate for cleaned offsets in the segment.
+   * @return A predicate for live offsets in the segment.
    */
-  public Predicate<Long> cleanPredicate() {
-    return new OffsetCleaner(cleaner.bits().copy());
+  public OffsetPredicate offsetPredicate() {
+    return offsetPredicate;
   }
 
   /**
@@ -516,7 +517,7 @@ public class Segment implements AutoCloseable {
   public void close() {
     buffer.close();
     offsetIndex.close();
-    cleaner.close();
+    offsetPredicate.close();
     descriptor.close();
     open = false;
   }

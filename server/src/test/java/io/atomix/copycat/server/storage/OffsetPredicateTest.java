@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.*;
@@ -25,22 +26,22 @@ import static org.testng.Assert.*;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class OffsetCleanerTest {
+public class OffsetPredicateTest {
 
   /**
-   * Tests the offset cleaner.
+   * Tests the offset predicate.
    */
-  public void testOffsetCleaner() {
-    OffsetCleaner cleaner = new OffsetCleaner();
+  public void testOffsetPredicate() {
+    OffsetPredicate cleaner = new OffsetPredicate();
     assertEquals(cleaner.count(), 0);
-    cleaner.clean(10);
+    cleaner.release(10);
     assertEquals(cleaner.count(), 1);
-    assertFalse(cleaner.isClean(0));
-    assertTrue(cleaner.isClean(10));
-    assertFalse(cleaner.isClean(11));
-    cleaner.clean(2048);
+    assertTrue(cleaner.test(0l));
+    assertFalse(cleaner.test(10l));
+    assertTrue(cleaner.test(11l));
+    cleaner.release(2048);
     assertEquals(cleaner.count(), 2);
-    assertTrue(cleaner.isClean(2048));
+    assertFalse(cleaner.test(2048l));
   }
 
 }

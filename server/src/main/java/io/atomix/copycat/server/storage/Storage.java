@@ -41,7 +41,7 @@ import java.time.Duration;
  * </pre>
  * Users can also configure a number of options related to how {@link Log logs} are constructed and managed.
  * Most notable of the configuration options is the number of {@link #compactionThreads()}, which specifies the
- * number of background threads to use to clean log {@link Segment segments}. The parallelism of the log
+ * number of background threads to use to compact log {@link Segment segments}. The parallelism of the log
  * compaction algorithm will be limited by the number of {@link #compactionThreads()}.
  *
  * @see Log
@@ -484,7 +484,7 @@ public class Storage {
      * Sets the number of log compaction threads, returning the builder for method chaining.
      * <p>
      * The compaction thread count dictates the parallelism with which the log
-     * {@link io.atomix.copycat.server.storage.compaction.Compactor} can rewrite segments in the log. By default,
+     * {@link io.atomix.copycat.server.storage.compaction.Compactor} can rewrite segments of the log. By default,
      * the log uses {@code Runtime.getRuntime().availableProcessors() / 2} compaction threads.
      *
      * @param compactionThreads The number of log compaction threads.
@@ -537,13 +537,13 @@ public class Storage {
     }
 
     /**
-     * Sets the percentage of entries in the segment that must be cleaned before a segment can be compacted,
+     * Sets the percentage of entries in the segment that must be released before a segment can be compacted,
      * returning the builder for method chaining.
      * <p>
      * The compaction threshold is used during {@link io.atomix.copycat.server.storage.compaction.Compaction#MINOR minor compaction}
      * to determine the set of segments to compact. By default, the compaction threshold is {@code 0.5}. Increasing the
      * compaction threshold will increase the number of {@link io.atomix.copycat.server.storage.entry.Entry entries} that
-     * must be cleaned from the segment before compaction and thus decrease the likelihood that a segment will be compacted.
+     * must be released from the segment before compaction and thus decrease the likelihood that a segment will be compacted.
      * Conversely, decreasing the compaction threshold will increase the frequency of compaction at the cost of unnecessary
      * I/O.
      *

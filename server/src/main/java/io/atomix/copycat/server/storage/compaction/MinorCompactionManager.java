@@ -36,19 +36,19 @@ import java.util.List;
  * <p>
  * Segments are selected for minor compaction based on several factors:
  * <ul>
- *   <li>The number of {@link Entry entries} in the segment that have been {@link Segment#clean(long) cleaned}</li>
+ *   <li>The number of {@link Entry entries} in the segment that have been {@link Segment#release(long) released}</li>
  *   <li>The number of times the segment has been compacted already</li>
  * </ul>
  * <p>
- * Given the number of entries that have been cleaned from the segment, a percentage of entries reclaimed by
- * compacting the segment is calculated. Then, the percentage of entries that have been cleaned is multiplied
+ * Given the number of entries that have been released from the segment, a percentage of entries reclaimed by
+ * compacting the segment is calculated. Then, the percentage of entries that have been released is multiplied
  * by the number of times the segment has been compacted. If the result of this calculation is greater than
  * the configured {@link Storage#compactionThreshold()} then the segment is selected for compaction.
  * <p>
  * The final formula is as follows:
  * <pre>
  *   {@code
- *   if ((segment.cleanCount() / (double) segment.count()) * segment.descriptor().version() > storage.compactionThreshold()) {
+ *   if ((segment.releaseCount() / (double) segment.count()) * segment.descriptor().version() > storage.compactionThreshold()) {
  *     // Compact the segment
  *   }
  *   }
@@ -88,12 +88,12 @@ public final class MinorCompactionManager implements CompactionManager {
       // of entries less than the minorIndex, and a later segment with at least one committed entry must exist in the log. This ensures that
       // a non-empty entry always remains at the end of the log.
       if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.firstIndex() <= manager.commitIndex() && !nextSegment.isEmpty())) {
-        // Calculate the percentage of entries that have been marked for cleaning in the segment.
-        double cleanPercentage = segment.cleanCount() / (double) segment.count();
+        // Calculate the percentage of entries that have been released in the segment.
+        double compactablePercentage = segment.releaseCount() / (double) segment.count();
 
-        // If the percentage of entries marked for cleaning times the segment version meets the cleaning threshold,
-        // add the segment to the segments list for cleaning.
-        if (cleanPercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
+        // If the percentage of entries released times the segment version meets the compaction threshold,
+        // add the segment to the segments list for compaction.
+        if (compactablePercentage * segment.descriptor().version() >= storage.compactionThreshold()) {
           segments.add(segment);
         }
       }

@@ -67,9 +67,9 @@ import java.util.concurrent.Executors;
  * <p>
  * In order to prevent exhausting disk space, the log manages a set of background threads that periodically rewrite and
  * combine segments to free disk space. This is known as log compaction. As entries are committed to the log and applied
- * to the Raft state machine as {@link io.atomix.copycat.server.Commit} objects, state machines {@link #clean(long)}
+ * to the Raft state machine as {@link io.atomix.copycat.server.Commit} objects, state machines {@link #release(long)}
  * entries that no longer apply to the state machine state. Internally, each log {@link Segment} maintains a compact
- * {@link io.atomix.catalyst.buffer.util.BitArray} to track cleaned entries. When an entry is cleaned, the entry's
+ * {@link io.atomix.catalyst.buffer.util.BitArray} to track the liveness of entries. When an entry is released, the entry's
  * offset is set in the bit array for the associated segment. The bit array represents the state of entries waiting to
  * be compacted from the log.
  * <p>
@@ -83,12 +83,12 @@ import java.util.concurrent.Executors;
  * Minor compaction is the more frequent and lightweight process. Periodically, according to the configured
  * {@link Storage#minorCompactionInterval()}, a background thread will evaluate the log for minor compaction. The minor
  * compaction process iterates through segments and selects compactable segments based on the ratio of entries that have
- * been {@link #clean(long) cleaned}. Minor compaction is generational. The
+ * been {@link #release(long) released}. Minor compaction is generational. The
  * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionManager} is more likely to select segments that haven't
  * yet been compacted than ones that have. Once a set of segments have been compacted, for each segment a
- * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask} rewrites the segment without cleaned entries.
+ * {@link io.atomix.copycat.server.storage.compaction.MinorCompactionTask} rewrites the segment without released entries.
  * This rewriting results in a segment with missing entries, and Copycat's Raft implementation accounts for that. For
- * instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being cleaned, and any attempt to
+ * instance, a segment with entries {@code {1, 2, 3}} can become {@code {1, 3}} after being released, and any attempt to
  * {@link #get(long) read} entry {@code 2} will result in a {@code null} entry.
  * <p>
  * However, note that minor compaction only applies to non-tombstone entries. Tombstones are entries that represent the
@@ -344,7 +344,7 @@ public class Log implements AutoCloseable {
     T entry = segment.get(index);
 
     // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
-    // based on the type of entry and whether it has been cleaned.
+    // based on the type of entry and whether it has been released.
     if (entry != null) {
       // The last entry in the log is always visible. This is necessary to ensure that candidates
       // can properly read the last entry term for the voting protocol.
@@ -366,20 +366,18 @@ public class Log implements AutoCloseable {
           }
           break;
         // QUORUM entries are returned if the minorIndex is less than the entry index or the
-        // entry has not been cleaned.
+        // entry is still live.
         case QUORUM:
-          if (index > compactor.minorIndex() || !segment.isClean(index)) {
+          if (index > compactor.minorIndex() || segment.isLive(index)) {
             return entry;
           }
           break;
-        // FULL entries are returned if the minorIndex or majorIndex is less than the entry index or
-        // if the entry hasn't been cleaned.
-        // SEQUENTIAL entries are returned if the minorIndex or majorIndex is less than the entry index or
-        // if the entry hasn't been cleaned.
+        // FULL, SEQUENTIAL, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
+        // entry index or if the entry is still live.
         case FULL:
         case SEQUENTIAL:
         case TOMBSTONE:
-          if (index > compactor.minorIndex() || index > compactor.majorIndex() || !segment.isClean(index)) {
+          if (index > compactor.minorIndex() || index > compactor.majorIndex() || segment.isLive(index)) {
             return entry;
           }
           break;
@@ -422,20 +420,20 @@ public class Log implements AutoCloseable {
   }
 
   /**
-   * Cleans the entry at the given index.
+   * Releases the entry at the given index.
    *
-   * @param index The index of the entry to clean.
+   * @param index The index of the entry to release.
    * @return The log.
    * @throws IllegalStateException If the log is not open.
    * @throws IndexOutOfBoundsException If the given index is not within the bounds of the log.
    */
-  public Log clean(long index) {
+  public Log release(long index) {
     assertIsOpen();
     assertValidIndex(index);
 
     Segment segment = segments.segment(index);
     Assert.index(segment != null, "invalid index: " + index);
-    segment.clean(index);
+    segment.release(index);
     return this;
   }
 

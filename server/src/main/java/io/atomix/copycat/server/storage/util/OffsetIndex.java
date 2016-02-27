@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.util;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.Segment;
 
 /**
  * Segment offset index.
@@ -45,7 +46,7 @@ import io.atomix.catalyst.util.Assert;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class OffsetIndex implements AutoCloseable {
+public final class OffsetIndex implements AutoCloseable {
 
   /**
    * Returns the count of the index for the given number of entries.

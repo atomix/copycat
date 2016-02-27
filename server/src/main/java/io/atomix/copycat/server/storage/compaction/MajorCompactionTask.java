@@ -21,12 +21,12 @@ import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentDescriptor;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * Removes tombstones from the log and combines {@link Segment}s to reclaim disk space.
@@ -42,7 +42,7 @@ import java.util.function.Predicate;
  * the major compaction task rewrites groups of segments provided by the {@link MajorCompactionManager}. For each group
  * of segments, a single compact segment will be created with the same {@code version} and starting {@code index} as
  * the first segment in the group. All entries from all segments in the group that haven't been
- * {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} will then be written to the new compact segment.
+ * {@link io.atomix.copycat.server.storage.Log#release(long) released} will then be written to the new compact segment.
  * Once the rewrite is complete, the compact segment will be locked and the set of old segments deleted.
  * <p>
  * <b>Removing tombstones</b>
@@ -61,18 +61,18 @@ import java.util.function.Predicate;
  * will remain.
  * <p>
  * Nevertheless, there are some significant potential race conditions that must be considered in the implementation of
- * major compaction. The major compaction task assumes that state machines will always clean <em>related</em> entries
+ * major compaction. The major compaction task assumes that state machines will always release <em>related</em> entries
  * in monotonically increasing order. That is, if a state machines receives a {@link io.atomix.copycat.server.Commit}
  * {@code remove 1} that deletes the state of a prior {@code Commit} {@code set 1}, the state machine will call
- * {@link Commit#close()} on the {@code set 1} commit before cleaning the {@code remove 1} commit. But even if applications
- * clean entries from the log in monotonic order, and the major compaction task compacts segments in sequential order,
+ * {@link Commit#close()} on the {@code set 1} commit before releasing the {@code remove 1} commit. But even if applications
+ * release entries from the log in monotonic order, and the major compaction task compacts segments in sequential order,
  * inconsistencies can still arise. Consider the following history:
  * <ul>
  *   <li>{@code set 1} is at index {@code 1} in segment {@code 1}</li>
  *   <li>{@code remove 1} is at index {@code 12345} in segment {@code 8}</li>
  *   <li>The major compaction task rewrites segment {@code 1}</li>
- *   <li>The application cleans {@code set 1} at index {@code 1} in the <em>rewritten</em> version of segment {@code 1}</li>
- *   <li>The application cleans {@code remove 1} at index {@code 12345} in segment {@code 8}, which the compaction task
+ *   <li>The application releases {@code set 1} at index {@code 1} in the <em>rewritten</em> version of segment {@code 1}</li>
+ *   <li>The application releases {@code remove 1} at index {@code 12345} in segment {@code 8}, which the compaction task
  *   has yet to compact</li>
  *   <li>The compaction task compacts segments {@code 2} through {@code 8}, removing tombstone entry {@code 12345} during
  *   the process</li>
@@ -84,8 +84,8 @@ import java.util.function.Predicate;
  * {@code 1} and entry {@code 12345} during major compaction.
  * <p>
  * In order to prevent such a scenario from occurring, the major compaction task takes an immutable snapshot of the
- * cleaned offsets underlying all the segments to be compacted prior to rewriting any entries. This ensures that any
- * entries cleaned after the start of rewriting segments will not be considered for compaction during the execution
+ * state of offsets underlying all the segments to be compacted prior to rewriting any entries. This ensures that any
+ * entries released after the start of rewriting segments will not be considered for compaction during the execution
  * of this task.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
@@ -94,7 +94,7 @@ public final class MajorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MajorCompactionTask.class);
   private final SegmentManager manager;
   private final List<List<Segment>> groups;
-  private List<List<Predicate<Long>>> cleaners;
+  private List<List<OffsetPredicate>> predicates;
   private final long snapshotIndex;
   private final long compactIndex;
   private final Compaction.Mode defaultCompactionMode;
@@ -109,21 +109,21 @@ public final class MajorCompactionTask implements CompactionTask {
 
   @Override
   public void run() {
-    storeCleaners();
+    copyPredicates();
     compactGroups();
   }
 
   /**
-   * Stores cleaned segment offsets.
+   * Creates a copy of offset predicates prior to compacting segments to prevent race conditions.
    */
-  private void storeCleaners() {
-    cleaners = new ArrayList<>(groups.size());
+  private void copyPredicates() {
+    predicates = new ArrayList<>(groups.size());
     for (List<Segment> group : groups) {
-      List<Predicate<Long>> groupCleaners = new ArrayList<>(group.size());
+      List<OffsetPredicate> groupPredicates = new ArrayList<>(group.size());
       for (Segment segment : group) {
-        groupCleaners.add(segment.cleanPredicate());
+        groupPredicates.add(segment.offsetPredicate().copy());
       }
-      cleaners.add(groupCleaners);
+      predicates.add(groupPredicates);
     }
   }
 
@@ -133,9 +133,9 @@ public final class MajorCompactionTask implements CompactionTask {
   private void compactGroups() {
     for (int i = 0; i < groups.size(); i++) {
       List<Segment> group = groups.get(i);
-      List<Predicate<Long>> groupCleaners = cleaners.get(i);
-      Segment segment = compactGroup(group, groupCleaners);
-      updateCleaned(group, groupCleaners, segment);
+      List<OffsetPredicate> groupPredicates = predicates.get(i);
+      Segment segment = compactGroup(group, groupPredicates);
+      mergeReleased(group, groupPredicates, segment);
       deleteGroup(group);
     }
   }
@@ -143,12 +143,12 @@ public final class MajorCompactionTask implements CompactionTask {
   /**
    * Compacts a group.
    */
-  private Segment compactGroup(List<Segment> segments, List<Predicate<Long>> cleaners) {
-    // Get the first segment which contains the first index being cleaned. The clean segment will be written
+  private Segment compactGroup(List<Segment> segments, List<OffsetPredicate> predicates) {
+    // Get the first segment which contains the first index being compacted. The compact segment will be written
     // as a newer version of the earliest segment being rewritten.
     Segment firstSegment = segments.iterator().next();
 
-    // Create a clean segment with a newer version to which to rewrite the segment entries.
+    // Create a compacted segment with a newer version to which to rewrite the segment entries.
     Segment compactSegment = manager.createSegment(SegmentDescriptor.builder()
       .withId(firstSegment.descriptor().id())
       .withVersion(firstSegment.descriptor().version() + 1)
@@ -157,7 +157,7 @@ public final class MajorCompactionTask implements CompactionTask {
       .withMaxEntries(segments.stream().mapToInt(s -> s.descriptor().maxEntries()).max().getAsInt())
       .build());
 
-    compactGroup(segments, cleaners, compactSegment);
+    compactGroup(segments, predicates, compactSegment);
 
     // Replace the rewritten segments with the updated segment.
     manager.replaceSegments(segments, compactSegment);
@@ -171,10 +171,10 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segments The segments to compact.
    * @param compactSegment The compact segment.
    */
-  private void compactGroup(List<Segment> segments, List<Predicate<Long>> cleaners, Segment compactSegment) {
+  private void compactGroup(List<Segment> segments, List<OffsetPredicate> predicates, Segment compactSegment) {
     // Iterate through all segments being compacted and write entries to a single compact segment.
     for (int i = 0; i < segments.size(); i++) {
-      compactSegment(segments.get(i), cleaners.get(i), compactSegment);
+      compactSegment(segments.get(i), predicates.get(i), compactSegment);
     }
   }
 
@@ -184,9 +184,9 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param segment The segment to compact.
    * @param compactSegment The segment to which to write the compacted segment.
    */
-  private void compactSegment(Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void compactSegment(Segment segment, OffsetPredicate predicate, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      checkEntry(i, segment, cleaner, compactSegment);
+      checkEntry(i, segment, predicate, compactSegment);
     }
   }
 
@@ -195,13 +195,13 @@ public final class MajorCompactionTask implements CompactionTask {
    *
    * @param index The index at which to compact the entry.
    * @param segment The segment to compact.
-   * @param compactSegment The segment to which to write the cleaned segment.
+   * @param compactSegment The segment to which to write the uncompacted segment.
    */
-  private void checkEntry(long index, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void checkEntry(long index, Segment segment, OffsetPredicate predicate, Segment compactSegment) {
     try (Entry entry = segment.get(index)) {
       // If an entry was found, remove the entry from the segment.
       if (entry != null) {
-        checkEntry(index, entry, segment, cleaner, compactSegment);
+        checkEntry(index, entry, segment, predicate, compactSegment);
       } else {
         compactSegment.skip(1);
       }
@@ -211,7 +211,7 @@ public final class MajorCompactionTask implements CompactionTask {
   /**
    * Compacts a command entry from a segment.
    */
-  private void checkEntry(long index, Entry entry, Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void checkEntry(long index, Entry entry, Segment segment, OffsetPredicate predicate, Segment compactSegment) {
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
     // mode to the entry.
     Compaction.Mode mode = entry.getCompactionMode();
@@ -225,37 +225,37 @@ public final class MajorCompactionTask implements CompactionTask {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (index <= snapshotIndex && isClean(index, segment, cleaner)) {
+        if (index <= snapshotIndex && !isLive(index, segment, predicate)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(entry, compactSegment);
         }
         break;
-      // QUORUM entries are compacted if the entry has been cleaned from the segment.
+      // QUORUM entries are compacted if the entry has been released from the segment.
       case QUORUM:
-        if (isClean(index, segment, cleaner)) {
+        if (!isLive(index, segment, predicate)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(entry, compactSegment);
         }
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index and
-      // the entry has been cleaned.
+      // the entry has been released.
       // SEQUENTIAL entries are compacted if the major compact index is greater than the entry index
-      // and the entry has been cleaned.
+      // and the entry has been released.
       case FULL:
       case SEQUENTIAL:
       case TOMBSTONE:
-        if (index <= compactIndex && isClean(index, segment, cleaner)) {
+        if (index <= compactIndex && !isLive(index, segment, predicate)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(entry, compactSegment);
         }
         break;
       // UNKNOWN entries are compacted if the index is less than both the snapshot and major
-      // compaction indexes and the entry has been cleaned.
+      // compaction indexes and the entry has been released.
       case UNKNOWN:
-        if (index <= snapshotIndex && index <= compactIndex && isClean(index, segment, cleaner)) {
+        if (index <= snapshotIndex && index <= compactIndex && !isLive(index, segment, predicate)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(entry, compactSegment);
@@ -282,30 +282,30 @@ public final class MajorCompactionTask implements CompactionTask {
   }
 
   /**
-   * Returns a boolean value indicating whether the given index is clean.
+   * Returns a boolean value indicating whether the given index is release.
    */
-  private boolean isClean(long index, Segment segment, Predicate<Long> cleaner) {
+  private boolean isLive(long index, Segment segment, OffsetPredicate predicate) {
     long offset = segment.offset(index);
-    return offset == -1 || cleaner.test(offset);
+    return offset != -1 && predicate.test(offset);
   }
 
   /**
-   * Updates the new compact segment with entries that were cleaned during compaction.
+   * Updates the new compact segment with entries that were released during compaction.
    */
-  private void updateCleaned(List<Segment> segments, List<Predicate<Long>> cleaners, Segment compactSegment) {
+  private void mergeReleased(List<Segment> segments, List<OffsetPredicate> predicates, Segment compactSegment) {
     for (int i = 0; i < segments.size(); i++) {
-      updateCleanedOffsets(segments.get(i), cleaners.get(i), compactSegment);
+      mergeReleasedEntries(segments.get(i), predicates.get(i), compactSegment);
     }
   }
 
   /**
-   * Updates the new compact segment with entries that were cleaned in the given segment during compaction.
+   * Updates the new compact segment with entries that were released in the given segment during compaction.
    */
-  private void updateCleanedOffsets(Segment segment, Predicate<Long> cleaner, Segment compactSegment) {
+  private void mergeReleasedEntries(Segment segment, OffsetPredicate predicate, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
       long offset = segment.offset(i);
-      if (offset != -1 && cleaner.test(offset)) {
-        compactSegment.clean(i);
+      if (offset != -1 && !predicate.test(offset)) {
+        compactSegment.release(i);
       }
     }
   }

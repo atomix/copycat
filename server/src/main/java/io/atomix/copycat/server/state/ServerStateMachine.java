@@ -347,13 +347,13 @@ final class ServerStateMachine implements AutoCloseable {
    * Applies a configuration entry to the internal state machine.
    * <p>
    * Configuration entries are applied to internal server state when written to the log. Thus, no significant
-   * logic needs to take place in the handling of configuration entries. We simply clean the previous configuration
+   * logic needs to take place in the handling of configuration entries. We simply release the previous configuration
    * entry since it was overwritten by a more recent committed configuration entry.
    */
   private CompletableFuture<Void> apply(ConfigurationEntry entry) {
     // Clean the configuration entry from the log. The entry will be retained until it has been stored
     // on all servers.
-    log.clean(entry.getIndex());
+    log.release(entry.getIndex());
     return CompletableFuture.completedFuture(null);
   }
 
@@ -361,7 +361,7 @@ final class ServerStateMachine implements AutoCloseable {
    * Applies connect entry to the state machine.
    * <p>
    * Connect entries are applied to internal server state when written to the log. Thus, no significant logic needs
-   * to take place in the handling of connect entries. We simply clean the previous connect entry for the session
+   * to take place in the handling of connect entries. We simply release the previous connect entry for the session
    * from the log. This ensures that the most recent connection is always retained in the log and replicated. Note
    * that connection indexes are not stored when applied to the internal state since a ConnectEntry may be applied
    * but never committed. Storing indexes in the internal state machine ensures that the stored index is committed
@@ -369,7 +369,7 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private CompletableFuture<Void> apply(ConnectEntry entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
-    // clean them once they're committed.
+    // release them once they're committed.
     ServerSessionContext session = executor().context().sessions().getSession(entry.getClient());
     if (session != null) {
       // Update the session connect index.
@@ -402,7 +402,7 @@ final class ServerStateMachine implements AutoCloseable {
     long timestamp = executor.timestamp(entry.getTimestamp());
 
     long sessionId = entry.getIndex();
-    ServerSessionContext session = new ServerSessionContext(sessionId, entry.getClient(), log::clean, executor.context(), entry.getTimeout());
+    ServerSessionContext session = new ServerSessionContext(sessionId, entry.getClient(), log, executor.context(), entry.getTimeout());
     executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
@@ -507,12 +507,12 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the server session is null, the session either never existed or already expired.
     if (session == null) {
-      log.clean(entry.getIndex());
+      log.release(entry.getIndex());
       future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
     }
     // If the session is in an inactive state, return an UnknownSessionException.
     else if (!session.state().active()) {
-      log.clean(entry.getIndex());
+      log.release(entry.getIndex());
       future = Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.getSession()));
     }
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
@@ -632,12 +632,12 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the server session is null, the session either never existed or already expired.
     if (session == null) {
-      log.clean(entry.getIndex());
+      log.release(entry.getIndex());
       future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
     }
     // If the session is not in an active state, return an UnknownSessionException.
     else if (!session.state().active()) {
-      log.clean(entry.getIndex());
+      log.release(entry.getIndex());
       future = Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.getSession()));
     }
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
@@ -798,14 +798,14 @@ final class ServerStateMachine implements AutoCloseable {
     // have a session. We ensure that session register/unregister entries are not compacted from the log
     // until all associated commands have been cleaned.
     if (session == null) {
-      log.clean(entry.getIndex());
+      log.release(entry.getIndex());
       return Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.getSession()));
     }
     // If the session is not in an active state, return an UnknownSessionException. Sessions are retained in the
     // session registry until all prior commands have been released by the state machine, but new commands can
     // only be applied for sessions in an active state.
     else if (!session.state().active()) {
-      log.clean(entry.getIndex());
+      log.release(entry.getIndex());
       return Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.getSession()));
     }
     // If the command's sequence number is less than the next session sequence number then that indicates that
@@ -1071,7 +1071,7 @@ final class ServerStateMachine implements AutoCloseable {
     for (ServerSessionContext session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
-    log.clean(entry.getIndex());
+    log.release(entry.getIndex());
     return Futures.completedFutureAsync(entry.getIndex(), ThreadContext.currentContextOrThrow().executor());
   }
 

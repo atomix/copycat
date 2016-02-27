@@ -101,7 +101,7 @@ final class ServerCommit implements Commit<Operation<?>> {
     if (open) {
       if (operation instanceof Command && log.isOpen()) {
         try {
-          log.clean(index);
+          log.release(index);
         } catch (IllegalStateException e) {
         }
       }
