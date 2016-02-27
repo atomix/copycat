@@ -21,6 +21,8 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.util.OffsetIndex;
+import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -302,7 +304,7 @@ public class SegmentManager implements AutoCloseable {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
     Buffer buffer = FileBuffer.allocate(segmentFile, Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxSegmentSize()), Integer.MAX_VALUE);
     descriptor.copyTo(buffer);
-    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), serializer.clone(), this);
+    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetPredicate(), serializer.clone(), this);
     LOGGER.debug("Created segment: {}", segment);
     return segment;
   }
@@ -314,7 +316,7 @@ public class SegmentManager implements AutoCloseable {
     File segmentFile = SegmentFile.createSegmentFile(name, storage.directory(), descriptor.id(), descriptor.version());
     Buffer buffer = MappedBuffer.allocate(segmentFile, Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxSegmentSize()), Integer.MAX_VALUE);
     descriptor.copyTo(buffer);
-    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), serializer.clone(), this);
+    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetPredicate(), serializer.clone(), this);
     LOGGER.debug("Created segment: {}", segment);
     return segment;
   }
@@ -325,7 +327,7 @@ public class SegmentManager implements AutoCloseable {
   private Segment createMemorySegment(SegmentDescriptor descriptor) {
     Buffer buffer = HeapBuffer.allocate(Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxSegmentSize()), Integer.MAX_VALUE);
     descriptor.copyTo(buffer);
-    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), serializer.clone(), this);
+    Segment segment = new Segment(buffer.slice(), descriptor, createIndex(descriptor), new OffsetPredicate(), serializer.clone(), this);
     LOGGER.debug("Created segment: {}", segment);
     return segment;
   }
@@ -353,7 +355,7 @@ public class SegmentManager implements AutoCloseable {
     File file = SegmentFile.createSegmentFile(name, storage.directory(), segmentId, segmentVersion);
     Buffer buffer = FileBuffer.allocate(file, Math.min(DEFAULT_BUFFER_SIZE, storage.maxSegmentSize()), Integer.MAX_VALUE);
     SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
-    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), serializer.clone(), this);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetPredicate(), serializer.clone(), this);
     LOGGER.debug("Loaded file segment: {} ({})", descriptor.id(), file.getName());
     return segment;
   }
@@ -365,7 +367,7 @@ public class SegmentManager implements AutoCloseable {
     File file = SegmentFile.createSegmentFile(name, storage.directory(), segmentId, segmentVersion);
     Buffer buffer = MappedBuffer.allocate(file, Math.min(DEFAULT_BUFFER_SIZE, storage.maxSegmentSize()), Integer.MAX_VALUE);
     SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
-    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), serializer.clone(), this);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetPredicate(), serializer.clone(), this);
     LOGGER.debug("Loaded mapped segment: {} ({})", descriptor.id(), file.getName());
     return segment;
   }
@@ -376,7 +378,7 @@ public class SegmentManager implements AutoCloseable {
   private Segment loadMemorySegment(long segmentId, long segmentVersion) {
     Buffer buffer = HeapBuffer.allocate(Math.min(DEFAULT_BUFFER_SIZE, storage.maxSegmentSize()), Integer.MAX_VALUE);
     SegmentDescriptor descriptor = new SegmentDescriptor(buffer);
-    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetCleaner(), serializer.clone(), this);
+    Segment segment = new Segment(buffer.position(SegmentDescriptor.BYTES).slice(), descriptor, createIndex(descriptor), new OffsetPredicate(), serializer.clone(), this);
     LOGGER.debug("Loaded memory segment: {}", descriptor.id());
     return segment;
   }

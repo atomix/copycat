@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 
 /**
- * Removes {@link io.atomix.copycat.server.storage.Log#clean(long) cleaned} entries from an individual
+ * Removes {@link io.atomix.copycat.server.storage.Log#release(long) released} entries from an individual
  * log {@link Segment} to reclaim disk space.
  * <p>
  * The minor compaction task is a lightweight process that rewrites an individual segment to remove entries for
@@ -65,7 +65,7 @@ public final class MinorCompactionTask implements CompactionTask {
   }
 
   /**
-   * Compacts all cleanable segments.
+   * Compacts all compactable segments.
    */
   private void compactSegments() {
     // Create a compact segment with a newer version to which to rewrite the segment entries.
@@ -82,8 +82,8 @@ public final class MinorCompactionTask implements CompactionTask {
     // Replace the old segment with the compact segment.
     manager.replaceSegments(Collections.singletonList(segment), compactSegment);
 
-    // Updates the new segment with offsets that were cleaned during compaction.
-    updateCleanedOffsets(segment, compactSegment);
+    // Update the new segment with offsets that were released during compaction.
+    mergeReleasedEntries(segment, compactSegment);
 
     // Delete the old segment.
     segment.close();
@@ -107,21 +107,21 @@ public final class MinorCompactionTask implements CompactionTask {
    *
    * @param index The index at which to compact the entry.
    * @param segment The segment to compact.
-   * @param cleanSegment The segment to which to write the compacted segment.
+   * @param compactSegment The segment to which to write the compacted segment.
    */
-  private void checkEntry(long index, Segment segment, Segment cleanSegment) {
+  private void checkEntry(long index, Segment segment, Segment compactSegment) {
     try (Entry entry = segment.get(index)) {
-      // If an entry was found, only remove the entry from the segment if it's not a tombstone that has been cleaned.
+      // If an entry was found, only remove the entry from the segment if it's not a tombstone that has been released.
       if (entry != null) {
-        checkEntry(index, entry, segment, cleanSegment);
+        checkEntry(index, entry, segment, compactSegment);
       } else {
-        cleanSegment.skip(1);
+        compactSegment.skip(1);
       }
     }
   }
 
   /**
-   * Cleans a command entry from a segment.
+   * Compacts a command entry from a segment.
    */
   private void checkEntry(long index, Entry entry, Segment segment, Segment compactSegment) {
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
@@ -137,24 +137,24 @@ public final class MinorCompactionTask implements CompactionTask {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (index <= snapshotIndex && segment.isClean(index)) {
+        if (index <= snapshotIndex && !segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(index, entry, compactSegment);
         }
         break;
-      // QUORUM entries are compacted if the entry has been marked clean in the segment.
+      // QUORUM entries are compacted if the entry has been released in the segment.
       case QUORUM:
-        if (segment.isClean(index)) {
+        if (!segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(index, entry, compactSegment);
         }
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index
-      // and the entry has been cleaned.
+      // and the entry has been released.
       case FULL:
-        if (index <= compactIndex && segment.isClean(index)) {
+        if (index <= compactIndex && !segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);
         } else {
           transferEntry(index, entry, compactSegment);
@@ -186,19 +186,19 @@ public final class MinorCompactionTask implements CompactionTask {
   private void transferEntry(long index, Entry entry, Segment compactSegment) {
     compactSegment.append(entry);
 
-    // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.
-    if (segment.isClean(index)) {
-      compactSegment.clean(index);
+    // If the entry was released in the prior segment, mark it as released in the compact segment.
+    if (!segment.isLive(index)) {
+      compactSegment.release(index);
     }
   }
 
   /**
-   * Updates the new compact segment with entries that were cleaned in the given segment during compaction.
+   * Updates the new compact segment with entries that were released from the given segment during compaction.
    */
-  private void updateCleanedOffsets(Segment segment, Segment compactSegment) {
+  private void mergeReleasedEntries(Segment segment, Segment compactSegment) {
     for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      if (segment.isClean(i)) {
-        compactSegment.clean(i);
+      if (!segment.isLive(i)) {
+        compactSegment.release(i);
       }
     }
   }

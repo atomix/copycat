@@ -725,12 +725,12 @@ class ServerSessionContext implements ServerSession {
    * Cleans session entries on close.
    */
   private void cleanState(long index) {
-    // If the keep alive index is set, clean the entry.
+    // If the keep alive index is set, release the entry.
     if (keepAliveIndex > 0) {
       cleaner.clean(keepAliveIndex);
     }
 
-    // If no references to session commands are open, clean session-related entries.
+    // If no references to session commands are open, release session-related entries.
     if (references == 0) {
       cleaner.clean(id);
       cleaner.clean(index);

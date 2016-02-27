@@ -60,7 +60,7 @@ public final class MajorCompactionManager implements CompactionManager {
    * compaction.
    */
   public List<List<Segment>> getCompactableGroups(Storage storage, SegmentManager manager) {
-    List<List<Segment>> clean = new ArrayList<>();
+    List<List<Segment>> compact = new ArrayList<>();
     List<Segment> segments = null;
     Segment previousSegment = null;
     for (Segment segment : getCompactableSegments(manager)) {
@@ -71,7 +71,7 @@ public final class MajorCompactionManager implements CompactionManager {
       }
       // If the previous segment is undefined or of a different version, reset the segments.
       else if (previousSegment != null && previousSegment.descriptor().version() != segment.descriptor().version()) {
-        clean.add(segments);
+        compact.add(segments);
         segments = new ArrayList<>();
         segments.add(segment);
       }
@@ -82,18 +82,18 @@ public final class MajorCompactionManager implements CompactionManager {
       }
       // If there's not enough room to combine segments, reset the segments list.
       else {
-        clean.add(segments);
+        compact.add(segments);
         segments = new ArrayList<>();
         segments.add(segment);
       }
       previousSegment = segment;
     }
 
-    // Ensure all cleanable segments have been added to the clean segments list.
+    // Ensure all compactable segments have been added to the compact segments list.
     if (segments != null) {
-      clean.add(segments);
+      compact.add(segments);
     }
-    return clean;
+    return compact;
   }
 
   /**

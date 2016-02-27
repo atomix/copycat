@@ -26,7 +26,7 @@ public interface LogCleaner {
   /**
    * Cleans the given index from the log.
    *
-   * @param index The index to clean from the log.
+   * @param index The index to release from the log.
    */
   void clean(long index);
 

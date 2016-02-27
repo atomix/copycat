@@ -65,7 +65,7 @@ public class FileLogTest extends LogTest {
     appendEntries(entriesPerSegment * 5);
     for (long i = 1; i <= entriesPerSegment * 5; i++) {
       if (i % 3 == 0 || i % 3 == 1) {
-        log.clean(i);
+        log.release(i);
       }
     }
 

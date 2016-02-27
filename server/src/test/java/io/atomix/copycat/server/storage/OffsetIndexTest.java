@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.HeapBuffer;
+import io.atomix.copycat.server.storage.util.OffsetIndex;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.*;

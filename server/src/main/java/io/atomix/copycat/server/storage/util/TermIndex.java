@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.util;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -34,7 +34,7 @@ import java.util.TreeMap;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class TermIndex {
+public final class TermIndex {
   private final TreeMap<Long, Long> terms = new TreeMap<>();
 
   /**
