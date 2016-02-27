@@ -82,6 +82,9 @@ public final class MinorCompactionTask implements CompactionTask {
     // Replace the old segment with the compact segment.
     manager.replaceSegments(Collections.singletonList(segment), compactSegment);
 
+    // Updates the new segment with offsets that were cleaned during compaction.
+    updateCleanedOffsets(segment, compactSegment);
+
     // Delete the old segment.
     segment.close();
     segment.delete();
@@ -186,6 +189,17 @@ public final class MinorCompactionTask implements CompactionTask {
     // If the entry was cleaned in the prior segment, mark it as cleaned in the compact segment.
     if (segment.isClean(index)) {
       compactSegment.clean(index);
+    }
+  }
+
+  /**
+   * Updates the new compact segment with entries that were cleaned in the given segment during compaction.
+   */
+  private void updateCleanedOffsets(Segment segment, Segment compactSegment) {
+    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
+      if (segment.isClean(i)) {
+        compactSegment.clean(i);
+      }
     }
   }
 

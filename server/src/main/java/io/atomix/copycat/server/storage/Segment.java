@@ -23,7 +23,7 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import java.util.function.Predicate;
 
 /**
- * Stores a set of sequential entries in a single file or memory {@link Buffer}.
+ * Stores a sequence of entries with monotonically increasing indexes in a {@link Buffer}.
  * <p>
  * Segments are individual file or memory based groups of sequential entries. Each segment has a fixed capacity
  * in terms of either number of entries or size in bytes.
@@ -38,8 +38,8 @@ import java.util.function.Predicate;
  * the Raft consensus algorithm, readers should typically benefit from O(1) lookups.
  * <p>
  * When a segment is constructed, the segment will attempt to rebuild its index from the underlying segment
- * {@link Buffer}. This is done by reading a 16-bit unsigned length and 32-bit offset for each entry. Once the
- * segment has been built, new entries will be {@link #append(Entry) appended} at the end of the segment.
+ * {@link Buffer}. This is done by reading a 32-bit length and 64-bit offset for each entry. Once the segment
+ * has been built, new entries will be {@link #append(Entry) appended} at the end of the segment.
  * <p>
  * Additionally, segments are responsible for keeping track of entries that have been {@link #clean(long) cleaned}.
  * Cleaned entries are tracked in an internal {@link io.atomix.catalyst.buffer.util.BitArray} with a size equal
@@ -47,7 +47,7 @@ import java.util.function.Predicate;
  * <p>
  * An entry in the log is written in binary format. The binary format of an entry is as follows:
  * <ul>
- *   <li>Required 16-bit unsigned entry length</li>
+ *   <li>Required 32-bit entry length</li>
  *   <li>Required 64-bit offset</li>
  *   <li>Required 8-bit term flag</li>
  *   <li>Optional 64-bit term</li>
