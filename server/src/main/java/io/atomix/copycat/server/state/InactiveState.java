@@ -46,7 +46,7 @@ class InactiveState extends AbstractState {
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
 
-    Configuration configuration = new Configuration(request.index(), request.timestamp(), request.members());
+    Configuration configuration = new Configuration(request.index(), request.term(), request.timestamp(), request.members());
 
     // Configure the cluster membership. This will cause this server to transition to the
     // appropriate state if its type has changed.

@@ -22,13 +22,13 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.CopycatException;
-import io.atomix.copycat.server.protocol.*;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.session.Session;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -218,6 +218,7 @@ final class LeaderState extends ActiveState {
     final long index;
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(context.getTerm())
+        .setTimestamp(System.currentTimeMillis())
         .setMembers(members);
       index = context.getLog().append(entry);
       LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
@@ -225,7 +226,7 @@ final class LeaderState extends ActiveState {
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getTimestamp(), entry.getMembers()));
+      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getTerm(), entry.getTimestamp(), entry.getMembers()));
     }
 
     return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
@@ -257,6 +258,8 @@ final class LeaderState extends ActiveState {
       return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
         .withStatus(Response.Status.OK)
         .withIndex(context.getClusterState().getConfiguration().index())
+        .withTerm(context.getClusterState().getConfiguration().term())
+        .withTime(context.getClusterState().getConfiguration().time())
         .withMembers(context.getCluster().members())
         .build()));
     }
@@ -276,6 +279,8 @@ final class LeaderState extends ActiveState {
           future.complete(logResponse(JoinResponse.builder()
             .withStatus(Response.Status.OK)
             .withIndex(index)
+            .withTerm(context.getClusterState().getConfiguration().term())
+            .withTime(context.getClusterState().getConfiguration().time())
             .withMembers(members)
             .build()));
         } else {
@@ -305,11 +310,11 @@ final class LeaderState extends ActiveState {
     }
 
     // If the configuration request index is less than the last known configuration index for
-    // the leader, fail the request and force the requester to retry. This ensures that servers
-    // aren't basing their configuration change requests on out-of-date membership information.
-    if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index()) {
+    // the leader, fail the request to ensure servers can't reconfigure an old configuration.
+    if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index() || request.term() != context.getClusterState().getConfiguration().term()) {
       return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.CONFIGURATION_ERROR)
         .build()));
     }
 
@@ -342,6 +347,8 @@ final class LeaderState extends ActiveState {
           future.complete(logResponse(ReconfigureResponse.builder()
             .withStatus(Response.Status.OK)
             .withIndex(index)
+            .withTerm(context.getClusterState().getConfiguration().term())
+            .withTime(context.getClusterState().getConfiguration().time())
             .withMembers(members)
             .build()));
         } else {
@@ -391,6 +398,8 @@ final class LeaderState extends ActiveState {
           future.complete(logResponse(LeaveResponse.builder()
             .withStatus(Response.Status.OK)
             .withIndex(index)
+            .withTerm(context.getClusterState().getConfiguration().term())
+            .withTime(context.getClusterState().getConfiguration().time())
             .withMembers(members)
             .build()));
         } else {

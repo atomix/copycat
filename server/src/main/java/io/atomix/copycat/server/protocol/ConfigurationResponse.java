@@ -41,6 +41,7 @@ import java.util.Objects;
  */
 public abstract class ConfigurationResponse extends AbstractResponse {
   protected long index;
+  protected long term;
   protected long timestamp;
   protected Collection<Member> members;
 
@@ -51,6 +52,15 @@ public abstract class ConfigurationResponse extends AbstractResponse {
    */
   public long index() {
     return index;
+  }
+
+  /**
+   * Returns the configuration term.
+   *
+   * @return The configuration term.
+   */
+  public long term() {
+    return term;
   }
 
   /**
@@ -77,6 +87,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
     if (status == Status.OK) {
       error = null;
       index = buffer.readLong();
+      term = buffer.readLong();
       timestamp = buffer.readLong();
       members = serializer.readObject(buffer);
     } else {
@@ -92,6 +103,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(index);
+      buffer.writeLong(term);
       buffer.writeLong(timestamp);
       serializer.writeObject(members, buffer);
     } else {
@@ -101,7 +113,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, index, members);
+    return Objects.hash(getClass(), status, index, term, members);
   }
 
   @Override
@@ -110,6 +122,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
       ConfigurationResponse response = (ConfigurationResponse) object;
       return response.status == status
         && response.index == index
+        && response.term == term
         && response.timestamp == timestamp
         && response.members.equals(members);
     }
@@ -118,7 +131,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), status, index, timestamp, members);
+    return String.format("%s[status=%s, index=%d, term=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), status, index, term, timestamp, members);
   }
 
   /**
@@ -139,6 +152,19 @@ public abstract class ConfigurationResponse extends AbstractResponse {
     @SuppressWarnings("unchecked")
     public T withIndex(long index) {
       response.index = Assert.argNot(index, index < 0, "index cannot be negative");
+      return (T) this;
+    }
+
+    /**
+     * Sets the response term.
+     *
+     * @param term The response term.
+     * @return The response builder.
+     * @throws IllegalArgumentException if {@code term} is negative
+     */
+    @SuppressWarnings("unchecked")
+    public T withTerm(long term) {
+      response.term = Assert.argNot(term, term < 0, "term must be positive");
       return (T) this;
     }
 

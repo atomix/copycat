@@ -31,12 +31,14 @@ import java.util.Collection;
  */
 public class Configuration {
   private final long index;
+  private final long term;
   private final long time;
   private final Collection<Member> members;
 
-  public Configuration(long index, long time, Collection<Member> members) {
+  public Configuration(long index, long term, long time, Collection<Member> members) {
     this.index = index;
-    this.time = time;
+    this.term = term;
+    this.time = Assert.argNot(time, time <= 0, "time must be positive");
     this.members = Assert.notNull(members, "members");
   }
 
@@ -50,6 +52,17 @@ public class Configuration {
    */
   public long index() {
     return index;
+  }
+
+  /**
+   * Returns the configuration term.
+   * <p>
+   * The term is the term of the leader at the time the configuration change was committed.
+   *
+   * @return The configuration term.
+   */
+  public long term() {
+    return term;
   }
 
   /**

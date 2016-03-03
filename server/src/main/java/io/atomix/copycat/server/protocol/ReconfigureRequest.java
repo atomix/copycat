@@ -49,6 +49,7 @@ public class ReconfigureRequest extends ConfigurationRequest {
   }
 
   private long index;
+  private long term;
 
   /**
    * Returns the configuration index.
@@ -59,15 +60,25 @@ public class ReconfigureRequest extends ConfigurationRequest {
     return index;
   }
 
+  /**
+   * Returns the configuration term.
+   *
+   * @return The configuration term.
+   */
+  public long term() {
+    return term;
+  }
+
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(index);
+    buffer.writeLong(index).writeLong(term);
     super.writeObject(buffer, serializer);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     index = buffer.readLong();
+    term = buffer.readLong();
     super.readObject(buffer, serializer);
   }
 
@@ -80,14 +91,14 @@ public class ReconfigureRequest extends ConfigurationRequest {
   public boolean equals(Object object) {
     if (object instanceof ReconfigureRequest) {
       ReconfigureRequest request = (ReconfigureRequest) object;
-      return request.index == index && request.member.equals(member);
+      return request.index == index && request.term == term && request.member.equals(member);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, member=%s]", getClass().getSimpleName(), index, member);
+    return String.format("%s[index=%d, term=%d, member=%s]", getClass().getSimpleName(), index, term, member);
   }
 
   /**
@@ -106,6 +117,17 @@ public class ReconfigureRequest extends ConfigurationRequest {
      */
     public Builder withIndex(long index) {
       request.index = Assert.argNot(index, index < 0, "index must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the request term.
+     *
+     * @param term The request term.
+     * @return The request builder.
+     */
+    public Builder withTerm(long term) {
+      request.term = Assert.argNot(term, term < 0, "term must be positive");
       return this;
     }
   }

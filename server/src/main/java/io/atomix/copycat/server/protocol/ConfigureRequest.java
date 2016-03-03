@@ -194,7 +194,7 @@ public class ConfigureRequest extends AbstractRequest {
      * @param timestamp The request timestamp.
      * @return The request builder.
      */
-    public Builder withTimestamp(long timestamp) {
+    public Builder withTime(long timestamp) {
       request.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp must be positive");
       return this;
     }
