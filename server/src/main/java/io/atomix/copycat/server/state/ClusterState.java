@@ -20,16 +20,12 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Scheduled;
+import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.ConfigurationRequest;
-import io.atomix.copycat.server.protocol.JoinRequest;
-import io.atomix.copycat.server.protocol.LeaveRequest;
-import io.atomix.copycat.server.protocol.ReconfigureRequest;
-import io.atomix.copycat.server.protocol.ConfigurationResponse;
-import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.system.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,8 +88,8 @@ final class ClusterState implements Cluster, AutoCloseable {
           .collect(Collectors.toSet());
       }
 
-      // Create a configuration for the 0 index.
-      configuration = new Configuration(0, time.toEpochMilli(), activeMembers);
+      // Create a configuration for the 0 term and index.
+      configuration = new Configuration(0, 0, time.toEpochMilli(), activeMembers);
     }
 
     // Iterate through members in the new configuration and add remote members.
@@ -368,7 +364,7 @@ final class ClusterState implements Cluster, AutoCloseable {
           if (response.status() == Response.Status.OK) {
             LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
 
-            Configuration configuration = new Configuration(response.index(), response.timestamp(), response.members());
+            Configuration configuration = new Configuration(response.index(), response.term(), response.timestamp(), response.members());
 
             // Configure the cluster with the join response.
             // Commit the configuration as we know it was committed via the successful join response.
@@ -381,7 +377,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             } else if (joinFuture != null) {
               joinFuture.complete(null);
             }
-          } else if (response.error() == null) {
+          } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
             // If the response error is null, that indicates that no error occurred but the leader was
             // in a state that was incapable of handling the join request. Attempt to join the leader
             // again after an election timeout.
@@ -428,6 +424,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         context.getConnections().getConnection(leader.serverAddress()).thenCompose(connection -> {
           ReconfigureRequest request = ReconfigureRequest.builder()
             .withIndex(configuration.index())
+            .withTerm(configuration.term())
             .withMember(member())
             .build();
           return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
@@ -438,7 +435,7 @@ final class ClusterState implements Cluster, AutoCloseable {
               cancelJoinTimer();
               if (joinFuture != null)
                 joinFuture.complete(null);
-            } else if (response.error() == null) {
+            } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
               joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
             }
           }
@@ -517,7 +514,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       cancelLeaveTimer();
 
       if (error == null && response.status() == Response.Status.OK) {
-        Configuration configuration = new Configuration(response.index(), response.timestamp(), response.members());
+        Configuration configuration = new Configuration(response.index(), response.term(), response.timestamp(), response.members());
 
         // Configure the cluster and commit the configuration as we know the successful response
         // indicates commitment.

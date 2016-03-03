@@ -87,7 +87,7 @@ public class MetaStoreTest {
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5002), new Address("localhost", 6002))
     ));
-    meta.storeConfiguration(new Configuration(1, System.currentTimeMillis(), members));
+    meta.storeConfiguration(new Configuration(1, 1, System.currentTimeMillis(), members));
 
     Configuration configuration = meta.loadConfiguration();
     assertEquals(configuration.index(), 1);

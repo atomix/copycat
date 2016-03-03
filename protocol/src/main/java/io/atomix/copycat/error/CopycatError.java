@@ -140,6 +140,16 @@ public interface CopycatError {
       public CopycatException createException() {
         return new InternalException("internal Raft error");
       }
+    },
+
+    /**
+     * Configuration error.
+     */
+    CONFIGURATION_ERROR(8) {
+      @Override
+      public CopycatException createException() {
+        return new ConfigurationException("configuration failed");
+      }
     };
 
     private final byte id;

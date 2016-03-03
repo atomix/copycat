@@ -21,12 +21,7 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.ConfigureRequest;
-import io.atomix.copycat.server.protocol.InstallRequest;
-import io.atomix.copycat.server.protocol.AppendResponse;
-import io.atomix.copycat.server.protocol.ConfigureResponse;
-import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -426,6 +421,7 @@ abstract class AbstractAppender implements AutoCloseable {
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
       .withIndex(context.getClusterState().getConfiguration().index())
+      .withTime(context.getClusterState().getConfiguration().time())
       .withMembers(context.getClusterState().getConfiguration().members())
       .build();
   }

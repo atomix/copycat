@@ -227,12 +227,13 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
     // will log, replicate, and commit the reconfiguration.
     cluster.getContext().getAbstractState().reconfigure(ReconfigureRequest.builder()
       .withIndex(cluster.getConfiguration().index())
+      .withTerm(cluster.getConfiguration().term())
       .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))
       .build()).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {
           cancelConfigureTimer();
-          cluster.configure(new Configuration(response.index(), response.timestamp(), response.members()));
+          cluster.configure(new Configuration(response.index(), response.term(), response.timestamp(), response.members()));
           future.complete(null);
         } else if (response.error() == null || response.error() == CopycatError.Type.NO_LEADER_ERROR) {
           cancelConfigureTimer();
