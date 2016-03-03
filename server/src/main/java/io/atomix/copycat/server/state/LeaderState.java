@@ -309,21 +309,22 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
-    // If the configuration request index is less than the last known configuration index for
-    // the leader, fail the request to ensure servers can't reconfigure an old configuration.
-    if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index() || request.term() != context.getClusterState().getConfiguration().term()) {
-      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.CONFIGURATION_ERROR)
-        .build()));
-    }
-
     // If the member is not a known member of the cluster, fail the promotion.
     ServerMember existingMember = context.getClusterState().member(request.member().id());
     if (existingMember == null) {
       return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    }
+
+    // If the configuration request index is less than the last known configuration index for
+    // the leader, fail the request to ensure servers can't reconfigure an old configuration.
+    if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index() || request.term() != context.getClusterState().getConfiguration().term()
+      && (existingMember.type() != request.member().type() || existingMember.status() != request.member().status())) {
+      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.CONFIGURATION_ERROR)
         .build()));
     }
 
