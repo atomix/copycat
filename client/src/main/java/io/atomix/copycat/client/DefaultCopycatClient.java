@@ -168,7 +168,7 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public synchronized CompletableFuture<CopycatClient> open() {
+  public synchronized CompletableFuture<CopycatClient> connect() {
     if (state != State.CLOSED)
       return CompletableFuture.completedFuture(this);
 
@@ -184,11 +184,6 @@ public class DefaultCopycatClient implements CopycatClient {
       }, context.executor());
     }
     return openFuture;
-  }
-
-  @Override
-  public boolean isOpen() {
-    return state != State.CLOSED;
   }
 
   @Override
@@ -309,11 +304,6 @@ public class DefaultCopycatClient implements CopycatClient {
       }, context.executor());
     }
     return closeFuture;
-  }
-
-  @Override
-  public boolean isClosed() {
-    return state == State.CLOSED;
   }
 
   /**

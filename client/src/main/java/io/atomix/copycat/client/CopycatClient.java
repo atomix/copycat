@@ -21,7 +21,6 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
@@ -44,7 +43,7 @@ import java.util.function.Consumer;
  * <p>
  * Copycat clients are responsible for connecting to the cluster and submitting {@link Command commands} and {@link Query queries}
  * that operate on the cluster's replicated state machine. Copycat clients interact with one or more nodes in a Copycat cluster
- * through a session. When the client is {@link #open() opened}, the client will attempt to one of the known member
+ * through a session. When the client is {@link #connect() connected}, the client will attempt to one of the known member
  * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
  * cluster, it can open a session. Once the client is able to register a {@link Session}, it will receive an updated list
  * of members for the entire cluster and thereafter be allowed to communicate with all servers.
@@ -125,7 +124,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface CopycatClient extends Managed<CopycatClient> {
+public interface CopycatClient {
 
   /**
    * Indicates the state of the client's communication with the Copycat cluster.
@@ -418,7 +417,7 @@ public interface CopycatClient extends Managed<CopycatClient> {
    *
    * @return A completable future to be completed once the client's {@link #session()} is open.
    */
-  CompletableFuture<CopycatClient> open();
+  CompletableFuture<CopycatClient> connect();
 
   /**
    * Recovers the client session.

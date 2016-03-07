@@ -72,9 +72,9 @@ final class ClusterState implements Cluster, AutoCloseable {
     if (configuration == null) {
       Set<Member> activeMembers;
 
-      // If the provided server members set contains the local server member, create an active members
-      // list including the local member.
-      if (members.contains(serverAddress)) {
+      // If the local server is joining the cluster as an active member, create an active members
+      // list that includes the local member.
+      if (type == Member.Type.ACTIVE) {
         activeMembers = members.stream()
           .filter(m -> !m.equals(member.serverAddress()))
           .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, time))
@@ -325,14 +325,9 @@ final class ClusterState implements Cluster, AutoCloseable {
       // Transition the server to the appropriate state for the local member type.
       context.transition(member.type());
 
-      // If the local member type is INACTIVE, send a join request to the cluster.
-      // The join future is not completed here in any case - even if the local server is already a member
-      // of the cluster - because the server needs to identify itself to the leader in order to complete
-      // the join. Once the server transitions to an active state, the server will identify itself to the
-      // leader upon learning of the leader. Once the server has identified itself the join will be completed.
-      if (member.type() == Member.Type.INACTIVE) {
-        join(getActiveMemberStates().iterator());
-      }
+      // Attempt to join the cluster. If the local member is ACTIVE then failing to join the cluster
+      // will result in the member attempting to get elected. This allows initial clusters to form.
+      join(getActiveMemberStates().iterator());
     });
 
     return joinFuture.whenComplete((result, error) -> joinFuture = null);
