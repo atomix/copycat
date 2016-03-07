@@ -67,6 +67,21 @@ public class ClusterTest extends ConcurrentTestCase {
   protected volatile List<CopycatServer> servers = new ArrayList<>();
 
   /**
+   * Tests starting several members individually.
+   */
+  public void testSingleMemberStart() throws Throwable {
+    CopycatServer server = createServers(1).get(0);
+    server.start().thenRun(this::resume);
+    await(5000);
+    CopycatServer joiner1 = createServer(members, nextMember(Member.Type.ACTIVE));
+    joiner1.start().thenRun(this::resume);
+    await(5000);
+    CopycatServer joiner2 = createServer(members, nextMember(Member.Type.ACTIVE));
+    joiner2.start().thenRun(this::resume);
+    await(5000);
+  }
+
+  /**
    * Tests joining a server after many entries have been committed.
    */
   public void testActiveJoinLate() throws Throwable {
@@ -100,7 +115,7 @@ public class ClusterTest extends ConcurrentTestCase {
       if (s == state)
         resume();
     });
-    joiner.open().thenRun(this::resume);
+    joiner.start().thenRun(this::resume);
     await(30000, 2);
   }
 
@@ -128,7 +143,7 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000);
     servers.get(0).kill().join();
     CopycatServer server = createServer(members, members.get(0));
-    server.open().thenRun(this::resume);
+    server.start().thenRun(this::resume);
     await(30000);
     submit(client, 0, 1000);
     await(30000);
@@ -140,7 +155,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testServerLeave() throws Throwable {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.get(0);
-    server.close().thenRun(this::resume);
+    server.stop().thenRun(this::resume);
     await(30000);
   }
 
@@ -150,7 +165,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testLeaderLeave() throws Throwable {
     List<CopycatServer> servers = createServers(3);
     CopycatServer server = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
-    server.close().thenRun(this::resume);
+    server.stop().thenRun(this::resume);
     await(30000);
   }
 
@@ -191,7 +206,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testServerJoin(Member.Type type) throws Throwable {
     createServers(3);
     CopycatServer server = createServer(members, nextMember(type));
-    server.open().thenRun(this::resume);
+    server.start().thenRun(this::resume);
     await(10000);
   }
 
@@ -201,11 +216,11 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testResize() throws Throwable {
     CopycatServer server = createServers(1).get(0);
     CopycatServer joiner = createServer(members, nextMember(Member.Type.ACTIVE));
-    joiner.open().thenRun(this::resume);
+    joiner.start().thenRun(this::resume);
     await(10000);
-    server.close().thenRun(this::resume);
+    server.stop().thenRun(this::resume);
     await(10000);
-    joiner.close().thenRun(this::resume);
+    joiner.stop().thenRun(this::resume);
   }
 
   /**
@@ -245,7 +260,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     Member member = nextMember(type);
     CopycatServer joiner = createServer(members, member);
-    joiner.open().thenRun(this::resume);
+    joiner.start().thenRun(this::resume);
     await(10000);
 
     joiner.kill().thenRun(this::resume);
@@ -259,7 +274,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
 
     CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
-    passive.open().thenRun(this::resume);
+    passive.start().thenRun(this::resume);
 
     await(10000);
 
@@ -273,7 +288,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     CopycatServer reserve = createServer(members, reserveMember);
-    reserve.open().thenRun(this::resume);
+    reserve.start().thenRun(this::resume);
 
     await(10000);
 
@@ -288,10 +303,10 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
 
     CopycatServer passive = createServer(members, nextMember(Member.Type.PASSIVE));
-    passive.open().thenRun(this::resume);
+    passive.start().thenRun(this::resume);
 
     CopycatServer reserve = createServer(members, nextMember(Member.Type.RESERVE));
-    reserve.open().thenRun(this::resume);
+    reserve.start().thenRun(this::resume);
 
     await(10000, 2);
 
@@ -341,7 +356,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     CopycatServer joiner = createServer(members, member);
-    joiner.open().thenRun(this::resume);
+    joiner.start().thenRun(this::resume);
     await(10000, 2);
   }
 
@@ -1021,7 +1036,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
-    leader.close().join();
+    leader.stop().join();
 
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
@@ -1299,7 +1314,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     for (int i = 0; i < nodes; i++) {
       CopycatServer server = createServer(members, members.get(i));
-      server.open().thenRun(this::resume);
+      server.start().thenRun(this::resume);
       servers.add(server);
     }
 
@@ -1320,7 +1335,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     for (int i = 0; i < live; i++) {
       CopycatServer server = createServer(members, members.get(i));
-      server.open().thenRun(this::resume);
+      server.start().thenRun(this::resume);
       servers.add(server);
     }
 
@@ -1380,7 +1395,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     servers.forEach(s -> {
       try {
-        if (s.isOpen()) {
+        if (s.isRunning()) {
           s.kill().join();
           s.delete().join();
         }

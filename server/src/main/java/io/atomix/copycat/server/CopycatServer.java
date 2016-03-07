@@ -23,7 +23,6 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
@@ -31,16 +30,16 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
-import io.atomix.copycat.util.ProtocolSerialization;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.util.StorageSerialization;
+import io.atomix.copycat.server.util.ServerSerialization;
+import io.atomix.copycat.util.ProtocolSerialization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -136,7 +135,7 @@ import java.util.function.Supplier;
  *   }
  * </pre>
  * <h2>Running the server</h2>
- * Once the server has been created, to connect to a cluster simply {@link #open()} the server. The server API is
+ * Once the server has been created, to connect to a cluster simply {@link #start() start} the server. The server API is
  * fully asynchronous and relies on {@link CompletableFuture} to provide promises:
  * <pre>
  * {@code
@@ -165,7 +164,7 @@ import java.util.function.Supplier;
  * @see Storage
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class CopycatServer implements Managed<CopycatServer> {
+public class CopycatServer {
   private static final Logger LOGGER = LoggerFactory.getLogger(CopycatServer.class);
 
   /**
@@ -309,7 +308,7 @@ public class CopycatServer implements Managed<CopycatServer> {
     /**
      * Represents the state of an inactive server.
      * <p>
-     * All servers start in this state and return to this state when {@link #close() stopped}.
+     * All servers start in this state and return to this state when {@link #stop() stopped}.
      */
     INACTIVE,
 
@@ -364,7 +363,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   private volatile CompletableFuture<CopycatServer> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
   private Listener<Member> electionListener;
-  private volatile boolean open;
+  private volatile boolean started;
 
   private CopycatServer(String name, Transport clientTransport, Transport serverTransport, ServerContext context) {
     this.name = Assert.notNull(name, "name");
@@ -411,7 +410,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * Returns the server's cluster configuration.
    * <p>
    * The {@link Cluster} is representative of the server's current view of the cluster configuration. The first time
-   * the server is {@link #open() started}, the cluster configuration will be initialized using the {@link Address}
+   * the server is {@link #start() started}, the cluster configuration will be initialized using the {@link Address}
    * list provided to the server {@link #builder(Address, Address...) builder}. For {@link StorageLevel#DISK persistent}
    * servers, subsequent starts will result in the last known cluster configuration being loaded from disk.
    * <p>
@@ -470,7 +469,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   /**
    * Returns the Copycat server state.
    * <p>
-   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #open() started} and
+   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #start() started} and
    * until it is explicitly shutdown, the server will be in one of the active states - {@link State#PASSIVE},
    * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
    *
@@ -529,7 +528,7 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
-   * Starts the Raft server asynchronously.
+   * Starts the server asynchronously.
    * <p>
    * When the server is started, the server will attempt to search for an existing cluster by contacting all of
    * the members in the provided members list. If no existing cluster is found, the server will immediately transition
@@ -539,9 +538,8 @@ public class CopycatServer implements Managed<CopycatServer> {
    *
    * @return A completable future to be completed once the server has joined the cluster and a leader has been found.
    */
-  @Override
-  public CompletableFuture<CopycatServer> open() {
-    if (open)
+  public CompletableFuture<CopycatServer> start() {
+    if (started)
       return CompletableFuture.completedFuture(this);
 
     if (openFuture == null) {
@@ -553,12 +551,12 @@ public class CopycatServer implements Managed<CopycatServer> {
             cluster().join().whenComplete((result, error) -> {
               if (error == null) {
                 if (cluster().leader() != null) {
-                  open = true;
+                  started = true;
                   future.complete(this);
                 } else {
                   electionListener = cluster().onLeaderElection(leader -> {
                     if (electionListener != null) {
-                      open = true;
+                      started = true;
                       future.complete(this);
                       electionListener.close();
                       electionListener = null;
@@ -601,11 +599,11 @@ public class CopycatServer implements Managed<CopycatServer> {
           // If the client address is different than the server address, start a separate client server.
           if (clientServer != null) {
             clientServer.listen(cluster().member().clientAddress(), c -> context.connectClient(c)).whenComplete((clientResult, clientError) -> {
-              open = true;
+              started = true;
               future.complete(null);
             });
           } else {
-            open = true;
+            started = true;
             future.complete(null);
           }
         } else {
@@ -617,14 +615,22 @@ public class CopycatServer implements Managed<CopycatServer> {
     return future;
   }
 
-  @Override
-  public boolean isOpen() {
-    return open;
+  /**
+   * Returns a boolean indicating whether the server is running.
+   *
+   * @return Indicates whether the server is running.
+   */
+  public boolean isRunning() {
+    return started;
   }
 
-  @Override
-  public CompletableFuture<Void> close() {
-    if (!open)
+  /**
+   * Stops the server asynchronously.
+   *
+   * @return A completable future to be completed once the server has been stopped.
+   */
+  public CompletableFuture<Void> stop() {
+    if (!started)
       return CompletableFuture.completedFuture(null);
 
     if (closeFuture == null) {
@@ -642,30 +648,17 @@ public class CopycatServer implements Managed<CopycatServer> {
   }
 
   /**
-   * Returns a boolean value indicating whether the server is running.
-   * <p>
-   * Once {@link #open()} is called and the returned {@link CompletableFuture} is completed (meaning this server found
-   * a cluster leader), this method will return {@code true} until closed.
-   *
-   * @return Indicates whether the server is running.
-   */
-  @Override
-  public boolean isClosed() {
-    return !open;
-  }
-
-  /**
    * Kills the server without leaving the cluster.
    *
    * @return A completable future to be completed once the server has been killed.
    */
   public CompletableFuture<Void> kill() {
-    if (!open)
+    if (!started)
       return Futures.exceptionalFuture(new IllegalStateException("context not open"));
 
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.getThreadContext().executor().execute(() -> {
-      open = false;
+      started = false;
       if (clientServer != null) {
         clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
           internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
@@ -695,14 +688,14 @@ public class CopycatServer implements Managed<CopycatServer> {
       clientTransport.close();
       serverTransport.close();
       context.close();
-      open = false;
+      started = false;
     });
   }
 
   /**
    * Deletes the server and its logs.
    * <p>
-   * If the server is not already closed, it will be closed upon calling this method. Once the server has been
+   * If the server is not already stopped, it will be stopped upon calling this method. Once the server has been
    * shut down, all state persisted on disk by the server will be deleted. On-disk state includes the last known
    * cluster configuration and all logs and snapshots. In the event that the server is restarted after its state
    * has been deleted, the server will start with a new log and no snapshots.
@@ -710,7 +703,7 @@ public class CopycatServer implements Managed<CopycatServer> {
    * @return A completable future to be completed once the server state has been deleted.
    */
   public CompletableFuture<Void> delete() {
-    return close().thenRun(context::delete);
+    return stop().thenRun(context::delete);
   }
 
   /**

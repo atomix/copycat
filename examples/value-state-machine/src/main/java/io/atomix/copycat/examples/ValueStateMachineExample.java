@@ -60,9 +60,9 @@ public class ValueStateMachineExample {
         .build())
       .build();
 
-    server.open().join();
+    server.start().join();
 
-    while (server.isOpen()) {
+    while (server.isRunning()) {
       Thread.sleep(1000);
     }
   }
