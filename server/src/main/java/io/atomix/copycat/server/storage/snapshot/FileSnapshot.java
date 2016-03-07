@@ -82,16 +82,17 @@ final class FileSnapshot extends Snapshot {
   @Override
   public Snapshot complete() {
     Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES, store.storage.maxSnapshotSize());
-    SnapshotDescriptor descriptor = new SnapshotDescriptor(buffer);
-    Assert.stateNot(descriptor.locked(), "cannot complete locked snapshot descriptor");
-    descriptor.lock();
-    descriptor.close();
+    try (SnapshotDescriptor descriptor = new SnapshotDescriptor(buffer)) {
+      Assert.stateNot(descriptor.locked(), "cannot complete locked snapshot descriptor");
+      descriptor.lock();
+    }
     return super.complete();
   }
 
   /**
    * Deletes the snapshot file.
    */
+  @Override
   public void delete() {
     Path path = file.file().toPath();
     if (Files.exists(path)) {

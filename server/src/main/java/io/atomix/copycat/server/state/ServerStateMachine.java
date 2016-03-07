@@ -142,12 +142,18 @@ final class ServerStateMachine implements AutoCloseable {
    */
   private void completeSnapshot() {
     // If a snapshot is pending to be persisted and the last completed index is greater than the
-    // waiting snapshot index, persist the snapshot and update the last snapshot index.
+    // waiting snapshot index and no current or newer snapshot exists,
+    // persist the snapshot and update the last snapshot index.
     if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.index()) {
       long snapshotIndex = pendingSnapshot.index();
       LOGGER.debug("{} - Completing snapshot {}", state.getCluster().member().address(), snapshotIndex);
       synchronized (pendingSnapshot) {
-        pendingSnapshot.complete();
+        Snapshot currentSnapshot = state.getSnapshotStore().currentSnapshot();
+        if (currentSnapshot == null || snapshotIndex > currentSnapshot.index()) {
+          pendingSnapshot.complete();
+        } else {
+          LOGGER.debug("Discarding pending snapshot at index {} since the current snapshot is at index {}", pendingSnapshot.index(), currentSnapshot.index());
+        }
         pendingSnapshot = null;
       }
 
