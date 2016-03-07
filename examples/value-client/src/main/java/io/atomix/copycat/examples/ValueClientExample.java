@@ -49,11 +49,11 @@ public class ValueClientExample {
       .withTransport(new NettyTransport())
       .build();
 
-    client.open().join();
+    client.connect().join();
 
     recursiveSet(client);
 
-    while (client.isOpen()) {
+    while (client.state() != CopycatClient.State.CLOSED) {
       Thread.sleep(1000);
     }
   }

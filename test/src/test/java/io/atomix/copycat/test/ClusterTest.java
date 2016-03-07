@@ -161,7 +161,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(3);
     CopycatClient client = createClient();
     Thread.sleep(Duration.ofSeconds(10).toMillis());
-    threadAssertTrue(client.isOpen());
+    threadAssertTrue(client.state() == CopycatClient.State.CONNECTED);
   }
 
   /**
@@ -1362,7 +1362,7 @@ public class ClusterTest extends ConcurrentTestCase {
       .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
     client.serializer().disableWhitelist();
-    client.open().thenRun(this::resume);
+    client.connect().thenRun(this::resume);
     await(30000);
     clients.add(client);
     return client;
