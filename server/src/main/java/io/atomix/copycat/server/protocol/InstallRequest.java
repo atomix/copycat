@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.protocol;
 
-import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.AbstractRequest;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -61,7 +61,7 @@ public class InstallRequest extends AbstractRequest {
   private int leader;
   protected long index;
   protected int offset;
-  protected Buffer data;
+  protected byte[] data;
   protected boolean complete;
 
   /**
@@ -105,7 +105,7 @@ public class InstallRequest extends AbstractRequest {
    *
    * @return The snapshot data.
    */
-  public Buffer data() {
+  public byte[] data() {
     return data;
   }
 
@@ -135,7 +135,7 @@ public class InstallRequest extends AbstractRequest {
     index = buffer.readLong();
     offset = buffer.readInt();
     complete = buffer.readBoolean();
-    data = serializer.<Buffer>readObject(buffer).flip();
+    data = serializer.<byte[]>readObject(buffer);
   }
 
   @Override
@@ -152,7 +152,7 @@ public class InstallRequest extends AbstractRequest {
         && request.index == index
         && request.offset == offset
         && request.complete == complete
-        && request.data == data;
+        && Arrays.equals(request.data, data);
     }
     return false;
   }
@@ -217,12 +217,12 @@ public class InstallRequest extends AbstractRequest {
     }
 
     /**
-     * Sets the request snapshot buffer.
+     * Sets the request snapshot bytes.
      *
-     * @param snapshot The snapshot buffer.
+     * @param snapshot The snapshot bytes.
      * @return The request builder.
      */
-    public Builder withData(Buffer snapshot) {
+    public Builder withData(byte[] snapshot) {
       request.data = Assert.notNull(snapshot, "data");
       return this;
     }

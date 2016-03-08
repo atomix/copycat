@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.Response;
@@ -539,8 +537,8 @@ abstract class AbstractAppender implements AutoCloseable {
       try (SnapshotReader reader = snapshot.reader()) {
         // Skip to the next batch of bytes according to the snapshot chunk size and current offset.
         reader.skip(member.getNextSnapshotOffset() * MAX_BATCH_SIZE);
-        Buffer buffer = HeapBuffer.allocate(Math.min(MAX_BATCH_SIZE, reader.remaining()));
-        reader.read(buffer);
+        byte[] data = new byte[Math.min(MAX_BATCH_SIZE, (int) reader.remaining())];
+        reader.read(data);
 
         // Create the install request, indicating whether this is the last chunk of data based on the number
         // of bytes remaining in the buffer.
@@ -550,7 +548,7 @@ abstract class AbstractAppender implements AutoCloseable {
           .withLeader(leader != null ? leader.id() : 0)
           .withIndex(member.getNextSnapshotIndex())
           .withOffset(member.getNextSnapshotOffset())
-          .withData(buffer.flip())
+          .withData(data)
           .withComplete(!reader.hasRemaining())
           .build();
       }
