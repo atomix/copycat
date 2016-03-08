@@ -182,6 +182,8 @@ abstract class AbstractAppender implements AutoCloseable {
     // be null if they've been compacted and the member to which we're sending entries is just
     // joining the cluster or is otherwise far behind. Null entries are simply skipped and not
     // counted towards the size of the batch.
+    // If there exists an entry in the log with size >= MAX_BATCH_SIZE the logic ensures that
+    // entry will be sent in a batch of size one
     int size = 0;
 
     // Iterate through remaining entries in the log up to the last index.
@@ -191,7 +193,7 @@ abstract class AbstractAppender implements AutoCloseable {
       // has a unique index to handle gaps in the log.
       Entry entry = context.getLog().get(i);
       if (entry != null) {
-        if (size + entry.size() > MAX_BATCH_SIZE) {
+        if (!entries.isEmpty() && size + entry.size() > MAX_BATCH_SIZE) {
           break;
         }
         size += entry.size();
