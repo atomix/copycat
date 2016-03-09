@@ -327,7 +327,12 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       // Attempt to join the cluster. If the local member is ACTIVE then failing to join the cluster
       // will result in the member attempting to get elected. This allows initial clusters to form.
-      join(getActiveMemberStates().iterator());
+      List<MemberState> activeMembers = getActiveMemberStates();
+      if (!activeMembers.isEmpty()) {
+        join(getActiveMemberStates().iterator());
+      } else {
+        joinFuture.complete(null);
+      }
     });
 
     return joinFuture.whenComplete((result, error) -> joinFuture = null);
