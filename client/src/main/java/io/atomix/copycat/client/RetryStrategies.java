@@ -71,11 +71,11 @@ public enum RetryStrategies implements RetryStrategy {
    * Retries attempts using fibonacci sequence backoff.
    */
   FIBONACCI_BACKOFF {
-    private final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
+    private final int[] fibonacci = new int[]{1, 1, 2, 3, 5};
 
     @Override
     public void attemptFailed(Attempt attempt, Throwable cause) {
-      attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt()-1, FIBONACCI.length-1)]));
+      attempt.retry(Duration.ofSeconds(fibonacci[Math.min(attempt.attempt()-1, fibonacci.length-1)]));
     }
   }
 

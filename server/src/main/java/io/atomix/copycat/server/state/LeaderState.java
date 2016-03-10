@@ -92,7 +92,7 @@ final class LeaderState extends ActiveState {
       entry.setTerm(term)
         .setTimestamp(appender.time());
       assert context.getLog().append(entry) == appender.index();
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      logger.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
@@ -130,7 +130,7 @@ final class LeaderState extends ActiveState {
     // Set a timer that will be used to periodically synchronize with other nodes
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
-    LOGGER.debug("{} - Starting append timer", context.getCluster().member().address());
+    logger.debug("{} - Starting append timer", context.getCluster().member().address());
     appendTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::appendMembers);
   }
 
@@ -162,7 +162,7 @@ final class LeaderState extends ActiveState {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
       if (session.state() == Session.State.UNSTABLE && !session.isUnregistering()) {
-        LOGGER.debug("{} - Detected expired session: {}", context.getCluster().member().address(), session.id());
+        logger.debug("{} - Detected expired session: {}", context.getCluster().member().address(), session.id());
 
         // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
         // This will result in state machine expire() methods being called when the entry is applied.
@@ -173,7 +173,7 @@ final class LeaderState extends ActiveState {
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+          logger.debug("{} - Appended {}", context.getCluster().member().address(), entry);
         }
 
         // Commit the unregister entry and apply it to the state machine.
@@ -221,7 +221,7 @@ final class LeaderState extends ActiveState {
         .setTimestamp(System.currentTimeMillis())
         .setMembers(members);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+      logger.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
@@ -427,7 +427,7 @@ final class LeaderState extends ActiveState {
   @Override
   public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
     if (updateTermAndLeader(request.term(), 0)) {
-      LOGGER.debug("{} - Received greater term", context.getCluster().member().address());
+      logger.debug("{} - Received greater term", context.getCluster().member().address());
       context.transition(CopycatServer.State.FOLLOWER);
       return super.vote(request);
     } else {
@@ -501,7 +501,7 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+      logger.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
     }
 
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
@@ -682,7 +682,7 @@ final class LeaderState extends ActiveState {
         .setClient(request.client())
         .setTimeout(timeout);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      logger.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
@@ -769,7 +769,7 @@ final class LeaderState extends ActiveState {
         .setTimestamp(timestamp)
         .setAddress(request.address());
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      logger.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
@@ -830,7 +830,7 @@ final class LeaderState extends ActiveState {
         .setEventIndex(request.eventIndex())
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      logger.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
@@ -896,7 +896,7 @@ final class LeaderState extends ActiveState {
         .setExpired(false)
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      logger.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
@@ -945,7 +945,7 @@ final class LeaderState extends ActiveState {
    */
   private void cancelAppendTimer() {
     if (appendTimer != null) {
-      LOGGER.debug("{} - Cancelling append timer", context.getCluster().member().address());
+      logger.debug("{} - Cancelling append timer", context.getCluster().member().address());
       appendTimer.cancel();
     }
   }
