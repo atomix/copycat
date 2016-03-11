@@ -39,6 +39,7 @@ import io.atomix.copycat.session.Session;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 
 /**
@@ -195,8 +196,10 @@ final class ClientSessionSubmitter {
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
-      } else {
+      } else if (error instanceof TimeoutException) {
         strategy.attemptFailed(this, error);
+      } else {
+        fail(error);
       }
     }
 
