@@ -102,6 +102,10 @@ class PassiveState extends ReserveState {
             .filter(m -> m != null)
             .collect(Collectors.toList()))
           .build())
+        .exceptionally(error -> ConnectResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
         .thenApply(this::logResponse);
     }
   }
@@ -263,7 +267,12 @@ class PassiveState extends ReserveState {
     }
 
     LOGGER.debug("{} - Forwarded {}", context.getCluster().member().address(), request);
-    return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
+    return this.<QueryRequest, QueryResponse>forward(request)
+      .exceptionally(error -> QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .build())
+      .thenApply(this::logResponse);
   }
 
   /**

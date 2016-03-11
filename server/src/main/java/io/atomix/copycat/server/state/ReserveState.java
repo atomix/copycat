@@ -101,7 +101,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<CommandRequest, CommandResponse>forward(request).thenApply(this::logResponse);
+      return this.<CommandRequest, CommandResponse>forward(request)
+        .exceptionally(error -> CommandResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -116,7 +121,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<QueryRequest, QueryResponse>forward(request).thenApply(this::logResponse);
+      return this.<QueryRequest, QueryResponse>forward(request)
+        .exceptionally(error -> QueryResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -131,7 +141,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<RegisterRequest, RegisterResponse>forward(request).thenApply(this::logResponse);
+      return this.<RegisterRequest, RegisterResponse>forward(request)
+        .exceptionally(error -> RegisterResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -167,7 +182,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<KeepAliveRequest, KeepAliveResponse>forward(request).thenApply(this::logResponse);
+      return this.<KeepAliveRequest, KeepAliveResponse>forward(request)
+        .exceptionally(error -> KeepAliveResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -183,7 +203,20 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
     } else {
-      return session.getConnection().<PublishRequest, PublishResponse>send(request);
+      CompletableFuture<PublishResponse> future = new CompletableFuture<>();
+      session.getConnection().<PublishRequest, PublishResponse>send(request).whenComplete((result, error) -> {
+        if (isOpen()) {
+          if (error == null) {
+            future.complete(result);
+          } else {
+            future.complete(logResponse(PublishResponse.builder()
+              .withStatus(Response.Status.ERROR)
+              .withError(CopycatError.Type.INTERNAL_ERROR)
+              .build()));
+          }
+        }
+      });
+      return future;
     }
   }
 
@@ -198,7 +231,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<UnregisterRequest, UnregisterResponse>forward(request).thenApply(this::logResponse);
+      return this.<UnregisterRequest, UnregisterResponse>forward(request)
+        .exceptionally(error -> UnregisterResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -213,7 +251,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<JoinRequest, JoinResponse>forward(request).thenApply(this::logResponse);
+      return this.<JoinRequest, JoinResponse>forward(request)
+        .exceptionally(error -> JoinResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -228,7 +271,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<ReconfigureRequest, ReconfigureResponse>forward(request).thenApply(this::logResponse);
+      return this.<ReconfigureRequest, ReconfigureResponse>forward(request)
+        .exceptionally(error -> ReconfigureResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
@@ -243,7 +291,12 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<LeaveRequest, LeaveResponse>forward(request).thenApply(this::logResponse);
+      return this.<LeaveRequest, LeaveResponse>forward(request)
+        .exceptionally(error -> LeaveResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
     }
   }
 
