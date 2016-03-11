@@ -23,8 +23,8 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ConnectRequest;
-import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,7 +149,7 @@ public class ClientConnection implements Connection {
         } else {
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
-      } else if (error instanceof TimeoutException) {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException) {
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       } else {
         future.completeExceptionally(error);
