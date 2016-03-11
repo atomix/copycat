@@ -15,16 +15,13 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.transport.MessageHandler;
+import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ConnectRequest;
-import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +32,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -148,8 +146,10 @@ public class ClientConnection implements Connection {
         } else {
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
-      } else {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException) {
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+      } else {
+        future.completeExceptionally(error);
       }
     }
   }

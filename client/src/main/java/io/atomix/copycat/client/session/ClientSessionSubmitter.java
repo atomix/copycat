@@ -16,29 +16,26 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.*;
-import io.atomix.copycat.error.CommandException;
-import io.atomix.copycat.error.QueryException;
-import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.CommandRequest;
-import io.atomix.copycat.protocol.OperationRequest;
-import io.atomix.copycat.protocol.QueryRequest;
-import io.atomix.copycat.protocol.CommandResponse;
-import io.atomix.copycat.protocol.OperationResponse;
-import io.atomix.copycat.protocol.QueryResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.util.ClientSequencer;
+import io.atomix.copycat.error.CommandException;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.error.QueryException;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
+import java.net.ConnectException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 
 /**
@@ -195,8 +192,10 @@ final class ClientSessionSubmitter {
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
-      } else {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException) {
         strategy.attemptFailed(this, error);
+      } else {
+        fail(error);
       }
     }
 
