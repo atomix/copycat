@@ -15,10 +15,7 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.transport.MessageHandler;
+import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.copycat.error.CopycatError;
@@ -149,7 +146,7 @@ public class ClientConnection implements Connection {
         } else {
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
-      } else if (error instanceof ConnectException || error instanceof TimeoutException) {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException) {
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       } else {
         future.completeExceptionally(error);

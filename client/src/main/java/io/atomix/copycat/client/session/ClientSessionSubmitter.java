@@ -16,6 +16,7 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
@@ -191,7 +192,7 @@ final class ClientSessionSubmitter {
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
-      } else if (error instanceof ConnectException || error instanceof TimeoutException) {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException) {
         strategy.attemptFailed(this, error);
       } else {
         fail(error);
