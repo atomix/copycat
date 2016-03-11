@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.ConnectException;
+import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
@@ -146,7 +147,7 @@ public class ClientConnection implements Connection {
         } else {
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
-      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException) {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       } else {
         future.completeExceptionally(error);

@@ -33,6 +33,7 @@ import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
 import java.net.ConnectException;
+import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
@@ -192,7 +193,7 @@ final class ClientSessionSubmitter {
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
-      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException) {
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
         strategy.attemptFailed(this, error);
       } else {
         fail(error);
