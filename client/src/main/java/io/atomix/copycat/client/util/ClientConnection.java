@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -148,8 +149,10 @@ public class ClientConnection implements Connection {
         } else {
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
-      } else {
+      } else if (error instanceof TimeoutException) {
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+      } else {
+        future.completeExceptionally(error);
       }
     }
   }
