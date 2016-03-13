@@ -62,16 +62,9 @@ public final class MajorCompactionManager implements CompactionManager {
   public List<List<Segment>> getCompactableGroups(Storage storage, SegmentManager manager) {
     List<List<Segment>> compact = new ArrayList<>();
     List<Segment> segments = null;
-    Segment previousSegment = null;
     for (Segment segment : getCompactableSegments(manager)) {
       // If this is the first segment in a segments list, add the segment.
       if (segments == null) {
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      // If the previous segment is undefined or of a different version, reset the segments.
-      else if (previousSegment != null && previousSegment.descriptor().version() != segment.descriptor().version()) {
-        compact.add(segments);
         segments = new ArrayList<>();
         segments.add(segment);
       }
@@ -86,7 +79,6 @@ public final class MajorCompactionManager implements CompactionManager {
         segments = new ArrayList<>();
         segments.add(segment);
       }
-      previousSegment = segment;
     }
 
     // Ensure all compactable segments have been added to the compact segments list.

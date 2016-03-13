@@ -61,7 +61,7 @@ public class Compactor implements AutoCloseable {
   private Compaction.Mode defaultCompactionMode = Compaction.Mode.SEQUENTIAL;
   private ScheduledFuture<?> minor;
   private ScheduledFuture<?> major;
-  private CompletableFuture<Void> future;
+  private CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
 
   public Compactor(Storage storage, SegmentManager segments, ScheduledExecutorService executor) {
     this.storage = Assert.notNull(storage, "storage");
@@ -178,7 +178,7 @@ public class Compactor implements AutoCloseable {
   }
 
   /**
-   * Compacts the log using the given {@link CompactionManager}.
+   * Compacts the log using the given {@link Compaction}.
    * <p>
    * The provided {@link CompactionManager} will be queried for a list of {@link CompactionTask}s to run.
    * Tasks will be run in parallel in a pool of background threads, and the returned {@link CompletableFuture}
@@ -188,13 +188,17 @@ public class Compactor implements AutoCloseable {
    * @return A completable future to be completed once the log has been compacted.
    */
   public synchronized CompletableFuture<Void> compact(Compaction compaction) {
-    if (future != null)
-      return future;
+    final CompletableFuture<Void> future = new CompletableFuture<>();
+    ThreadContext context = ThreadContext.currentContext();
+    this.future.whenComplete((result, error) -> compact(compaction, future, context));
+    this.future = future;
+    return this.future;
+  }
 
-    future = new CompletableFuture<>();
-
-    ThreadContext compactorThread = ThreadContext.currentContext();
-
+  /**
+   * Compacts the log.
+   */
+  private synchronized CompletableFuture<Void> compact(Compaction compaction, CompletableFuture<Void> future, ThreadContext context) {
     CompactionManager manager = compaction.manager(this);
     AtomicInteger counter = new AtomicInteger();
 
@@ -208,8 +212,8 @@ public class Compactor implements AutoCloseable {
         taskThread.execute(task).whenComplete((result, error) -> {
           LOGGER.debug("{} complete", task);
           if (counter.incrementAndGet() == tasks.size()) {
-            if (compactorThread != null) {
-              compactorThread.executor().execute(() -> future.complete(null));
+            if (context != null) {
+              context.executor().execute(() -> future.complete(null));
             } else {
               future.complete(null);
             }
@@ -219,7 +223,7 @@ public class Compactor implements AutoCloseable {
     } else {
       future.complete(null);
     }
-    return future.whenComplete((result, error) -> future = null);
+    return future;
   }
 
   /**
