@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server;
 
+import io.atomix.catalyst.util.ReferenceCounted;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
@@ -44,7 +45,7 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Commit<T extends Operation> extends AutoCloseable {
+public interface Commit<T extends Operation> extends ReferenceCounted<Commit<T>> {
 
   /**
    * Returns the commit index.
@@ -137,9 +138,44 @@ public interface Commit<T extends Operation> extends AutoCloseable {
   }
 
   /**
-   * Closes the commit.
+   * Acquires a reference to the commit.
    * <p>
-   * Closing a commit will make it available for compaction from the replicated log.
+   * Initially, all open commits have a single reference. Acquiring new references to a commit will
+   * increase the commit's {@link #references() reference count} which is used to determine when it's
+   * safe to recycle the {@link Commit} object and compact the underlying entry from the log. Acquired
+   * references must be {@link #release() released} once the commit is no longer needed to free up
+   * memory and disk space.
+   *
+   * @return The referenced commit.
+   */
+  @Override
+  Commit<T> acquire();
+
+  /**
+   * Releases a reference to the commit.
+   * <p>
+   * If releasing the commit results in the {@link #references() reference count} decreasing to
+   * {@code 0} then the commit will be released back to a pool and the log entry underlying the commit
+   * may be compacted from the log. Once all references to the commit have been released it should
+   * no longer be accessed.
+   *
+   * @return Indicates whether all references to the commit have been released.
+   */
+  @Override
+  boolean release();
+
+  /**
+   * Returns the number of open references to the commit.
+   *
+   * @return The number of open references to the commit.
+   */
+  @Override
+  int references();
+
+  /**
+   * Closes the commit, releasing all references.
+   * <p>
+   * Closing a commit will make it immediately available for compaction from the replicated log.
    * Once the commit is closed, it may be recycled and should no longer be accessed by the closer.
    */
   @Override
