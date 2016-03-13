@@ -54,11 +54,15 @@ public class ValueStateMachineExample {
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withDirectory(args[0])
-        .withMaxEntriesPerSegment(1024)
-        .withMinorCompactionInterval(Duration.ofSeconds(27))
-        .withMajorCompactionInterval(Duration.ofSeconds(31))
+        .withMaxSegmentSize(1024 * 1024 * 32)
+        .withMinorCompactionInterval(Duration.ofMinutes(1))
+        .withMajorCompactionInterval(Duration.ofHours(1))
         .build())
       .build();
+
+    server.serializer().register(SetCommand.class, 1);
+    server.serializer().register(GetQuery.class, 2);
+    server.serializer().register(DeleteCommand.class, 3);
 
     server.start().join();
 
