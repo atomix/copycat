@@ -76,8 +76,7 @@ public final class MajorCompactionManager implements CompactionManager {
         segments.add(segment);
       }
       // If the total size of all segments is less than the maximum size of any segment, add the segment to the segments list.
-      else if (segments.stream().mapToLong(Segment::size).sum() + segment.size() <= storage.maxSegmentSize()
-        && segments.stream().mapToLong(Segment::count).sum() + segment.count() <= storage.maxEntriesPerSegment()) {
+      else if (segments.stream().mapToLong(Segment::size).sum() + segment.size() <= storage.maxSegmentSize()) {
         segments.add(segment);
       }
       // If there's not enough room to combine segments, reset the segments list.
