@@ -24,6 +24,7 @@ import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Server commit.
@@ -33,11 +34,11 @@ import java.time.Instant;
 final class ServerCommit implements Commit<Operation<?>> {
   private final ServerCommitPool pool;
   private final Log log;
-  private long index;
-  private ServerSessionContext session;
-  private Instant instant;
-  private Operation operation;
-  private volatile boolean open;
+  private final AtomicInteger references = new AtomicInteger();
+  private volatile long index;
+  private volatile ServerSessionContext session;
+  private volatile Instant instant;
+  private volatile Operation operation;
 
   public ServerCommit(ServerCommitPool pool, Log log) {
     this.pool = pool;
@@ -50,19 +51,23 @@ final class ServerCommit implements Commit<Operation<?>> {
    * @param entry The entry.
    */
   void reset(OperationEntry<?> entry, ServerSessionContext session, long timestamp) {
-    this.index = entry.getIndex();
-    this.session = session;
-    this.instant = Instant.ofEpochMilli(timestamp);
-    this.operation = entry.getOperation();
-    session.acquire();
-    open = true;
+    if (references.compareAndSet(0, 1)) {
+      this.index = entry.getIndex();
+      this.session = session;
+      this.instant = Instant.ofEpochMilli(timestamp);
+      this.operation = entry.getOperation();
+      session.acquire();
+      references.set(1);
+    } else {
+      throw new IllegalStateException("Cannot recycle commit with " + references.get() + " references");
+    }
   }
 
   /**
    * Checks whether the commit is open and throws an exception if not.
    */
   private void checkOpen() {
-    Assert.state(open, "commit not open");
+    Assert.state(references.get() > 0, "commit not open");
   }
 
   @Override
@@ -97,24 +102,52 @@ final class ServerCommit implements Commit<Operation<?>> {
   }
 
   @Override
-  public void close() {
-    if (open) {
-      if (operation instanceof Command && log.isOpen()) {
-        try {
-          log.release(index);
-        } catch (IllegalStateException e) {
-        }
-      }
+  public Commit<Operation<?>> acquire() {
+    references.incrementAndGet();
+    return this;
+  }
 
-      session.release();
-
-      index = 0;
-      session = null;
-      instant = null;
-      operation = null;
-      pool.release(this);
-      open = false;
+  @Override
+  public boolean release() {
+    if (references.decrementAndGet() == 0) {
+      cleanup();
+      return true;
     }
+    return false;
+  }
+
+  @Override
+  public int references() {
+    return references.get();
+  }
+
+  @Override
+  public void close() {
+    if (references.get() > 0) {
+      references.set(0);
+      cleanup();
+    }
+  }
+
+  /**
+   * Cleans up the commit.
+   */
+  private void cleanup() {
+    if (operation instanceof Command && log.isOpen()) {
+      try {
+        log.release(index);
+      } catch (IllegalStateException e) {
+      }
+    }
+
+    session.release();
+
+    index = 0;
+    session = null;
+    instant = null;
+    operation = null;
+
+    pool.release(this);
   }
 
   @Override
@@ -125,7 +158,7 @@ final class ServerCommit implements Commit<Operation<?>> {
 
   @Override
   public String toString() {
-    if (open) {
+    if (references() > 0) {
       return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
     } else {
       return String.format("%s[index=unknown]", getClass().getSimpleName());
