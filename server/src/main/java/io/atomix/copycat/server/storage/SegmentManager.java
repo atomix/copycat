@@ -416,38 +416,51 @@ public class SegmentManager implements AutoCloseable {
           // Load the segment.
           Segment segment = loadSegment(descriptor.id(), descriptor.version());
 
-          // Check whether an existing segment with the segment index already exists. Note that we don't use segment IDs
-          // since the log compaction process combines segments and therefore it's not easy to determine which segment
-          // will contain a given starting index by ID.
-          Map.Entry<Long, Segment> existingEntry = segments.floorEntry(segment.descriptor().index());
-          if (existingEntry != null) {
+          // If a segment with an equal or lower index has already been loaded, ensure this segment is not superseded
+          // by the earlier segment. This can occur due to segments being combined during log compaction.
+          Map.Entry<Long, Segment> previousEntry = segments.floorEntry(segment.index());
+          if (previousEntry != null) {
 
             // If an existing descriptor exists with a lower index than this segment's first index, check to determine
             // whether this segment's first index is contained in that existing index. If it is, determine which segment
             // should take precedence based on segment versions.
-            Segment existingSegment = existingEntry.getValue();
-            if (existingSegment.index() <= segment.index() && existingSegment.index() + existingSegment.length() > segment.index()) {
-              if (existingSegment.descriptor().version() < segment.descriptor().version()) {
-                LOGGER.debug("Replaced segment {} with newer version: {} ({})", existingSegment.descriptor().id(), segment.descriptor().version(), segmentFile.file().getName());
-                segments.remove(existingEntry.getKey());
-                existingSegment.close();
-                existingSegment.delete();
-                segments.put(segment.index(), segment);
+            Segment previousSegment = previousEntry.getValue();
+
+            // If the two segments start at the same index, the segment with the higher version number is used.
+            if (previousSegment.index() == segment.index()) {
+              if (segment.descriptor().version() > previousSegment.descriptor().version()) {
+                LOGGER.debug("Replaced segment {} with newer version: {} ({})", previousSegment.descriptor().id(), segment.descriptor().version(), segmentFile.file().getName());
+                segments.remove(previousEntry.getKey());
+                previousSegment.close();
+                previousSegment.delete();
               } else {
                 segment.close();
                 segment.delete();
+                continue;
               }
             }
-            // If the next closest existing segment didn't contain this segment's first index, add this segment.
-            else {
-              LOGGER.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
-              segments.put(segment.index(), segment);
+            // If the existing segment's entries overlap with the loaded segment's entries, the existing segment always
+            // supersedes the loaded segment. Log compaction processes ensure this is always the case.
+            else if (previousSegment.index() + previousSegment.length() > segment.index()) {
+              segment.close();
+              segment.delete();
+              continue;
             }
           }
-          // If there was no segment with a starting index close to this segment's index, add this segment.
-          else {
-            LOGGER.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
-            segments.put(segment.index(), segment);
+
+          // Add the segment to the segments list.
+          LOGGER.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
+          segments.put(segment.index(), segment);
+
+          // Ensure any segments later in the log with which this segment overlaps are removed.
+          Map.Entry<Long, Segment> nextEntry = segments.higherEntry(segment.index());
+          while (nextEntry != null) {
+            if (nextEntry.getValue().index() < segment.index() + segment.length()) {
+              segments.remove(nextEntry.getKey());
+              nextEntry = segments.higherEntry(segment.index());
+            } else {
+              break;
+            }
           }
 
           descriptor.close();
