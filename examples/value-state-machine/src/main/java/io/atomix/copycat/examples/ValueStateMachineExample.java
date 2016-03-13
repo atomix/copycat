@@ -56,7 +56,7 @@ public class ValueStateMachineExample {
         .withDirectory(args[0])
         .withMaxSegmentSize(1024 * 1024 * 32)
         .withMinorCompactionInterval(Duration.ofMinutes(1))
-        .withMajorCompactionInterval(Duration.ofHours(1))
+        .withMajorCompactionInterval(Duration.ofMinutes(15))
         .build())
       .build();
 
