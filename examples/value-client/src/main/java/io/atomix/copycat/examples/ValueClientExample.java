@@ -17,12 +17,14 @@ package io.atomix.copycat.examples;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.NettyTransport;
-import io.atomix.copycat.client.CopycatClient;
+import io.atomix.copycat.client.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Value client example.
@@ -40,32 +42,58 @@ public class ValueClientExample {
 
     // Build a list of all member addresses to which to connect.
     List<Address> members = new ArrayList<>();
-    for (int i = 0; i < args.length; i++) {
-      String[] parts = args[i].split(":");
+    for (String arg : args) {
+      String[] parts = arg.split(":");
       members.add(new Address(parts[0], Integer.valueOf(parts[1])));
     }
 
     CopycatClient client = CopycatClient.builder(members)
       .withTransport(new NettyTransport())
+      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
+      .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
+      .withRecoveryStrategy(RecoveryStrategies.RECOVER)
+      .withServerSelectionStrategy(ServerSelectionStrategies.LEADER)
       .build();
+
+    client.serializer().register(SetCommand.class, 1);
+    client.serializer().register(GetQuery.class, 2);
+    client.serializer().register(DeleteCommand.class, 3);
 
     client.connect().join();
 
-    recursiveSet(client);
+    AtomicInteger counter = new AtomicInteger();
+    AtomicLong timer = new AtomicLong();
+    client.context().schedule(Duration.ofSeconds(1), Duration.ofSeconds(1), () -> {
+      long count = counter.get();
+      long time = System.currentTimeMillis();
+      long previousTime = timer.get();
+      if (previousTime > 0) {
+        System.out.println(String.format("Completed %d writes in %d milliseconds", count, time - previousTime));
+      }
+      counter.set(0);
+      timer.set(time);
+    });
+
+    for (int i = 0; i < 10; i++) {
+      recursiveSet(client, counter);
+    }
 
     while (client.state() != CopycatClient.State.CLOSED) {
-      Thread.sleep(1000);
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        break;
+      }
     }
   }
 
   /**
    * Recursively sets state machine values.
    */
-  private static void recursiveSet(CopycatClient client) {
+  private static void recursiveSet(CopycatClient client, AtomicInteger counter) {
     client.submit(new SetCommand(UUID.randomUUID().toString())).thenRun(() -> {
-      client.submit(new GetQuery()).thenAccept(value -> {
-        client.context().schedule(Duration.ofMillis(10), () -> recursiveSet(client));
-      });
+      counter.incrementAndGet();
+      recursiveSet(client, counter);
     });
   }
 
