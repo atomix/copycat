@@ -64,40 +64,10 @@ public final class MinorCompactionManager implements CompactionManager {
   }
 
   @Override
-  public List<CompactionTask> buildTasks(Storage storage, SegmentManager manager) {
-    List<CompactionTask> tasks = new ArrayList<>(manager.segments().size());
-
-    List<Segment> segments = null;
-    Segment previousSegment = null;
-    for (Segment segment : getCompactableSegments(storage, manager)) {
-      // If this is the first segment in a segments list, add the segment to a new segments list.
-      if (segments == null) {
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      // If the previous segment is undefined or of a different version, add the task and reset the segments list.
-      else if (previousSegment != null && previousSegment.descriptor().version() != segment.descriptor().version()) {
-        tasks.add(new MinorCompactionTask(manager, segments, compactor.snapshotIndex(), compactor.majorIndex(), compactor.getDefaultCompactionMode()));
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      // If the total size of all segments is less than the maximum size of any segment, add the segment to the segments list.
-      else if (segments.stream().mapToLong(Segment::size).sum() + segment.size() <= storage.maxSegmentSize()
-        && segments.stream().mapToLong(Segment::count).sum() + segment.count() <= storage.maxEntriesPerSegment()) {
-        segments.add(segment);
-      }
-      // If there's not enough room to combine segments, add the task and reset the segments list.
-      else {
-        tasks.add(new MinorCompactionTask(manager, segments, compactor.snapshotIndex(), compactor.majorIndex(), compactor.getDefaultCompactionMode()));
-        segments = new ArrayList<>();
-        segments.add(segment);
-      }
-      previousSegment = segment;
-    }
-
-    // Ensure all compactable segments have been added to the task list.
-    if (segments != null) {
-      tasks.add(new MinorCompactionTask(manager, segments, compactor.snapshotIndex(), compactor.majorIndex(), compactor.getDefaultCompactionMode()));
+  public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
+    List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
+    for (Segment segment : getCompactableSegments(storage, segments)) {
+      tasks.add(new MinorCompactionTask(segments, segment, compactor.snapshotIndex(), compactor.majorIndex(), compactor.getDefaultCompactionMode()));
     }
     return tasks;
   }
