@@ -21,7 +21,7 @@ package io.atomix.copycat.error;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class InternalException extends CopycatException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR;
+  private static final CopycatError.Type TYPE = CopycatError.Type.INTERNAL_ERROR;
 
   public InternalException(String message, Object... args) {
     super(TYPE, message, args);
