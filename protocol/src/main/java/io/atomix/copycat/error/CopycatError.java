@@ -48,6 +48,8 @@ public interface CopycatError {
         return Type.UNKNOWN_SESSION_ERROR;
       case 7:
         return Type.INTERNAL_ERROR;
+      case 8:
+        return Type.CONFIGURATION_ERROR;
       default:
         throw new IllegalArgumentException("invalid error identifier: " + id);
     }
