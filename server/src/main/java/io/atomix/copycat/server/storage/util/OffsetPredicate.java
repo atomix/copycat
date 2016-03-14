@@ -50,7 +50,7 @@ public final class OffsetPredicate implements Predicate<Long>, AutoCloseable {
    */
   @Override
   public boolean test(Long offset) {
-    return offset == -1 || bits.size() < offset || !bits.get(offset);
+    return offset == -1 || bits.size() <= offset || !bits.get(offset);
   }
 
   /**
