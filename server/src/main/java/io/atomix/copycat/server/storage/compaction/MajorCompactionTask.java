@@ -231,7 +231,8 @@ public final class MajorCompactionTask implements CompactionTask {
           transferEntry(entry, compactSegment);
         }
         break;
-      // QUORUM entries are compacted if the entry has been released from the segment.
+      // RELEASE and QUORUM entries are compacted if the entry has been released from the segment.
+      case RELEASE:
       case QUORUM:
         if (!isLive(index, segment, predicate)) {
           compactEntry(index, segment, compactSegment);

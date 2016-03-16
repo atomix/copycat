@@ -96,9 +96,15 @@ public enum Compaction {
     SNAPSHOT,
 
     /**
+     * The {@code RELEASE} compaction mode retains the command in the log until it has been stored and applied
+     * on a majority of servers in the cluster and is released.
+     */
+    RELEASE,
+
+    /**
      * The {@code QUORUM} compaction mode retains the command in the log until it has been stored and applied
      * on a majority of servers in the cluster. Once the commit has been applied to the state machine and
-     * closed, it may be removed during minor or major compaction.
+     * released, it may be removed during minor or major compaction.
      */
     QUORUM,
 

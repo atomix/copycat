@@ -173,6 +173,19 @@ public interface Command<T> extends Operation<T> {
     SNAPSHOT,
 
     /**
+     * The {@code RELEASE} compaction mode retains the command in the log until it has been stored on a majority
+     * of servers in the cluster and has been released by the state machine.
+     * <p>
+     * This compaction mode typically represents normal writes to a state machine. Once a {@code RELEASE} command
+     * has been applied on a majority of state machines and have been released from memory, the command may be
+     * safely removed from the log. It is the state machine's responsibility to indicate when it's safe for a
+     * {@code RELEASE} command to be removed from the log by explicitly releasing the command once it no longer
+     * contributes to the state machine's state. For instance, when one write overwrites the state that resulted
+     * from a previous write, the previous write can be safely released and removed from the log during compaction.
+     */
+    RELEASE,
+
+    /**
      * The {@code QUORUM} compaction mode retains the command in the log until it has been stored on a majority
      * of servers in the cluster and has been applied to the state machine.
      * <p>

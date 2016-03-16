@@ -143,7 +143,8 @@ public final class MinorCompactionTask implements CompactionTask {
           transferEntry(index, entry, compactSegment);
         }
         break;
-      // QUORUM entries are compacted if the entry has been released in the segment.
+      // RELEASE and QUORUM entries are compacted if the entry has been released in the segment.
+      case RELEASE:
       case QUORUM:
         if (!segment.isLive(index)) {
           compactEntry(index, segment, compactSegment);

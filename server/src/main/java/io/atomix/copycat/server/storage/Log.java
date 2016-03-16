@@ -365,8 +365,9 @@ public class Log implements AutoCloseable {
             return entry;
           }
           break;
-        // QUORUM entries are returned if the minorIndex is less than the entry index or the
+        // RELEASE and QUORUM entries are returned if the minorIndex is less than the entry index or the
         // entry is still live.
+        case RELEASE:
         case QUORUM:
           if (index > compactor.minorIndex() || segment.isLive(index)) {
             return entry;
