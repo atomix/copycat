@@ -160,9 +160,10 @@ public final class MinorCompactionTask implements CompactionTask {
           transferEntry(index, entry, compactSegment);
         }
         break;
-      // SEQUENTIAL and TOMBSTONE entries can only be compacted during major compaction.
+      // SEQUENTIAL, EXPIRING, and TOMBSTONE entries can only be compacted during major compaction.
       // UNKNOWN entries can only be compacted during major compaction.
       case SEQUENTIAL:
+      case EXPIRING:
       case TOMBSTONE:
       case UNKNOWN:
         transferEntry(index, entry, compactSegment);

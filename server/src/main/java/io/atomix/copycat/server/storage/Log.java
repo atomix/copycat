@@ -372,10 +372,11 @@ public class Log implements AutoCloseable {
             return entry;
           }
           break;
-        // FULL, SEQUENTIAL, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
+        // FULL, SEQUENTIAL, EXPIRING, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
         // entry index or if the entry is still live.
         case FULL:
         case SEQUENTIAL:
+        case EXPIRING:
         case TOMBSTONE:
           if (index > compactor.minorIndex() || index > compactor.majorIndex() || segment.isLive(index)) {
             return entry;

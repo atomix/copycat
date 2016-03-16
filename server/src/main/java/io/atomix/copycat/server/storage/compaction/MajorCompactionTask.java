@@ -241,10 +241,11 @@ public final class MajorCompactionTask implements CompactionTask {
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index and
       // the entry has been released.
-      // SEQUENTIAL entries are compacted if the major compact index is greater than the entry index
-      // and the entry has been released.
+      // SEQUENTIAL, EXPIRING, and TOMBSTONE entries are compacted if the major compact index is greater than the
+      // entry index and the entry has been released.
       case FULL:
       case SEQUENTIAL:
+      case EXPIRING:
       case TOMBSTONE:
         if (index <= compactIndex && !isLive(index, segment, predicate)) {
           compactEntry(index, segment, compactSegment);

@@ -216,6 +216,21 @@ public interface Command<T> extends Operation<T> {
     SEQUENTIAL,
 
     /**
+     * The expiring compaction mode is an alias for the {@link #SEQUENTIAL} compaction mode that is specifically intended
+     * for expiring commands like TTLs and other time-based operations. Expiring commands will be retained in the log until
+     * stored and applied on all servers and will only be removed from the log once all prior released entries have been
+     * removed.
+     * <p>
+     * The {@code EXPIRING} compaction mode adds to the <em>full replication</em> requirement of the {@code FULL}
+     * compaction mode to also require that commands be removed from the log <em>in sequential order</em>. Typically,
+     * this compaction mode is used for so called <em>tombstone</em> commands. Sequential ordering is critical in
+     * the handling of tombstones since they essentially represent the absence of state. A tombstone cannot be safely
+     * removed from the log until all prior related entries have been removed. Compacting tombstones sequentially ensures
+     * that any prior related commands will have been compacted from the log prior to the tombstone being removed.
+     */
+    EXPIRING,
+
+    /**
      * The tombstone compaction mode is an alias for the {@link #SEQUENTIAL} compaction mode that is specifically intended
      * for tombstone commands. Tombstones will be retained in the log until stored and applied on all servers, and tombstones
      * will only be removed from the log once all prior released entries have been removed.

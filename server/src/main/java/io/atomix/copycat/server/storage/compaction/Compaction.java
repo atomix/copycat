@@ -118,6 +118,14 @@ public enum Compaction {
     SEQUENTIAL,
 
     /**
+     * The {@code EXPIRING} compaction mode is an alias of the {@link #SEQUENTIAL} mode. Expiring entries are
+     * retained in the log until stored and applied on all servers. Once the commit has been applied to a state
+     * machine and closed, it may be removed from the log <em>only during major compaction</em> to ensure that
+     * all prior completed commits are removed first.
+     */
+    EXPIRING,
+
+    /**
      * The {@code TOMBSTONE} compaction mode is an alias of the {@link #SEQUENTIAL} mode. Tombstone entries are
      * retained in the log until stored and applied on all servers. Once the commit has been applied to a state
      * machine and closed, it may be removed from the log <em>only during major compaction</em> to ensure that
