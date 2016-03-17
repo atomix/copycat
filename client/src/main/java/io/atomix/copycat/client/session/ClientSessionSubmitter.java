@@ -191,10 +191,8 @@ final class ClientSessionSubmitter {
         state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
-        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
+        } else if (response.error() == CopycatError.Type.COMMAND_ERROR || response.error() == CopycatError.Type.QUERY_ERROR || response.error() == CopycatError.Type.APPLICATION_ERROR) {
           complete(response.error().createException());
-        } else if (response.error() == CopycatError.Type.COMMAND_ERROR || response.error() == CopycatError.Type.QUERY_ERROR) {
-          strategy.attemptFailed(this, error);
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
