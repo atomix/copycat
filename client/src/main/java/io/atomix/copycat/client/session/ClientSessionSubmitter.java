@@ -36,8 +36,10 @@ import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 /**
  * Session operation submitter.
@@ -184,6 +186,7 @@ final class ClientSessionSubmitter {
 
     @Override
     public void accept(U response, Throwable error) {
+      Predicate<Throwable> retryableCheck = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
       if (error == null) {
         state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
@@ -195,7 +198,7 @@ final class ClientSessionSubmitter {
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           strategy.attemptFailed(this, response.error().createException());
         }
-      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
+      } else if (retryableCheck.test(error) || (error instanceof CompletionException && retryableCheck.test(error.getCause()))) {
         strategy.attemptFailed(this, error);
       } else {
         fail(error);
