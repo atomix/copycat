@@ -19,12 +19,7 @@ import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.PollRequest;
-import io.atomix.copycat.server.protocol.VoteRequest;
-import io.atomix.copycat.server.protocol.AppendResponse;
-import io.atomix.copycat.server.protocol.PollResponse;
-import io.atomix.copycat.server.protocol.VoteResponse;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 
@@ -277,34 +272,37 @@ abstract class ActiveState extends PassiveState {
   /**
    * Returns a boolean value indicating whether the given candidate's log is up-to-date.
    */
-  boolean isLogUpToDate(long index, long term, Request request) {
+  boolean isLogUpToDate(long lastIndex, long lastTerm, Request request) {
     // If the log is empty then vote for the candidate.
     if (context.getLog().isEmpty()) {
       LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
       return true;
-    } else {
-      // Otherwise, load the last entry in the log. The last entry should be
-      // at least as up to date as the candidates entry and term.
-      long lastIndex = context.getLog().lastIndex();
-      long lastTerm = context.getLog().term(lastIndex);
-      if (lastTerm == 0) {
-        LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
-        return true;
-      }
-
-      if (index != 0 && index >= lastIndex) {
-        if (term >= lastTerm) {
-          LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
-          return true;
-        } else {
-          LOGGER.debug("{} - Rejected {}: candidate's last log term ({}) is in conflict with local log ({})", context.getCluster().member().address(), request, term, lastTerm);
-          return false;
-        }
-      } else {
-        LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().member().address(), request, index, lastIndex);
-        return false;
-      }
     }
+
+    // Read the last entry index and term from the log.
+    long localLastIndex = context.getLog().lastIndex();
+    long localLastTerm = context.getLog().term(localLastIndex);
+
+    // If the candidate's last log term is lower than the local log's last entry term, reject the request.
+    if (lastTerm < localLastTerm) {
+      LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower term than the local log ({})", context.getCluster().member().address(), request, lastTerm, localLastTerm);
+      return false;
+    }
+
+    // If the candidate's last term is equal to the local log's last entry term, reject the request if the
+    // candidate's last index is less than the local log's last index. If the candidate's last log term is
+    // greater than the local log's last term then it's considered up to date, and if both have the same term
+    // then the candidate's last index must be greater than the local log's last index.
+    if (lastTerm == localLastTerm && lastIndex < localLastIndex) {
+      LOGGER.debug("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().member().address(), request, lastIndex, localLastIndex);
+      return false;
+    }
+
+    // If we made it this far, the candidate's last term is greater than or equal to the local log's last
+    // term, and if equal to the local log's last term, the candidate's last index is equal to or greater
+    // than the local log's last index.
+    LOGGER.debug("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
+    return true;
   }
 
 }
