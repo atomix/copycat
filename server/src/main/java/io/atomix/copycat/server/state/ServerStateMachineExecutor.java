@@ -111,6 +111,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   <T extends Operation<U>, U> U executeOperation(Commit commit) {
     // If the commit operation is a no-op command, complete the operation.
     if (commit.operation() instanceof NoOpCommand) {
+      commit.close();
       return null;
     }
 
