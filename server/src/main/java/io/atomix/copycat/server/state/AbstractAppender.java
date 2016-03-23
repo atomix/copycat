@@ -367,7 +367,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // when attempting to send entries to down followers.
     int failures = member.incrementFailureCount();
     if (failures <= 3 || failures % 100 == 0) {
-      LOGGER.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
+      LOGGER.warn("{} - AppendRequest to {} failed. Reason: {}", context.getCluster().member().address(), member.getMember().address(), error.getMessage());
     }
   }
 
