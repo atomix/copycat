@@ -730,11 +730,12 @@ class ServerSessionContext implements ServerSession {
       log.release(keepAliveIndex);
     }
 
+    context.sessions().unregisterSession(id);
+
     // If no references to session commands are open, release session-related entries.
     if (references == 0) {
       log.release(id);
       log.release(index);
-      context.sessions().unregisterSession(id);
     } else {
       this.closeIndex = index;
     }

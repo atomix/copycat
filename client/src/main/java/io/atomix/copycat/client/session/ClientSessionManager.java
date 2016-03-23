@@ -119,8 +119,6 @@ final class ClientSessionManager {
       .withEventIndex(state.getCompleteIndex())
       .build();
 
-    scheduleKeepAlive();
-
     state.getLogger().debug("{} - Sending {}", sessionId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
