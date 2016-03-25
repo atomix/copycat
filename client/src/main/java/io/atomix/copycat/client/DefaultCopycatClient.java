@@ -260,6 +260,8 @@ public class DefaultCopycatClient implements CopycatClient {
       // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
       ClientSession session = newSession();
       recoverFuture = session.open().handleAsync((result, error) -> {
+        // Reset recoverFuture to null in case we need to rerun recovery
+        recoverFuture = null;
         if (error == null) {
           LOGGER.debug("Recovered by replacing session {} with session {}", this.session.id(), session.id());
           ClientSession oldSession = this.session;
