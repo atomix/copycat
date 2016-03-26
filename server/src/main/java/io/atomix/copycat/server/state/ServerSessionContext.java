@@ -640,7 +640,7 @@ class ServerSessionContext implements ServerSession {
     PublishRequest request = PublishRequest.builder()
       .withSession(id())
       .withEventIndex(event.eventIndex)
-      .withPreviousIndex(event.previousIndex)
+      .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
       .withEvents(event.events)
       .build();
 
