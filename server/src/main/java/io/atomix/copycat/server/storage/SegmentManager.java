@@ -289,7 +289,11 @@ public class SegmentManager implements AutoCloseable {
       case MEMORY:
         return createMemorySegment(descriptor);
       case MAPPED:
-        return createMappedSegment(descriptor);
+        if (descriptor.version() == 1) {
+          return createMappedSegment(descriptor);
+        } else {
+          return createDiskSegment(descriptor);
+        }
       case DISK:
         return createDiskSegment(descriptor);
       default:
