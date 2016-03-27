@@ -20,12 +20,7 @@ import io.atomix.copycat.error.InternalException;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.ConfigureRequest;
-import io.atomix.copycat.server.protocol.InstallRequest;
-import io.atomix.copycat.server.protocol.AppendResponse;
-import io.atomix.copycat.server.protocol.ConfigureResponse;
-import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.*;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -172,7 +167,7 @@ final class LeaderAppender extends AbstractAppender {
     // If prior requests to the member have failed, build an empty append request to send to the member
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
     if (member.getFailureCount() > 0) {
-      if (canAppend(member)) {
+      if (member.canAppend()) {
         sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
@@ -182,13 +177,13 @@ final class LeaderAppender extends AbstractAppender {
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
     else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getConfiguration().index()) {
-      if (canConfigure(member)) {
+      if (member.canConfigure()) {
         sendConfigureRequest(member, buildConfigureRequest(member));
       }
     }
     // If the member is a reserve or passive member, send an empty AppendRequest to it.
     else if (member.getMember().type() == Member.Type.RESERVE || member.getMember().type() == Member.Type.PASSIVE) {
-      if (canAppend(member)) {
+      if (member.canAppend()) {
         sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
@@ -197,12 +192,12 @@ final class LeaderAppender extends AbstractAppender {
     else if (member.getMember().type() == Member.Type.ACTIVE && context.getSnapshotStore().currentSnapshot() != null
       && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
-      if (canInstall(member)) {
+      if (member.canInstall()) {
         sendInstallRequest(member, buildInstallRequest(member));
       }
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
-    else if (canAppend(member)) {
+    else if (member.canAppend()) {
       sendAppendRequest(member, buildAppendRequest(member, context.getLog().lastIndex()));
     }
   }

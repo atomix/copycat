@@ -26,7 +26,9 @@ import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Abstract appender.
@@ -37,76 +39,10 @@ abstract class AbstractAppender implements AutoCloseable {
   private static final int MAX_BATCH_SIZE = 1024 * 32;
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerContext context;
-  private final Set<MemberState> appending = new HashSet<>();
-  private final Set<MemberState> configuring = new HashSet<>();
-  private final Set<MemberState> installing = new HashSet<>();
   protected boolean open = true;
 
   protected AbstractAppender(ServerContext context) {
     this.context = Assert.notNull(context, "context");
-  }
-
-  /**
-   * Returns a boolean value indicating whether an {@link AppendRequest} can be sent to the given member.
-   */
-  protected boolean canAppend(MemberState member) {
-    return !appending.contains(member);
-  }
-
-  /**
-   * Locks the {@link AppendRequest} lock for the given member.
-   */
-  protected boolean lockAppend(MemberState member) {
-    return appending.add(member);
-  }
-
-  /**
-   * Unlocks the {@link AppendRequest} lock for the given member.
-   */
-  protected boolean unlockAppend(MemberState member) {
-    return appending.remove(member);
-  }
-
-  /**
-   * Returns a boolean value indicating whether a {@link ConfigureRequest} can be sent to the given member.
-   */
-  protected boolean canConfigure(MemberState member) {
-    return !configuring.contains(member);
-  }
-
-  /**
-   * Locks the {@link ConfigureRequest} lock for the given member.
-   */
-  protected boolean lockConfigure(MemberState member) {
-    return configuring.add(member);
-  }
-
-  /**
-   * Unlocks the {@link ConfigureRequest} lock for the given member.
-   */
-  protected boolean unlockConfigure(MemberState member) {
-    return configuring.remove(member);
-  }
-
-  /**
-   * Returns a boolean value indicating whether an {@link InstallRequest} can be sent to the given member.
-   */
-  protected boolean canInstall(MemberState member) {
-    return !installing.contains(member);
-  }
-
-  /**
-   * Locks the {@link InstallRequest} lock for the given member.
-   */
-  protected boolean lockInstall(MemberState member) {
-    return installing.add(member);
-  }
-
-  /**
-   * Unlocks the {@link InstallRequest} lock for the given member.
-   */
-  protected boolean unlockInstall(MemberState member) {
-    return installing.remove(member);
   }
 
   /**
@@ -230,8 +166,8 @@ abstract class AbstractAppender implements AutoCloseable {
    * Connects to the member and sends a commit message.
    */
   protected void sendAppendRequest(MemberState member, AppendRequest request) {
-    // Lock appending to this member.
-    lockAppend(member);
+    // Start the append to the member.
+    member.startAppend();
 
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
     context.getConnections().getConnection(member.getMember().address()).whenComplete((connection, error) -> {
@@ -241,8 +177,8 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendAppendRequest(connection, member, request);
         } else {
-          // Remove the member from the appending set to allow the next append request.
-          unlockAppend(member);
+          // Complete the append to the member.
+          member.completeAppend();
 
           // Trigger reactions to the request failure.
           handleAppendRequestFailure(member, request, error);
@@ -258,8 +194,8 @@ abstract class AbstractAppender implements AutoCloseable {
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
-      // Remove the member from the appending list to allow the next append request.
-      unlockAppend(member);
+      // Complete the append to the member.
+      member.completeAppend();
 
       if (open) {
         if (error == null) {
@@ -430,8 +366,8 @@ abstract class AbstractAppender implements AutoCloseable {
    * Connects to the member and sends a configure request.
    */
   protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
-    // Prevent concurrent configure requests to the member.
-    lockConfigure(member);
+    // Start the configure to the member.
+    member.startConfigure();
 
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
       context.checkThread();
@@ -440,8 +376,8 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendConfigureRequest(connection, member, request);
         } else {
-          // Remove the member from the configuring set to allow the next configure request.
-          unlockConfigure(member);
+          // Complete the configure to the member.
+          member.completeConfigure();
 
           // Trigger reactions to the request failure.
           handleConfigureRequestFailure(member, request, error);
@@ -458,8 +394,8 @@ abstract class AbstractAppender implements AutoCloseable {
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
-      // Remove the member from the configuring list to allow a new configure request.
-      unlockConfigure(member);
+      // Complete the configure to the member.
+      member.completeConfigure();
 
       if (open) {
         if (error == null) {
@@ -563,8 +499,8 @@ abstract class AbstractAppender implements AutoCloseable {
    * Connects to the member and sends a snapshot request.
    */
   protected void sendInstallRequest(MemberState member, InstallRequest request) {
-    // Prevent concurrent install requests to the member.
-    lockInstall(member);
+    // Start the install to the member.
+    member.startInstall();
 
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
       context.checkThread();
@@ -573,8 +509,8 @@ abstract class AbstractAppender implements AutoCloseable {
         if (error == null) {
           sendInstallRequest(connection, member, request);
         } else {
-          // Remove the member from the installing set to allow the next install request.
-          unlockInstall(member);
+          // Complete the install to the member.
+          member.completeInstall();
 
           // Trigger reactions to the install request failure.
           handleInstallRequestFailure(member, request, error);
@@ -591,8 +527,8 @@ abstract class AbstractAppender implements AutoCloseable {
     connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
-      // Remove the member from the installing list to allow a new install request.
-      unlockInstall(member);
+      // Complete the install to the member.
+      member.completeInstall();
 
       if (open) {
         if (error == null) {

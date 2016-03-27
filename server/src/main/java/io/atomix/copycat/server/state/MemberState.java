@@ -34,6 +34,9 @@ final class MemberState {
   private long nextIndex;
   private long heartbeatTime;
   private long heartbeatStartTime;
+  private boolean appending;
+  private boolean configuring;
+  private boolean installing;
   private int failures;
 
   public MemberState(ServerMember member, ClusterState cluster) {
@@ -50,6 +53,9 @@ final class MemberState {
     nextIndex = log.lastIndex() + 1;
     heartbeatTime = 0;
     heartbeatStartTime = 0;
+    appending = false;
+    configuring = false;
+    installing = false;
     failures = 0;
   }
 
@@ -199,6 +205,93 @@ final class MemberState {
    */
   MemberState setNextIndex(long nextIndex) {
     this.nextIndex = Assert.argNot(nextIndex, nextIndex <= 0, "nextIndex cannot be less than or equal to 0");
+    return this;
+  }
+
+  /**
+   * Returns a boolean indicating whether an append request can be sent to the member.
+   *
+   * @return Indicates whether an append request can be sent to the member.
+   */
+  boolean canAppend() {
+    return !appending;
+  }
+
+  /**
+   * Starts an append request to the member.
+   *
+   * @return The member state.
+   */
+  MemberState startAppend() {
+    appending = true;
+    return this;
+  }
+
+  /**
+   * Completes an append request to the member.
+   *
+   * @return The member state.
+   */
+  MemberState completeAppend() {
+    appending = false;
+    return this;
+  }
+
+  /**
+   * Returns a boolean indicating whether a configure request can be sent to the member.
+   *
+   * @return Indicates whether a configure request can be sent to the member.
+   */
+  boolean canConfigure() {
+    return !configuring;
+  }
+
+  /**
+   * Starts a configure request to the member.
+   *
+   * @return The member state.
+   */
+  MemberState startConfigure() {
+    configuring = true;
+    return this;
+  }
+
+  /**
+   * Completes a configure request to the member.
+   *
+   * @return The member state.
+   */
+  MemberState completeConfigure() {
+    configuring = false;
+    return this;
+  }
+
+  /**
+   * Returns a boolean indicating whether an install request can be sent to the member.
+   *
+   * @return Indicates whether an install request can be sent to the member.
+   */
+  boolean canInstall() {
+    return !installing;
+  }
+
+  /**
+   * Starts an install request to the member.
+   *
+   * @return The member state.
+   */
+  MemberState startInstall() {
+    installing = true;
+    return this;
+  }
+
+  /**
+   * Completes an install request to the member.
+   *
+   * @return The member state.
+   */
+  MemberState completeInstall() {
+    installing = false;
     return this;
   }
 
