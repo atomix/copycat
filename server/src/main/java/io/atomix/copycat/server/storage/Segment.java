@@ -521,9 +521,10 @@ public class Segment implements AutoCloseable {
    * @return The segment.
    */
   public Segment commit() {
+    Buffer buffer = this.buffer instanceof SlicedBuffer ? ((SlicedBuffer) this.buffer).root() : this.buffer;
     if (buffer instanceof MappedBuffer) {
       buffer.close();
-      buffer = FileBuffer.allocate(file.file());
+      this.buffer = FileBuffer.allocate(file.file());
     }
     return this;
   }
