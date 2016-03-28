@@ -161,6 +161,9 @@ public class ClientConnection implements Connection {
   private CompletableFuture<Connection> connect() {
     // If the address selector has been then reset the connection.
     if (selector.state() == AddressSelector.State.RESET && connection != null) {
+      if (connectFuture != null)
+        return connectFuture;
+
       CompletableFuture<Connection> future = new CompletableFuture<>();
       connectFuture = future;
       connection.close().whenComplete((result, error) -> connect(future));
@@ -229,11 +232,13 @@ public class ClientConnection implements Connection {
     this.connection = connection;
     connection.closeListener(c -> {
       if (c.equals(this.connection)) {
+        LOGGER.debug("Connection closed");
         this.connection = null;
       }
     });
     connection.exceptionListener(c -> {
       if (c.equals(this.connection)) {
+        LOGGER.debug("Connection lost");
         this.connection = null;
       }
     });
@@ -248,6 +253,7 @@ public class ClientConnection implements Connection {
       .withClientId(id)
       .build();
 
+    LOGGER.debug("Sending {}", request);
     connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
   }
 
@@ -257,6 +263,7 @@ public class ClientConnection implements Connection {
   private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<Connection> future) {
     if (open) {
       if (error == null) {
+        LOGGER.debug("Received {}", response);
         // If the connection was successfully created, immediately send a keep-alive request
         // to the server to ensure we maintain our session and get an updated list of server addresses.
         if (response.status() == Response.Status.OK) {
