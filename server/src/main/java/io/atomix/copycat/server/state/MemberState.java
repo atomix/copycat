@@ -24,7 +24,6 @@ import io.atomix.copycat.server.storage.Log;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class MemberState {
-  private static final int MAX_APPENDS = 2;
   private final ServerMember member;
   private long term;
   private long configIndex;
@@ -35,7 +34,7 @@ final class MemberState {
   private long nextIndex;
   private long heartbeatTime;
   private long heartbeatStartTime;
-  private int appending;
+  private boolean appending;
   private boolean configuring;
   private boolean installing;
   private int failures;
@@ -54,7 +53,7 @@ final class MemberState {
     nextIndex = log.lastIndex() + 1;
     heartbeatTime = 0;
     heartbeatStartTime = 0;
-    appending = 0;
+    appending = false;
     configuring = false;
     installing = false;
     failures = 0;
@@ -215,7 +214,7 @@ final class MemberState {
    * @return Indicates whether an append request can be sent to the member.
    */
   boolean canAppend() {
-    return appending < MAX_APPENDS;
+    return !appending;
   }
 
   /**
@@ -224,7 +223,7 @@ final class MemberState {
    * @return The member state.
    */
   MemberState startAppend() {
-    appending++;
+    appending = true;
     return this;
   }
 
@@ -234,7 +233,7 @@ final class MemberState {
    * @return The member state.
    */
   MemberState completeAppend() {
-    appending--;
+    appending = false;
     return this;
   }
 

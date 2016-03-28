@@ -112,7 +112,7 @@ abstract class AbstractAppender implements AutoCloseable {
     final long index = prevEntry != null ? prevEntry.getIndex() + 1 : context.getLog().firstIndex();
 
     // Build a list of entries to send to the member.
-    List<Entry> entries = new ArrayList<>((int) Math.min(8, context.getLog().lastIndex() - index + 1));
+    List<Entry> entries = new ArrayList<>((int) Math.min(8, lastIndex - index + 1));
 
     // Build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
     // be null if they've been compacted and the member to which we're sending entries is just
@@ -206,11 +206,6 @@ abstract class AbstractAppender implements AutoCloseable {
         }
       }
     });
-
-    updateNextIndex(member, request);
-    if (!request.entries().isEmpty() && hasMoreEntries(member)) {
-      appendEntries(member);
-    }
   }
 
   /**
@@ -327,11 +322,9 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Updates the next index when the match index is updated.
    */
-  protected void updateNextIndex(MemberState member, AppendRequest request) {
+  protected void updateNextIndex(MemberState member) {
     // If the match index was set, update the next index to be greater than the match index if necessary.
-    if (!request.entries().isEmpty()) {
-      member.setNextIndex(request.entries().get(request.entries().size()-1).getIndex()+1);
-    }
+    member.setNextIndex(Math.max(member.getMatchIndex() + 1, 1));
   }
 
   /**
