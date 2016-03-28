@@ -247,6 +247,7 @@ public class Log implements AutoCloseable {
    */
   private void checkRoll() {
     if (segments.currentSegment().isFull()) {
+      segments.currentSegment().flush();
       segments.nextSegment();
     }
   }
