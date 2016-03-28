@@ -206,6 +206,11 @@ abstract class AbstractAppender implements AutoCloseable {
         }
       }
     });
+
+    updateNextIndex(member, request);
+    if (!request.entries().isEmpty() && hasMoreEntries(member)) {
+      appendEntries(member);
+    }
   }
 
   /**
@@ -245,7 +250,6 @@ abstract class AbstractAppender implements AutoCloseable {
     // If replication succeeded then trigger commit futures.
     if (response.succeeded()) {
       updateMatchIndex(member, response);
-      updateNextIndex(member);
 
       // If there are more entries to send then attempt to send another commit.
       if (request.logIndex() != response.logIndex() && hasMoreEntries(member)) {
@@ -323,9 +327,11 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Updates the next index when the match index is updated.
    */
-  protected void updateNextIndex(MemberState member) {
+  protected void updateNextIndex(MemberState member, AppendRequest request) {
     // If the match index was set, update the next index to be greater than the match index if necessary.
-    member.setNextIndex(Math.max(member.getMatchIndex() + 1, 1));
+    if (!request.entries().isEmpty()) {
+      member.setNextIndex(request.entries().get(request.entries().size()-1).getIndex()+1);
+    }
   }
 
   /**
