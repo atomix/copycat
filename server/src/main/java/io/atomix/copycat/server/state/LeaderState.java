@@ -95,9 +95,6 @@ final class LeaderState extends ActiveState {
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
-    // Flush the log entries to disk.
-    context.getLog().flush();
-
     // Append a configuration entry to propagate the leader's cluster configuration.
     configure(context.getCluster().members());
   }
@@ -189,9 +186,6 @@ final class LeaderState extends ActiveState {
         // Mark the session as being unregistered in order to ensure this leader doesn't attempt
         // to unregister it again.
         session.unregister();
-
-        // Flush the log entries to disk.
-        context.getLog().flush();
       }
     }
   }
@@ -234,9 +228,6 @@ final class LeaderState extends ActiveState {
       configuring = index;
       context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getTerm(), entry.getTimestamp(), entry.getMembers()));
     }
-
-    // Flush the log entries to disk.
-    context.getLog().flush();
 
     return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
@@ -559,9 +550,6 @@ final class LeaderState extends ActiveState {
     // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
     session.setRequestSequence(request.sequence());
 
-    // Flush the log entries to disk.
-    context.getLog().flush();
-
     return future;
   }
 
@@ -742,9 +730,6 @@ final class LeaderState extends ActiveState {
       }
     });
 
-    // Flush the log entries to disk.
-    context.getLog().flush();
-
     return future;
   }
 
@@ -829,9 +814,6 @@ final class LeaderState extends ActiveState {
       }
     });
 
-    // Flush the log entries to disk.
-    context.getLog().flush();
-
     return future;
   }
 
@@ -900,9 +882,6 @@ final class LeaderState extends ActiveState {
       }
     });
 
-    // Flush the log entries to disk.
-    context.getLog().flush();
-
     return future;
   }
 
@@ -961,9 +940,6 @@ final class LeaderState extends ActiveState {
         }
       }
     });
-
-    // Flush the log entries to disk.
-    context.getLog().flush();
 
     return future;
   }
