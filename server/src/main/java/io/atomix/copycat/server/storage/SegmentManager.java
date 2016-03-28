@@ -82,7 +82,7 @@ public class SegmentManager implements AutoCloseable {
       long previousIndex = this.commitIndex;
       this.commitIndex = commitIndex;
       Segment segment = segment(previousIndex);
-      if (segment.lastIndex() < commitIndex) {
+      if (segment != null && segment.lastIndex() < commitIndex) {
         segment.commit();
       }
     }
