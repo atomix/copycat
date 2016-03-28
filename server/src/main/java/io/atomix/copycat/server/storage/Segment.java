@@ -60,7 +60,7 @@ public class Segment implements AutoCloseable {
   private final SegmentFile file;
   private final SegmentDescriptor descriptor;
   private final Serializer serializer;
-  private volatile Buffer buffer;
+  private final Buffer buffer;
   private final OffsetIndex offsetIndex;
   private final OffsetPredicate offsetPredicate;
   private final TermIndex termIndex = new TermIndex();
@@ -93,6 +93,15 @@ public class Segment implements AutoCloseable {
       length = buffer.mark().readInt();
     }
     buffer.reset();
+  }
+
+  /**
+   * Returns the segment file.
+   *
+   * @return The segment file.
+   */
+  public SegmentFile file() {
+    return file;
   }
 
   /**
@@ -512,20 +521,6 @@ public class Segment implements AutoCloseable {
   public Segment flush() {
     buffer.flush();
     offsetIndex.flush();
-    return this;
-  }
-
-  /**
-   * Commits the segment to disk.
-   *
-   * @return The segment.
-   */
-  public Segment commit() {
-    Buffer buffer = this.buffer instanceof SlicedBuffer ? ((SlicedBuffer) this.buffer).root() : this.buffer;
-    if (buffer instanceof MappedBuffer) {
-      buffer.close();
-      this.buffer = FileBuffer.allocate(file.file());
-    }
     return this;
   }
 
