@@ -218,7 +218,7 @@ final class MemberState {
    * @return Indicates whether an append request can be sent to the member.
    */
   boolean canAppend() {
-    return appending < MAX_APPENDS && System.currentTimeMillis() - (timeBuffer.average() / MAX_APPENDS) >= appendTime;
+    return appending < MAX_APPENDS && System.nanoTime() - (timeBuffer.average() / MAX_APPENDS) >= appendTime;
   }
 
   /**
@@ -228,7 +228,7 @@ final class MemberState {
    */
   MemberState startAppend() {
     appending++;
-    appendTime = System.currentTimeMillis();
+    appendTime = System.nanoTime();
     return this;
   }
 

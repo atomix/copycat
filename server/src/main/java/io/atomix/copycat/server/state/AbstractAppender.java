@@ -191,13 +191,13 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a commit message.
    */
   protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
-    long timestamp = System.currentTimeMillis();
+    long timestamp = System.nanoTime();
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the append to the member.
       if (!request.entries().isEmpty()) {
-        member.completeAppend(System.currentTimeMillis() - timestamp);
+        member.completeAppend(System.nanoTime() - timestamp);
       } else {
         member.completeAppend();
       }
