@@ -57,6 +57,7 @@ import io.atomix.copycat.server.storage.util.TermIndex;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class Segment implements AutoCloseable {
+  private final SegmentFile file;
   private final SegmentDescriptor descriptor;
   private final Serializer serializer;
   private final Buffer buffer;
@@ -70,8 +71,9 @@ public class Segment implements AutoCloseable {
   /**
    * @throws NullPointerException if any argument is null
    */
-  Segment(Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetPredicate offsetPredicate, Serializer serializer, SegmentManager manager) {
+  Segment(SegmentFile file, Buffer buffer, SegmentDescriptor descriptor, OffsetIndex offsetIndex, OffsetPredicate offsetPredicate, Serializer serializer, SegmentManager manager) {
     this.serializer = Assert.notNull(serializer, "serializer");
+    this.file = Assert.notNull(file, "file");
     this.buffer = Assert.notNull(buffer, "buffer");
     this.descriptor = Assert.notNull(descriptor, "descriptor");
     this.offsetIndex = Assert.notNull(offsetIndex, "offsetIndex");
@@ -91,6 +93,15 @@ public class Segment implements AutoCloseable {
       length = buffer.mark().readInt();
     }
     buffer.reset();
+  }
+
+  /**
+   * Returns the segment file.
+   *
+   * @return The segment file.
+   */
+  public SegmentFile file() {
+    return file;
   }
 
   /**

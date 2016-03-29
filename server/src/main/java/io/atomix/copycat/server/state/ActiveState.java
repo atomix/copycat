@@ -128,6 +128,9 @@ abstract class ActiveState extends PassiveState {
           context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
         }
       }
+
+      // Flush the log entries to disk.
+      context.getLog().flush();
     }
 
     // If we've made it this far, apply commits and send a successful response.

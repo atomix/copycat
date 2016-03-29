@@ -729,6 +729,7 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+
     return future;
   }
 
@@ -812,6 +813,7 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+
     return future;
   }
 
@@ -879,6 +881,7 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+
     return future;
   }
 
@@ -937,6 +940,7 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+
     return future;
   }
 
