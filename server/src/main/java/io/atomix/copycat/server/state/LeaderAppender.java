@@ -244,10 +244,12 @@ final class LeaderAppender extends AbstractAppender {
       // heartbeat was being sent.
       if (member.getMember().type() == Member.Type.ACTIVE && ++heartbeatFailures > votingMemberSize - quorumSize) {
         CompletableFuture<Long> heartbeatFuture = this.heartbeatFuture;
-        context.getThreadContext().executor().execute(() -> {
-          heartbeatFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
-          completeHeartbeat();
-        });
+        if (heartbeatFuture != null) {
+          context.getThreadContext().executor().execute(() -> {
+            heartbeatFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
+            completeHeartbeat();
+          });
+        }
       }
     } else {
       member.setHeartbeatTime(System.currentTimeMillis());
