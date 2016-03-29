@@ -20,6 +20,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Scheduled;
+import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
@@ -35,6 +36,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -46,6 +48,7 @@ import java.util.stream.Collectors;
 final class ClusterState implements Cluster, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClusterState.class);
   private final ServerContext context;
+  private final ScheduledExecutorService threadPool;
   private final ServerMember member;
   private final Member.Type initialType;
   private Configuration configuration;
@@ -61,11 +64,12 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final Listeners<Member> joinListeners = new Listeners<>();
   private final Listeners<Member> leaveListeners = new Listeners<>();
 
-  ClusterState(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, ServerContext context) {
+  ClusterState(Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, ServerContext context, ScheduledExecutorService threadPool) {
     Instant time = Instant.now();
     this.initialType = Assert.notNull(type, "type");
     this.member = new ServerMember(Member.Type.INACTIVE, serverAddress, clientAddress, time).setCluster(this);
     this.context = Assert.notNull(context, "context");
+    this.threadPool = Assert.notNull(threadPool, "threadPool");
 
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
     configuration = context.getMetaStore().loadConfiguration();
@@ -99,7 +103,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         this.member.update(member.type(), updateTime).update(member.clientAddress(), updateTime);
       } else {
         // If the member state doesn't already exist, create it.
-        MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this);
+        MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this, new ThreadPoolContext(threadPool, context.getSerializer().clone()));
         state.resetState(context.getLog());
         this.members.add(state);
         membersMap.put(member.id(), state);
@@ -595,7 +599,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
         if (state == null) {
-          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this);
+          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this, new ThreadPoolContext(threadPool, context.getSerializer().clone()));
           state.resetState(context.getLog());
           this.members.add(state);
           membersMap.put(member.id(), state);

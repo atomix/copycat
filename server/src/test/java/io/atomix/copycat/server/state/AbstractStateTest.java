@@ -44,6 +44,7 @@ import org.testng.annotations.Test;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -80,7 +81,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
 
     serverCtx = new SingleThreadContext("test-server", serializer);
     new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
-      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx);
+      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx, Executors.newScheduledThreadPool(2));
       resume();
     });
     await(1000);

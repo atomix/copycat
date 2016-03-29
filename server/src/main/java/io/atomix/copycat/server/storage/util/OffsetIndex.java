@@ -60,11 +60,11 @@ public final class OffsetIndex implements AutoCloseable {
   private static final int OFFSET_SIZE = 8;
 
   private final Buffer buffer;
-  private boolean skipped;
-  private int size;
-  private long lastOffset = -1;
-  private long currentOffset = -1;
-  private long currentMatch = -1;
+  private volatile boolean skipped;
+  private volatile int size;
+  private volatile long lastOffset = -1;
+  private volatile long currentOffset = -1;
+  private volatile long currentMatch = -1;
 
   /**
    * @throws NullPointerException if {@code buffer} is null

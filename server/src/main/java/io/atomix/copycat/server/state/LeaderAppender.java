@@ -38,10 +38,10 @@ final class LeaderAppender extends AbstractAppender {
   private final LeaderState leader;
   private final long leaderTime;
   private final long leaderIndex;
-  private long heartbeatTime;
-  private int heartbeatFailures;
-  private CompletableFuture<Long> heartbeatFuture;
-  private CompletableFuture<Long> nextHeartbeatFuture;
+  private volatile long heartbeatTime;
+  private volatile int heartbeatFailures;
+  private volatile CompletableFuture<Long> heartbeatFuture;
+  private volatile CompletableFuture<Long> nextHeartbeatFuture;
   private final Map<Long, CompletableFuture<Long>> appendFutures = new HashMap<>();
 
   LeaderAppender(LeaderState leader) {
@@ -102,7 +102,7 @@ final class LeaderAppender extends AbstractAppender {
       heartbeatFuture = newHeartbeatFuture;
       heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
-        appendEntries(member);
+        member.getContext().executor().execute(() -> appendEntries(member));
       }
       return newHeartbeatFuture;
     }
@@ -152,7 +152,7 @@ final class LeaderAppender extends AbstractAppender {
     // Only send entry-specific AppendRequests to active members of the cluster.
     return appendFutures.computeIfAbsent(index, i -> {
       for (MemberState member : context.getClusterState().getActiveMemberStates()) {
-        appendEntries(member);
+        member.getContext().executor().execute(() -> appendEntries(member));
       }
       return new CompletableFuture<>();
     });
@@ -163,6 +163,9 @@ final class LeaderAppender extends AbstractAppender {
     // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
     if (!open)
       return;
+
+    // Ensure this method is called on the proper thread.
+    member.getContext().checkThread();
 
     // If prior requests to the member have failed, build an empty append request to send to the member
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
@@ -240,8 +243,11 @@ final class LeaderAppender extends AbstractAppender {
       // ACTIVE members are considered. A member could have been transitioned to another state while the
       // heartbeat was being sent.
       if (member.getMember().type() == Member.Type.ACTIVE && ++heartbeatFailures > votingMemberSize - quorumSize) {
-        heartbeatFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
-        completeHeartbeat();
+        CompletableFuture<Long> heartbeatFuture = this.heartbeatFuture;
+        context.getThreadContext().executor().execute(() -> {
+          heartbeatFuture.completeExceptionally(new InternalException("Failed to reach consensus"));
+          completeHeartbeat();
+        });
       }
     } else {
       member.setHeartbeatTime(System.currentTimeMillis());
@@ -250,8 +256,13 @@ final class LeaderAppender extends AbstractAppender {
       // was contacted. If the current heartbeatFuture's time is less than the commit time then trigger the
       // commit future and reset it to the next commit future.
       if (heartbeatTime <= heartbeatTime()) {
-        heartbeatFuture.complete(null);
-        completeHeartbeat();
+        CompletableFuture<Long> heartbeatFuture = this.heartbeatFuture;
+        if (heartbeatFuture != null) {
+          context.getThreadContext().executor().execute(() -> {
+            heartbeatFuture.complete(null);
+            completeHeartbeat();
+          });
+        }
       }
     }
   }
@@ -261,6 +272,7 @@ final class LeaderAppender extends AbstractAppender {
    * current heartbeatTime, and starting a new {@link AppendRequest} to all active members.
    */
   private void completeHeartbeat() {
+    context.checkThread();
     heartbeatFailures = 0;
     heartbeatFuture = nextHeartbeatFuture;
     nextHeartbeatFuture = null;
@@ -268,7 +280,7 @@ final class LeaderAppender extends AbstractAppender {
     if (heartbeatFuture != null) {
       heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
-        appendEntries(member);
+        member.getContext().executor().execute(() -> appendEntries(member));
       }
     }
   }
@@ -395,7 +407,7 @@ final class LeaderAppender extends AbstractAppender {
 
       // If entries were committed to the replica then check commit indexes.
       if (!request.entries().isEmpty()) {
-        commitEntries();
+        context.getThreadContext().executor().execute(this::commitEntries);
       }
 
       // If there are more entries to send then attempt to send another commit.

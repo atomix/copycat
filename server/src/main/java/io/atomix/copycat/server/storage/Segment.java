@@ -65,7 +65,7 @@ public class Segment implements AutoCloseable {
   private final OffsetPredicate offsetPredicate;
   private final TermIndex termIndex = new TermIndex();
   private final SegmentManager manager;
-  private long skip = 0;
+  private volatile long skip = 0;
   private boolean open = true;
 
   /**
@@ -279,7 +279,7 @@ public class Segment implements AutoCloseable {
    * @throws IllegalStateException if the segment is full
    * @throws IndexOutOfBoundsException if the {@code entry} index does not match the next index
    */
-  public long append(Entry entry) {
+  public synchronized long append(Entry entry) {
     Assert.notNull(entry, "entry");
     Assert.stateNot(isFull(), "segment is full");
 

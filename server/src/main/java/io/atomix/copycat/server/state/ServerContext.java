@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -80,7 +81,7 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, Serializer serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Collection<Address> members, Storage storage, Serializer serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext, ScheduledExecutorService threadPool) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
     this.serializer = Assert.notNull(serializer, "serializer");
@@ -99,7 +100,7 @@ public class ServerContext implements AutoCloseable {
     // Reset the state machine.
     threadContext.execute(this::reset).join();
 
-    this.cluster = new ClusterState(type, serverAddress, clientAddress, members, this);
+    this.cluster = new ClusterState(type, serverAddress, clientAddress, members, this, threadPool);
   }
 
   /**
