@@ -191,11 +191,16 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a commit message.
    */
   protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
+    long timestamp = System.currentTimeMillis();
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the append to the member.
-      member.completeAppend();
+      if (!request.entries().isEmpty()) {
+        member.completeAppend(System.currentTimeMillis() - timestamp);
+      } else {
+        member.completeAppend();
+      }
 
       if (open) {
         if (error == null) {
@@ -206,6 +211,11 @@ abstract class AbstractAppender implements AutoCloseable {
         }
       }
     });
+
+    updateNextIndex(member, request);
+    if (!request.entries().isEmpty() && hasMoreEntries(member)) {
+      appendEntries(member);
+    }
   }
 
   /**
@@ -322,9 +332,11 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Updates the next index when the match index is updated.
    */
-  protected void updateNextIndex(MemberState member) {
+  protected void updateNextIndex(MemberState member, AppendRequest request) {
     // If the match index was set, update the next index to be greater than the match index if necessary.
-    member.setNextIndex(Math.max(member.getMatchIndex() + 1, 1));
+    if (!request.entries().isEmpty()) {
+      member.setNextIndex(request.entries().get(request.entries().size()-1).getIndex()+1);
+    }
   }
 
   /**

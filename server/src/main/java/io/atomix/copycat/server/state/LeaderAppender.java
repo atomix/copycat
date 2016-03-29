@@ -392,7 +392,6 @@ final class LeaderAppender extends AbstractAppender {
     // If replication succeeded then trigger commit futures.
     if (response.succeeded()) {
       updateMatchIndex(member, response);
-      updateNextIndex(member);
 
       // If entries were committed to the replica then check commit indexes.
       if (!request.entries().isEmpty()) {

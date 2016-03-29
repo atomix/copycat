@@ -24,6 +24,7 @@ import io.atomix.copycat.server.storage.Log;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class MemberState {
+  private static final int MAX_APPENDS = 2;
   private final ServerMember member;
   private long term;
   private long configIndex;
@@ -34,10 +35,12 @@ final class MemberState {
   private long nextIndex;
   private long heartbeatTime;
   private long heartbeatStartTime;
-  private boolean appending;
+  private int appending;
+  private long appendTime;
   private boolean configuring;
   private boolean installing;
   private int failures;
+  private final TimeBuffer timeBuffer = new TimeBuffer(8);
 
   public MemberState(ServerMember member, ClusterState cluster) {
     this.member = Assert.notNull(member, "member").setCluster(cluster);
@@ -53,7 +56,8 @@ final class MemberState {
     nextIndex = log.lastIndex() + 1;
     heartbeatTime = 0;
     heartbeatStartTime = 0;
-    appending = false;
+    appending = 0;
+    timeBuffer.reset();
     configuring = false;
     installing = false;
     failures = 0;
@@ -214,7 +218,7 @@ final class MemberState {
    * @return Indicates whether an append request can be sent to the member.
    */
   boolean canAppend() {
-    return !appending;
+    return appending < MAX_APPENDS && System.currentTimeMillis() - (timeBuffer.average() / MAX_APPENDS) >= appendTime;
   }
 
   /**
@@ -223,7 +227,8 @@ final class MemberState {
    * @return The member state.
    */
   MemberState startAppend() {
-    appending = true;
+    appending++;
+    appendTime = System.currentTimeMillis();
     return this;
   }
 
@@ -233,8 +238,19 @@ final class MemberState {
    * @return The member state.
    */
   MemberState completeAppend() {
-    appending = false;
+    appending--;
     return this;
+  }
+
+  /**
+   * Completes an append request to the member.
+   *
+   * @param time The time in milliseconds for the append.
+   * @return The member state.
+   */
+  MemberState completeAppend(long time) {
+    timeBuffer.record(time);
+    return completeAppend();
   }
 
   /**
@@ -366,6 +382,55 @@ final class MemberState {
   @Override
   public String toString() {
     return member.serverAddress().toString();
+  }
+
+  /**
+   * Timestamp ring buffer.
+   */
+  private static class TimeBuffer {
+    private final long[] buffer;
+    private int position;
+
+    public TimeBuffer(int size) {
+      this.buffer = new long[size];
+    }
+
+    /**
+     * Records a request round trip time.
+     *
+     * @param time The request round trip time to record.
+     */
+    public void record(long time) {
+      buffer[position++] = time;
+      if (position >= buffer.length) {
+        position = 0;
+      }
+    }
+
+    /**
+     * Returns the average of all recorded round trip times.
+     *
+     * @return The average of all recorded round trip times.
+     */
+    public long average() {
+      long total = 0;
+      for (long time : buffer) {
+        if (time > 0) {
+          total += time;
+        }
+      }
+      return total / buffer.length;
+    }
+
+    /**
+     * Resets the recorded round trip times.
+     */
+    public void reset() {
+      for (int i = 0; i < buffer.length; i++) {
+        buffer[i] = 0;
+      }
+      position = 0;
+    }
   }
 
 }
