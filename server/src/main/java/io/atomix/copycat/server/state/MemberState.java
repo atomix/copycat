@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.server.storage.Log;
 
 /**
@@ -26,24 +27,26 @@ import io.atomix.copycat.server.storage.Log;
 final class MemberState {
   private static final int MAX_APPENDS = 2;
   private final ServerMember member;
-  private long term;
-  private long configIndex;
-  private long snapshotIndex;
-  private long nextSnapshotIndex;
-  private int nextSnapshotOffset;
-  private long matchIndex;
-  private long nextIndex;
-  private long heartbeatTime;
-  private long heartbeatStartTime;
+  private final ThreadContext context;
+  private volatile long term;
+  private volatile long configIndex;
+  private volatile long snapshotIndex;
+  private volatile long nextSnapshotIndex;
+  private volatile int nextSnapshotOffset;
+  private volatile long matchIndex;
+  private volatile long nextIndex;
+  private volatile long heartbeatTime;
+  private volatile long heartbeatStartTime;
   private int appending;
   private long appendTime;
   private boolean configuring;
   private boolean installing;
-  private int failures;
+  private volatile int failures;
   private final TimeBuffer timeBuffer = new TimeBuffer(8);
 
-  public MemberState(ServerMember member, ClusterState cluster) {
+  public MemberState(ServerMember member, ClusterState cluster, ThreadContext context) {
     this.member = Assert.notNull(member, "member").setCluster(cluster);
+    this.context = context;
   }
 
   /**
@@ -70,6 +73,15 @@ final class MemberState {
    */
   public ServerMember getMember() {
     return member;
+  }
+
+  /**
+   * Returns the member context.
+   *
+   * @return The member context.
+   */
+  public ThreadContext getContext() {
+    return context;
   }
 
   /**

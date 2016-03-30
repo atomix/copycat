@@ -171,7 +171,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
     context.getConnections().getConnection(member.getMember().address()).whenComplete((connection, error) -> {
-      context.checkThread();
+      member.getContext().checkThread();
 
       if (open) {
         if (error == null) {
@@ -193,7 +193,7 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
     long timestamp = System.nanoTime();
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
-      context.checkThread();
+      member.getContext().checkThread();
 
       // Complete the append to the member.
       if (!request.entries().isEmpty()) {
@@ -381,7 +381,7 @@ abstract class AbstractAppender implements AutoCloseable {
     member.startConfigure();
 
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
-      context.checkThread();
+      member.getContext().checkThread();
 
       if (open) {
         if (error == null) {
@@ -403,7 +403,7 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
-      context.checkThread();
+      member.getContext().checkThread();
 
       // Complete the configure to the member.
       member.completeConfigure();
@@ -514,7 +514,7 @@ abstract class AbstractAppender implements AutoCloseable {
     member.startInstall();
 
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
-      context.checkThread();
+      member.getContext().checkThread();
 
       if (open) {
         if (error == null) {
@@ -536,7 +536,7 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
-      context.checkThread();
+      member.getContext().checkThread();
 
       // Complete the install to the member.
       member.completeInstall();

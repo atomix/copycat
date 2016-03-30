@@ -20,6 +20,7 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
 import io.atomix.catalyst.transport.Transport;
+import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
@@ -47,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.testng.Assert.*;
@@ -88,7 +90,7 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     ));
 
     new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
-      state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, serializer, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+      state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, serializer, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext, Executors.newScheduledThreadPool(2, new CatalystThreadFactory("test")));
       resume();
     });
     await(1000);
