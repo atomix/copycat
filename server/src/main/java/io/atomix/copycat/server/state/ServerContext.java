@@ -42,6 +42,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -59,6 +60,7 @@ public class ServerContext implements AutoCloseable {
   private final Listeners<Member> electionListeners = new Listeners<>();
   private final String name;
   private final ThreadContext threadContext;
+  private final ScheduledExecutorService threadPool;
   private final Supplier<StateMachine> stateMachineFactory;
   private final ClusterState cluster;
   private final Storage storage;
@@ -86,6 +88,7 @@ public class ServerContext implements AutoCloseable {
     this.storage = Assert.notNull(storage, "storage");
     this.serializer = Assert.notNull(serializer, "serializer");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
+    this.threadPool = Assert.notNull(threadPool, "threadPool");
     this.connections = Assert.notNull(connections, "connections");
     this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
     this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name), threadContext.serializer().clone());
@@ -649,6 +652,11 @@ public class ServerContext implements AutoCloseable {
     }
     stateMachine.close();
     threadContext.close();
+    threadPool.shutdown();
+    try {
+      threadPool.awaitTermination(5, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+    }
   }
 
   /**
