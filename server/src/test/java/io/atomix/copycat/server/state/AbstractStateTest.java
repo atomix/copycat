@@ -19,6 +19,7 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.LocalServerRegistry;
 import io.atomix.catalyst.transport.LocalTransport;
+import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.error.CopycatError;
@@ -81,7 +82,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
 
     serverCtx = new SingleThreadContext("test-server", serializer);
     new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
-      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx, Executors.newScheduledThreadPool(2));
+      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx, Executors.newScheduledThreadPool(2, new CatalystThreadFactory("test")));
       resume();
     });
     await(1000);
