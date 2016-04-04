@@ -33,8 +33,6 @@ import io.atomix.copycat.util.ProtocolSerialization;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -209,25 +207,10 @@ public interface CopycatClient {
    * the complete list of servers in the cluster, but it must have at least one reachable member that can communicate with
    * the cluster's leader.
    *
-   * @param members The cluster members to which to connect.
    * @return The client builder.
    */
-  static Builder builder(Address... members) {
-    return builder(Arrays.asList(Assert.notNull(members, "members")));
-  }
-
-  /**
-   * Returns a new Copycat client builder.
-   * <p>
-   * The provided set of members will be used to connect to the Copycat cluster. The members list does not have to represent
-   * the complete list of servers in the cluster, but it must have at least one reachable member that can communicate with
-   * the cluster's leader.
-   *
-   * @param members The cluster members to which to connect.
-   * @return The client builder.
-   */
-  static Builder builder(Collection<Address> members) {
-    return new Builder(members);
+  static Builder builder() {
+    return new Builder();
   }
 
   /**
@@ -402,7 +385,7 @@ public interface CopycatClient {
   <T> Listener<T> onEvent(String event, Consumer<T> callback);
 
   /**
-   * Connects the client to the Copycat cluster.
+   * Connects the client to Copycat cluster via the provided server addresses.
    * <p>
    * When the client is opened, it will attempt to connect to and register a session with each unique configured server
    * {@link Address}. Once the session is open, the client will transition to the {@link State#CONNECTED} state and the
@@ -415,9 +398,31 @@ public interface CopycatClient {
    * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
    * to retry the registration attempt.
    *
+   * @param members A set of server addresses to which to connect.
    * @return A completable future to be completed once the client's {@link #session()} is open.
    */
-  CompletableFuture<CopycatClient> connect();
+  default CompletableFuture<CopycatClient> connect(Address... members) {
+    return connect(Arrays.asList(members));
+  }
+
+  /**
+   * Connects the client to Copycat cluster via the provided server addresses.
+   * <p>
+   * When the client is opened, it will attempt to connect to and register a session with each unique configured server
+   * {@link Address}. Once the session is open, the client will transition to the {@link State#CONNECTED} state and the
+   * returned {@link CompletableFuture} will be completed.
+   * <p>
+   * The client will connect to servers in the cluster according to the pattern specified by theconfigured
+   * {@link ServerSelectionStrategy}.
+   * <p>
+   * In the event that the client is unable to register a session through any of the servers listed in the provided
+   * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
+   * to retry the registration attempt.
+   *
+   * @param members A set of server addresses to which to connect.
+   * @return A completable future to be completed once the client's {@link #session()} is open.
+   */
+  CompletableFuture<CopycatClient> connect(Collection<Address> members);
 
   /**
    * Recovers the client session.
@@ -447,7 +452,7 @@ public interface CopycatClient {
   /**
    * Builds a new Copycat client.
    * <p>
-   * New client builders should be constructed using the static {@link #builder(Address...)} factory method.
+   * New client builders should be constructed using the static {@link #builder()} factory method.
    * <pre>
    *   {@code
    *     CopycatClient client = CopycatClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000)
@@ -461,14 +466,12 @@ public interface CopycatClient {
     private Serializer serializer;
     private CatalystThreadFactory threadFactory;
     private ThreadContext context;
-    private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RetryStrategy retryStrategy = RetryStrategies.FIBONACCI_BACKOFF;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
-    private Builder(Collection<Address> members) {
-      this.members = new HashSet<>(Assert.notNull(members, "members"));
+    private Builder() {
     }
 
     /**
@@ -591,7 +594,7 @@ public interface CopycatClient {
         context.serializer().resolve(new ClientResponseTypeResolver());
         context.serializer().resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       } else {
         // If no serializer instance was provided, create one.
         if (serializer == null) {
@@ -603,7 +606,7 @@ public interface CopycatClient {
         serializer.resolve(new ClientResponseTypeResolver());
         serializer.resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       }
     }
   }

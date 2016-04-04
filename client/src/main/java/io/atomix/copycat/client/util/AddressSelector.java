@@ -53,20 +53,13 @@ public class AddressSelector implements Iterator<Address> {
   }
 
   private Address leader;
-  private Collection<Address> servers;
+  private Collection<Address> servers = new ArrayList<>();
   private final ServerSelectionStrategy strategy;
-  private Collection<Address> selections;
+  private Collection<Address> selections = new ArrayList<>();
   private Iterator<Address> selectionsIterator;
 
-  public AddressSelector(Collection<Address> servers, ServerSelectionStrategy selectionStrategy) {
-    this(null, servers, selectionStrategy);
-  }
-
-  public AddressSelector(Address leader, Collection<Address> servers, ServerSelectionStrategy strategy) {
-    this.leader = leader;
-    this.servers = Assert.argNot(servers, Assert.notNull(servers, "servers").isEmpty(), "servers list cannot be empty");
+  public AddressSelector(ServerSelectionStrategy strategy) {
     this.strategy = Assert.notNull(strategy, "strategy");
-    this.selections = strategy.selectConnections(leader, new ArrayList<>(servers));
   }
 
   /**

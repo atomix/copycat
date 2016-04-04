@@ -69,15 +69,15 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
-    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+  DefaultCopycatClient(Transport transport, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+    this(transport, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
   }
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(Transport transport, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
     this.transport = Assert.notNull(transport, "transport");
     this.context = Assert.notNull(context, "context");
     this.threadFactory = Assert.notNull(threadFactory, "threadFactory");
-    this.selector = new AddressSelector(members, selectionStrategy);
+    this.selector = new AddressSelector(selectionStrategy);
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.retryStrategy = Assert.notNull(retryStrategy, "retryStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
@@ -168,12 +168,13 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public synchronized CompletableFuture<CopycatClient> connect() {
+  public synchronized CompletableFuture<CopycatClient> connect(Collection<Address> members) {
     if (state != State.CLOSED)
       return CompletableFuture.completedFuture(this);
 
     if (openFuture == null) {
       openFuture = new CompletableFuture<>();
+      selector.reset(null, members);
       session = newSession();
       session.open().whenCompleteAsync((result, error) -> {
         if (error == null) {

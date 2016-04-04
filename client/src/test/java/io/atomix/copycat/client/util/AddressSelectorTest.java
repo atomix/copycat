@@ -42,7 +42,8 @@ public class AddressSelectorTest {
       new Address("localhost", 5002)
     );
 
-    AddressSelector selector = new AddressSelector(servers, ServerSelectionStrategies.ANY);
+    AddressSelector selector = new AddressSelector(ServerSelectionStrategies.ANY);
+    selector.reset(null, servers);
     assertNull(selector.leader());
     assertEquals(selector.servers(), servers);
     assertEquals(selector.state(), AddressSelector.State.RESET);
@@ -67,7 +68,8 @@ public class AddressSelectorTest {
       new Address("localhost", 5002)
     );
 
-    AddressSelector selector = new AddressSelector(servers, ServerSelectionStrategies.ANY);
+    AddressSelector selector = new AddressSelector(ServerSelectionStrategies.ANY);
+    selector.reset(null, servers);
     selector.next();
     selector.next();
     selector.next();
@@ -89,7 +91,8 @@ public class AddressSelectorTest {
       new Address("localhost", 5002)
     );
 
-    AddressSelector selector = new AddressSelector(servers, ServerSelectionStrategies.ANY);
+    AddressSelector selector = new AddressSelector(ServerSelectionStrategies.ANY);
+    selector.reset(null, servers);
     assertNull(selector.leader());
     assertEquals(selector.servers(), servers);
     selector.next();
