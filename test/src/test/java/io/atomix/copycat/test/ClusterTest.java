@@ -1359,13 +1359,13 @@ public class ClusterTest extends ConcurrentTestCase {
    * Creates a Copycat client.
    */
   private CopycatClient createClient() throws Throwable {
-    CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
+    CopycatClient client = CopycatClient.builder()
       .withTransport(new LocalTransport(registry))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
     client.serializer().disableWhitelist();
-    client.connect().thenRun(this::resume);
+    client.connect(members.stream().map(Member::clientAddress).collect(Collectors.toList())).thenRun(this::resume);
     await(30000);
     clients.add(client);
     return client;
