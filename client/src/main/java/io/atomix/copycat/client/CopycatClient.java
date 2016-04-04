@@ -24,6 +24,7 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
+import io.atomix.copycat.Event;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
@@ -369,29 +370,28 @@ public interface CopycatClient {
   <T> CompletableFuture<T> submit(Query<T> query);
 
   /**
-   * Registers a void event listener.
-   * <p>
-   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
-   * from the Raft cluster for the client. {@link CopycatClient} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
-   *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @return The listener context.
-   * @throws NullPointerException if {@code event} or {@code callback} is null
-   */
-  Listener<Void> onEvent(String event, Runnable callback);
-
-  /**
    * Registers an event listener.
    * <p>
    * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
-   * from the Raft cluster for the session. {@link CopycatClient} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
+   * from the Raft cluster for the session. When an event is received by the client, all listeners registered for
+   * the given {@code event} name will be called. Copycat clients guarantee that events will be received and listeners
+   * invoked in the same order as they were published by the state machine, and no two events can be handled concurrently.
+   * This ensures events effectively have the same atomicity guarantees as other areas of the system.
+   * <p>
+   * When an event is received by a listener, the listener must handle the event and then call {@link Event#complete()}
+   * to acknowledge completion of the event.
+   * <pre>
+   *   {@code
+   *   client.<ChangeEvent>onEvent("change", event -> {
+   *     System.out.println(event.message().key() + " changed");
+   *     event.complete();
+   *   });
+   * </pre>
+   * Event listeners may handle events asynchronously and complete the event once an asynchronous operation is complete.
+   * If the event was published by a command using {@link io.atomix.copycat.Command.ConsistencyLevel#LINEARIZABLE LINEARIZABLE}
+   * consistency, the command that published the event will not be completed until the event is acknowledged.
+   * <em>If {@link Event#complete()} is not called for any event, the client will stop receiving events</em> since events
+   * are ordered and only one event can be handled by the client at any given time.
    *
    * @param event The event to which to listen.
    * @param callback The session receive callback.
@@ -399,7 +399,7 @@ public interface CopycatClient {
    * @return The listener context.
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  <T> Listener<T> onEvent(String event, Consumer<T> callback);
+  <T> Listener<Event<T>> onEvent(String event, Consumer<Event<T>> callback);
 
   /**
    * Connects the client to the Copycat cluster.
@@ -461,6 +461,7 @@ public interface CopycatClient {
     private Serializer serializer;
     private CatalystThreadFactory threadFactory;
     private ThreadContext context;
+    private ThreadContext eventContext;
     private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
@@ -518,6 +519,18 @@ public interface CopycatClient {
      */
     public Builder withThreadContext(ThreadContext context) {
       this.context = Assert.notNull(context, "context");
+      return this;
+    }
+
+    /**
+     * Sets the client event thread context.
+     *
+     * @param context The client event thread context.
+     * @return The client builder.
+     * @throws NullPointerException if the thread context is {@code null}
+     */
+    public Builder withEventContext(ThreadContext context) {
+      this.eventContext = Assert.notNull(context, "context");
       return this;
     }
 
@@ -591,7 +604,7 @@ public interface CopycatClient {
         context.serializer().resolve(new ClientResponseTypeResolver());
         context.serializer().resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, members, context, eventContext, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       } else {
         // If no serializer instance was provided, create one.
         if (serializer == null) {
@@ -603,7 +616,7 @@ public interface CopycatClient {
         serializer.resolve(new ClientResponseTypeResolver());
         serializer.resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, members, serializer, eventContext, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       }
     }
   }

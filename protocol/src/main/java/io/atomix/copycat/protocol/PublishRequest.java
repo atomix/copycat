@@ -19,7 +19,7 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.session.Event;
+import io.atomix.copycat.Event;
 
 import java.util.ArrayList;
 import java.util.Arrays;

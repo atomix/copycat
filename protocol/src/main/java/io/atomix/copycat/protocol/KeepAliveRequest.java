@@ -59,6 +59,7 @@ public class KeepAliveRequest extends SessionRequest {
 
   private long commandSequence;
   private long eventIndex;
+  private long completeIndex;
 
   /**
    * Returns the command sequence number.
@@ -78,11 +79,21 @@ public class KeepAliveRequest extends SessionRequest {
     return eventIndex;
   }
 
+  /**
+   * Returns the event complete index.
+   *
+   * @return The event complete index.
+   */
+  public long completeIndex() {
+    return completeIndex;
+  }
+
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
     eventIndex = buffer.readLong();
+    completeIndex = buffer.readLong();
   }
 
   @Override
@@ -90,6 +101,7 @@ public class KeepAliveRequest extends SessionRequest {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
     buffer.writeLong(eventIndex);
+    buffer.writeLong(completeIndex);
   }
 
   @Override
@@ -103,14 +115,15 @@ public class KeepAliveRequest extends SessionRequest {
       KeepAliveRequest request = (KeepAliveRequest) object;
       return request.session == session
         && request.commandSequence == commandSequence
-        && request.eventIndex == eventIndex;
+        && request.eventIndex == eventIndex
+        && request.completeIndex == completeIndex;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
+    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d, completeIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex, completeIndex);
   }
 
   /**
@@ -142,6 +155,18 @@ public class KeepAliveRequest extends SessionRequest {
      */
     public Builder withEventIndex(long eventIndex) {
       request.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
+      return this;
+    }
+
+    /**
+     * Sets the event complete index.
+     *
+     * @param completeIndex The event complete index.
+     * @return The request builder.
+     * @throws IllegalArgumentException if {@code eventIndex} is less than 0
+     */
+    public Builder withCompleteIndex(long completeIndex) {
+      request.completeIndex = Assert.argNot(completeIndex, completeIndex < 0, "completeIndex cannot be negative");
       return this;
     }
 

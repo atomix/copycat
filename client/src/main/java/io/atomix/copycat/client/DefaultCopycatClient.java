@@ -25,6 +25,7 @@ import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
+import io.atomix.copycat.Event;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
@@ -54,6 +55,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Transport transport;
   private final CatalystThreadFactory threadFactory;
   private final ThreadContext context;
+  private final ThreadContext eventContext;
   private final AddressSelector selector;
   private final ConnectionStrategy connectionStrategy;
   private final RetryStrategy retryStrategy;
@@ -69,13 +71,14 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
-    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+  DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, ThreadContext eventContext, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), eventContext, threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
   }
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, ThreadContext eventContext, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
     this.transport = Assert.notNull(transport, "transport");
     this.context = Assert.notNull(context, "context");
+    this.eventContext = eventContext != null ? eventContext : context;
     this.threadFactory = Assert.notNull(threadFactory, "threadFactory");
     this.selector = new AddressSelector(members, selectionStrategy);
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
@@ -129,7 +132,7 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, context.serializer().clone()), connectionStrategy, retryStrategy);
+    ClientSession session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, context.serializer().clone()), eventContext, connectionStrategy, retryStrategy);
 
     // Update the session change listener.
     if (changeListener != null)
@@ -242,12 +245,7 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public Listener<Void> onEvent(String event, Runnable callback) {
-    return onEvent(event, v -> callback.run());
-  }
-
-  @Override
-  public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
+  public <T> Listener<Event<T>> onEvent(String event, Consumer<Event<T>> callback) {
     EventListener<T> listener = new EventListener<>(event, callback);
     listener.register(session);
     return listener;
@@ -381,12 +379,12 @@ public class DefaultCopycatClient implements CopycatClient {
   /**
    * Event listener wrapper.
    */
-  private final class EventListener<T> implements Listener<T> {
+  private final class EventListener<T> implements Listener<Event<T>> {
     private final String event;
-    private final Consumer<T> callback;
-    private Listener<T> parent;
+    private final Consumer<Event<T>> callback;
+    private Listener<Event<T>> parent;
 
-    private EventListener(String event, Consumer<T> callback) {
+    private EventListener(String event, Consumer<Event<T>> callback) {
       this.event = event;
       this.callback = callback;
       eventListeners.add(this);
@@ -396,17 +394,11 @@ public class DefaultCopycatClient implements CopycatClient {
      * Registers the session event listener.
      */
     public void register(ClientSession session) {
-      if (ThreadContext.currentContext() == context) {
-        parent = session.onEvent(event, callback);
-      } else {
-        context.execute(() -> {
-          parent = session.onEvent(event, callback);
-        }).join();
-      }
+      parent = session.onEvent(event, callback);
     }
 
     @Override
-    public void accept(T message) {
+    public void accept(Event<T> message) {
       context.executor().execute(() -> callback.accept(message));
     }
 

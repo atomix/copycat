@@ -21,6 +21,7 @@ import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
+import io.atomix.copycat.Event;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategy;
@@ -61,20 +62,20 @@ public class ClientSession implements Session, Managed<Session> {
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(UUID.randomUUID(), client, selector, context, connectionStrategy, retryStrategy);
+  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ThreadContext eventContext, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
+    this(UUID.randomUUID(), client, selector, context, eventContext, connectionStrategy, retryStrategy);
   }
 
-  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy, retryStrategy);
+  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ThreadContext eventContext, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
+    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, eventContext, connectionStrategy, retryStrategy);
   }
 
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
+  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ThreadContext eventContext, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.manager = new ClientSessionManager(connection, state, context, connectionStrategy);
-    this.listener = new ClientSessionListener(connection, state, context);
+    this.listener = new ClientSessionListener(connection, state, eventContext);
     this.submitter = new ClientSessionSubmitter(connection, state, context, retryStrategy);
   }
 
@@ -147,24 +148,6 @@ public class ClientSession implements Session, Managed<Session> {
   }
 
   /**
-   * Registers a void event listener.
-   * <p>
-   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
-   * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
-   *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @return The listener context.
-   * @throws NullPointerException if {@code event} or {@code callback} is null
-   */
-  public Listener<Void> onEvent(String event, Runnable callback) {
-    return listener.onEvent(event, callback);
-  }
-
-  /**
    * Registers an event listener.
    * <p>
    * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
@@ -179,7 +162,7 @@ public class ClientSession implements Session, Managed<Session> {
    * @return The listener context.
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
+  public <T> Listener<Event<T>> onEvent(String event, Consumer<Event<T>> callback) {
     return listener.onEvent(event, callback);
   }
 

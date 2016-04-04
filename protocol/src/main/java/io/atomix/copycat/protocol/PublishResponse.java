@@ -56,15 +56,25 @@ public class PublishResponse extends SessionResponse {
     return new Builder(response);
   }
 
-  private long index;
+  private long eventIndex;
+  private long completeIndex;
 
   /**
    * Returns the event index.
    *
    * @return The event index.
    */
-  public long index() {
-    return index;
+  public long eventIndex() {
+    return eventIndex;
+  }
+
+  /**
+   * Returns the event complete index.
+   *
+   * @return The event complete index.
+   */
+  public long completeIndex() {
+    return completeIndex;
   }
 
   @Override
@@ -75,7 +85,8 @@ public class PublishResponse extends SessionResponse {
     } else if (buffer.readBoolean()) {
       error = CopycatError.forId(buffer.readByte());
     }
-    index = buffer.readLong();
+    eventIndex = buffer.readLong();
+    completeIndex = buffer.readLong();
   }
 
   @Override
@@ -88,7 +99,8 @@ public class PublishResponse extends SessionResponse {
         buffer.writeBoolean(false);
       }
     }
-    buffer.writeLong(index);
+    buffer.writeLong(eventIndex);
+    buffer.writeLong(completeIndex);
   }
 
   @Override
@@ -101,14 +113,15 @@ public class PublishResponse extends SessionResponse {
     if (object instanceof PublishResponse) {
       PublishResponse response = (PublishResponse) object;
       return response.status == status
-        && response.index == index;
+        && response.eventIndex == eventIndex
+        && response.completeIndex == completeIndex;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d]", getClass().getSimpleName(), status, index);
+    return String.format("%s[status=%s, eventIndex=%d, completeIndex=%d]", getClass().getSimpleName(), status, eventIndex, completeIndex);
   }
 
   /**
@@ -122,23 +135,25 @@ public class PublishResponse extends SessionResponse {
     /**
      * Sets the event index.
      *
-     * @param index The event index.
+     * @param eventIndex The event index.
      * @return The response builder.
      * @throws IllegalArgumentException if {@code index} is less than {@code 1}
      */
-    public Builder withIndex(long index) {
-      response.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
+    public Builder withEventIndex(long eventIndex) {
+      response.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be less than 0");
       return this;
     }
 
     /**
-     * @throws IllegalStateException if sequence is less than 1
+     * Sets the event complete index.
+     *
+     * @param completeIndex The event complete index.
+     * @return The response builder.
+     * @throws IllegalArgumentException if {@code index} is less than {@code 1}
      */
-    @Override
-    public PublishResponse build() {
-      super.build();
-      Assert.stateNot(response.index < 0, "index cannot be less than 0");
-      return response;
+    public Builder withCompleteIndex(long completeIndex) {
+      response.completeIndex = Assert.argNot(completeIndex, completeIndex < 0, "eventIndex cannot be less than 0");
+      return this;
     }
   }
 

@@ -21,8 +21,8 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
-import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.session.SessionEvent;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
@@ -30,9 +30,9 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.testng.Assert.*;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.*;
+import static org.testng.Assert.*;
 
 /**
  * Client session listener test.
@@ -72,8 +72,9 @@ public class ClientSessionListenerTest {
     ClientSessionListener listener = createListener();
 
     AtomicBoolean received = new AtomicBoolean();
-    listener.onEvent("foo", value -> {
-      assertEquals(value, "Hello world!");
+    listener.onEvent("foo", event -> {
+      assertEquals(event.message(), "Hello world!");
+      event.complete();
       received.set(true);
     });
 
@@ -82,11 +83,12 @@ public class ClientSessionListenerTest {
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(1)
-      .withEvents(new Event<String>("foo", "Hello world!"))
+      .withEvents(new SessionEvent<String>("foo", "Hello world!"))
       .build()).get();
 
     assertEquals(response.status(), Response.Status.OK);
-    assertEquals(response.index(), 10);
+    assertEquals(response.eventIndex(), 10);
+    assertEquals(response.completeIndex(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertEquals(state.getCompleteIndex(), 10);
     assertTrue(received.get());
@@ -99,8 +101,9 @@ public class ClientSessionListenerTest {
     ClientSessionListener listener = createListener();
 
     AtomicBoolean received = new AtomicBoolean();
-    listener.onEvent("foo", value -> {
-      assertEquals(value, "Hello world!");
+    listener.onEvent("foo", event -> {
+      assertEquals(event.message(), "Hello world!");
+      event.complete();
       received.set(true);
     });
 
@@ -109,11 +112,11 @@ public class ClientSessionListenerTest {
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(1)
-      .withEvents(new Event<String>("foo", "Hello world!"))
+      .withEvents(new SessionEvent<String>("foo", "Hello world!"))
       .build()).get();
 
     assertEquals(response.status(), Response.Status.OK);
-    assertEquals(response.index(), 10);
+    assertEquals(response.eventIndex(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertEquals(state.getCompleteIndex(), 10);
     assertTrue(received.get());
@@ -123,11 +126,12 @@ public class ClientSessionListenerTest {
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(1)
-      .withEvents(new Event<String>("foo", "Hello world!"))
+      .withEvents(new SessionEvent<String>("foo", "Hello world!"))
       .build()).get();
 
     assertEquals(response.status(), Response.Status.ERROR);
-    assertEquals(response.index(), 10);
+    assertEquals(response.eventIndex(), 10);
+    assertEquals(response.completeIndex(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertEquals(state.getCompleteIndex(), 10);
     assertFalse(received.get());
@@ -140,8 +144,9 @@ public class ClientSessionListenerTest {
     ClientSessionListener listener = createListener();
 
     AtomicBoolean received = new AtomicBoolean();
-    listener.onEvent("foo", value -> {
-      assertEquals(value, "Hello world!");
+    listener.onEvent("foo", event -> {
+      assertEquals(event.message(), "Hello world!");
+      event.complete();
       received.set(true);
     });
 
@@ -150,12 +155,14 @@ public class ClientSessionListenerTest {
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(2)
-      .withEvents(new Event<String>("foo", "Hello world!"))
+      .withEvents(new SessionEvent<String>("foo", "Hello world!"))
       .build()).get();
 
     assertEquals(response.status(), Response.Status.ERROR);
-    assertEquals(response.index(), 1);
+    assertEquals(response.eventIndex(), 1);
+    assertEquals(response.completeIndex(), 1);
     assertEquals(state.getEventIndex(), 1);
+    assertEquals(state.getCompleteIndex(), 1);
     assertFalse(received.get());
   }
 

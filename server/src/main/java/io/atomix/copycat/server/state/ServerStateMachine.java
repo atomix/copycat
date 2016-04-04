@@ -541,12 +541,13 @@ final class ServerStateMachine implements AutoCloseable {
       // Store the command/event sequence and event index instead of acquiring a reference to the entry.
       long commandSequence = entry.getCommandSequence();
       long eventIndex = entry.getEventIndex();
+      long completeIndex = entry.getCompleteIndex();
 
       future = new CompletableFuture<>();
 
       // The keep-alive entry also serves to clear cached command responses and events from memory.
       // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
-      executor.executor().execute(() -> keepAliveSession(index, timestamp, commandSequence, eventIndex, session, future, context));
+      executor.executor().execute(() -> keepAliveSession(index, timestamp, commandSequence, eventIndex, completeIndex, session, future, context));
 
       // Update the session keep alive index for log cleaning.
       session.setKeepAliveIndex(entry.getIndex()).setRequestSequence(commandSequence);
@@ -558,7 +559,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Applies a keep alive for a session.
    */
-  private void keepAliveSession(long index, long timestamp, long commandSequence, long eventIndex, ServerSessionContext session, CompletableFuture<Void> future, ThreadContext context) {
+  private void keepAliveSession(long index, long timestamp, long commandSequence, long eventIndex, long completeIndex, ServerSessionContext session, CompletableFuture<Void> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -577,7 +578,11 @@ final class ServerStateMachine implements AutoCloseable {
     // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
     executor.init(index, Instant.ofEpochMilli(timestamp), false, Command.ConsistencyLevel.SEQUENTIAL);
 
-    session.clearResponses(commandSequence).resendEvents(eventIndex);
+    // Clear cached response data, ack events, and resend pending events.
+    session.clearResponses(commandSequence)
+      .ackEvents(eventIndex)
+      .completeEvents(completeIndex)
+      .resendPendingEvents();
 
     // Calculate the last completed index.
     long lastCompleted = calculateLastCompleted(index);

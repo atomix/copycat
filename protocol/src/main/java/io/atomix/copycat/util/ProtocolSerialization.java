@@ -20,7 +20,7 @@ import io.atomix.catalyst.serializer.SerializerRegistry;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.protocol.Request;
-import io.atomix.copycat.session.Event;
+import io.atomix.copycat.session.SessionEvent;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,7 +34,7 @@ public final class ProtocolSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
     put(Address.class, -1);
-    put(Event.class, -2);
+    put(SessionEvent.class, -2);
     put(NoOpCommand.class, -45);
   }};
 

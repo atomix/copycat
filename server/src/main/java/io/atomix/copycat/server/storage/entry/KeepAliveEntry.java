@@ -37,6 +37,7 @@ import io.atomix.copycat.session.Session;
 public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   private long commandSequence;
   private long eventIndex;
+  private long completeIndex;
 
   public KeepAliveEntry() {
   }
@@ -85,11 +86,32 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
     return this;
   }
 
+  /**
+   * Returns the event complete index.
+   *
+   * @return The event complete index.
+   */
+  public long getCompleteIndex() {
+    return completeIndex;
+  }
+
+  /**
+   * Sets the event complete index.
+   *
+   * @param completeIndex The event complete index.
+   * @return The keep alive entry.
+   */
+  public KeepAliveEntry setCompleteIndex(long completeIndex) {
+    this.completeIndex = completeIndex;
+    return this;
+  }
+
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
     eventIndex = buffer.readLong();
+    completeIndex = buffer.readLong();
   }
 
   @Override
@@ -97,11 +119,12 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
     buffer.writeLong(eventIndex);
+    buffer.writeLong(completeIndex);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventIndex=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventIndex(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventIndex=%d, completeIndex=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventIndex(), getCompleteIndex(), getTimestamp());
   }
 
 }

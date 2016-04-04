@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,46 +19,62 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.copycat.Event;
+
+import java.util.function.Consumer;
 
 /**
- * Transports a named event from a server to a client {@link Session}.
- * <p>
- * Events are published by server state machines to client sessions as event objects. Each event sent to a session is
- * associated with a {@link String} event name and value.
- *
- * @see Session
+ * Session event.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class Event<T> implements CatalystSerializable {
+public class SessionEvent<T> implements Event<T>, CatalystSerializable {
   private String event;
   private Object message;
+  private transient long index;
+  private transient Consumer<Long> acker;
 
-  public Event() {
+  public SessionEvent() {
   }
 
-  public Event(String event, Object message) {
+  public SessionEvent(String event, Object message) {
     this.event = event;
     this.message = message;
   }
 
-  /**
-   * Returns the event name.
-   *
-   * @return The event name.
-   */
+  @Override
   public String name() {
     return event;
   }
 
-  /**
-   * Returns the event message.
-   *
-   * @return The event message.
-   */
+  @Override
   @SuppressWarnings("unchecked")
   public T message() {
     return (T) message;
+  }
+
+  /**
+   * Returns the event index.
+   *
+   * @return The event index.
+   */
+  public long index() {
+    return index;
+  }
+
+  @Override
+  public void complete() {
+    acker.accept(index);
+  }
+
+  /**
+   * Sets a callback to be called when the event is completed.
+   *
+   * @param callback A callback to be called when the event is completed.
+   */
+  public void onCompletion(long index, Consumer<Long> callback) {
+    this.index = index;
+    this.acker = callback;
   }
 
   @Override

@@ -18,18 +18,16 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.copycat.Event;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
-import io.atomix.copycat.session.Event;
+import io.atomix.copycat.session.SessionEvent;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -42,7 +40,10 @@ import java.util.function.Consumer;
 final class ClientSessionListener {
   private final ClientSessionState state;
   private final ThreadContext context;
-  private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
+  private final Map<String, Set<Consumer<Event>>> eventListeners = new ConcurrentHashMap<>();
+  private final Queue<EventContext> events = new ArrayDeque<>();
+  private EventContext currentEvent;
+  private int eventCount;
 
   public ClientSessionListener(Connection connection, ClientSessionState state, ThreadContext context) {
     this.state = Assert.notNull(state, "state");
@@ -54,17 +55,19 @@ final class ClientSessionListener {
    * Registers a session event listener.
    */
   @SuppressWarnings("unchecked")
-  public Listener<Void> onEvent(String event, Runnable callback) {
-    return onEvent(event, v -> callback.run());
-  }
-
-  /**
-   * Registers a session event listener.
-   */
-  @SuppressWarnings("unchecked")
-  public <T> Listener<T> onEvent(String event, Consumer listener) {
-    return (Listener<T>) eventListeners.computeIfAbsent(Assert.notNull(event, "event"), e -> new Listeners<>())
-      .add(Assert.notNull(listener, "listener"));
+  public synchronized <T> Listener<Event<T>> onEvent(String event, Consumer<Event<T>> listener) {
+    Set<Consumer<Event>> listeners = eventListeners.computeIfAbsent(Assert.notNull(event, "event"), e -> new HashSet<>());
+    listeners.add((Consumer) listener);
+    return new Listener<Event<T>>() {
+      @Override
+      public void accept(Event<T> value) {
+        listener.accept(value);
+      }
+      @Override
+      public void close() {
+        listeners.remove(listener);
+      }
+    };
   }
 
   /**
@@ -91,38 +94,83 @@ final class ClientSessionListener {
       state.getLogger().debug("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
-        .withIndex(state.getEventIndex())
+        .withEventIndex(state.getEventIndex())
+        .withCompleteIndex(state.getCompleteIndex())
         .build());
     }
 
     // Store the event index. This will be used to verify that events are received in sequential order.
     state.setEventIndex(request.eventIndex());
 
-    // For each event in the events batch, call the appropriate event listener and create a CompletableFuture
-    // to be called once the event callback is complete. Futures will ensure that an event is not acknowledged
-    // until all event callbacks have completed.
-    List<CompletableFuture<Void>> futures = new ArrayList<>(request.events().size());
+    // Iterate through all published event. For each event, queue the event with a future.
+    int i = 0;
+    CompletableFuture[] futures = new CompletableFuture[request.events().size()];
     for (Event<?> event : request.events()) {
-      Listeners<Object> listeners = eventListeners.get(event.name());
-      if (listeners != null) {
-        futures.add(listeners.accept(event.message()));
-      }
+      CompletableFuture<Void> future = new CompletableFuture<>();
+      futures[i++] = future;
+      SessionEvent<?> sessionEvent = (SessionEvent<?>) event;
+      sessionEvent.onCompletion(request.eventIndex(), this::ackEvent);
+      events.add(new EventContext(sessionEvent, future));
     }
 
-    // Wait for all event listeners to complete and then respond to the event message. This ensures that
-    // linearizable events are completed between their invocation and response. If the async queue is backed
-    // up and we don't wait for callbacks to complete, the cluster will believe an event to have been received
-    // and handled before it has indeed been received and handled.
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
-      .handleAsync((result, error) -> {
-        // Store the highest index for which event callbacks have completed.
-        state.setCompleteIndex(request.eventIndex());
+    // Publish queued events if necessary.
+    publishEvents();
 
-        return PublishResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withIndex(state.getCompleteIndex())
-          .build();
-      }, context.executor());
+    return CompletableFuture.allOf(futures).handleAsync((result, error) -> PublishResponse.builder()
+      .withStatus(Response.Status.OK)
+      .withEventIndex(state.getEventIndex())
+      .withCompleteIndex(state.getCompleteIndex())
+      .build());
+  }
+
+  /**
+   * Publishes events if necessary.
+   */
+  private synchronized void publishEvents() {
+    if (eventCount == 0) {
+      if (currentEvent != null) {
+        currentEvent.future.complete(null);
+        currentEvent = null;
+      }
+      nextEvent();
+    }
+  }
+
+  /**
+   * Called when a session event is acknowledged.
+   */
+  private synchronized void ackEvent(long index) {
+    eventCount--;
+    if (eventCount == 0) {
+      if (currentEvent != null) {
+        state.setCompleteIndex(currentEvent.event.index());
+        currentEvent.future.complete(null);
+        currentEvent = null;
+      }
+      nextEvent();
+    }
+  }
+
+  /**
+   * Publishes the next event to handlers.
+   */
+  private synchronized void nextEvent() {
+    currentEvent = events.poll();
+    if (currentEvent != null) {
+      Set<Consumer<Event>> listeners = eventListeners.get(currentEvent.event.name());
+      if (listeners != null) {
+        eventCount = listeners.size();
+        for (Consumer<Event> listener : listeners) {
+          Event<?> event = currentEvent.event;
+          context.executor().execute(() -> listener.accept(event));
+        }
+      } else {
+        state.setCompleteIndex(currentEvent.event.index());
+        currentEvent.future.complete(null);
+        currentEvent = null;
+        nextEvent();
+      }
+    }
   }
 
   /**
@@ -132,6 +180,19 @@ final class ClientSessionListener {
    */
   public CompletableFuture<Void> close() {
     return CompletableFuture.completedFuture(null);
+  }
+
+  /**
+   * Event context.
+   */
+  private static class EventContext {
+    private final SessionEvent event;
+    private final CompletableFuture<Void> future;
+
+    private EventContext(SessionEvent event, CompletableFuture<Void> future) {
+      this.event = event;
+      this.future = future;
+    }
   }
 
 }

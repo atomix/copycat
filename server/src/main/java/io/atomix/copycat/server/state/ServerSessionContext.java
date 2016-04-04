@@ -21,13 +21,14 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
 import io.atomix.copycat.Command;
+import io.atomix.copycat.Event;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.session.SessionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +60,7 @@ class ServerSessionContext implements ServerSession {
   private long lastApplied;
   private long commandLowWaterMark;
   private long eventIndex;
+  private long ackIndex;
   private long completeIndex;
   private long closeIndex;
   private long timestamp;
@@ -534,7 +536,7 @@ class ServerSessionContext implements ServerSession {
     }
 
     // Add the event to the event holder.
-    this.event.events.add(new Event<>(event, message));
+    this.event.events.add(new SessionEvent<>(event, message));
 
     return this;
   }
@@ -567,12 +569,23 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
+   * Acknowledges events up to the given index.
+   *
+   * @param index The ack index.
+   * @return The server session.
+   */
+  ServerSessionContext ackEvents(long index) {
+    ackIndex = Math.max(ackIndex, index);
+    return this;
+  }
+
+  /**
    * Clears events up to the given sequence.
    *
    * @param index The index to clear.
    * @return The server session.
    */
-  private ServerSessionContext clearEvents(long index) {
+  ServerSessionContext completeEvents(long index) {
     if (index > completeIndex) {
       EventHolder event = events.peek();
       while (event != null && event.eventIndex <= index) {
@@ -590,13 +603,13 @@ class ServerSessionContext implements ServerSession {
   /**
    * Resends events from the given sequence.
    *
-   * @param index The index from which to resend events.
    * @return The server session.
    */
-  ServerSessionContext resendEvents(long index) {
-    clearEvents(index);
+  ServerSessionContext resendPendingEvents() {
     for (EventHolder event : events) {
-      sendSequentialEvent(event);
+      if (event.eventIndex > ackIndex) {
+        sendSequentialEvent(event);
+      }
     }
     return this;
   }
@@ -650,11 +663,14 @@ class ServerSessionContext implements ServerSession {
         LOGGER.debug("{} - Received {}", id, response);
         // If the event was received successfully, clear events up to the event index.
         if (response.status() == Response.Status.OK) {
-          clearEvents(response.index());
+          ackEvents(response.eventIndex());
+          completeEvents(response.completeIndex());
         }
         // If the event failed and the response index is non-null, resend all events from the response index.
-        else if (response.error() == null && response.index() > 0) {
-          resendEvents(response.index());
+        else if (response.error() == null && response.eventIndex() > 0) {
+          ackEvents(response.eventIndex());
+          completeEvents(response.completeIndex());
+          resendPendingEvents();
         }
       }
     });

@@ -723,8 +723,9 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
+      event.complete();
       resume();
     });
 
@@ -778,16 +779,19 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
+      event.complete();
       resume();
     });
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    createClient().onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
+      event.complete();
       resume();
     });
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    createClient().onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
+      event.complete();
       resume();
     });
 
@@ -843,9 +847,10 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicInteger counter = new AtomicInteger();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
       counter.incrementAndGet();
+      event.complete();
       resume();
     });
 
@@ -902,19 +907,22 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicInteger counter = new AtomicInteger();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
       counter.incrementAndGet();
+      event.complete();
       resume();
     });
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    createClient().onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
       counter.incrementAndGet();
+      event.complete();
       resume();
     });
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    createClient().onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
       counter.incrementAndGet();
+      event.complete();
       resume();
     });
 
@@ -943,9 +951,10 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicInteger counter = new AtomicInteger();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
       counter.incrementAndGet();
+      event.complete();
       resume();
     });
 
@@ -979,8 +988,9 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
@@ -1019,8 +1029,9 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
@@ -1073,8 +1084,9 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
@@ -1129,8 +1141,9 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
@@ -1185,18 +1198,21 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    createClient().onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+    createClient().onEvent("test", event -> {
+      threadAssertEquals(event.message(), value.get());
+      event.complete();
       resume();
     });
 
@@ -1241,7 +1257,10 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
-    client1.onEvent("expired", this::resume);
+    client1.onEvent("expired", event -> {
+      event.complete();
+      resume();
+    });
     client1.submit(new TestExpire()).thenRun(this::resume);
     ((DefaultCopycatClient) client2).kill().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
@@ -1278,7 +1297,10 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client2 = createClient();
     client1.submit(new TestClose()).thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 1);
-    client1.onEvent("closed", this::resume);
+    client1.onEvent("closed", event -> {
+      event.complete();
+      resume();
+    });
     client2.close().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 2);
   }
