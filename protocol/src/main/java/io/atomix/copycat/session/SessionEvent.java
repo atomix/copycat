@@ -21,7 +21,7 @@ import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.Event;
 
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Session event.
@@ -31,15 +31,26 @@ import java.util.function.Consumer;
 public class SessionEvent<T> implements Event<T>, CatalystSerializable {
   private String event;
   private Object message;
-  private transient long index;
-  private transient Consumer<Long> acker;
+  private final Runnable completer;
+  private final AtomicBoolean complete;
 
   public SessionEvent() {
+    this.completer = null;
+    this.complete = null;
   }
 
   public SessionEvent(String event, Object message) {
     this.event = event;
     this.message = message;
+    this.completer = null;
+    this.complete = null;
+  }
+
+  public SessionEvent(String event, Object message, Runnable completer) {
+    this.event = event;
+    this.message = message;
+    this.completer = completer;
+    this.complete = new AtomicBoolean();
   }
 
   @Override
@@ -53,28 +64,11 @@ public class SessionEvent<T> implements Event<T>, CatalystSerializable {
     return (T) message;
   }
 
-  /**
-   * Returns the event index.
-   *
-   * @return The event index.
-   */
-  public long index() {
-    return index;
-  }
-
   @Override
   public void complete() {
-    acker.accept(index);
-  }
-
-  /**
-   * Sets a callback to be called when the event is completed.
-   *
-   * @param callback A callback to be called when the event is completed.
-   */
-  public void onCompletion(long index, Consumer<Long> callback) {
-    this.index = index;
-    this.acker = callback;
+    if (complete.compareAndSet(false, true)) {
+      completer.run();
+    }
   }
 
   @Override
