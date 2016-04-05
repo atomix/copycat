@@ -19,7 +19,6 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ComposableFuture;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.error.InternalException;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.server.Snapshottable;
@@ -403,7 +402,7 @@ final class ServerStateMachine implements AutoCloseable {
    * response, i.e. it was applied by a leader. In that case, any events published during the execution of the
    * state machine's register() method must be completed synchronously prior to the completion of the returned future.
    */
-  private CompletableFuture<Long> apply(RegisterEntry entry, boolean synchronous) {
+  private CompletableFuture<Long> apply(RegisterEntry entry) {
     // Allow the executor to execute any scheduled events.
     long timestamp = executor.timestamp(entry.getTimestamp());
 
@@ -426,14 +425,14 @@ final class ServerStateMachine implements AutoCloseable {
     // Call the register() method on the user-provided state machine to allow the state machine to react to
     // a new session being registered. User state machine methods are always called in the state machine thread.
     CompletableFuture<Long> future = new ComposableFuture<>();
-    executor.executor().execute(() -> registerSession(index, timestamp, synchronous, session, future, context));
+    executor.executor().execute(() -> registerSession(index, timestamp, session, future, context));
     return future;
   }
 
   /**
    * Registers a session.
    */
-  private void registerSession(long index, long timestamp, boolean synchronous, ServerSessionContext session, CompletableFuture<Long> future, ThreadContext context) {
+  private void registerSession(long index, long timestamp, ServerSessionContext session, CompletableFuture<Long> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -446,7 +445,7 @@ final class ServerStateMachine implements AutoCloseable {
     // within the register method will be properly associated with the unregister entry's index. All events
     // published during registration of a session are linearizable to ensure that clients receive related events
     // before the registration is completed.
-    executor.init(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+    executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
     // Register the session and then open it. This ensures that state machines cannot publish events to this
     // session before the client has learned of the session ID.
@@ -458,20 +457,14 @@ final class ServerStateMachine implements AutoCloseable {
     // Calculate the last completed index.
     long lastCompleted = calculateLastCompleted(index);
 
-    // Update the highest index completed for all sessions to allow log compaction to progress.
-    context.executor().execute(() -> setLastCompleted(lastCompleted));
-
     // Once register callbacks have been completed, ensure that events published during the callbacks are
     // received by clients. The state machine context will generate an event future for all published events
     // to all sessions.
-    CompletableFuture<Void> sessionFuture = executor.commit();
-    if (sessionFuture != null) {
-      sessionFuture.whenComplete((result, error) -> {
-        context.executor().execute(() -> future.complete(index));
-      });
-    } else {
-      context.executor().execute(() -> future.complete(index));
-    }
+    executor.commit();
+    context.executor().execute(() -> {
+      setLastCompleted(lastCompleted);
+      future.complete(index);
+    });
   }
 
   /**
@@ -575,7 +568,7 @@ final class ServerStateMachine implements AutoCloseable {
 
     // Update the state machine context with the keep-alive entry's index. This ensures that events published
     // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
-    executor.init(index, Instant.ofEpochMilli(timestamp), false, Command.ConsistencyLevel.SEQUENTIAL);
+    executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
     session.clearResponses(commandSequence).resendEvents(eventIndex);
 
@@ -585,20 +578,11 @@ final class ServerStateMachine implements AutoCloseable {
     // Callbacks in the state machine may have been triggered by the execution of the keep-alive.
     // Get any futures for scheduled tasks and await their completion, then update the highest
     // index completed for all sessions to allow log compaction to progress.
-    CompletableFuture<Void> sessionFuture = executor.commit();
-    if (sessionFuture != null) {
-      sessionFuture.whenComplete((result, error) -> {
-        context.executor().execute(() -> {
-          setLastCompleted(lastCompleted);
-          future.complete(null);
-        });
-      });
-    } else {
-      context.executor().execute(() -> {
-        setLastCompleted(lastCompleted);
-        future.complete(null);
-      });
-    }
+    executor.commit();
+    context.executor().execute(() -> {
+      setLastCompleted(lastCompleted);
+      future.complete(null);
+    });
   }
 
   /**
@@ -691,7 +675,7 @@ final class ServerStateMachine implements AutoCloseable {
     // within the expire or close methods will be properly associated with the unregister entry's index.
     // All events published during expiration or closing of a session are linearizable to ensure that clients
     // receive related events before the expiration is completed.
-    executor.init(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+    executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
     // Expire the session and call state machine callbacks.
     session.expire(index);
@@ -703,21 +687,15 @@ final class ServerStateMachine implements AutoCloseable {
     // Calculate the last completed index.
     long lastCompleted = calculateLastCompleted(index);
 
-    // Update the highest index completed for all sessions to allow log compaction to progress.
-    context.executor().execute(() -> setLastCompleted(lastCompleted));
-
     // Once expiration callbacks have been completed, ensure that events published during the callbacks
     // are published in batch. The state machine context will generate an event future for all published events
     // to all sessions. If the event future is non-null, that indicates events are pending which were published
     // during the call to expire(). Wait for the events to be received by the client before completing the future.
-    CompletableFuture<Void> sessionFuture = executor.commit();
-    if (sessionFuture != null) {
-      sessionFuture.whenComplete((result, error) -> {
-        context.executor().execute(() -> future.complete(null));
-      });
-    } else {
-      context.executor().execute(() -> future.complete(null));
-    }
+    executor.commit();
+    context.executor().execute(() -> {
+      setLastCompleted(lastCompleted);
+      future.complete(null);
+    });
   }
 
   /**
@@ -742,7 +720,7 @@ final class ServerStateMachine implements AutoCloseable {
     // within the close method will be properly associated with the unregister entry's index. All events published
     // during expiration or closing of a session are linearizable to ensure that clients receive related events
     // before the expiration is completed.
-    executor.init(index, Instant.ofEpochMilli(timestamp), synchronous, Command.ConsistencyLevel.LINEARIZABLE);
+    executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
     // Close the session and call state machine callbacks.
     session.close(index);
@@ -754,21 +732,15 @@ final class ServerStateMachine implements AutoCloseable {
     // Calculate the last completed index.
     long lastCompleted = calculateLastCompleted(index);
 
-    // Update the highest index completed for all sessions to allow log compaction to progress.
-    context.executor().execute(() -> setLastCompleted(lastCompleted));
-
     // Once close callbacks have been completed, ensure that events published during the callbacks
     // are published in batch. The state machine context will generate an event future for all published events
     // to all sessions. If the event future is non-null, that indicates events are pending which were published
     // during the call to expire(). Wait for the events to be received by the client before completing the future.
-    CompletableFuture<Void> sessionFuture = executor.commit();
-    if (sessionFuture != null) {
-      sessionFuture.whenComplete((result, error) -> {
-        context.executor().execute(() -> future.complete(null));
-      });
-    } else {
-      context.executor().execute(() -> future.complete(null));
-    }
+    executor.commit();
+    context.executor().execute(() -> {
+      setLastCompleted(lastCompleted);
+      future.complete(null);
+    });
   }
 
   /**
@@ -785,13 +757,6 @@ final class ServerStateMachine implements AutoCloseable {
    * duplicate of a command that was already applied. Otherwise, commands are assumed to have been
    * received in sequential order. The reason for this assumption is because leaders always sequence
    * commands as they're written to the log, so no sequence number will be skipped.
-   * <p>
-   * During the execution of a command, state machines may publish zero or many session events.
-   * The command's {@link Command.ConsistencyLevel} and the {@code synchronous}
-   * flag dictate how commands that publish session events should be handled. If {@code synchronous}
-   * is {@code true}, that indicates a response is expected (this is the leader's state machine). For
-   * linearizable commands, we wait for events to be received and acknowledged by their respective
-   * clients.
    */
   private CompletableFuture<Object> apply(CommandEntry entry, boolean synchronous) {
     final CompletableFuture<Object> future = new CompletableFuture<>();
@@ -821,10 +786,9 @@ final class ServerStateMachine implements AutoCloseable {
       // Ensure the response check is executed in the state machine thread in order to ensure the
       // command was applied, otherwise there will be a race condition and concurrent modification issues.
       long sequence = entry.getSequence();
-      Command.ConsistencyLevel consistency = entry.getCommand().consistency();
 
       // Switch to the state machine thread and get the existing response.
-      executor.executor().execute(() -> sequenceCommand(sequence, consistency, session, future, context));
+      executor.executor().execute(() -> sequenceCommand(sequence, session, future, context));
       return future;
     }
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
@@ -837,12 +801,10 @@ final class ServerStateMachine implements AutoCloseable {
       // Calculate the updated timestamp for the command.
       long timestamp = executor.timestamp(entry.getTimestamp());
 
-      Command.ConsistencyLevel consistency = entry.getCommand().consistency();
-
       // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
       // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
       ServerCommit commit = commits.acquire(entry, session, timestamp);
-      executor.executor().execute(() -> executeCommand(index, sequence, timestamp, commit, synchronous, consistency, session, future, context));
+      executor.executor().execute(() -> executeCommand(index, sequence, timestamp, commit, session, future, context));
 
       // Update the session timestamp and command sequence number. This is done in the caller's thread since all
       // timestamp/index/sequence checks are done in this thread prior to executing operations on the state machine thread.
@@ -854,59 +816,26 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Sequences a command according to the command sequence number.
    */
-  private void sequenceCommand(long sequence, Command.ConsistencyLevel consistency, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
+  private void sequenceCommand(long sequence, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
     }
 
-    // If the command's consistency level is not LINEARIZABLE or null (which are equivalent), return the
-    // cached response immediately in the server thread.
-    if (consistency == Command.ConsistencyLevel.SEQUENTIAL) {
-      Object response = session.getResponse(sequence);
-      if (response == null) {
-        context.executor().execute(() -> future.complete(null));
-      } else if (response instanceof Throwable) {
-        context.executor().execute(() -> future.completeExceptionally((Throwable) response));
-      } else {
-        context.executor().execute(() -> future.complete(response));
-      }
+    Object response = session.getResponse(sequence);
+    if (response == null) {
+      context.executor().execute(() -> future.complete(null));
+    } else if (response instanceof Throwable) {
+      context.executor().execute(() -> future.completeExceptionally((Throwable) response));
     } else {
-      // For linearizable commands, check whether a future is registered for the command. A future will be
-      // registered if the original command resulted in publishing events to any session. For linearizable
-      // commands, we wait until the event future is completed, indicating that all sessions to which event
-      // messages were sent have received/acked the messages.
-      CompletableFuture<Void> sessionFuture = session.getResponseFuture(sequence);
-      if (sessionFuture != null) {
-        sessionFuture.whenComplete((result, error) -> {
-          Object response = session.getResponse(sequence);
-          if (response == null) {
-            context.executor().execute(() -> future.complete(null));
-          } else if (response instanceof Throwable) {
-            context.executor().execute(() -> future.completeExceptionally((Throwable) response));
-          } else {
-            context.executor().execute(() -> future.complete(response));
-          }
-        });
-      } else {
-        // If no event future was registered for the original command, return the cached response in the
-        // server thread.
-        Object response = session.getResponse(sequence);
-        if (response == null) {
-          context.executor().execute(() -> future.complete(null));
-        } else if (response instanceof Throwable) {
-          context.executor().execute(() -> future.completeExceptionally((Throwable) response));
-        } else {
-          context.executor().execute(() -> future.complete(response));
-        }
-      }
+      context.executor().execute(() -> future.complete(response));
     }
   }
 
   /**
    * Executes a state machine command.
    */
-  private void executeCommand(long index, long sequence, long timestamp, ServerCommit commit, boolean synchronous, Command.ConsistencyLevel consistency, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
+  private void executeCommand(long index, long sequence, long timestamp, ServerCommit commit, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -924,7 +853,7 @@ final class ServerStateMachine implements AutoCloseable {
     // Update the state machine context with the commit index and local server context. The synchronous flag
     // indicates whether the server expects linearizable completion of published events. Events will be published
     // based on the configured consistency level for the context.
-    executor.init(commit.index(), commit.time(), synchronous, consistency != null ? consistency : Command.ConsistencyLevel.LINEARIZABLE);
+    executor.init(commit.index(), commit.time(), ServerStateMachineContext.Type.COMMAND);
 
     try {
       // Execute the state machine operation and get the result.
@@ -935,18 +864,12 @@ final class ServerStateMachine implements AutoCloseable {
       // If events were published during the execution of the command and under a LINEARIZABLE event consistency,
       // the composite future will be non-null. Wait for events to be acknowledged by clients and for a non-null
       // future to be completed before completing the command future.
-      CompletableFuture<Void> sessionFuture = executor.commit();
-      session.registerResponse(sequence, result, sessionFuture);
-      if (sessionFuture != null) {
-        sessionFuture.whenComplete((sessionResult, sessionError) -> {
-          context.executor().execute(() -> future.complete(result));
-        });
-      } else {
-        context.executor().execute(() -> future.complete(result));
-      }
+      executor.commit();
+      session.registerResponse(sequence, result);
+      context.executor().execute(() -> future.complete(result));
     } catch (Exception e) {
       // If an exception occurs during execution of the command, store the exception.
-      session.registerResponse(sequence, e, null);
+      session.registerResponse(sequence, e);
       context.executor().execute(() -> future.completeExceptionally(e));
     }
   }
@@ -1051,7 +974,7 @@ final class ServerStateMachine implements AutoCloseable {
     // Update the state machine context with the query entry's index. We set a null consistency
     // level to indicate that events cannot be published in this context. Publishing events in
     // response to state machine queries is non-deterministic as queries are not replicated.
-    executor.init(commit.index(), commit.time(), true, null);
+    executor.init(commit.index(), commit.time(), ServerStateMachineContext.Type.QUERY);
 
     try {
       Object result = executor.executeOperation(commit);

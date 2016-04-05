@@ -124,7 +124,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private void submit(CopycatClient client, int count, int total) {
     if (count < total) {
-      client.submit(new TestCommand("Hello world!", Command.ConsistencyLevel.LINEARIZABLE)).whenComplete((result, error) -> {
+      client.submit(new TestCommand("Hello world!")).whenComplete((result, error) -> {
         threadAssertNull(error);
         submit(client, count + 1, total);
       });
@@ -387,81 +387,46 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testOneNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(1, Command.ConsistencyLevel.SEQUENTIAL);
+  public void testOneNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(1);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testOneNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(1, Command.ConsistencyLevel.LINEARIZABLE);
+  public void testTwoNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(2);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testTwoNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(2, Command.ConsistencyLevel.SEQUENTIAL);
+  public void testThreeNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(3);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testTwoNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(2, Command.ConsistencyLevel.LINEARIZABLE);
+  public void testFourNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(4);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testThreeNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(3, Command.ConsistencyLevel.SEQUENTIAL);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testThreeNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(3, Command.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(4, Command.ConsistencyLevel.SEQUENTIAL);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(4, Command.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testFiveNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(5, Command.ConsistencyLevel.SEQUENTIAL);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testFiveNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(5, Command.ConsistencyLevel.LINEARIZABLE);
+  public void testFiveNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(5);
   }
 
   /**
    * Tests submitting a command with a configured consistency level.
    */
-  private void testSubmitCommand(int nodes, Command.ConsistencyLevel consistency) throws Throwable {
+  private void testSubmitCommand(int nodes) throws Throwable {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
+    client.submit(new TestCommand("Hello world!")).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
     });
@@ -472,53 +437,32 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a command.
    */
-  public void testTwoOfThreeNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(2, 3, Command.ConsistencyLevel.SEQUENTIAL);
+  public void testTwoOfThreeNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(2, 3);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testTwoOfThreeNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(2, 3, Command.ConsistencyLevel.LINEARIZABLE);
+  public void testThreeOfFourNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(3, 4);
   }
 
   /**
    * Tests submitting a command.
    */
-  public void testThreeOfFourNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(3, 4, Command.ConsistencyLevel.SEQUENTIAL);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testThreeOfFourNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(3, 4, Command.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testThreeOfFiveNodeSubmitCommandWithSequentialConsistency() throws Throwable {
-    testSubmitCommand(3, 5, Command.ConsistencyLevel.SEQUENTIAL);
-  }
-
-  /**
-   * Tests submitting a command.
-   */
-  public void testThreeOfFiveNodeSubmitCommandWithLinearizableConsistency() throws Throwable {
-    testSubmitCommand(3, 5, Command.ConsistencyLevel.LINEARIZABLE);
+  public void testThreeOfFiveNodeSubmitCommand() throws Throwable {
+    testSubmitCommand(3, 5);
   }
 
   /**
    * Tests submitting a command to a partial cluster.
    */
-  private void testSubmitCommand(int live, int total, Command.ConsistencyLevel consistency) throws Throwable {
+  private void testSubmitCommand(int live, int total) throws Throwable {
     createServers(live, total);
 
     CopycatClient client = createClient();
-    client.submit(new TestCommand("Hello world!", consistency)).thenAccept(result -> {
+    client.submit(new TestCommand("Hello world!")).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
     });
@@ -728,7 +672,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+    client.submit(new TestEvent("Hello world!", true)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
     });
@@ -791,7 +735,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", false, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+    client.submit(new TestEvent("Hello world!", false)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
     });
@@ -849,7 +793,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestEvent("Hello world!", true)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       threadAssertEquals(counter.get(), 1);
       resume();
@@ -918,7 +862,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestEvent("Hello world!", false)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       threadAssertEquals(counter.get(), 3);
       resume();
@@ -949,12 +893,12 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestCommand("Hello world!", Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestCommand("Hello world!")).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestEvent("Hello world!", true)).thenAccept(result -> {
       threadAssertEquals(result, "Hello world!");
       threadAssertEquals(counter.get(), 1);
       resume();
@@ -987,7 +931,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1027,7 +971,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1041,7 +985,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1081,7 +1025,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1091,7 +1035,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     String singleEvent = UUID.randomUUID().toString();
     value.set(singleEvent);
-    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+    client.submit(new TestEvent(singleEvent, true)).thenAccept(result -> {
       threadAssertEquals(result, singleEvent);
       resume();
     });
@@ -1104,7 +1048,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1137,7 +1081,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1147,7 +1091,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     String singleEvent = UUID.randomUUID().toString();
     value.set(singleEvent);
-    client.submit(new TestEvent(singleEvent, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+    client.submit(new TestEvent(singleEvent, true)).thenAccept(result -> {
       threadAssertEquals(result, singleEvent);
       resume();
     });
@@ -1160,7 +1104,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0 ; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, true, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, true)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1203,7 +1147,7 @@ public class ClusterTest extends ConcurrentTestCase {
     for (int i = 0; i < 10; i++) {
       String event = UUID.randomUUID().toString();
       value.set(event);
-      client.submit(new TestEvent(event, false, Command.ConsistencyLevel.LINEARIZABLE)).thenAccept(result -> {
+      client.submit(new TestEvent(event, false)).thenAccept(result -> {
         threadAssertEquals(result, event);
         resume();
       });
@@ -1497,16 +1441,9 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public static class TestCommand implements Command<String> {
     private String value;
-    private ConsistencyLevel consistency;
 
-    public TestCommand(String value, ConsistencyLevel consistency) {
+    public TestCommand(String value) {
       this.value = value;
-      this.consistency = consistency;
-    }
-
-    @Override
-    public ConsistencyLevel consistency() {
-      return consistency;
     }
 
     @Override
@@ -1547,17 +1484,10 @@ public class ClusterTest extends ConcurrentTestCase {
   public static class TestEvent implements Command<String> {
     private String value;
     private boolean own;
-    private ConsistencyLevel consistency;
 
-    public TestEvent(String value, boolean own, ConsistencyLevel consistency) {
+    public TestEvent(String value, boolean own) {
       this.value = value;
       this.own = own;
-      this.consistency = consistency;
-    }
-
-    @Override
-    public Command.ConsistencyLevel consistency() {
-      return consistency;
     }
 
     @Override

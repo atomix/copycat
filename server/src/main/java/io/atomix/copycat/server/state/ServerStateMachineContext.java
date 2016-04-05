@@ -16,14 +16,10 @@
 
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.Command;
 import io.atomix.copycat.server.StateMachineContext;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Server state machine context.
@@ -31,12 +27,20 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 class ServerStateMachineContext implements StateMachineContext {
+
+  /**
+   * Context type.
+   */
+  enum Type {
+    COMMAND,
+    QUERY,
+  }
+
   private final ServerClock clock = new ServerClock();
   private final ConnectionManager connections;
   private final ServerSessionManager sessions;
+  private Type type;
   private long index;
-  private boolean synchronous;
-  private Command.ConsistencyLevel consistency;
 
   public ServerStateMachineContext(ConnectionManager connections, ServerSessionManager sessions) {
     this.connections = connections;
@@ -46,44 +50,27 @@ class ServerStateMachineContext implements StateMachineContext {
   /**
    * Updates the state machine context.
    */
-  void update(long index, Instant instant, boolean synchronous, Command.ConsistencyLevel consistency) {
+  void update(long index, Instant instant, Type type) {
     this.index = index;
+    this.type = type;
     clock.set(instant);
-    this.synchronous = synchronous;
-    this.consistency = consistency;
   }
 
   /**
    * Commits the state machine index.
    */
-  CompletableFuture<Void> commit() {
+  void commit() {
     long index = this.index;
-
-    List<CompletableFuture<Void>> futures = null;
     for (ServerSessionContext session : sessions.sessions.values()) {
-      CompletableFuture<Void> future = session.commit(index);
-      if (future != null) {
-        if (futures == null)
-          futures = new ArrayList<>(8);
-        futures.add(future);
-      }
+      session.commit(index);
     }
-
-    return futures != null ? CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])) : null;
   }
 
   /**
-   * Indicates whether the current context is synchronous.
+   * Returns the current context type.
    */
-  boolean synchronous() {
-    return synchronous;
-  }
-
-  /**
-   * Returns the context consistency level.
-   */
-  Command.ConsistencyLevel consistency() {
-    return consistency;
+  Type type() {
+    return type;
   }
 
   @Override

@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat;
 
-import io.atomix.copycat.session.Session;
-
 /**
  * Base interface for operations that modify system state.
  * <p>
@@ -24,17 +22,6 @@ import io.atomix.copycat.session.Session;
  * is submitted to the cluster, if the command is received by a follower, the Raft protocol dictates that it must be
  * forwarded to the cluster leader. Once the leader receives a command, it logs and replicates the command to a majority
  * of the cluster before applying it to its state machine and responding with the result.
- * <h2>Consistency levels</h2>
- * Commands are allow both to modify system state and to trigger events
- * published to client {@link Session sessions}. Whereas {@link Query} consistency
- * levels dictate when and how queries can be executed on follower nodes, command
- * {@link Command.ConsistencyLevel consistency levels} largely relate to how events triggered
- * by commands are handled. When a command is applied to a server state machine, the consistency level of the command
- * being executed dictates the requirements for handling the event. For instance, in a fictitious lock state machine,
- * one command might be the {@code UnlockCommand}. The unlock command would set the state machine state to {@code unlocked}
- * and perhaps send a message to any lock waiters notifying them that the lock is available. In this case,
- * {@link Command.ConsistencyLevel#LINEARIZABLE linearizable} consistency can be used to ensure
- * that lock holders are notified before the {@code unlock} operation completes.
  * <h2>Compaction modes</h2>
  * <em>Determinism is the number one rule of state machines!</em>
  * <p>
@@ -53,51 +40,11 @@ import io.atomix.copycat.session.Session;
  * or register a custom {@link io.atomix.catalyst.serializer.TypeSerializer} for better performance. Serializable types
  * can be registered on the associated client/server {@link io.atomix.catalyst.serializer.Serializer} instance.
  *
- * @see Command.ConsistencyLevel
  * @see CompactionMode
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public interface Command<T> extends Operation<T> {
-
-  /**
-   * Constants for specifying Raft {@link Command} consistency levels.
-   * <p>
-   * This enum provides identifiers for configuring consistency levels for {@link Command commands}
-   * submitted to a Raft cluster.
-   * <p>
-   * Consistency levels are used to dictate how events associated with a command are published to clients.
-   * For expectations of specific consistency levels, see specific consistency levels.
-   *
-   * @see #consistency()
-   *
-   * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
-   */
-  enum ConsistencyLevel {
-
-    /**
-     * Enforces sequential command consistency.
-     * <p>
-     * All commands are applied to the server state machine in program order and at some point between their invocation and
-     * response (linearization point). But session events related to commands can be controlled by this consistency level.
-     * The sequential consistency level guarantees that all session events related to a command will be received by the client
-     * in sequential order. However, it does not guarantee that the events will be received during the invocation of the command.
-     */
-    SEQUENTIAL,
-
-    /**
-     * Enforces linearizable command consistency.
-     * <p>
-     * Linearizable consistency enforces sequential consistency for concurrent writes from a single client by sequencing
-     * commands as they're applied to the Raft state machine. If a client submits writes <em>a</em>, <em>b</em>, and <em>c</em>
-     * in that order, they're guaranteed to be applied to the Raft state machine and client {@link java.util.concurrent.CompletableFuture futures}
-     * are guaranteed to be completed in that order. Additionally, linearizable commands are guaranteed to be applied to the
-     * server state machine some time between invocation and response, and command-related session events are guaranteed to be
-     * received by clients prior to completion of the command.
-     */
-    LINEARIZABLE
-
-  }
 
   /**
    * Constants for specifying command compaction modes.
@@ -257,24 +204,6 @@ public interface Command<T> extends Operation<T> {
      */
     TOMBSTONE,
 
-  }
-
-  /**
-   * Returns the command consistency level.
-   * <p>
-   * The consistency will dictate the order with which commands are submitted to the Raft cluster. Ultimately, all commands
-   * are linearized by Raft. But commands submitted concurrently by a single client may be received by the cluster out of order.
-   * The consistency level allows users to specify how out-of-order commands should be handled. Consult the {@link ConsistencyLevel}
-   * documentation for more information.
-   * <p>
-   * By default, this method enforces strong consistency with the {@link ConsistencyLevel#LINEARIZABLE} consistency level.
-   *
-   * @see ConsistencyLevel
-   *
-   * @return The command consistency level.
-   */
-  default ConsistencyLevel consistency() {
-    return null;
   }
 
   /**

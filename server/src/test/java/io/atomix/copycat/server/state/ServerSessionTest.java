@@ -19,7 +19,6 @@ import io.atomix.copycat.server.storage.Log;
 import org.testng.annotations.Test;
 
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.mockito.Mockito.mock;
@@ -94,8 +93,7 @@ public class ServerSessionTest {
   public void testCacheResponse() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
     ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
-    session.registerResponse(2, "Hello world!", new CompletableFuture<>());
-    assertNotNull(session.getResponseFuture(2));
+    session.registerResponse(2, "Hello world!");
     assertEquals(session.getResponse(2), "Hello world!");
     session.clearResponses(3);
     assertNull(session.getResponse(2));

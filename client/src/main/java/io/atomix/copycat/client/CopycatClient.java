@@ -72,8 +72,7 @@ import java.util.function.Consumer;
  * <p>
  * Sessions work to provide linearizable semantics for client {@link Command commands}. When a command is submitted to the cluster,
  * the command will be forwarded to the leader where it will be logged and replicated. Once the command is stored on a majority
- * of servers, the leader will apply it to its state machine and respond according to the command's {@link Command#consistency()}.
- * See the {@link Command.ConsistencyLevel} documentation for more info.
+ * of servers, the leader will apply it to its state machine and respond.
  * <p>
  * Sessions also allow {@link Query queries} (read-only requests) submitted by the client to optionally be executed on follower
  * nodes. When a query is submitted to the cluster, the query's {@link Query#consistency()} will be used to determine how the
@@ -163,7 +162,7 @@ public interface CopycatClient {
      * <p>
      * The {@code CONNECTED} state indicates that the client is healthy and operating normally. {@link Command commands}
      * and {@link Query queries} submitted and completed while the client is in this state are guaranteed to adhere to
-     * the respective {@link Command.ConsistencyLevel consistency}
+     * consistency guarantees.
      * {@link Query.ConsistencyLevel levels}.
      */
     CONNECTED,
@@ -338,7 +337,7 @@ public interface CopycatClient {
    * <p>
    * Note that all client submissions are guaranteed to be completed in the same order in which they were sent (program order)
    * and on the same thread. This does not, however, mean that they'll be applied to the server-side replicated state machine
-   * in that order. State machine order is dependent on the configured {@link Command.ConsistencyLevel}.
+   * in that order.
    *
    * @param command The command to submit.
    * @param <T> The command result type.
