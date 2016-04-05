@@ -62,6 +62,8 @@ class ServerSessionContext implements ServerSession {
   private long eventIndex;
   private long ackIndex;
   private long completeIndex;
+  private long clientEventIndex;
+  private long clientCompleteIndex;
   private long closeIndex;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
@@ -234,6 +236,46 @@ class ServerSessionContext implements ServerSession {
     if (previousKeepAliveIndex > 0) {
       log.release(previousKeepAliveIndex);
     }
+    return this;
+  }
+
+  /**
+   * Returns the current session ack index.
+   *
+   * @return The current session ack index.
+   */
+  long getClientEventIndex() {
+    return clientEventIndex;
+  }
+
+  /**
+   * Sets the current session ack index.
+   *
+   * @param eventIndex The current session ack index.
+   * @return The server session.
+   */
+  ServerSessionContext setClientEventIndex(long eventIndex) {
+    this.clientEventIndex = eventIndex;
+    return this;
+  }
+
+  /**
+   * Returns the current session complete index.
+   *
+   * @return The current session complete index.
+   */
+  long getClientCompleteIndex() {
+    return clientCompleteIndex;
+  }
+
+  /**
+   * Sets the current session complete index.
+   *
+   * @param completeIndex The current session complete index.
+   * @return The server session.
+   */
+  ServerSessionContext setClientCompleteIndex(long completeIndex) {
+    this.clientCompleteIndex = completeIndex;
     return this;
   }
 

@@ -498,7 +498,8 @@ final class ServerStateMachine implements AutoCloseable {
    * from the log before they're replicated to some servers.
    */
   private CompletableFuture<Void> apply(KeepAliveEntry entry) {
-    ServerSessionContext session = executor.context().sessions().getSession(entry.getSession());
+    long sessionId = entry.getSession();
+    ServerSessionContext session = executor.context().sessions().getSession(sessionId);
 
     // Update the deterministic executor time and allow the executor to execute any scheduled events.
     long timestamp = executor.timestamp(entry.getTimestamp());
@@ -531,6 +532,25 @@ final class ServerStateMachine implements AutoCloseable {
 
       long index = entry.getIndex();
 
+      future = new CompletableFuture<>();
+
+      // Store the command/event sequence and event index instead of acquiring a reference to the entry.
+      long commandSequence = entry.getCommandSequence();
+      long eventIndex = entry.getEventIndex();
+      long completeIndex = entry.getCompleteIndex();
+
+      long previousEventIndex = session.getClientEventIndex();
+      long previousCompleteIndex = session.getClientCompleteIndex();
+
+      // If the previous event index was greater than the client's previous complete index and the
+      // complete index has not increased since the last keep-alive, expire the session.
+      if (previousEventIndex > previousCompleteIndex && completeIndex == previousCompleteIndex) {
+        CompletableFuture<Void> expireFuture = new CompletableFuture<>();
+        executor.executor().execute(() -> expireSession(index, timestamp, false, session, expireFuture, context));
+        expireFuture.whenComplete((result, error) -> future.completeExceptionally(new UnknownSessionException("fault session: " + sessionId)));
+        return future;
+      }
+
       // Set the session as trusted. This will prevent the leader from explicitly unregistering the
       // session if it hasn't done so already.
       session.trust();
@@ -538,19 +558,15 @@ final class ServerStateMachine implements AutoCloseable {
       // Update the session's timestamp with the current state machine time.
       session.setTimestamp(timestamp);
 
-      // Store the command/event sequence and event index instead of acquiring a reference to the entry.
-      long commandSequence = entry.getCommandSequence();
-      long eventIndex = entry.getEventIndex();
-      long completeIndex = entry.getCompleteIndex();
-
-      future = new CompletableFuture<>();
-
       // The keep-alive entry also serves to clear cached command responses and events from memory.
       // Remove responses and clear/resend events in the state machine thread to prevent thread safety issues.
       executor.executor().execute(() -> keepAliveSession(index, timestamp, commandSequence, eventIndex, completeIndex, session, future, context));
 
-      // Update the session keep alive index for log cleaning.
-      session.setKeepAliveIndex(entry.getIndex()).setRequestSequence(commandSequence);
+      // Update the session indexes and sequence numbers for log cleaning, response caching, et al.
+      session.setKeepAliveIndex(entry.getIndex())
+        .setRequestSequence(commandSequence)
+        .setClientEventIndex(eventIndex)
+        .setClientCompleteIndex(completeIndex);
     }
 
     return future;

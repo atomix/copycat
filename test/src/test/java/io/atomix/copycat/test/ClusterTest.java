@@ -682,6 +682,32 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests that a client's session is expired when the client fails to complete an event.
+   */
+  public void testExpireIncompleteEvent() throws Throwable {
+    createServers(3);
+
+    CopycatClient client = createClient();
+    client.onEvent("test", event -> {
+      threadAssertEquals(event.message(), "Hello world!");
+      resume();
+    });
+
+    client.onStateChange(state -> {
+      if (state == CopycatClient.State.CLOSED) {
+        resume();
+      }
+    });
+
+    client.submit(new TestEvent("Hello world!", true, Command.ConsistencyLevel.SEQUENTIAL)).thenAccept(result -> {
+      threadAssertEquals(result, "Hello world!");
+      resume();
+    });
+
+    await(30000, 3);
+  }
+
+  /**
    * Tests submitting a sequential event.
    */
   public void testOneNodeSequentialEvent() throws Throwable {
