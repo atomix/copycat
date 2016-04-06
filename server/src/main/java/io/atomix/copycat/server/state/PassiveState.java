@@ -351,30 +351,7 @@ class PassiveState extends ReserveState {
     // indexes will be the last applied index.
     final long index = context.getStateMachine().getLastApplied();
     context.getStateMachine().apply(entry).whenComplete((result, error) -> {
-      if (isOpen()) {
-        if (error == null) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withIndex(index)
-            .withResult(result)
-            .build()));
-        } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(((CopycatException) error.getCause()).getType())
-            .build()));
-        } else if (error instanceof CopycatException) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(((CopycatException) error).getType())
-            .build()));
-        } else {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-      }
+      completeQuery(index, result, error, future);
       entry.release();
     });
     return future;
@@ -391,16 +368,19 @@ class PassiveState extends ReserveState {
           .withIndex(index)
           .withResult(result)
           .build()));
+      } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
+        future.complete(logResponse(QueryResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(((CopycatException) error.getCause()).getType())
+          .build()));
       } else if (error instanceof CopycatException) {
         future.complete(logResponse(QueryResponse.builder()
           .withStatus(Response.Status.ERROR)
-          .withIndex(index)
           .withError(((CopycatException) error).getType())
           .build()));
       } else {
         future.complete(logResponse(QueryResponse.builder()
           .withStatus(Response.Status.ERROR)
-          .withIndex(index)
           .withError(CopycatError.Type.INTERNAL_ERROR)
           .build()));
       }
