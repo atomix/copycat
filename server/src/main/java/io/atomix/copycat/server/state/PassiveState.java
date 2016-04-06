@@ -30,6 +30,7 @@ import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 /**
@@ -345,23 +346,38 @@ class PassiveState extends ReserveState {
   /**
    * Applies a query to the state machine.
    */
-  private void applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
-    // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
-    if (session == null) {
-      future.complete(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
-    } else {
-      final long index = session.getLastApplied();
-      context.getStateMachine().apply(entry).whenComplete((result, error) -> {
-        if (isOpen()) {
-          completeQuery(index, result, error, future);
+  protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+    // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
+    // indexes will be the last applied index.
+    final long index = context.getStateMachine().getLastApplied();
+    context.getStateMachine().apply(entry).whenComplete((result, error) -> {
+      if (isOpen()) {
+        if (error == null) {
+          future.complete(logResponse(QueryResponse.builder()
+            .withStatus(Response.Status.OK)
+            .withIndex(index)
+            .withResult(result)
+            .build()));
+        } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
+          future.complete(logResponse(QueryResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(((CopycatException) error.getCause()).getType())
+            .build()));
+        } else if (error instanceof CopycatException) {
+          future.complete(logResponse(QueryResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(((CopycatException) error).getType())
+            .build()));
+        } else {
+          future.complete(logResponse(QueryResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .build()));
         }
-        entry.release();
-      });
-    }
+      }
+      entry.release();
+    });
+    return future;
   }
 
   /**

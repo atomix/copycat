@@ -548,7 +548,6 @@ final class LeaderState extends ActiveState {
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
-              checkSessions();
             }
           });
         } else {
@@ -566,7 +565,6 @@ final class LeaderState extends ActiveState {
 
   @Override
   protected CompletableFuture<QueryResponse> query(final QueryRequest request) {
-
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
@@ -584,15 +582,15 @@ final class LeaderState extends ActiveState {
 
     Query.ConsistencyLevel consistency = query.consistency();
     if (consistency == null)
-      return submitQueryLinearizable(entry);
+      return queryLinearizable(entry);
 
     switch (consistency) {
       case SEQUENTIAL:
-        return submitQueryLocal(entry);
+        return queryLocal(entry);
       case BOUNDED_LINEARIZABLE:
-        return submitQueryBoundedLinearizable(entry);
+        return queryBoundedLinearizable(entry);
       case LINEARIZABLE:
-        return submitQueryLinearizable(entry);
+        return queryLinearizable(entry);
       default:
         throw new IllegalStateException("unknown consistency level");
     }
@@ -601,32 +599,69 @@ final class LeaderState extends ActiveState {
   /**
    * Submits a query with serializable consistency.
    */
-  private CompletableFuture<QueryResponse> submitQueryLocal(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> queryLocal(QueryEntry entry) {
     return applyQuery(entry, new CompletableFuture<>());
   }
 
   /**
    * Submits a query with lease bounded linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> submitQueryBoundedLinearizable(QueryEntry entry) {
-    if (System.currentTimeMillis() - appender.time() < context.getElectionTimeout().toMillis()) {
-      return submitQueryLocal(entry);
+  private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry) {
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    if (session == null) {
+      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    }
+
+    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+    sequenceBoundedLinearizableQuery(entry, session, future);
+    return future;
+  }
+
+  /**
+   * Sequences a bounded linearizable query.
+   */
+  private void sequenceBoundedLinearizableQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+    // If the query's sequence number is greater than the session's current sequence number, queue the request for
+    // handling once the state machine is caught up.
+    if (entry.getSequence() > session.getCommandSequence()) {
+      session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, future));
     } else {
-      return submitQueryLinearizable(entry);
+      applyQuery(entry, future);
     }
   }
 
   /**
    * Submits a query with strict linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> submitQueryLinearizable(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> queryLinearizable(QueryEntry entry) {
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    if (session == null) {
+      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    }
+
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+    appendLinearizableQuery(entry, session, future);
+    return future;
+  }
+
+  /**
+   * Sends an append request for the given query entry.
+   */
+  private void appendLinearizableQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
           entry.acquire();
-          applyQuery(entry, future);
+          sequenceLinearizableQuery(entry, future);
         } else {
           future.complete(logResponse(QueryResponse.builder()
             .withStatus(Response.Status.ERROR)
@@ -636,45 +671,29 @@ final class LeaderState extends ActiveState {
       }
       entry.release();
     });
-    return future;
+    session.setRequestSequence(entry.getSequence());
   }
 
   /**
-   * Applies a query to the state machine.
+   * Sequences a linearizable query.
    */
-  private CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
-    // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
-    // indexes will be the last applied index.
-    final long index = context.getStateMachine().getLastApplied();
-    context.getStateMachine().apply(entry).whenComplete((result, error) -> {
-      if (isOpen()) {
-        if (error == null) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withIndex(index)
-            .withResult(result)
-            .build()));
-        } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(((CopycatException) error.getCause()).getType())
-            .build()));
-        } else if (error instanceof CopycatException) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(((CopycatException) error).getType())
-            .build()));
-        } else {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-        checkSessions();
+  private void sequenceLinearizableQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    if (session == null) {
+      future.complete(logResponse(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    } else {
+      // If the query's sequence number is greater than the session's current sequence number, queue the request for
+      // handling once the state machine is caught up.
+      if (entry.getSequence() > session.getCommandSequence()) {
+        session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, future));
+      } else {
+        applyQuery(entry, future);
       }
-      entry.release();
-    });
-    return future;
+    }
   }
 
   @Override
