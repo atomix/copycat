@@ -107,23 +107,13 @@ final class ClientSessionSubmitter {
    * Submits a query to the cluster.
    */
   private <T> void submitQuery(Query<T> query, CompletableFuture<T> future) {
-    if (query.consistency() == Query.ConsistencyLevel.CAUSAL) {
-      QueryRequest request = QueryRequest.builder()
-        .withSession(state.getSessionId())
-        .withSequence(state.getCommandResponse())
-        .withIndex(state.getResponseIndex())
-        .withQuery(query)
-        .build();
-      submitQuery(request, future);
-    } else {
-      QueryRequest request = QueryRequest.builder()
-        .withSession(state.getSessionId())
-        .withSequence(state.getCommandRequest())
-        .withIndex(state.getResponseIndex())
-        .withQuery(query)
-        .build();
-      submitQuery(request, future);
-    }
+    QueryRequest request = QueryRequest.builder()
+      .withSession(state.getSessionId())
+      .withSequence(state.getCommandRequest())
+      .withIndex(state.getResponseIndex())
+      .withQuery(query)
+      .build();
+    submitQuery(request, future);
   }
 
   /**
@@ -349,26 +339,10 @@ final class ClientSessionSubmitter {
     @Override
     @SuppressWarnings("unchecked")
     protected void complete(QueryResponse response) {
-      // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
-      if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-        sequence(() -> {
-          state.setResponseIndex(response.index());
-          future.complete((T) response.result());
-        });
-      }
-      // If the query consistency level is strong, the query must be executed sequentially. In order to ensure responses
-      // are received in a sequential manner, we compare the response index number with the highest index for which
-      // we've received a response and resubmit queries with output resulting from stale (prior) versions.
-      else {
-        if (response.index() > 0 && response.index() < state.getResponseIndex()) {
-          retry();
-        } else {
-          sequence(() -> {
-            state.setResponseIndex(response.index());
-            future.complete((T) response.result());
-          });
-        }
-      }
+      sequence(() -> {
+        state.setResponseIndex(response.index());
+        future.complete((T) response.result());
+      });
     }
 
     @Override

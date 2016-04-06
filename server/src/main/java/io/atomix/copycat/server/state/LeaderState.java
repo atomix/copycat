@@ -476,18 +476,31 @@ final class LeaderState extends ActiveState {
     }
 
     ComposableFuture<CommandResponse> future = new ComposableFuture<>();
+    sequenceCommand(request, session, future);
+    return future;
+  }
 
-    Command command = request.command();
-
+  /**
+   * Sequences the given command to the log.
+   */
+  private void sequenceCommand(CommandRequest request, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
     // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
     // sequence number, queue this request for handling later. We want to handle command requests in the order in which
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
     // sequence number. In that case, it's likely that the command was submitted more than once to the
     // cluster, and the command will be deduplicated once applied to the state machine.
     if (request.sequence() > session.nextRequestSequence()) {
-      session.registerRequest(request.sequence(), () -> context.getThreadContext().executor().execute(() -> command(request).whenComplete(future)));
-      return future;
+      session.registerRequest(request.sequence(), () -> applyCommand(request, session, future));
+    } else {
+      applyCommand(request, session, future);
     }
+  }
+
+  /**
+   * Applies the given command to the log.
+   */
+  private void applyCommand(CommandRequest request, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
+    final Command command = request.command();
 
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
@@ -549,8 +562,6 @@ final class LeaderState extends ActiveState {
 
     // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
     session.setRequestSequence(request.sequence());
-
-    return future;
   }
 
   @Override
@@ -576,7 +587,6 @@ final class LeaderState extends ActiveState {
       return submitQueryLinearizable(entry);
 
     switch (consistency) {
-      case CAUSAL:
       case SEQUENTIAL:
         return submitQueryLocal(entry);
       case BOUNDED_LINEARIZABLE:

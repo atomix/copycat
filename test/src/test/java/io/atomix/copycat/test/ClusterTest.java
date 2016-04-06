@@ -472,13 +472,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a query.
    */
-  public void testOneNodeSubmitQueryWithCausalConsistency() throws Throwable {
-    testSubmitQuery(1, Query.ConsistencyLevel.CAUSAL);
-  }
-
-  /**
-   * Tests submitting a query.
-   */
   public void testOneNodeSubmitQueryWithSequentialConsistency() throws Throwable {
     testSubmitQuery(1, Query.ConsistencyLevel.SEQUENTIAL);
   }
@@ -495,13 +488,6 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testOneNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
     testSubmitQuery(1, Query.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a query.
-   */
-  public void testTwoNodeSubmitQueryWithCausalConsistency() throws Throwable {
-    testSubmitQuery(2, Query.ConsistencyLevel.CAUSAL);
   }
 
   /**
@@ -528,13 +514,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a query.
    */
-  public void testThreeNodeSubmitQueryWithCausalConsistency() throws Throwable {
-    testSubmitQuery(3, Query.ConsistencyLevel.CAUSAL);
-  }
-
-  /**
-   * Tests submitting a query.
-   */
   public void testThreeNodeSubmitQueryWithSequentialConsistency() throws Throwable {
     testSubmitQuery(3, Query.ConsistencyLevel.SEQUENTIAL);
   }
@@ -556,13 +535,6 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting a query.
    */
-  public void testFourNodeSubmitQueryWithCausalConsistency() throws Throwable {
-    testSubmitQuery(4, Query.ConsistencyLevel.CAUSAL);
-  }
-
-  /**
-   * Tests submitting a query.
-   */
   public void testFourNodeSubmitQueryWithSequentialConsistency() throws Throwable {
     testSubmitQuery(4, Query.ConsistencyLevel.SEQUENTIAL);
   }
@@ -579,13 +551,6 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   public void testFourNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
     testSubmitQuery(4, Query.ConsistencyLevel.LINEARIZABLE);
-  }
-
-  /**
-   * Tests submitting a query.
-   */
-  public void testFiveNodeSubmitQueryWithCausalConsistency() throws Throwable {
-    testSubmitQuery(5, Query.ConsistencyLevel.CAUSAL);
   }
 
   /**
