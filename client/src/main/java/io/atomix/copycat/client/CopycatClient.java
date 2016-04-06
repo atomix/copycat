@@ -463,7 +463,6 @@ public interface CopycatClient {
     private Set<Address> members;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
-    private RetryStrategy retryStrategy = RetryStrategies.FIBONACCI_BACKOFF;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
     private Builder(Collection<Address> members) {
@@ -544,17 +543,6 @@ public interface CopycatClient {
     }
 
     /**
-     * Sets the operation retry strategy.
-     *
-     * @param retryStrategy The operation retry strategy.
-     * @return The client builder.
-     */
-    public Builder withRetryStrategy(RetryStrategy retryStrategy) {
-      this.retryStrategy = Assert.notNull(retryStrategy, "retryStrategy");
-      return this;
-    }
-
-    /**
      * Sets the client recovery strategy.
      *
      * @param recoveryStrategy The client recovery strategy.
@@ -590,7 +578,7 @@ public interface CopycatClient {
         context.serializer().resolve(new ClientResponseTypeResolver());
         context.serializer().resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, members, context, threadFactory, serverSelectionStrategy, connectionStrategy, recoveryStrategy);
       } else {
         // If no serializer instance was provided, create one.
         if (serializer == null) {
@@ -602,7 +590,7 @@ public interface CopycatClient {
         serializer.resolve(new ClientResponseTypeResolver());
         serializer.resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(transport, members, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, recoveryStrategy);
       }
     }
   }

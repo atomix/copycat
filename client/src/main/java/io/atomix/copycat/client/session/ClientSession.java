@@ -24,7 +24,6 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategy;
-import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.session.Session;
@@ -45,8 +44,7 @@ import java.util.function.Consumer;
  * <p>
  * Sessions are responsible for sequencing concurrent operations to ensure they're applied to the system state
  * in the order in which they were submitted by the client. To do so, the session coordinates with its server-side
- * counterpart using unique per-operation sequence numbers. The session relies upon the client's various configured
- * {@link io.atomix.copycat.client.RetryStrategies strategies} to ensure fault-tolerance of state machine operations.
+ * counterpart using unique per-operation sequence numbers.
  * <p>
  * In the event that the client session expires, clients are responsible for opening a new session by creating and
  * opening a new session object.
@@ -61,21 +59,21 @@ public class ClientSession implements Session, Managed<Session> {
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(UUID.randomUUID(), client, selector, context, connectionStrategy, retryStrategy);
+  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
+    this(UUID.randomUUID(), client, selector, context, connectionStrategy);
   }
 
-  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy, retryStrategy);
+  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
+    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy);
   }
 
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
+  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.manager = new ClientSessionManager(connection, state, context, connectionStrategy);
     this.listener = new ClientSessionListener(connection, state, context);
-    this.submitter = new ClientSessionSubmitter(connection, state, context, retryStrategy);
+    this.submitter = new ClientSessionSubmitter(connection, state, context);
   }
 
   @Override

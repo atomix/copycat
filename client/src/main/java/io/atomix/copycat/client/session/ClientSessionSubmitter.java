@@ -21,9 +21,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
-import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.util.ClientSequencer;
 import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
@@ -47,17 +45,17 @@ import java.util.function.Predicate;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class ClientSessionSubmitter {
+  private static final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
+  private static final Predicate<Throwable> EXCEPTION_PREDICATE = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
   private final Connection connection;
   private final ClientSessionState state;
   private final ThreadContext context;
-  private final RetryStrategy strategy;
   private final ClientSequencer sequencer = new ClientSequencer();
 
-  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ThreadContext context, RetryStrategy retryStrategy) {
+  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
-    this.strategy = Assert.notNull(retryStrategy, "retryStrategy");
   }
 
   /**
@@ -161,7 +159,7 @@ final class ClientSessionSubmitter {
   /**
    * Operation attempt.
    */
-  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse, V> implements RetryStrategy.Attempt, BiConsumer<U, Throwable> {
+  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse, V> implements BiConsumer<U, Throwable> {
     protected final long sequence;
     protected final int attempt;
     protected final T request;
@@ -172,35 +170,6 @@ final class ClientSessionSubmitter {
       this.attempt = attempt;
       this.request = request;
       this.future = future;
-    }
-
-    @Override
-    public int attempt() {
-      return attempt;
-    }
-
-    @Override
-    public Operation<?> operation() {
-      return request.operation();
-    }
-
-    @Override
-    public void accept(U response, Throwable error) {
-      Predicate<Throwable> retryableCheck = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
-      if (error == null) {
-        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
-        if (response.status() == Response.Status.OK) {
-          complete(response);
-        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
-          complete(response.error().createException());
-        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
-          strategy.attemptFailed(this, response.error().createException());
-        }
-      } else if (retryableCheck.test(error) || (error instanceof CompletionException && retryableCheck.test(error.getCause()))) {
-        strategy.attemptFailed(this, error);
-      } else {
-        fail(error);
-      }
     }
 
     /**
@@ -240,22 +209,34 @@ final class ClientSessionSubmitter {
       sequencer.sequence(sequence, callback);
     }
 
-    @Override
+    /**
+     * Fails the attempt.
+     */
     public void fail() {
       fail(defaultException());
     }
 
-    @Override
+    /**
+     * Fails the attempt with the given exception.
+     *
+     * @param t The exception with which to fail the attempt.
+     */
     public void fail(Throwable t) {
       complete(t);
     }
 
-    @Override
+    /**
+     * Immediately retries the attempt.
+     */
     public void retry() {
       context.executor().execute(() -> submit(next()));
     }
 
-    @Override
+    /**
+     * Retries the attempt after the given duration.
+     *
+     * @param after The duration after which to retry the attempt.
+     */
     public void retry(Duration after) {
       context.schedule(after, () -> submit(next()));
     }
@@ -265,6 +246,7 @@ final class ClientSessionSubmitter {
    * Command operation attempt.
    */
   private final class CommandAttempt<T> extends OperationAttempt<CommandRequest, CommandResponse, T> {
+
     public CommandAttempt(long sequence, CommandRequest request, CompletableFuture<T> future) {
       super(sequence, 1, request, future);
     }
@@ -281,6 +263,24 @@ final class ClientSessionSubmitter {
     @Override
     protected Throwable defaultException() {
       return new CommandException("failed to complete command");
+    }
+
+    @Override
+    public void accept(CommandResponse response, Throwable error) {
+      if (error == null) {
+        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+        if (response.status() == Response.Status.OK) {
+          complete(response);
+        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
+          complete(response.error().createException());
+        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+          retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
+        }
+      } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
+        retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
+      } else {
+        fail(error);
+      }
     }
 
     @Override
@@ -330,6 +330,20 @@ final class ClientSessionSubmitter {
     @Override
     protected Throwable defaultException() {
       return new QueryException("failed to complete query");
+    }
+
+    @Override
+    public void accept(QueryResponse response, Throwable error) {
+      if (error == null) {
+        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+        if (response.status() == Response.Status.OK) {
+          complete(response);
+        } else {
+          complete(response.error().createException());
+        }
+      } else {
+        fail(error);
+      }
     }
 
     @Override

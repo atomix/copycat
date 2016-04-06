@@ -56,7 +56,6 @@ public class DefaultCopycatClient implements CopycatClient {
   private final ThreadContext context;
   private final AddressSelector selector;
   private final ConnectionStrategy connectionStrategy;
-  private final RetryStrategy retryStrategy;
   private final RecoveryStrategy recoveryStrategy;
   private final ClientSequencer sequencer = new ClientSequencer();
   private ClientSession session;
@@ -69,17 +68,16 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
-    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+  DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
+    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, recoveryStrategy);
   }
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
     this.transport = Assert.notNull(transport, "transport");
     this.context = Assert.notNull(context, "context");
     this.threadFactory = Assert.notNull(threadFactory, "threadFactory");
     this.selector = new AddressSelector(members, selectionStrategy);
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
-    this.retryStrategy = Assert.notNull(retryStrategy, "retryStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
   }
 
@@ -129,7 +127,7 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, context.serializer().clone()), connectionStrategy, retryStrategy);
+    ClientSession session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, context.serializer().clone()), connectionStrategy);
 
     // Update the session change listener.
     if (changeListener != null)

@@ -24,7 +24,6 @@ import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.DefaultCopycatClient;
-import io.atomix.copycat.client.RetryStrategies;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -1318,7 +1317,6 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client = CopycatClient.builder(members.stream().map(Member::clientAddress).collect(Collectors.toList()))
       .withTransport(new LocalTransport(registry))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withRetryStrategy(RetryStrategies.FIBONACCI_BACKOFF)
       .build();
     client.serializer().disableWhitelist();
     client.connect().thenRun(this::resume);
