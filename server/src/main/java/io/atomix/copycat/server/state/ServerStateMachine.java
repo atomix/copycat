@@ -905,48 +905,6 @@ final class ServerStateMachine implements AutoCloseable {
     // only be applied for sessions in an active state.
     else if (!session.state().active()) {
       return Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.getSession()));
-    }
-    // Query execution is determined by the sequence and index supplied for the query. All queries are queued until the state
-    // machine advances at least until the provided sequence and index.
-    // If the query sequence number is greater than the current sequence number for the session, queue the query.
-    else if (entry.getSequence() > session.getCommandSequence()) {
-      CompletableFuture<Object> future = new CompletableFuture<>();
-
-      // Get the caller's context.
-      ThreadContext context = ThreadContext.currentContextOrThrow();
-
-      // Store the entry index and sequence instead of acquiring a reference to the entry.
-      long index = entry.getIndex();
-      long sequence = entry.getSequence();
-
-      // Once the query has met its sequence requirement, check whether it has also met its index requirement. If the index
-      // requirement is not yet met, queue the query for the state machine to catch up to the required index.
-      ServerCommit commit = commits.acquire(entry, session, executor.timestamp());
-      session.registerSequenceQuery(sequence, () -> {
-        context.checkThread();
-        if (index > session.getLastApplied()) {
-          session.registerIndexQuery(index, () -> {
-            context.checkThread();
-            executor.executor().execute(() -> executeQuery(commit, session, future, context));
-          });
-        } else {
-          executor.executor().execute(() -> executeQuery(commit, session, future, context));
-        }
-      });
-      return future;
-    }
-    // If the query index is greater than the last applied index for the session, queue the query.
-    else if (entry.getIndex() > session.getLastApplied()) {
-      CompletableFuture<Object> future = new CompletableFuture<>();
-
-      ThreadContext context = ThreadContext.currentContextOrThrow();
-
-      ServerCommit commit = commits.acquire(entry, session, executor.timestamp());
-      session.registerIndexQuery(entry.getIndex(), () -> {
-        context.checkThread();
-        executor.executor().execute(() -> executeQuery(commit, session, future, context));
-      });
-      return future;
     } else {
       CompletableFuture<Object> future = new CompletableFuture<>();
       ThreadContext context = ThreadContext.currentContextOrThrow();
