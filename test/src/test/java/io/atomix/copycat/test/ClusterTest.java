@@ -45,10 +45,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -123,7 +122,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private void submit(CopycatClient client, int count, int total) {
     if (count < total) {
-      client.submit(new TestCommand("Hello world!")).whenComplete((result, error) -> {
+      client.submit(new TestCommand()).whenComplete((result, error) -> {
         threadAssertNull(error);
         submit(client, count + 1, total);
       });
@@ -425,8 +424,8 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submit(new TestCommand("Hello world!")).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
+    client.submit(new TestCommand()).thenAccept(result -> {
+      threadAssertNotNull(result);
       resume();
     });
 
@@ -461,8 +460,8 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(live, total);
 
     CopycatClient client = createClient();
-    client.submit(new TestCommand("Hello world!")).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
+    client.submit(new TestCommand()).thenAccept(result -> {
+      threadAssertNotNull(result);
       resume();
     });
 
@@ -581,8 +580,8 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submit(new TestQuery("Hello world!", consistency)).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
+    client.submit(new TestQuery(consistency)).thenAccept(result -> {
+      threadAssertNotNull(result);
       resume();
     });
 
@@ -630,14 +629,20 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testSequentialEvent(int nodes) throws Throwable {
     createServers(nodes);
 
+    AtomicLong count = new AtomicLong();
+    AtomicLong index = new AtomicLong();
+
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+      threadAssertEquals(count.incrementAndGet(), 2);
+      threadAssertEquals(index.get(), message);
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", true)).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
+    client.submit(new TestEvent(true)).thenAccept(result -> {
+      threadAssertNotNull(result);
+      threadAssertEquals(count.incrementAndGet(), 1);
+      index.set(result);
       resume();
     });
 
@@ -647,60 +652,60 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting sequential events.
    */
-  public void testOneNodeSequentialEvents() throws Throwable {
-    testSequentialEvents(1);
+  public void testOneNodeEvents() throws Throwable {
+    testEvents(1);
   }
 
   /**
    * Tests submitting sequential events.
    */
-  public void testTwoNodeSequentialEvents() throws Throwable {
-    testSequentialEvents(2);
+  public void testTwoNodeEvents() throws Throwable {
+    testEvents(2);
   }
 
   /**
    * Tests submitting sequential events.
    */
-  public void testThreeNodeSequentialEvents() throws Throwable {
-    testSequentialEvents(3);
+  public void testThreeNodeEvents() throws Throwable {
+    testEvents(3);
   }
 
   /**
    * Tests submitting sequential events.
    */
-  public void testFourNodeSequentialEvents() throws Throwable {
-    testSequentialEvents(4);
+  public void testFourNodeEvents() throws Throwable {
+    testEvents(4);
   }
 
   /**
    * Tests submitting sequential events.
    */
-  public void testFiveNodeSequentialEvents() throws Throwable {
-    testSequentialEvents(5);
+  public void testFiveNodeEvents() throws Throwable {
+    testEvents(5);
   }
 
   /**
    * Tests submitting sequential events to all sessions.
    */
-  private void testSequentialEvents(int nodes) throws Throwable {
+  private void testEvents(int nodes) throws Throwable {
     createServers(nodes);
 
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+      threadAssertNotNull(message);
       resume();
     });
     createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+      threadAssertNotNull(message);
       resume();
     });
     createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
+      threadAssertNotNull(message);
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", false)).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
+    client.submit(new TestEvent(false)).thenAccept(result -> {
+      threadAssertNotNull(result);
       resume();
     });
 
@@ -708,167 +713,67 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests submitting a linearizable event.
+   * Tests that operations are properly sequenced on the client.
    */
-  public void testOneNodeLinearizableEvent() throws Throwable {
-    testLinearizableEvent(1);
+  public void testSequenceLinearizableOperations() throws Throwable {
+    testSequenceOperations(5, Query.ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
-   * Tests submitting a linearizable event.
+   * Tests that operations are properly sequenced on the client.
    */
-  public void testTwoNodeLinearizableEvent() throws Throwable {
-    testLinearizableEvent(2);
+  public void testSequenceBoundedLinearizableOperations() throws Throwable {
+    testSequenceOperations(5, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
   }
 
   /**
-   * Tests submitting a linearizable event.
+   * Tests that operations are properly sequenced on the client.
    */
-  public void testThreeNodeLinearizableEvent() throws Throwable {
-    testLinearizableEvent(3);
-  }
-
-  /**
-   * Tests submitting a linearizable event.
-   */
-  public void testFourNodeLinearizableEvent() throws Throwable {
-    testLinearizableEvent(4);
-  }
-
-  /**
-   * Tests submitting a linearizable event.
-   */
-  public void testFiveNodeLinearizableEvent() throws Throwable {
-    testLinearizableEvent(5);
-  }
-
-  /**
-   * Tests submitting an event command.
-   */
-  private void testLinearizableEvent(int nodes) throws Throwable {
-    createServers(nodes);
-
-    AtomicInteger counter = new AtomicInteger();
-
-    CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
-      counter.incrementAndGet();
-      resume();
-    });
-
-    client.submit(new TestEvent("Hello world!", true)).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
-      threadAssertEquals(counter.get(), 1);
-      resume();
-    });
-
-    await(30000, 2);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
-  public void testOneNodeLinearizableEvents() throws Throwable {
-    testLinearizableEvents(1);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
-  public void testTwoNodeLinearizableEvents() throws Throwable {
-    testLinearizableEvents(2);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
-  public void testThreeNodeLinearizableEvents() throws Throwable {
-    testLinearizableEvents(3);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
-  public void testFourNodeLinearizableEvents() throws Throwable {
-    testLinearizableEvents(4);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
-  public void testFiveNodeLinearizableEvents() throws Throwable {
-    testLinearizableEvents(5);
+  public void testSequenceSequentialOperations() throws Throwable {
+    testSequenceOperations(5, Query.ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a linearizable event that publishes to all sessions.
    */
-  private void testLinearizableEvents(int nodes) throws Throwable {
+  private void testSequenceOperations(int nodes, Query.ConsistencyLevel consistency) throws Throwable {
     createServers(nodes);
 
     AtomicInteger counter = new AtomicInteger();
+    AtomicLong index = new AtomicLong();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
-      counter.incrementAndGet();
-      resume();
-    });
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
-      counter.incrementAndGet();
-      resume();
-    });
-    createClient().onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
-      counter.incrementAndGet();
+    client.<Long>onEvent("test", message -> {
+      threadAssertEquals(counter.incrementAndGet(), 3);
+      threadAssertTrue(message >= index.get());
+      index.set(message);
       resume();
     });
 
-    client.submit(new TestEvent("Hello world!", false)).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
-      threadAssertEquals(counter.get(), 3);
+    client.submit(new TestCommand()).thenAccept(result -> {
+      threadAssertNotNull(result);
+      threadAssertEquals(counter.incrementAndGet(), 1);
+      threadAssertTrue(index.compareAndSet(0, result));
+      resume();
+    });
+
+    client.submit(new TestEvent(true)).thenAccept(result -> {
+      threadAssertNotNull(result);
+      threadAssertEquals(counter.incrementAndGet(), 2);
+      threadAssertTrue(result > index.get());
+      index.set(result);
+      resume();
+    });
+
+    client.submit(new TestQuery(consistency)).thenAccept(result -> {
+      threadAssertNotNull(result);
+      threadAssertEquals(counter.incrementAndGet(), 4);
+      long i = index.get();
+      threadAssertTrue(result >= i);
       resume();
     });
 
     await(30000, 4);
-  }
-
-  /**
-   * Tests submitting linearizable events.
-   */
-  public void testFiveNodeCommandBeforeEvent() throws Throwable {
-    testCommandBeforeEvent(5);
-  }
-
-  /**
-   * Tests submitting a linearizable event that publishes to all sessions.
-   */
-  private void testCommandBeforeEvent(int nodes) throws Throwable {
-    createServers(nodes);
-
-    AtomicInteger counter = new AtomicInteger();
-
-    CopycatClient client = createClient();
-    client.onEvent("test", message -> {
-      threadAssertEquals(message, "Hello world!");
-      counter.incrementAndGet();
-      resume();
-    });
-
-    client.submit(new TestCommand("Hello world!")).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
-      resume();
-    });
-
-    client.submit(new TestEvent("Hello world!", true)).thenAccept(result -> {
-      threadAssertEquals(result, "Hello world!");
-      threadAssertEquals(counter.get(), 1);
-      resume();
-    });
-
-    await(30000, 3);
   }
 
   /**
@@ -884,19 +789,15 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testManyEvents(int nodes) throws Throwable {
     createServers(nodes);
 
-    AtomicReference<String> value = new AtomicReference<>();
-
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
@@ -924,19 +825,15 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testManyEventsAfterLeaderShutdown(int nodes) throws Throwable {
     List<CopycatServer> servers = createServers(nodes);
 
-    AtomicReference<String> value = new AtomicReference<>();
-
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
@@ -947,10 +844,8 @@ public class ClusterTest extends ConcurrentTestCase {
     leader.stop().join();
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
@@ -961,46 +856,40 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Tests submitting sequential events.
    */
-  public void testThreeNodesSequentialEventsAfterFollowerKill() throws Throwable {
-    testSequentialEventsAfterFollowerKill(3);
+  public void testThreeNodesEventsAfterFollowerKill() throws Throwable {
+    testEventsAfterFollowerKill(3);
   }
 
   /**
    * Tests submitting sequential events.
    */
-  public void testFiveNodesSequentialEventsAfterFollowerKill() throws Throwable {
-    testSequentialEventsAfterFollowerKill(5);
+  public void testFiveNodesEventsAfterFollowerKill() throws Throwable {
+    testEventsAfterFollowerKill(5);
   }
 
   /**
    * Tests submitting a sequential event that publishes to all sessions.
    */
-  private void testSequentialEventsAfterFollowerKill(int nodes) throws Throwable {
+  private void testEventsAfterFollowerKill(int nodes) throws Throwable {
     List<CopycatServer> servers = createServers(nodes);
-
-    AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
       await(30000, 2);
     }
 
-    String singleEvent = UUID.randomUUID().toString();
-    value.set(singleEvent);
-    client.submit(new TestEvent(singleEvent, true)).thenAccept(result -> {
-      threadAssertEquals(result, singleEvent);
+    client.submit(new TestEvent(true)).thenAccept(result -> {
+      threadAssertNotNull(result);
       resume();
     });
 
@@ -1010,10 +899,8 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
@@ -1022,41 +909,35 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests submitting linearizable events.
+   * Tests submitting events.
    */
-  public void testFiveNodesLinearizableEventsAfterLeaderKill() throws Throwable {
-    testLinearizableEventsAfterLeaderKill(5);
+  public void testFiveNodesEventsAfterLeaderKill() throws Throwable {
+    testEventsAfterLeaderKill(5);
   }
 
   /**
    * Tests submitting a linearizable event that publishes to all sessions.
    */
-  private void testLinearizableEventsAfterLeaderKill(int nodes) throws Throwable {
+  private void testEventsAfterLeaderKill(int nodes) throws Throwable {
     List<CopycatServer> servers = createServers(nodes);
-
-    AtomicReference<String> value = new AtomicReference<>();
 
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
       await(30000, 2);
     }
 
-    String singleEvent = UUID.randomUUID().toString();
-    value.set(singleEvent);
-    client.submit(new TestEvent(singleEvent, true)).thenAccept(result -> {
-      threadAssertEquals(result, singleEvent);
+    client.submit(new TestEvent(true)).thenAccept(result -> {
+      threadAssertNotNull(result);
       resume();
     });
 
@@ -1066,10 +947,8 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0 ; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, true)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(true)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
@@ -1090,29 +969,25 @@ public class ClusterTest extends ConcurrentTestCase {
   private void testManySessionsManyEvents(int nodes) throws Throwable {
     createServers(nodes);
 
-    AtomicReference<String> value = new AtomicReference<>();
-
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     createClient().onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     createClient().onEvent("test", message -> {
-      threadAssertEquals(message, value.get());
+      threadAssertNotNull(message);
       resume();
     });
 
     for (int i = 0; i < 10; i++) {
-      String event = UUID.randomUUID().toString();
-      value.set(event);
-      client.submit(new TestEvent(event, false)).thenAccept(result -> {
-        threadAssertEquals(result, event);
+      client.submit(new TestEvent(false)).thenAccept(result -> {
+        threadAssertNotNull(result);
         resume();
       });
 
@@ -1357,9 +1232,9 @@ public class ClusterTest extends ConcurrentTestCase {
       assert reader.readLong() == 10;
     }
 
-    public String command(Commit<TestCommand> commit) {
+    public long command(Commit<TestCommand> commit) {
       try {
-        return commit.operation().value();
+        return commit.index();
       } finally {
         if (last != null)
           last.close();
@@ -1367,24 +1242,24 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     }
 
-    public String query(Commit<TestQuery> commit) {
+    public long query(Commit<TestQuery> commit) {
       try {
-        return commit.operation().value();
+        return commit.index();
       } finally {
         commit.close();
       }
     }
 
-    public String event(Commit<TestEvent> commit) {
+    public long event(Commit<TestEvent> commit) {
       try {
         if (commit.operation().own()) {
-          commit.session().publish("test", commit.operation().value());
+          commit.session().publish("test", commit.index());
         } else {
           for (ServerSession session : sessions) {
-            session.publish("test", commit.operation().value());
+            session.publish("test", commit.index());
           }
         }
-        return commit.operation().value();
+        return commit.index();
       } finally {
         commit.close();
       }
@@ -1402,32 +1277,20 @@ public class ClusterTest extends ConcurrentTestCase {
   /**
    * Test command.
    */
-  public static class TestCommand implements Command<String> {
-    private String value;
-
-    public TestCommand(String value) {
-      this.value = value;
-    }
-
+  public static class TestCommand implements Command<Long> {
     @Override
     public CompactionMode compaction() {
       return CompactionMode.QUORUM;
-    }
-
-    public String value() {
-      return value;
     }
   }
 
   /**
    * Test query.
    */
-  public static class TestQuery implements Query<String> {
-    private String value;
+  public static class TestQuery implements Query<Long> {
     private ConsistencyLevel consistency;
 
-    public TestQuery(String value, ConsistencyLevel consistency) {
-      this.value = value;
+    public TestQuery(ConsistencyLevel consistency) {
       this.consistency = consistency;
     }
 
@@ -1435,31 +1298,21 @@ public class ClusterTest extends ConcurrentTestCase {
     public ConsistencyLevel consistency() {
       return consistency;
     }
-
-    public String value() {
-      return value;
-    }
   }
 
   /**
    * Test event.
    */
-  public static class TestEvent implements Command<String> {
-    private String value;
+  public static class TestEvent implements Command<Long> {
     private boolean own;
 
-    public TestEvent(String value, boolean own) {
-      this.value = value;
+    public TestEvent(boolean own) {
       this.own = own;
     }
 
     @Override
     public CompactionMode compaction() {
       return CompactionMode.QUORUM;
-    }
-
-    public String value() {
-      return value;
     }
 
     public boolean own() {
