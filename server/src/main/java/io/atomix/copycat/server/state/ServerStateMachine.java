@@ -796,6 +796,10 @@ final class ServerStateMachine implements AutoCloseable {
       ServerCommit commit = commits.acquire(entry, session, timestamp);
       executor.executor().execute(() -> executeCommand(index, sequence, timestamp, commit, session, future, context));
 
+      // Update the last applied index prior to the command sequence number. This is necessary to ensure queries sequenced
+      // at this index receive the index of the command.
+      setLastApplied(index);
+
       // Update the session timestamp and command sequence number. This is done in the caller's thread since all
       // timestamp/index/sequence checks are done in this thread prior to executing operations on the state machine thread.
       session.setTimestamp(timestamp).setCommandSequence(sequence);
