@@ -662,7 +662,6 @@ final class LeaderState extends ActiveState {
       }
       entry.release();
     });
-    session.setRequestSequence(entry.getSequence());
   }
 
   /**
