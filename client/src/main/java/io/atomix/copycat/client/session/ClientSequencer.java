@@ -76,10 +76,11 @@ final class ClientSequencer {
   /**
    * Sequences an event.
    * <p>
-   * When an event is received, if the {@code eventIndex} is greater than the last sequenced {@code responseIndex},
-   * the event is enqueued unless there are no outstanding requests. If the {@code eventIndex} is equal to the last
-   * sequenced {@code responseIndex} then the event is immediately completed. If the {@code eventIndex} is less than
-   * the last sequenced {@code responseIndex} then something has gone wrong.
+   * This method relies on the session event protocol to ensure that events are applied in sequential order.
+   * When an event is received, if no operations are outstanding, the event is immediately completed since
+   * the event could not have occurred concurrently with any other operation. Otherwise, the event is queued
+   * and the next response in the sequence of responses is checked to determine whether the event can be
+   * completed.
    *
    * @param request The publish request.
    * @param callback The callback to sequence.
@@ -126,8 +127,11 @@ final class ClientSequencer {
    * Completes all sequenced responses.
    */
   private void completeResponses() {
+    // Iterate through queued responses and complete as many as possible.
     ResponseCallback response = responseCallbacks.get(responseSequence + 1);
     while (response != null) {
+      // If the response was completed, remove the response callback from the response queue,
+      // increment the response sequence number, and check the next response.
       if (completeResponse(response.response, response.callback)) {
         responseCallbacks.remove(++responseSequence);
         response = responseCallbacks.get(responseSequence + 1);
@@ -136,6 +140,8 @@ final class ClientSequencer {
       }
     }
 
+    // Once we've completed as many responses as possible, if no more operations are outstanding
+    // and events remain in the event queue, complete the events.
     if (requestSequence == responseSequence) {
       EventCallback eventCallback = eventCallbacks.poll();
       while (eventCallback != null) {
@@ -172,6 +178,7 @@ final class ClientSequencer {
     }
 
     // If after completing pending events the eventIndex is equal to the response's eventIndex, complete the response.
+    // Note that the event protocol initializes the eventIndex to the session ID.
     if (response.eventIndex() == eventIndex || (eventIndex == 0 && response.eventIndex() == state.getSessionId())) {
       callback.run();
       return true;

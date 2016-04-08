@@ -41,7 +41,7 @@ import java.util.function.Consumer;
 final class ClientSessionListener {
   private final ClientSessionState state;
   private final ThreadContext context;
-  private final Map<String, Set<Consumer<Event>>> eventListeners = new ConcurrentHashMap<>();
+  private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
   private final ClientSequencer sequencer;
 
   public ClientSessionListener(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
@@ -64,7 +64,7 @@ final class ClientSessionListener {
    */
   @SuppressWarnings("unchecked")
   public <T> Listener<T> onEvent(String event, Consumer listener) {
-    Set<Consumer<Event>> listeners = eventListeners.computeIfAbsent(event, e -> new CopyOnWriteArraySet<>());
+    Set<Consumer> listeners = eventListeners.computeIfAbsent(event, e -> new CopyOnWriteArraySet<>());
     listeners.add(listener);
     return new Listener<T>() {
       @Override
@@ -111,10 +111,10 @@ final class ClientSessionListener {
 
     sequencer.sequenceEvent(request, () -> {
       for (Event<?> event : request.events()) {
-        Set<Consumer<Event>> listeners = eventListeners.get(event.name());
+        Set<Consumer> listeners = eventListeners.get(event.name());
         if (listeners != null) {
-          for (Consumer<Event> listener : listeners) {
-            listener.accept(event);
+          for (Consumer listener : listeners) {
+            listener.accept(event.message());
           }
         }
       }
