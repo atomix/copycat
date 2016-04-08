@@ -634,14 +634,14 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client = createClient();
     client.onEvent("test", message -> {
-      threadAssertEquals(count.incrementAndGet(), 2);
+      threadAssertEquals(count.incrementAndGet(), 2L);
       threadAssertEquals(index.get(), message);
       resume();
     });
 
     client.submit(new TestEvent(true)).thenAccept(result -> {
       threadAssertNotNull(result);
-      threadAssertEquals(count.incrementAndGet(), 1);
+      threadAssertEquals(count.incrementAndGet(), 1L);
       index.set(result);
       resume();
     });
