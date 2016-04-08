@@ -287,8 +287,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         index = state.getLog().append(entry);
       }
 
-      state.getStateMachine().apply(index).whenComplete((result, error) -> {
-        threadAssertNull(result);
+      state.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+        threadAssertNull(result.result);
         threadAssertNull(error);
         resume();
       });
@@ -339,8 +339,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         index = state.getLog().append(entry);
       }
 
-      state.getStateMachine().apply(index).whenComplete((result, error) -> {
-        threadAssertEquals(result, 1L);
+      state.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+        threadAssertEquals(result.result, 1L);
         resume();
       });
 
@@ -363,8 +363,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         index = state.getLog().append(entry);
       }
 
-      state.getStateMachine().apply(index).whenComplete((result, error) -> {
-        threadAssertEquals(result, 2L);
+      state.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+        threadAssertEquals(result.result, 2L);
         resume();
       });
 
@@ -382,8 +382,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         index = state.getLog().append(entry);
       }
 
-      state.getStateMachine().apply(index).whenComplete((result, error) -> {
-        threadAssertEquals(result, 3L);
+      state.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+        threadAssertEquals(result.result, 3L);
         resume();
       });
 
@@ -436,8 +436,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
           .setSequence(0)
           .setQuery(new TestQuery());
 
-      state.getStateMachine().apply(entry).whenComplete((result, error) -> {
-        threadAssertEquals(result, 1L);
+      state.getStateMachine().<ServerStateMachine.Result>apply(entry).whenComplete((result, error) -> {
+        threadAssertEquals(result.result, 1L);
         resume();
       });
     });
@@ -454,8 +454,8 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
         index = state.getLog().append(entry);
       }
 
-      state.getStateMachine().apply(index).whenComplete((result, error) -> {
-        threadAssertEquals(result, 2L);
+      state.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+        threadAssertEquals(result.result, 2L);
         resume();
       });
 
