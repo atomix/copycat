@@ -164,6 +164,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
       tasks.clear();
     }
+    context.commit();
   }
 
   /**

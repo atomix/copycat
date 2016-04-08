@@ -29,20 +29,16 @@ import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.client.util.AddressSelector;
-import io.atomix.copycat.client.util.ClientSequencer;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * Default Copycat client implementation.
@@ -52,30 +48,28 @@ import java.util.function.Function;
 public class DefaultCopycatClient implements CopycatClient {
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultCopycatClient.class);
   private final Transport transport;
-  private final CatalystThreadFactory threadFactory;
-  private final ThreadContext context;
+  private final ThreadContext ioContext;
+  private final ThreadContext eventContext;
   private final AddressSelector selector;
   private final ConnectionStrategy connectionStrategy;
   private final RecoveryStrategy recoveryStrategy;
-  private final ClientSequencer sequencer = new ClientSequencer();
   private ClientSession session;
   private volatile State state = State.CLOSED;
   private volatile CompletableFuture<CopycatClient> openFuture;
   private volatile CompletableFuture<CopycatClient> recoverFuture;
   private volatile CompletableFuture<Void> closeFuture;
-  private final Map<Long, OperationFuture<?>> operations = new LinkedHashMap<>();
   private final Set<StateChangeListener> changeListeners = new CopyOnWriteArraySet<>();
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
   DefaultCopycatClient(Transport transport, Collection<Address> members, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
-    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, recoveryStrategy);
+    this(transport, members, new SingleThreadContext(threadFactory, serializer.clone()), new SingleThreadContext(threadFactory, serializer.clone()), selectionStrategy, connectionStrategy, recoveryStrategy);
   }
 
-  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(Transport transport, Collection<Address> members, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
     this.transport = Assert.notNull(transport, "transport");
-    this.context = Assert.notNull(context, "context");
-    this.threadFactory = Assert.notNull(threadFactory, "threadFactory");
+    this.ioContext = Assert.notNull(ioContext, "ioContext");
+    this.eventContext = Assert.notNull(eventContext, "eventContext");
     this.selector = new AddressSelector(members, selectionStrategy);
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
@@ -110,7 +104,7 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public Serializer serializer() {
     ThreadContext context = ThreadContext.currentContext();
-    return context != null ? context.serializer() : this.context.serializer();
+    return context != null ? context.serializer() : this.eventContext.serializer();
   }
 
   @Override
@@ -120,14 +114,14 @@ public class DefaultCopycatClient implements CopycatClient {
 
   @Override
   public ThreadContext context() {
-    return context;
+    return eventContext;
   }
 
   /**
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(transport.client(), selector, new SingleThreadContext(threadFactory, context.serializer().clone()), connectionStrategy);
+    ClientSession session = new ClientSession(transport.client(), selector, ioContext, connectionStrategy);
 
     // Update the session change listener.
     if (changeListener != null)
@@ -179,64 +173,25 @@ public class DefaultCopycatClient implements CopycatClient {
         } else {
           openFuture.completeExceptionally(error);
         }
-      }, context.executor());
+      }, eventContext.executor());
     }
     return openFuture;
   }
 
   @Override
   public <T> CompletableFuture<T> submit(Command<T> command) {
+    ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
-
-    OperationFuture<T> future = new OperationFuture<>(command);
-    context.executor().execute(() -> submit(command, session::submit, future));
-    return future;
+    return session.submit(command);
   }
 
   @Override
   public <T> CompletableFuture<T> submit(Query<T> query) {
+    ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
-
-    OperationFuture<T> future = new OperationFuture<>(query);
-    context.executor().execute(() -> submit(query, session::submit, future));
-    return future;
-  }
-
-  /**
-   * Submits an operation to the cluster.
-   */
-  private <T extends Operation<U>, U> void submit(T operation, Function<T, CompletableFuture<U>> submitter, OperationFuture<U> future) {
-    context.checkThread();
-    long sequence = sequencer.nextSequence();
-    operations.put(sequence, future);
-    submitter.apply(operation).whenCompleteAsync((r, e) -> complete(sequence, r, e, future), context.executor());
-  }
-
-  /**
-   * Resubmits an operation future upon session recovery.
-   */
-  @SuppressWarnings("unchecked")
-  private <T> void resubmit(long sequence, OperationFuture<T> future) {
-    context.checkThread();
-    session.submit(future.operation).whenCompleteAsync((r, e) -> complete(sequence, r, e, future), context.executor());
-  }
-
-  /**
-   * Completes an operation.
-   */
-  private <T> void complete(long sequence, T result, Throwable error, OperationFuture<T> future) {
-    context.checkThread();
-    sequencer.sequence(sequence, () -> {
-      if (error == null) {
-        operations.remove(sequence);
-        future.complete(result);
-      } else if (!(error instanceof ClosedSessionException)) {
-        operations.remove(sequence);
-        future.completeExceptionally(error);
-      }
-    });
+    return session.submit(query);
   }
 
   @Override
@@ -264,16 +219,12 @@ public class DefaultCopycatClient implements CopycatClient {
           LOGGER.debug("Recovered by replacing session {} with session {}", this.session.id(), session.id());
           ClientSession oldSession = this.session;
           this.session = session;
-          // If the session was opened successfully, resubmit any pending operations.
-          for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
-            resubmit(entry.getKey(), entry.getValue());
-          }
           return oldSession.close();
         } else {
           setState(State.CLOSED);
           return Futures.exceptionalFuture(error);
         }
-      }, context.executor()).thenApply(v -> this);
+      }, eventContext.executor()).thenApply(v -> this);
     }
     return recoverFuture;
   }
@@ -288,12 +239,9 @@ public class DefaultCopycatClient implements CopycatClient {
       closeFuture = new CompletableFuture<>();
       session.close().whenCompleteAsync((result, error) -> {
         setState(State.CLOSED);
-        for (Map.Entry<Long, OperationFuture<?>> entry : operations.entrySet()) {
-          entry.getValue().completeExceptionally(new ClosedSessionException("session closed"));
-        }
-
         CompletableFuture.runAsync(() -> {
-          context.close();
+          ioContext.close();
+          eventContext.close();
           transport.close();
           if (error == null) {
             closeFuture.complete(null);
@@ -301,7 +249,7 @@ public class DefaultCopycatClient implements CopycatClient {
             closeFuture.completeExceptionally(error);
           }
         });
-      }, context.executor());
+      }, eventContext.executor());
     }
     return closeFuture;
   }
@@ -320,7 +268,8 @@ public class DefaultCopycatClient implements CopycatClient {
         .whenComplete((result, error) -> {
           setState(State.CLOSED);
           CompletableFuture.runAsync(() -> {
-            context.close();
+            ioContext.close();
+            eventContext.close();
             transport.close();
           });
         });
@@ -367,7 +316,7 @@ public class DefaultCopycatClient implements CopycatClient {
 
     @Override
     public void accept(State state) {
-      context.executor().execute(() -> callback.accept(state));
+      eventContext.executor().execute(() -> callback.accept(state));
     }
 
     @Override
@@ -394,18 +343,12 @@ public class DefaultCopycatClient implements CopycatClient {
      * Registers the session event listener.
      */
     public void register(ClientSession session) {
-      if (ThreadContext.currentContext() == context) {
-        parent = session.onEvent(event, callback);
-      } else {
-        context.execute(() -> {
-          parent = session.onEvent(event, callback);
-        }).join();
-      }
+      session.onEvent(event, callback);
     }
 
     @Override
     public void accept(T message) {
-      context.executor().execute(() -> callback.accept(message));
+      eventContext.executor().execute(() -> callback.accept(message));
     }
 
     @Override

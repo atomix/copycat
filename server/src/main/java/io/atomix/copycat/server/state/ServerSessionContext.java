@@ -64,7 +64,7 @@ class ServerSessionContext implements ServerSession {
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
-  private final Map<Long, Object> responses = new HashMap<>();
+  private final Map<Long, ServerStateMachine.Result> results = new HashMap<>();
   private final Queue<EventHolder> events = new ArrayDeque<>();
   private EventHolder event;
   private boolean unregistering;
@@ -411,23 +411,23 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
-   * Registers a session response.
+   * Registers a session result.
    * <p>
-   * Responses are stored in memory on all servers in order to provide linearizable semantics. When a command
+   * Results are stored in memory on all servers in order to provide linearizable semantics. When a command
    * is applied to the state machine, the command's return value is stored with the sequence number. Once the
-   * client acknowledges receipt of the command output the response will be cleared from memory.
+   * client acknowledges receipt of the command output the result will be cleared from memory.
    *
-   * @param sequence The response sequence number.
-   * @param response The response.
+   * @param sequence The result sequence number.
+   * @param result The result.
    * @return The server session.
    */
-  ServerSessionContext registerResponse(long sequence, Object response) {
-    responses.put(sequence, response);
+  ServerSessionContext registerResult(long sequence, ServerStateMachine.Result result) {
+    results.put(sequence, result);
     return this;
   }
 
   /**
-   * Clears command responses up to the given sequence number.
+   * Clears command results up to the given sequence number.
    * <p>
    * Command output is removed from memory up to the given sequence number. Additionally, since we know the
    * client received a response for all commands up to the given sequence number, command futures are removed
@@ -436,10 +436,10 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The sequence to clear.
    * @return The server session.
    */
-  ServerSessionContext clearResponses(long sequence) {
+  ServerSessionContext clearResults(long sequence) {
     if (sequence > commandLowWaterMark) {
       for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
-        responses.remove(i);
+        results.remove(i);
         commandLowWaterMark = i;
       }
     }
@@ -452,8 +452,8 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The response sequence.
    * @return The response.
    */
-  Object getResponse(long sequence) {
-    return responses.get(sequence);
+  ServerStateMachine.Result getResult(long sequence) {
+    return results.get(sequence);
   }
 
   /**
@@ -486,6 +486,15 @@ class ServerSessionContext implements ServerSession {
    */
   Address getAddress() {
     return address;
+  }
+
+  /**
+   * Returns the session event index.
+   *
+   * @return The session event index.
+   */
+  long getEventIndex() {
+    return eventIndex;
   }
 
   @Override

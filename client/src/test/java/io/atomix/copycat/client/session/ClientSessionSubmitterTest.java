@@ -59,7 +59,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
     assertEquals(submitter.submit(new TestCommand()).get(), "Hello world!");
     assertEquals(state.getCommandRequest(), 1);
     assertEquals(state.getCommandResponse(), 1);
@@ -86,7 +86,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
     CompletableFuture<String> result1 = submitter.submit(new TestCommand());
     CompletableFuture<String> result2 = submitter.submit(new TestCommand());
@@ -140,7 +140,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
     assertEquals(submitter.submit(new TestQuery()).get(), "Hello world!");
     assertEquals(state.getResponseIndex(), 10);
   }
@@ -165,7 +165,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
     CompletableFuture<String> result1 = submitter.submit(new TestQuery());
     CompletableFuture<String> result2 = submitter.submit(new TestQuery());

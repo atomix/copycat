@@ -93,10 +93,10 @@ public class ServerSessionTest {
   public void testCacheResponse() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
     ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
-    session.registerResponse(2, "Hello world!");
-    assertEquals(session.getResponse(2), "Hello world!");
-    session.clearResponses(3);
-    assertNull(session.getResponse(2));
+    session.registerResult(2, new ServerStateMachine.Result(2, 2, "Hello world!"));
+    assertEquals(session.getResult(2).result, "Hello world!");
+    session.clearResults(3);
+    assertNull(session.getResult(2));
   }
 
 }

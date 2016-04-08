@@ -270,7 +270,7 @@ final class ServerStateMachine implements AutoCloseable {
         Entry entry = log.get(i);
         if (entry != null) {
           LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
-          apply(entry, false).whenComplete((result, error) -> entry.release());
+          apply(entry).whenComplete((result, error) -> entry.release());
         }
         setLastApplied(i);
       }
@@ -287,7 +287,7 @@ final class ServerStateMachine implements AutoCloseable {
    * @param index The index to apply.
    * @return A completable future to be completed once the commit has been applied.
    */
-  public CompletableFuture<?> apply(long index) {
+  public <T> CompletableFuture<T> apply(long index) {
     // If entries remain to be applied prior to this entry then synchronously apply them.
     if (index > lastApplied + 1) {
       applyAll(index - 1);
@@ -315,35 +315,25 @@ final class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return A completable future to be completed with the result.
    */
-  public CompletableFuture<?> apply(Entry entry) {
+  @SuppressWarnings("unchecked")
+  public <T> CompletableFuture<T> apply(Entry entry) {
     LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
-    return apply(entry, true);
-  }
-
-  /**
-   * Applies an entry to the state machine.
-   *
-   * @param entry The entry to apply.
-   * @param expectResult Indicates whether this call expects a result.
-   * @return The result.
-   */
-  private CompletableFuture<?> apply(Entry entry, boolean expectResult) {
     if (entry instanceof QueryEntry) {
-      return apply((QueryEntry) entry);
+      return (CompletableFuture<T>) apply((QueryEntry) entry);
     } else if (entry instanceof CommandEntry) {
-      return apply((CommandEntry) entry, expectResult);
+      return (CompletableFuture<T>) apply((CommandEntry) entry);
     } else if (entry instanceof RegisterEntry) {
-      return apply((RegisterEntry) entry, expectResult);
+      return (CompletableFuture<T>) apply((RegisterEntry) entry);
     } else if (entry instanceof KeepAliveEntry) {
-      return apply((KeepAliveEntry) entry);
+      return (CompletableFuture<T>) apply((KeepAliveEntry) entry);
     } else if (entry instanceof UnregisterEntry) {
-      return apply((UnregisterEntry) entry, expectResult);
+      return (CompletableFuture<T>) apply((UnregisterEntry) entry);
     } else if (entry instanceof InitializeEntry) {
-      return apply((InitializeEntry) entry);
+      return (CompletableFuture<T>) apply((InitializeEntry) entry);
     } else if (entry instanceof ConnectEntry) {
-      return apply((ConnectEntry) entry);
+      return (CompletableFuture<T>) apply((ConnectEntry) entry);
     } else if (entry instanceof ConfigurationEntry) {
-      return apply((ConfigurationEntry) entry);
+      return (CompletableFuture<T>) apply((ConfigurationEntry) entry);
     }
     return Futures.exceptionalFuture(new InternalException("unknown state machine operation"));
   }
@@ -570,7 +560,7 @@ final class ServerStateMachine implements AutoCloseable {
     // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
     executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
-    session.clearResponses(commandSequence).resendEvents(eventIndex);
+    session.clearResults(commandSequence).resendEvents(eventIndex);
 
     // Calculate the last completed index.
     long lastCompleted = calculateLastCompleted(index);
@@ -604,7 +594,7 @@ final class ServerStateMachine implements AutoCloseable {
    * ensures that state changes resulting from the expiration or closing of a session are completed before
    * the session close itself is completed.
    */
-  private CompletableFuture<Void> apply(UnregisterEntry entry, boolean synchronous) {
+  private CompletableFuture<Void> apply(UnregisterEntry entry) {
     // Get the session from the context sessions. Note that we do not unregister the session here. Sessions
     // can only be unregistered once all references to session commands have been released by the state machine.
     ServerSessionContext session = executor.context().sessions().getSession(entry.getSession());
@@ -641,12 +631,12 @@ final class ServerStateMachine implements AutoCloseable {
       // If the entry was marked expired, that indicates that the leader explicitly expired the session due to
       // the session not being kept alive by the client. In all other cases, we close the session normally.
       if (entry.isExpired()) {
-        executor.executor().execute(() -> expireSession(index, timestamp, synchronous, session, future, context));
+        executor.executor().execute(() -> expireSession(index, timestamp, session, future, context));
       }
       // If the unregister entry is not indicated as expired, a client must have submitted a request to unregister
       // the session. In that case, we simply close the session without expiring it.
       else {
-        executor.executor().execute(() -> closeSession(index, timestamp, synchronous, session, future, context));
+        executor.executor().execute(() -> closeSession(index, timestamp, session, future, context));
       }
     }
 
@@ -656,7 +646,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Expires the given session.
    */
-  private void expireSession(long index, long timestamp, boolean synchronous, ServerSessionContext session, CompletableFuture<Void> future, ThreadContext context) {
+  private void expireSession(long index, long timestamp, ServerSessionContext session, CompletableFuture<Void> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -701,7 +691,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Closes the given session.
    */
-  private void closeSession(long index, long timestamp, boolean synchronous, ServerSessionContext session, CompletableFuture<Void> future, ThreadContext context) {
+  private void closeSession(long index, long timestamp, ServerSessionContext session, CompletableFuture<Void> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -758,8 +748,8 @@ final class ServerStateMachine implements AutoCloseable {
    * received in sequential order. The reason for this assumption is because leaders always sequence
    * commands as they're written to the log, so no sequence number will be skipped.
    */
-  private CompletableFuture<Object> apply(CommandEntry entry, boolean synchronous) {
-    final CompletableFuture<Object> future = new CompletableFuture<>();
+  private CompletableFuture<Result> apply(CommandEntry entry) {
+    final CompletableFuture<Result> future = new CompletableFuture<>();
     final ThreadContext context = ThreadContext.currentContextOrThrow();
 
     // First check to ensure that the session exists.
@@ -816,26 +806,24 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Sequences a command according to the command sequence number.
    */
-  private void sequenceCommand(long sequence, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
+  private void sequenceCommand(long sequence, ServerSessionContext session, CompletableFuture<Result> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
     }
 
-    Object response = session.getResponse(sequence);
-    if (response == null) {
-      context.executor().execute(() -> future.complete(null));
-    } else if (response instanceof Throwable) {
-      context.executor().execute(() -> future.completeExceptionally((Throwable) response));
+    Result result = session.getResult(sequence);
+    if (result == null) {
+      context.executor().execute(() -> future.completeExceptionally(new RuntimeException("missing result")));
     } else {
-      context.executor().execute(() -> future.complete(response));
+      context.executor().execute(() -> future.complete(result));
     }
   }
 
   /**
    * Executes a state machine command.
    */
-  private void executeCommand(long index, long sequence, long timestamp, ServerCommit commit, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
+  private void executeCommand(long index, long sequence, long timestamp, ServerCommit commit, ServerSessionContext session, CompletableFuture<Result> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -855,22 +843,26 @@ final class ServerStateMachine implements AutoCloseable {
     // based on the configured consistency level for the context.
     executor.init(commit.index(), commit.time(), ServerStateMachineContext.Type.COMMAND);
 
+    // Store the event index to return in the command response.
+    long eventIndex = session.getEventIndex();
+
     try {
       // Execute the state machine operation and get the result.
-      Object result = executor.executeOperation(commit);
+      Object output = executor.executeOperation(commit);
 
       // Once the operation has been applied to the state machine, commit events published by the command.
       // The state machine context will build a composite future for events published to all sessions.
-      // If events were published during the execution of the command and under a LINEARIZABLE event consistency,
-      // the composite future will be non-null. Wait for events to be acknowledged by clients and for a non-null
-      // future to be completed before completing the command future.
       executor.commit();
-      session.registerResponse(sequence, result);
+
+      // Store the result for linearizability and complete the command.
+      Result result = new Result(index, eventIndex, output);
+      session.registerResult(sequence, result);
       context.executor().execute(() -> future.complete(result));
     } catch (Exception e) {
       // If an exception occurs during execution of the command, store the exception.
-      session.registerResponse(sequence, e);
-      context.executor().execute(() -> future.completeExceptionally(e));
+      Result result = new Result(index, eventIndex, e);
+      session.registerResult(sequence, result);
+      context.executor().execute(() -> future.complete(result));
     }
   }
 
@@ -892,7 +884,7 @@ final class ServerStateMachine implements AutoCloseable {
    * publishing of session events. Events require commands to be written to the Raft log to ensure
    * fault-tolerance and consistency across the cluster.
    */
-  private CompletableFuture<Object> apply(QueryEntry entry) {
+  private CompletableFuture<Result> apply(QueryEntry entry) {
     ServerSessionContext session = executor.context().sessions().getSession(entry.getSession());
 
     // If the session is null then that indicates that the session already timed out or it never existed.
@@ -906,9 +898,9 @@ final class ServerStateMachine implements AutoCloseable {
     else if (!session.state().active()) {
       return Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.getSession()));
     } else {
-      CompletableFuture<Object> future = new CompletableFuture<>();
+      CompletableFuture<Result> future = new CompletableFuture<>();
       ThreadContext context = ThreadContext.currentContextOrThrow();
-      ServerCommit commit = commits.acquire(entry, session, executor.timestamp());
+      ServerCommit commit = commits.acquire(entry.setIndex(lastApplied), session, executor.timestamp());
       executor.executor().execute(() -> executeQuery(commit, session, future, context));
       return future;
     }
@@ -917,7 +909,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine query.
    */
-  private void executeQuery(ServerCommit commit, ServerSessionContext session, CompletableFuture<Object> future, ThreadContext context) {
+  private void executeQuery(ServerCommit commit, ServerSessionContext session, CompletableFuture<Result> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -929,16 +921,19 @@ final class ServerStateMachine implements AutoCloseable {
       return;
     }
 
+    long index = commit.index();
+    long eventIndex = session.getEventIndex();
+
     // Update the state machine context with the query entry's index. We set a null consistency
     // level to indicate that events cannot be published in this context. Publishing events in
     // response to state machine queries is non-deterministic as queries are not replicated.
-    executor.init(commit.index(), commit.time(), ServerStateMachineContext.Type.QUERY);
+    executor.init(index, commit.time(), ServerStateMachineContext.Type.QUERY);
 
     try {
       Object result = executor.executeOperation(commit);
-      context.executor().execute(() -> future.complete(result));
+      context.executor().execute(() -> future.complete(new Result(index, eventIndex, result)));
     } catch (Exception e) {
-      context.executor().execute(() -> future.completeExceptionally(e));
+      context.executor().execute(() -> future.complete(new Result(index, eventIndex, e)));
     }
   }
 
@@ -982,6 +977,21 @@ final class ServerStateMachine implements AutoCloseable {
   @Override
   public void close() {
     executor.close();
+  }
+
+  /**
+   * State machine result.
+   */
+  static final class Result {
+    final long index;
+    final long eventIndex;
+    final Object result;
+
+    Result(long index, long eventIndex, Object result) {
+      this.index = index;
+      this.eventIndex = eventIndex;
+      this.result = result;
+    }
   }
 
 }

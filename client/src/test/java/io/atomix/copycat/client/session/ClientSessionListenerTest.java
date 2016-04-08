@@ -59,7 +59,7 @@ public class ClientSessionListenerTest {
 
     state.setSessionId(1).setState(Session.State.OPEN);
 
-    ClientSessionListener listener = new ClientSessionListener(connection, state, context);
+    ClientSessionListener listener = new ClientSessionListener(connection, state, new ClientSequencer(state), context);
     verify(connection).handler(any(Class.class), captor.capture());
     handler = captor.getValue();
     return listener;

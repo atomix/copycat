@@ -349,38 +349,40 @@ class PassiveState extends ReserveState {
   protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // indexes will be the last applied index.
-    final long index = context.getStateMachine().getLastApplied();
-    context.getStateMachine().apply(entry).whenComplete((result, error) -> {
-      completeQuery(index, result, error, future);
+    context.getStateMachine().<ServerStateMachine.Result>apply(entry).whenComplete((result, error) -> {
+      completeOperation(result, QueryResponse.builder(), error, future);
       entry.release();
     });
     return future;
   }
 
   /**
-   * Completes a query operation.
+   * Completes an operation.
    */
-  private void completeQuery(long index, Object result, Throwable error, CompletableFuture<QueryResponse> future) {
+  protected  <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
     if (isOpen()) {
+      if (result != null) {
+        builder.withIndex(result.index);
+        builder.withEventIndex(result.eventIndex);
+        if (result.result instanceof Exception) {
+          error = (Exception) result.result;
+        }
+      }
+
       if (error == null) {
-        future.complete(logResponse(QueryResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withIndex(index)
-          .withResult(result)
+        future.complete(logResponse(builder.withStatus(Response.Status.OK)
+          .withResult(result.result)
           .build()));
       } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
-        future.complete(logResponse(QueryResponse.builder()
-          .withStatus(Response.Status.ERROR)
+        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
           .withError(((CopycatException) error.getCause()).getType())
           .build()));
       } else if (error instanceof CopycatException) {
-        future.complete(logResponse(QueryResponse.builder()
-          .withStatus(Response.Status.ERROR)
+        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
           .withError(((CopycatException) error).getType())
           .build()));
       } else {
-        future.complete(logResponse(QueryResponse.builder()
-          .withStatus(Response.Status.ERROR)
+        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.INTERNAL_ERROR)
           .build()));
       }

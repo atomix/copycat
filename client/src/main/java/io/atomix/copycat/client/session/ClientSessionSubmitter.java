@@ -22,7 +22,6 @@ import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.util.ClientSequencer;
 import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.QueryException;
@@ -33,6 +32,8 @@ import io.atomix.copycat.session.Session;
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
@@ -49,12 +50,14 @@ final class ClientSessionSubmitter {
   private static final Predicate<Throwable> EXCEPTION_PREDICATE = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
   private final Connection connection;
   private final ClientSessionState state;
+  private final ClientSequencer sequencer;
   private final ThreadContext context;
-  private final ClientSequencer sequencer = new ClientSequencer();
+  private final Map<Long, OperationAttempt> attempts = new HashMap<>();
 
-  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ThreadContext context) {
+  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
+    this.sequencer = Assert.notNull(sequencer, "sequencer");
     this.context = Assert.notNull(context, "context");
   }
 
@@ -87,7 +90,7 @@ final class ClientSessionSubmitter {
    * Submits a command request to the cluster.
    */
   private <T> void submitCommand(CommandRequest request, CompletableFuture<T> future) {
-    submit(new CommandAttempt<>(sequencer.nextSequence(), request, future));
+    submit(new CommandAttempt<>(sequencer.nextRequest(), request, future));
   }
 
   /**
@@ -120,7 +123,7 @@ final class ClientSessionSubmitter {
    * Submits a query request to the cluster.
    */
   private <T> void submitQuery(QueryRequest request, CompletableFuture<T> future) {
-    submit(new QueryAttempt<>(sequencer.nextSequence(), request, future));
+    submit(new QueryAttempt<>(sequencer.nextRequest(), request, future));
   }
 
   /**
@@ -133,6 +136,7 @@ final class ClientSessionSubmitter {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
       state.getLogger().debug("{} - Sending {}", state.getSessionId(), attempt.request);
+      attempts.put(attempt.sequence, attempt);
       connection.<T, U>send(attempt.request).whenComplete(attempt);
     }
   }
@@ -143,6 +147,9 @@ final class ClientSessionSubmitter {
    * @return A completable future to be completed with a list of pending operations.
    */
   public CompletableFuture<Void> close() {
+    for (OperationAttempt attempt : attempts.values()) {
+      attempt.fail(new ClosedSessionException("session closed"));
+    }
     return CompletableFuture.completedFuture(null);
   }
 
@@ -193,10 +200,11 @@ final class ClientSessionSubmitter {
     /**
      * Runs the given callback in proper sequence.
      *
+     * @param response The operation response.
      * @param callback The callback to run in sequence.
      */
-    protected final void sequence(Runnable callback) {
-      sequencer.sequence(sequence, callback);
+    protected final void sequence(OperationResponse response, Runnable callback) {
+      sequencer.sequenceResponse(sequence, response, callback);
     }
 
     /**
@@ -287,7 +295,7 @@ final class ClientSessionSubmitter {
     @Override
     @SuppressWarnings("unchecked")
     protected void complete(CommandResponse response) {
-      sequence(() -> {
+      sequence(response, () -> {
         state.setCommandResponse(request.sequence());
         state.setResponseIndex(response.index());
         future.complete((T) response.result());
@@ -296,7 +304,7 @@ final class ClientSessionSubmitter {
 
     @Override
     protected void complete(Throwable error) {
-      sequence(() -> future.completeExceptionally(error));
+      sequence(null, () -> future.completeExceptionally(error));
     }
   }
 
@@ -339,7 +347,7 @@ final class ClientSessionSubmitter {
     @Override
     @SuppressWarnings("unchecked")
     protected void complete(QueryResponse response) {
-      sequence(() -> {
+      sequence(response, () -> {
         state.setResponseIndex(response.index());
         future.complete((T) response.result());
       });

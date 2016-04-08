@@ -517,39 +517,22 @@ final class LeaderState extends ActiveState {
       LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
     }
 
+    // Replicate the command to followers.
+    appendCommand(index, future);
+
+    // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
+    session.setRequestSequence(request.sequence());
+  }
+
+  /**
+   * Sends append requests for a command to followers.
+   */
+  private void appendCommand(long index, CompletableFuture<CommandResponse> future) {
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((result, error) -> {
-            if (isOpen()) {
-              if (error == null) {
-                future.complete(logResponse(CommandResponse.builder()
-                  .withStatus(Response.Status.OK)
-                  .withIndex(commitIndex)
-                  .withResult(result)
-                  .build()));
-              } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
-                future.complete(logResponse(CommandResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withIndex(commitIndex)
-                  .withError(((CopycatException) error.getCause()).getType())
-                  .build()));
-              } else if (error instanceof CopycatException) {
-                future.complete(logResponse(CommandResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withIndex(commitIndex)
-                  .withError(((CopycatException) error).getType())
-                  .build()));
-              } else {
-                future.complete(logResponse(CommandResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withIndex(commitIndex)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
-                  .build()));
-              }
-            }
-          });
+          applyCommand(index, future);
         } else {
           future.complete(logResponse(CommandResponse.builder()
             .withStatus(Response.Status.ERROR)
@@ -558,9 +541,17 @@ final class LeaderState extends ActiveState {
         }
       }
     });
+  }
 
-    // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
-    session.setRequestSequence(request.sequence());
+  /**
+   * Applies a command to the state machine.
+   */
+  private void applyCommand(long index, CompletableFuture<CommandResponse> future) {
+    context.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+      if (isOpen()) {
+        completeOperation(result, CommandResponse.builder(), error, future);
+      }
+    });
   }
 
   @Override
