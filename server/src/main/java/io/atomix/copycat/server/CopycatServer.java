@@ -213,9 +213,22 @@ import java.util.function.Supplier;
  */
 public class CopycatServer {
   private static final Logger LOGGER = LoggerFactory.getLogger(CopycatServer.class);
+  private static final String DEFAULT_HOST = "0.0.0.0";
+  private static final int DEFAULT_PORT = 8700;
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder using the default host:port.
+   * <p>
+   * The server will be constructed at 0.0.0.0:8700.
+   *
+   * @return The server builder.
+   */
+  public static Builder builder() {
+    return builder(new Address(DEFAULT_HOST, DEFAULT_PORT));
+  }
+
+  /**
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address} is the address to which to bind the server being constructed.
    *
@@ -227,7 +240,7 @@ public class CopycatServer {
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
    * The provided {@link Address}es are the client and server address to which to bind the server being
    * constructed respectively.
@@ -241,7 +254,7 @@ public class CopycatServer {
   }
 
   /**
-   * Raft server state types.
+   * Copycat server state types.
    * <p>
    * States represent the context of the server's internal state machine. Throughout the lifetime of a server,
    * the server will periodically transition between states based on requests, responses, and timeouts.

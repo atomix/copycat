@@ -33,6 +33,7 @@ import io.atomix.copycat.util.ProtocolSerialization;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -43,7 +44,7 @@ import java.util.function.Consumer;
  * that operate on the cluster's replicated state machine. Copycat clients interact with one or more nodes in a Copycat cluster
  * through a session. When the client is {@link #connect() connected}, the client will attempt to one of the known member
  * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
- * cluster, it can open a session. Once the client is able to register a {@link Session}, it will receive an updated list
+ * cluster, it can register a session. Once the client is able to register a {@link Session}, it will receive an updated list
  * of members for the entire cluster and thereafter be allowed to communicate with all servers.
  * <p>
  * Sessions are created by registering the client through the cluster leader. Clients always connect to a single node in the
@@ -80,7 +81,7 @@ import java.util.function.Consumer;
  * {@link Query.ConsistencyLevel} documentation for more info.
  * <p>
  * Throughout the lifetime of a client, the client may operate on the cluster via multiple sessions according to the configured
- * {@link RecoveryStrategy}. In the event that the client's session expires, the client may reopen a new session and continue
+ * {@link RecoveryStrategy}. In the event that the client's session expires, the client may register a new session and continue
  * to submit operations under the recovered session. The client will always attempt to ensure commands submitted are eventually
  * committed to the cluster even across sessions. If a command is submitted under one session but is not completed before the
  * session is lost and a new session is established, the client will resubmit pending commands from the prior session under
@@ -137,7 +138,7 @@ public interface CopycatClient {
    *   {@code
    *   client.onStateChange(state -> {
    *     switch (state) {
-   *       case OPEN:
+   *       case CONNECTED:
    *         // The client is healthy
    *         break;
    *       case SUSPENDED:
@@ -209,8 +210,37 @@ public interface CopycatClient {
    *
    * @return The client builder.
    */
+  @SuppressWarnings("unchecked")
   static Builder builder() {
-    return new Builder();
+    return builder(Collections.EMPTY_LIST);
+  }
+
+  /**
+   * Returns a new Copycat client builder.
+   * <p>
+   * The provided set of members will be used to connect to the Copycat cluster. The members list does not have to represent
+   * the complete list of servers in the cluster, but it must have at least one reachable member that can communicate with
+   * the cluster's leader.
+   *
+   * @param cluster The cluster to which to connect.
+   * @return The client builder.
+   */
+  static Builder builder(Address... cluster) {
+    return builder(Arrays.asList(cluster));
+  }
+
+  /**
+   * Returns a new Copycat client builder.
+   * <p>
+   * The provided set of members will be used to connect to the Copycat cluster. The members list does not have to represent
+   * the complete list of servers in the cluster, but it must have at least one reachable member that can communicate with
+   * the cluster's leader.
+   *
+   * @param cluster The cluster to which to connect.
+   * @return The client builder.
+   */
+  static Builder builder(Collection<Address> cluster) {
+    return new Builder(cluster);
   }
 
   /**
@@ -281,7 +311,7 @@ public interface CopycatClient {
    * with the leader at any given time. During periods where the cluster is electing a new leader, the client's session will
    * not timeout but will resume once a new leader is elected.
    *
-   * @return The client session or {@code null} if no session is open.
+   * @return The client session or {@code null} if no session is register.
    */
   Session session();
 
@@ -385,34 +415,36 @@ public interface CopycatClient {
   <T> Listener<T> onEvent(String event, Consumer<T> callback);
 
   /**
-   * Connects the client to Copycat cluster via the provided server addresses.
+   * Connects the client to Copycat cluster via the default server address.
    * <p>
-   * When the client is opened, it will attempt to connect to and register a session with each unique configured server
-   * {@link Address}. Once the session is open, the client will transition to the {@link State#CONNECTED} state and the
+   * If the client was built with a default cluster list, the default server addresses will be used. Otherwise, the client
+   * will attempt to connect to localhost:8700.
+   * <p>
+   * When the client is connected, it will attempt to connect to and register a session with each unique configured server
+   * {@link Address}. Once the session is registered, the client will transition to the {@link State#CONNECTED} state and the
    * returned {@link CompletableFuture} will be completed.
    * <p>
-   * The client will connect to servers in the cluster according to the pattern specified by theconfigured
+   * The client will connect to servers in the cluster according to the pattern specified by the configured
    * {@link ServerSelectionStrategy}.
    * <p>
    * In the event that the client is unable to register a session through any of the servers listed in the provided
    * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
    * to retry the registration attempt.
    *
-   * @param members A set of server addresses to which to connect.
-   * @return A completable future to be completed once the client's {@link #session()} is open.
+   * @return A completable future to be completed once the client's {@link #session()} is registered.
    */
-  default CompletableFuture<CopycatClient> connect(Address... members) {
-    return connect(Arrays.asList(members));
+  default CompletableFuture<CopycatClient> connect() {
+    return connect((Collection<Address>) null);
   }
 
   /**
    * Connects the client to Copycat cluster via the provided server addresses.
    * <p>
-   * When the client is opened, it will attempt to connect to and register a session with each unique configured server
-   * {@link Address}. Once the session is open, the client will transition to the {@link State#CONNECTED} state and the
+   * When the client is connected, it will attempt to connect to and register a session with each unique configured server
+   * {@link Address}. Once the session is registered, the client will transition to the {@link State#CONNECTED} state and the
    * returned {@link CompletableFuture} will be completed.
    * <p>
-   * The client will connect to servers in the cluster according to the pattern specified by theconfigured
+   * The client will connect to servers in the cluster according to the pattern specified by the configured
    * {@link ServerSelectionStrategy}.
    * <p>
    * In the event that the client is unable to register a session through any of the servers listed in the provided
@@ -420,7 +452,28 @@ public interface CopycatClient {
    * to retry the registration attempt.
    *
    * @param members A set of server addresses to which to connect.
-   * @return A completable future to be completed once the client's {@link #session()} is open.
+   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   */
+  default CompletableFuture<CopycatClient> connect(Address... members) {
+    return connect(Arrays.asList(Assert.notNull(members, "members")));
+  }
+
+  /**
+   * Connects the client to Copycat cluster via the provided server addresses.
+   * <p>
+   * When the client is connected, it will attempt to connect to and register a session with each unique configured server
+   * {@link Address}. Once the session is registered, the client will transition to the {@link State#CONNECTED} state and the
+   * returned {@link CompletableFuture} will be completed.
+   * <p>
+   * The client will connect to servers in the cluster according to the pattern specified by the configured
+   * {@link ServerSelectionStrategy}.
+   * <p>
+   * In the event that the client is unable to register a session through any of the servers listed in the provided
+   * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
+   * to retry the registration attempt.
+   *
+   * @param members A set of server addresses to which to connect.
+   * @return A completable future to be completed once the client's {@link #session()} is registered.
    */
   CompletableFuture<CopycatClient> connect(Collection<Address> members);
 
@@ -439,7 +492,7 @@ public interface CopycatClient {
   /**
    * Closes the client.
    * <p>
-   * Closing the client will cause the client to unregister its current {@link Session} if open. Once the
+   * Closing the client will cause the client to unregister its current {@link Session} if registered. Once the
    * client's session is unregistered, the returned {@link CompletableFuture} will be completed. If the client
    * is unable to unregister its session, the client will transition to the {@link State#SUSPENDED} state and
    * continue to attempt to reconnect and unregister its session until it is able to unregister its session or
@@ -462,6 +515,7 @@ public interface CopycatClient {
    * </pre>
    */
   final class Builder implements io.atomix.catalyst.util.Builder<CopycatClient> {
+    private final Collection<Address> cluster;
     private Transport transport;
     private Serializer serializer;
     private CatalystThreadFactory threadFactory;
@@ -471,7 +525,8 @@ public interface CopycatClient {
     private RetryStrategy retryStrategy = RetryStrategies.FIBONACCI_BACKOFF;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
-    private Builder() {
+    private Builder(Collection<Address> cluster) {
+      this.cluster = Assert.notNull(cluster, "cluster");
     }
 
     /**
@@ -594,7 +649,7 @@ public interface CopycatClient {
         context.serializer().resolve(new ClientResponseTypeResolver());
         context.serializer().resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(cluster, transport, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       } else {
         // If no serializer instance was provided, create one.
         if (serializer == null) {
@@ -606,7 +661,7 @@ public interface CopycatClient {
         serializer.resolve(new ClientResponseTypeResolver());
         serializer.resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(transport, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+        return new DefaultCopycatClient(cluster, transport, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
       }
     }
   }

@@ -35,10 +35,7 @@ import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
@@ -51,6 +48,9 @@ import java.util.function.Function;
  */
 public class DefaultCopycatClient implements CopycatClient {
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultCopycatClient.class);
+  private static final String DEFAULT_HOST = "0.0.0.0";
+  private static final int DEFAULT_PORT = 8700;
+  private final Collection<Address> cluster;
   private final Transport transport;
   private final CatalystThreadFactory threadFactory;
   private final ThreadContext context;
@@ -69,11 +69,12 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(Transport transport, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
-    this(transport, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
+  DefaultCopycatClient(Collection<Address> cluster, Transport transport, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+    this(cluster, transport, new SingleThreadContext(threadFactory, serializer.clone()), threadFactory, selectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
   }
 
-  DefaultCopycatClient(Transport transport, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(Collection<Address> cluster, Transport transport, ThreadContext context, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy, RecoveryStrategy recoveryStrategy) {
+    this.cluster = Assert.notNull(cluster, "cluster");
     this.transport = Assert.notNull(transport, "transport");
     this.context = Assert.notNull(context, "context");
     this.threadFactory = Assert.notNull(threadFactory, "threadFactory");
@@ -168,15 +169,29 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public synchronized CompletableFuture<CopycatClient> connect(Collection<Address> members) {
+  public synchronized CompletableFuture<CopycatClient> connect(Collection<Address> cluster) {
     if (state != State.CLOSED)
       return CompletableFuture.completedFuture(this);
 
     if (openFuture == null) {
       openFuture = new CompletableFuture<>();
-      selector.reset(null, members);
+
+      // If the provided cluster list is null or empty, use the default list.
+      if (cluster == null || cluster.isEmpty()) {
+        cluster = this.cluster;
+      }
+
+      // If the default list is null or empty, use the default host:port.
+      if (cluster == null || cluster.isEmpty()) {
+        cluster = Collections.singletonList(new Address(DEFAULT_HOST, DEFAULT_PORT));
+      }
+
+      // Reset the connection list to allow the selection strategy to prioritize connections.
+      selector.reset(null, cluster);
+
+      // Create and register a new session.
       session = newSession();
-      session.open().whenCompleteAsync((result, error) -> {
+      session.register().whenCompleteAsync((result, error) -> {
         if (error == null) {
           openFuture.complete(this);
         } else {
@@ -260,7 +275,7 @@ public class DefaultCopycatClient implements CopycatClient {
       LOGGER.debug("Recovering session {}", this.session.id());
       // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
       ClientSession session = newSession();
-      recoverFuture = session.open().handleAsync((result, error) -> {
+      recoverFuture = session.register().handleAsync((result, error) -> {
         // Reset recoverFuture to null in case we need to rerun recovery
         recoverFuture = null;
         if (error == null) {
