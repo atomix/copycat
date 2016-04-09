@@ -588,13 +588,6 @@ final class LeaderState extends ActiveState {
   }
 
   /**
-   * Submits a query with serializable consistency.
-   */
-  private CompletableFuture<QueryResponse> queryLocal(QueryEntry entry) {
-    return applyQuery(entry, new CompletableFuture<>());
-  }
-
-  /**
    * Submits a query with lease bounded linearizable consistency.
    */
   private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry) {

@@ -240,7 +240,15 @@ class PassiveState extends ReserveState {
         return queryForward(request);
       }
 
-      return queryLocal(request);
+      QueryEntry entry = context.getLog().create(QueryEntry.class)
+        .setIndex(request.index())
+        .setTerm(context.getTerm())
+        .setTimestamp(System.currentTimeMillis())
+        .setSession(request.session())
+        .setSequence(request.sequence())
+        .setQuery(request.query());
+
+      return queryLocal(entry);
     } else {
       return queryForward(request);
     }
@@ -269,19 +277,9 @@ class PassiveState extends ReserveState {
   /**
    * Performs a local query.
    */
-  private CompletableFuture<QueryResponse> queryLocal(QueryRequest request) {
+  protected CompletableFuture<QueryResponse> queryLocal(QueryEntry entry) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(request.index())
-      .setTerm(context.getTerm())
-      .setTimestamp(System.currentTimeMillis())
-      .setSession(request.session())
-      .setSequence(request.sequence())
-      .setQuery(request.query());
-
     sequenceQuery(entry, future);
-
     return future;
   }
 
