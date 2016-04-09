@@ -36,8 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 /**
@@ -183,7 +182,26 @@ public class DefaultCopycatClient implements CopycatClient {
     ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
-    return session.submit(command);
+
+    BlockingFuture<T> future = new BlockingFuture<>();
+    session.submit(command).whenComplete((result, error) -> {
+      if (future.blocked) {
+        if (error == null) {
+          future.complete(result);
+        } else {
+          future.completeExceptionally(error);
+        }
+      } else {
+        eventContext.executor().execute(() -> {
+          if (error == null) {
+            future.complete(result);
+          } else {
+            future.completeExceptionally(error);
+          }
+        });
+      }
+    });
+    return future;
   }
 
   @Override
@@ -191,7 +209,26 @@ public class DefaultCopycatClient implements CopycatClient {
     ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
-    return session.submit(query);
+
+    BlockingFuture<T> future = new BlockingFuture<>();
+    session.submit(query).whenComplete((result, error) -> {
+      if (future.blocked) {
+        if (error == null) {
+          future.complete(result);
+        } else {
+          future.completeExceptionally(error);
+        }
+      } else {
+        eventContext.executor().execute(() -> {
+          if (error == null) {
+            future.complete(result);
+          } else {
+            future.completeExceptionally(error);
+          }
+        });
+      }
+    });
+    return future;
   }
 
   @Override
@@ -343,7 +380,7 @@ public class DefaultCopycatClient implements CopycatClient {
      * Registers the session event listener.
      */
     public void register(ClientSession session) {
-      session.onEvent(event, callback);
+      parent = session.onEvent(event, callback);
     }
 
     @Override
@@ -355,6 +392,35 @@ public class DefaultCopycatClient implements CopycatClient {
     public void close() {
       parent.close();
       eventListeners.remove(this);
+    }
+  }
+
+  /**
+   * Future that sets a flag when blocked.
+   */
+  private static class BlockingFuture<T> extends CompletableFuture<T> {
+    private volatile boolean blocked;
+
+    @Override
+    public T get() throws InterruptedException, ExecutionException {
+      blocked = true;
+      return super.get();
+    }
+
+    @Override
+    public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+      blocked = true;
+      try {
+        return super.get(timeout, unit);
+      } finally {
+        blocked = false;
+      }
+    }
+
+    @Override
+    public T join() {
+      blocked = true;
+      return super.join();
     }
   }
 

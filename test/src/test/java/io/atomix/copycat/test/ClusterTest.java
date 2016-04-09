@@ -777,6 +777,28 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests blocking within an event thread.
+   */
+  public void testBlockOnEvent() throws Throwable {
+    createServers(3);
+
+    AtomicLong index = new AtomicLong();
+
+    CopycatClient client = createClient();
+
+    client.onEvent("test", event -> {
+      threadAssertEquals(index.get(), event);
+      threadAssertEquals(index.get(), client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).join());
+    });
+
+    client.submit(new TestEvent(true)).thenAccept(result -> {
+      threadAssertNotNull(result);
+      index.compareAndSet(0, result);
+      resume();
+    });
+  }
+
+  /**
    * Tests submitting linearizable events.
    */
   public void testFiveNodeManyEvents() throws Throwable {
