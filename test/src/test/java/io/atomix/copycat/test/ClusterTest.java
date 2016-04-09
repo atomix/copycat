@@ -788,7 +788,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     client.onEvent("test", event -> {
       threadAssertEquals(index.get(), event);
-      threadAssertEquals(index.get(), client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).join());
+      threadAssertTrue(index.get() <= client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).join());
       resume();
     });
 
