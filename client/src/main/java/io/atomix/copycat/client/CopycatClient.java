@@ -104,6 +104,40 @@ import java.util.function.Consumer;
  * the client cannot communicate with the cluster and consistency guarantees <em>may</em> have been broken. While in this
  * state, the client's session from the perspective of servers may timeout, the {@link Session} events sent to the client
  * by the cluster may be lost.
+ * <h3>Session events</h3>
+ * Clients can receive arbitrary event notifications from the cluster by registering an event listener via
+ * {@link #onEvent(String, Consumer)}. When a command is applied to a state machine, the state machine may publish any number
+ * of events to any open session. Events will be sent to the client by the server to which the client is connected as dictated
+ * by the configured {@link ServerSelectionStrategy}. In the event a client is disconnected from a server, events will be
+ * retained in memory on all servers until the client reconnects to another server or its session expires. Once a client
+ * reconnects to a new server, the new server will resume sending session events to the client.
+ * <pre>
+ *   {@code
+ *   client.<ChangeEvent>onEvent("change", change -> {
+ *     System.out.println("value changed from " + change.oldValue() + " to " + change.newValue());
+ *   });
+ *   }
+ * </pre>
+ * <h3>Session consistency</h3>
+ * Sessions guarantee linearizability for all <em>commands</em> submitted by the client within the context of a session.
+ * This means when the client submits a command, the command is guaranteed to be applied to the replicated state machine
+ * between invocation and response. Furthermore, concurrent operations from a single client are guaranteed to be applied
+ * in FIFO order even when switching between writes to the leader and reads from followers. In the event that a session
+ * is expired by the cluster, linearizability guarantees are lost. It's possible for a command to be applied to the cluster
+ * without a successful response if the client's session expires.
+ * <p>
+ * Clients guarantee that all operations submitted to the cluster will be applied in sequential order and responses will
+ * be received by the client in sequential order. This means the {@link CompletableFuture}s returned when submitting
+ * operations through the client are guaranteed to be completed in the order in which they were created.
+ * <p>
+ * Sequential consistency is also guaranteed for {@link #onEvent(String, Consumer) events} received by a client, and events
+ * are sequenced with command and query responses. If a client submits a command that publishes an event and then immediately
+ * submits a concurrent query, the client will first receive the command response, then the event message, then the query
+ * response.
+ * <p>
+ * All events and responses are received in the client's event thread. Because all operation results are received on the same
+ * thread, it is critical that clients not block the event thread. If clients need to perform blocking actions on response to
+ * an event or response, do so on another thread.
  * <h3>Serialization</h3>
  * All {@link Command commands}, {@link Query queries}, and session {@link #onEvent(String, Consumer) events} must be
  * serializable by the {@link Serializer} associated with the client. Serializable types can be registered at any time.
