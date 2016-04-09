@@ -21,7 +21,7 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
+import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
@@ -555,7 +555,6 @@ public interface CopycatClient {
     private final Collection<Address> cluster;
     private Transport transport;
     private Serializer serializer;
-    private CatalystThreadFactory threadFactory;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
@@ -588,17 +587,6 @@ public interface CopycatClient {
      */
     public Builder withSerializer(Serializer serializer) {
       this.serializer = Assert.notNull(serializer, "serializer");
-      return this;
-    }
-
-    /**
-     * Sets the client thread factory.
-     *
-     * @param factory The client thread factory.
-     * @return The client builder.
-     */
-    public Builder withThreadFactory(CatalystThreadFactory factory) {
-      this.threadFactory = Assert.notNull(factory, "factory");
       return this;
     }
 
@@ -651,10 +639,6 @@ public interface CopycatClient {
         }
       }
 
-      if (threadFactory == null) {
-        threadFactory = new CatalystThreadFactory("copycat-client-%d");
-      }
-
       // If no serializer instance was provided, create one.
       if (serializer == null) {
         serializer = new Serializer();
@@ -665,7 +649,7 @@ public interface CopycatClient {
       serializer.resolve(new ClientResponseTypeResolver());
       serializer.resolve(new ProtocolSerialization());
 
-      return new DefaultCopycatClient(cluster, transport, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, recoveryStrategy);
+      return new DefaultCopycatClient(cluster, transport, new SingleThreadContext("copycat-client-io-%d", serializer.clone()), new SingleThreadContext("copycat-client-event-%d", serializer.clone()), serverSelectionStrategy, connectionStrategy, recoveryStrategy);
     }
   }
 

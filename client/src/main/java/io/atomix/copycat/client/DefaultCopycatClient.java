@@ -20,9 +20,7 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.util.concurrent.Futures;
-import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
@@ -64,10 +62,6 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<StateChangeListener> changeListeners = new CopyOnWriteArraySet<>();
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
-
-  DefaultCopycatClient(Collection<Address> cluster, Transport transport, Serializer serializer, CatalystThreadFactory threadFactory, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
-    this(cluster, transport, new SingleThreadContext(threadFactory, serializer.clone()), new SingleThreadContext(threadFactory, serializer.clone()), selectionStrategy, connectionStrategy, recoveryStrategy);
-  }
 
   DefaultCopycatClient(Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
     this.cluster = Assert.notNull(cluster, "cluster");
