@@ -789,6 +789,7 @@ public class ClusterTest extends ConcurrentTestCase {
     client.onEvent("test", event -> {
       threadAssertEquals(index.get(), event);
       threadAssertEquals(index.get(), client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).join());
+      resume();
     });
 
     client.submit(new TestEvent(true)).thenAccept(result -> {
@@ -796,6 +797,8 @@ public class ClusterTest extends ConcurrentTestCase {
       index.compareAndSet(0, result);
       resume();
     });
+
+    await(10000, 2);
   }
 
   /**
