@@ -46,8 +46,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
@@ -70,7 +69,7 @@ import java.util.function.Supplier;
  *   Address address = new Address("123.456.789.0", 5000);
  *   Collection<Address> members = Arrays.asList(new Address("123.456.789.1", 5000), new Address("123.456.789.2", 5000));
  *
- *   CopycatServer server = CopycatServer.builder(address, members)
+ *   CopycatServer server = CopycatServer.builder(address)
  *     .withStateMachine(MyStateMachine::new)
  *     .build();
  *   }
@@ -86,7 +85,7 @@ import java.util.function.Supplier;
  * {@code io.atomix.catalyst:catalyst-netty} jar on your classpath.
  * <pre>
  * {@code
- * CopycatServer server = CopycatServer.builder(address, members)
+ * CopycatServer server = CopycatServer.builder(address)
  *   .withStateMachine(MyStateMachine::new)
  *   .withTransport(NettyTransport.builder()
  *     .withThreads(4)
@@ -101,7 +100,7 @@ import java.util.function.Supplier;
  * memory instead of disk, configure the {@link StorageLevel}.
  * <pre>
  * {@code
- * CopycatServer server = CopycatServer.builder(address, members)
+ * CopycatServer server = CopycatServer.builder(address)
  *   .withStateMachine(MyStateMachine::new)
  *   .withStorage(Storage.builder()
  *     .withDirectory(new File("logs"))
@@ -134,29 +133,77 @@ import java.util.function.Supplier;
  *   server.serializer().register(MySerializable.class, 123, MySerializableSerializer.class);
  *   }
  * </pre>
- * <h2>Running the server</h2>
- * Once the server has been created, to connect to a cluster simply {@link #start() start} the server. The server API is
- * fully asynchronous and relies on {@link CompletableFuture} to provide promises:
+ * <h2>Bootstrapping the cluster</h2>
+ * Once a server has been built, it must either be {@link #bootstrap() bootstrapped} to form a new cluster or
+ * {@link #join(Address...) joined} to an existing cluster. The simplest way to bootstrap a new cluster is to bootstrap
+ * a single server to which additional servers can be joined.
  * <pre>
- * {@code
- * server.open().thenRun(() -> {
- *   System.out.println("Server started successfully!");
- * });
- * }
- * </pre>
- * When the server is started, it will attempt to connect to an existing cluster. If the server cannot find any
- * existing members, it will attempt to form its own cluster.
- * <p>
- * Once the server is started, it will communicate with the rest of the nodes in the cluster, periodically
- * transitioning between states. Users can listen for state transitions via {@link #onStateChange(Consumer)}:
- * <pre>
- * {@code
- * server.onStateChange(state -> {
- *   if (state == CopycatServer.State.LEADER) {
- *     System.out.println("Server elected leader!");
+ *   {@code
+ *   CompletableFuture<CopycatServer> future = server.bootstrap();
+ *   future.thenRun(() -> {
+ *     System.out.println("Server bootstrapped!");
+ *   });
  *   }
- * });
- * }
+ * </pre>
+ * Alternatively, the bootstrapped cluster can include multiple servers by providing an initial configuration to the
+ * {@link #bootstrap(Address...)} method on each server. When bootstrapping a multi-node cluster, the bootstrap configuration
+ * must be identical on all servers for safety.
+ * <pre>
+ *   {@code
+ *     List<Address> cluster = Arrays.asList(
+ *       new Address("123.456.789.0", 5000),
+ *       new Address("123.456.789.1", 5000),
+ *       new Address("123.456.789.2", 5000)
+ *     );
+ *
+ *     CompletableFuture<CopycatServer> future = server.bootstrap(cluster);
+ *     future.thenRun(() -> {
+ *       System.out.println("Cluster bootstrapped");
+ *     });
+ *   }
+ * </pre>
+ * <h2>Adding a server to an existing cluster</h2>
+ * Once a single- or multi-node cluster has been {@link #bootstrap() bootstrapped}, often times users need to
+ * add additional servers to the cluster. For example, some users prefer to bootstrap a single-node cluster and
+ * add additional nodes to that server. Servers can join existing bootstrapped clusters using the {@link #join(Address...)}
+ * method. When joining an existing cluster, the server simply needs to specify at least one reachable server in the
+ * existing cluster.
+ * <pre>
+ *   {@code
+ *     CopycatServer server = CopycatServer.builder(new Address("123.456.789.3", 5000))
+ *       .withTransport(NettyTransport.builder().withThreads(4).build())
+ *       .build();
+ *
+ *     List<Address> cluster = Arrays.asList(
+ *       new Address("123.456.789.0", 5000),
+ *       new Address("123.456.789.1", 5000),
+ *       new Address("123.456.789.2", 5000)
+ *     );
+ *
+ *     CompletableFuture<CopycatServer> future = server.join(cluster);
+ *     future.thenRun(() -> {
+ *       System.out.println("Server joined successfully!");
+ *     });
+ *   }
+ * </pre>
+ * <h2>Server types</h2>
+ * Servers form new clusters and join existing clusters as active Raft voting members by default. However, for
+ * large deployments Copycat also supports alternative types of nodes which are configured by setting the server
+ * {@link Member.Type}. For example, the {@link Member.Type#PASSIVE PASSIVE} server type does not participate
+ * directly in the Raft consensus algorithm and instead receives state changes via an asynchronous gossip protocol.
+ * This allows passive members to scale sequential reads beyond the typical three- or five-node Raft cluster. The
+ * {@link Member.Type#RESERVE RESERVE} server type is a stateless server that can act as a standby to the stateful
+ * servers in the cluster, being {@link Member#promote(Member.Type) promoted} to a stateful state when necessary.
+ * <p>
+ * Server types are defined in the server builder simply by passing the initial {@link Member.Type} to the
+ * {@link Builder#withType(Member.Type)} setter:
+ * <pre>
+ *   {@code
+ *   CopycatServer server = CopycatServer.builder(address)
+ *     .withType(Member.Type.PASSIVE)
+ *     .withTransport(new NettyTransport())
+ *     .build();
+ *   }
  * </pre>
  *
  * @see StateMachine
@@ -166,137 +213,48 @@ import java.util.function.Supplier;
  */
 public class CopycatServer {
   private static final Logger LOGGER = LoggerFactory.getLogger(CopycatServer.class);
+  private static final String DEFAULT_HOST = "0.0.0.0";
+  private static final int DEFAULT_PORT = 8700;
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder using the default host:port.
    * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * The server will be constructed at 0.0.0.0:8700.
    *
-   * @param address The address through which clients and servers connect to this server.
-   * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
-  public static Builder builder(Address address, Address... cluster) {
-    return builder(address, address, Arrays.asList(cluster));
+  public static Builder builder() {
+    return builder(new Address(DEFAULT_HOST, DEFAULT_PORT));
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * The provided {@link Address} is the address to which to bind the server being constructed.
    *
    * @param address The address through which clients and servers connect to this server.
-   * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
-  public static Builder builder(Address address, Collection<Address> cluster) {
-    return new Builder(address, address, cluster);
+  public static Builder builder(Address address) {
+    return new Builder(address, address);
   }
 
   /**
-   * Returns a new Raft server builder.
+   * Returns a new Copycat server builder.
    * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
-   *
-   * @param type The server member type.
-   * @param address The address through which clients and servers connect to this server.
-   * @param cluster The cluster members to which to connect.
-   * @return The server builder.
-   */
-  public static Builder builder(Member.Type type, Address address, Address... cluster) {
-    return builder(address, address, Arrays.asList(cluster)).withType(type);
-  }
-
-  /**
-   * Returns a new Raft server builder.
-   * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
-   *
-   * @param type The server member type.
-   * @param address The address through which clients and servers connect to this server.
-   * @param cluster The cluster members to which to connect.
-   * @return The server builder.
-   */
-  public static Builder builder(Member.Type type, Address address, Collection<Address> cluster) {
-    return new Builder(address, address, cluster).withType(type);
-  }
-
-  /**
-   * Returns a new Raft server builder.
-   * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
+   * The provided {@link Address}es are the client and server address to which to bind the server being
+   * constructed respectively.
    *
    * @param clientAddress The address through which clients connect to the server.
    * @param serverAddress The local server member address.
-   * @param cluster The cluster members to which to connect.
    * @return The server builder.
    */
-  public static Builder builder(Address clientAddress, Address serverAddress, Address... cluster) {
-    return builder(clientAddress, serverAddress, Arrays.asList(cluster));
+  public static Builder builder(Address clientAddress, Address serverAddress) {
+    return new Builder(clientAddress, serverAddress);
   }
 
   /**
-   * Returns a new Raft server builder.
-   * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
-   *
-   * @param clientAddress The address through which clients connect to the server.
-   * @param serverAddress The local server member address.
-   * @param cluster The cluster members to which to connect.
-   * @return The server builder.
-   */
-  public static Builder builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
-    return new Builder(clientAddress, serverAddress, cluster);
-  }
-
-  /**
-   * Returns a new Raft server builder.
-   * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
-   *
-   * @param type The server member type.
-   * @param clientAddress The address through which clients connect to the server.
-   * @param serverAddress The local server member address.
-   * @param cluster The cluster members to which to connect.
-   * @return The server builder.
-   */
-  public static Builder builder(Member.Type type, Address clientAddress, Address serverAddress, Address... cluster) {
-    return builder(clientAddress, serverAddress, Arrays.asList(cluster)).withType(type);
-  }
-
-  /**
-   * Returns a new Raft server builder.
-   * <p>
-   * The provided {@link Address} is the address to which to bind the server being constructed. The provided set of
-   * members will be used to connect to the other members in the Raft cluster. The local server {@link Address} does
-   * not have to be present in the address list.
-   *
-   * @param type The server member type.
-   * @param clientAddress The address through which clients connect to the server.
-   * @param serverAddress The local server member address.
-   * @param cluster The cluster members to which to connect.
-   * @return The server builder.
-   */
-  public static Builder builder(Member.Type type, Address clientAddress, Address serverAddress, Collection<Address> cluster) {
-    return new Builder(clientAddress, serverAddress, cluster).withType(type);
-  }
-
-  /**
-   * Raft server state types.
+   * Copycat server state types.
    * <p>
    * States represent the context of the server's internal state machine. Throughout the lifetime of a server,
    * the server will periodically transition between states based on requests, responses, and timeouts.
@@ -308,7 +266,7 @@ public class CopycatServer {
     /**
      * Represents the state of an inactive server.
      * <p>
-     * All servers start in this state and return to this state when {@link #stop() stopped}.
+     * All servers start in this state and return to this state when {@link #leave() stopped}.
      */
     INACTIVE,
 
@@ -396,9 +354,6 @@ public class CopycatServer {
    * configuration. The storage object is immutable and is intended to provide runtime configuration information only. Users
    * should <em>never open logs, snapshots, or other storage related files</em> through the {@link Storage} API. Doing so
    * can conflict with internal server operations, resulting in the loss of state.
-   * <p>
-   * To delete the server's on-disk state, use the {@link #delete()} method rather than operating on the {@link Storage}
-   * object directly.
    *
    * @return The server storage.
    */
@@ -410,13 +365,13 @@ public class CopycatServer {
    * Returns the server's cluster configuration.
    * <p>
    * The {@link Cluster} is representative of the server's current view of the cluster configuration. The first time
-   * the server is {@link #start() started}, the cluster configuration will be initialized using the {@link Address}
-   * list provided to the server {@link #builder(Address, Address...) builder}. For {@link StorageLevel#DISK persistent}
+   * the server is {@link #bootstrap() started}, the cluster configuration will be initialized using the {@link Address}
+   * list provided to the server {@link #builder(Address) builder}. For {@link StorageLevel#DISK persistent}
    * servers, subsequent starts will result in the last known cluster configuration being loaded from disk.
    * <p>
    * The returned {@link Cluster} can be used to modify the state of the cluster to which this server belongs. Note,
-   * however, that users need not explicitly {@link Cluster#join() join} or {@link Cluster#leave() leave} the cluster
-   * since starting and stopping the server results in joining and leaving the cluster respectively.
+   * however, that users need not explicitly {@link Cluster#join(Address...) join} or {@link Cluster#leave() leave} the
+   * cluster since starting and stopping the server results in joining and leaving the cluster respectively.
    *
    * @return The server's cluster configuration.
    */
@@ -469,7 +424,7 @@ public class CopycatServer {
   /**
    * Returns the Copycat server state.
    * <p>
-   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #start() started} and
+   * The initial state of a Raft server is {@link State#INACTIVE}. Once the server is {@link #bootstrap() started} and
    * until it is explicitly shutdown, the server will be in one of the active states - {@link State#PASSIVE},
    * {@link State#FOLLOWER}, {@link State#CANDIDATE}, or {@link State#LEADER}.
    *
@@ -528,17 +483,163 @@ public class CopycatServer {
   }
 
   /**
-   * Starts the server asynchronously.
+   * Bootstraps a single-node cluster.
    * <p>
-   * When the server is started, the server will attempt to search for an existing cluster by contacting all of
-   * the members in the provided members list. If no existing cluster is found, the server will immediately transition
-   * to the {@link State#FOLLOWER} state and continue normal Raft protocol operations. If a cluster is found, the server
-   * will attempt to join the cluster. Once the server has joined or started a cluster and a leader has been found,
-   * the returned {@link CompletableFuture} will be completed.
+   * Bootstrapping a single-node cluster results in the server forming a new cluster to which additional servers
+   * can be joined.
+   * <p>
+   * Only {@link Member.Type#ACTIVE} members can be included in a bootstrap configuration. If the local server is
+   * not initialized as an active member, it cannot be part of the bootstrap configuration for the cluster.
+   * <p>
+   * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
+   * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
+   * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
+   * members may be {@link #join(Address...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * reach a quorum to elect a leader, bootstrap will continue until successful.
+   * <p>
+   * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
+   * Bootstrapping multiple servers with different configurations may result in split brain.
+   * <p>
+   * The {@link CompletableFuture} returned by this method will be completed once the cluster has been bootstrapped,
+   * a leader has been elected, and the leader has been notified of the local server's client configurations.
    *
-   * @return A completable future to be completed once the server has joined the cluster and a leader has been found.
+   * @return A completable future to be completed once the cluster has been bootstrapped.
    */
-  public CompletableFuture<CopycatServer> start() {
+  @SuppressWarnings("unchecked")
+  public CompletableFuture<CopycatServer> bootstrap() {
+    return bootstrap(Collections.EMPTY_LIST);
+  }
+
+  /**
+   * Bootstraps the cluster using the provided cluster configuration.
+   * <p>
+   * Bootstrapping the cluster results in a new cluster being formed with the provided configuration. The initial
+   * nodes in a cluster must always be bootstrapped. This is necessary to prevent split brain. If the provided
+   * configuration is empty, the local server will form a single-node cluster.
+   * <p>
+   * Only {@link Member.Type#ACTIVE} members can be included in a bootstrap configuration. If the local server is
+   * not initialized as an active member, it cannot be part of the bootstrap configuration for the cluster.
+   * <p>
+   * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
+   * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
+   * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
+   * members may be {@link #join(Address...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * reach a quorum to elect a leader, bootstrap will continue until successful.
+   * <p>
+   * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
+   * Bootstrapping multiple servers with different configurations may result in split brain.
+   * <p>
+   * The {@link CompletableFuture} returned by this method will be completed once the cluster has been bootstrapped,
+   * a leader has been elected, and the leader has been notified of the local server's client configurations.
+   *
+   * @param cluster The bootstrap cluster configuration.
+   * @return A completable future to be completed once the cluster has been bootstrapped.
+   */
+  public CompletableFuture<CopycatServer> bootstrap(Address... cluster) {
+    return bootstrap(Arrays.asList(cluster));
+  }
+
+  /**
+   * Bootstraps the cluster using the provided cluster configuration.
+   * <p>
+   * Bootstrapping the cluster results in a new cluster being formed with the provided configuration. The initial
+   * nodes in a cluster must always be bootstrapped. This is necessary to prevent split brain. If the provided
+   * configuration is empty, the local server will form a single-node cluster.
+   * <p>
+   * Only {@link Member.Type#ACTIVE} members can be included in a bootstrap configuration. If the local server is
+   * not initialized as an active member, it cannot be part of the bootstrap configuration for the cluster.
+   * <p>
+   * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
+   * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
+   * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
+   * members may be {@link #join(Address...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * reach a quorum to elect a leader, bootstrap will continue until successful.
+   * <p>
+   * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
+   * Bootstrapping multiple servers with different configurations may result in split brain.
+   * <p>
+   * The {@link CompletableFuture} returned by this method will be completed once the cluster has been bootstrapped,
+   * a leader has been elected, and the leader has been notified of the local server's client configurations.
+   *
+   * @param cluster The bootstrap cluster configuration.
+   * @return A completable future to be completed once the cluster has been bootstrapped.
+   */
+  public CompletableFuture<CopycatServer> bootstrap(Collection<Address> cluster) {
+    return start(() -> cluster().bootstrap(cluster));
+  }
+
+  /**
+   * Joins the cluster.
+   * <p>
+   * Joining the cluster results in the local server being added to an existing cluster that has already been
+   * bootstrapped. The provided configuration will be used to connect to the existing cluster and submit a join
+   * request. Once the server has been added to the existing cluster's configuration, the join operation is complete.
+   * <p>
+   * Any {@link Member.Type type} of server may join a cluster. In order to join a cluster, the provided list of
+   * bootstrapped members must be non-empty and must include at least one active member of the cluster. If no member
+   * in the configuration is reachable, the server will continue to attempt to join the cluster until successful. If
+   * the provided cluster configuration is empty, the returned {@link CompletableFuture} will be completed exceptionally.
+   * <p>
+   * When the server joins the cluster, the local server will be transitioned into its initial state as defined by
+   * the configured {@link Member.Type}. Once the server has joined, it will immediately begin participating in
+   * Raft and asynchronous replication according to its configuration.
+   * <p>
+   * It's important to note that the provided cluster configuration will only be used the first time the server attempts
+   * to join the cluster. Thereafter, in the event that the server crashes and is restarted by {@code join}ing the cluster
+   * again, the last known configuration will be used assuming the server is configured with persistent storage. Only when
+   * the server leaves the cluster will its configuration and log be reset.
+   * <p>
+   * In order to preserve safety during configuration changes, Copycat leaders do not allow concurrent configuration
+   * changes. In the event that an existing configuration change (a server joining or leaving the cluster or a
+   * member being {@link Member#promote() promoted} or {@link Member#demote() demoted}) is under way, the local
+   * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
+   * the join will be retried until successful.
+   *
+   * @param cluster A collection of cluster member addresses to join.
+   * @return A completable future to be completed once the local server has joined the cluster.
+   */
+  public CompletableFuture<CopycatServer> join(Address... cluster) {
+    return join(Arrays.asList(cluster));
+  }
+
+  /**
+   * Joins the cluster.
+   * <p>
+   * Joining the cluster results in the local server being added to an existing cluster that has already been
+   * bootstrapped. The provided configuration will be used to connect to the existing cluster and submit a join
+   * request. Once the server has been added to the existing cluster's configuration, the join operation is complete.
+   * <p>
+   * Any {@link Member.Type type} of server may join a cluster. In order to join a cluster, the provided list of
+   * bootstrapped members must be non-empty and must include at least one active member of the cluster. If no member
+   * in the configuration is reachable, the server will continue to attempt to join the cluster until successful. If
+   * the provided cluster configuration is empty, the returned {@link CompletableFuture} will be completed exceptionally.
+   * <p>
+   * When the server joins the cluster, the local server will be transitioned into its initial state as defined by
+   * the configured {@link Member.Type}. Once the server has joined, it will immediately begin participating in
+   * Raft and asynchronous replication according to its configuration.
+   * <p>
+   * It's important to note that the provided cluster configuration will only be used the first time the server attempts
+   * to join the cluster. Thereafter, in the event that the server crashes and is restarted by {@code join}ing the cluster
+   * again, the last known configuration will be used assuming the server is configured with persistent storage. Only when
+   * the server leaves the cluster will its configuration and log be reset.
+   * <p>
+   * In order to preserve safety during configuration changes, Copycat leaders do not allow concurrent configuration
+   * changes. In the event that an existing configuration change (a server joining or leaving the cluster or a
+   * member being {@link Member#promote() promoted} or {@link Member#demote() demoted}) is under way, the local
+   * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
+   * the join will be retried until successful.
+   *
+   * @param cluster A collection of cluster member addresses to join.
+   * @return A completable future to be completed once the local server has joined the cluster.
+   */
+  public CompletableFuture<CopycatServer> join(Collection<Address> cluster) {
+    return start(() -> cluster().join(cluster));
+  }
+
+  /**
+   * Starts the server.
+   */
+  private CompletableFuture<CopycatServer> start(Supplier<CompletableFuture<Void>> joiner) {
     if (started)
       return CompletableFuture.completedFuture(this);
 
@@ -548,7 +649,7 @@ public class CopycatServer {
           Function<Void, CompletionStage<CopycatServer>> completionFunction = state -> {
             CompletableFuture<CopycatServer> future = new CompletableFuture<>();
             openFuture = null;
-            cluster().join().whenComplete((result, error) -> {
+            joiner.get().whenComplete((result, error) -> {
               if (error == null) {
                 if (cluster().leader() != null) {
                   started = true;
@@ -594,11 +695,11 @@ public class CopycatServer {
   private CompletableFuture<Void> listen() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.getThreadContext().executor().execute(() -> {
-      internalServer.listen(cluster().member().serverAddress(), c -> context.connectServer(c)).whenComplete((internalResult, internalError) -> {
+      internalServer.listen(cluster().member().serverAddress(), context::connectServer).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
           // If the client address is different than the server address, start a separate client server.
           if (clientServer != null) {
-            clientServer.listen(cluster().member().clientAddress(), c -> context.connectClient(c)).whenComplete((clientResult, clientError) -> {
+            clientServer.listen(cluster().member().clientAddress(), context::connectClient).whenComplete((clientResult, clientError) -> {
               started = true;
               future.complete(null);
             });
@@ -625,34 +726,11 @@ public class CopycatServer {
   }
 
   /**
-   * Stops the server asynchronously.
+   * Shuts down the server without leaving the Copycat cluster.
    *
-   * @return A completable future to be completed once the server has been stopped.
+   * @return A completable future to be completed once the server has been shutdown.
    */
-  public CompletableFuture<Void> stop() {
-    if (!started)
-      return CompletableFuture.completedFuture(null);
-
-    if (closeFuture == null) {
-      synchronized (this) {
-        if (closeFuture == null) {
-          if (openFuture == null) {
-            closeFuture = cluster().leave().thenCompose(v -> kill());
-          } else {
-            closeFuture = openFuture.thenCompose(c -> cluster().leave().thenCompose(v -> kill()));
-          }
-        }
-      }
-    }
-    return closeFuture;
-  }
-
-  /**
-   * Kills the server without leaving the cluster.
-   *
-   * @return A completable future to be completed once the server has been killed.
-   */
-  public CompletableFuture<Void> kill() {
+  public CompletableFuture<Void> shutdown() {
     if (!started)
       return Futures.exceptionalFuture(new IllegalStateException("context not open"));
 
@@ -693,17 +771,26 @@ public class CopycatServer {
   }
 
   /**
-   * Deletes the server and its logs.
-   * <p>
-   * If the server is not already stopped, it will be stopped upon calling this method. Once the server has been
-   * shut down, all state persisted on disk by the server will be deleted. On-disk state includes the last known
-   * cluster configuration and all logs and snapshots. In the event that the server is restarted after its state
-   * has been deleted, the server will start with a new log and no snapshots.
+   * Leaves the Copycat cluster.
    *
-   * @return A completable future to be completed once the server state has been deleted.
+   * @return A completable future to be completed once the server has left the cluster.
    */
-  public CompletableFuture<Void> delete() {
-    return stop().thenRun(context::delete);
+  public CompletableFuture<Void> leave() {
+    if (!started)
+      return CompletableFuture.completedFuture(null);
+
+    if (closeFuture == null) {
+      synchronized (this) {
+        if (closeFuture == null) {
+          if (openFuture == null) {
+            closeFuture = cluster().leave().thenCompose(v -> shutdown()).thenRun(context::delete);
+          } else {
+            closeFuture = openFuture.thenCompose(c -> cluster().leave().thenCompose(v -> shutdown()).thenRun(context::delete));
+          }
+        }
+      }
+    }
+    return closeFuture;
   }
 
   /**
@@ -712,16 +799,16 @@ public class CopycatServer {
    * This builder should be used to programmatically configure and construct a new {@link CopycatServer} instance.
    * The builder provides methods for configuring all aspects of a Copycat server. The {@code CopycatServer.Builder}
    * class cannot be instantiated directly. To create a new builder, use one of the
-   * {@link CopycatServer#builder(Address, Address...) server builder factory} methods.
+   * {@link CopycatServer#builder(Address) server builder factory} methods.
    * <pre>
    *   {@code
-   *   CopycatServer.Builder builder = CopycatServer.builder(address, members);
+   *   CopycatServer.Builder builder = CopycatServer.builder(address);
    *   }
    * </pre>
    * Once the server has been configured, use the {@link #build()} method to build the server instance:
    * <pre>
    *   {@code
-   *   CopycatServer server = CopycatServer.builder(address, members)
+   *   CopycatServer server = CopycatServer.builder(address)
    *     ...
    *     .build();
    *   }
@@ -732,7 +819,7 @@ public class CopycatServer {
    * its state when necessary.
    * <pre>
    *   {@code
-   *   CopycatServer server = CopycatServer.builder(address, members)
+   *   CopycatServer server = CopycatServer.builder(address)
    *     .withStateMachine(MyStateMachine::new)
    *     .build();
    *   }
@@ -757,17 +844,14 @@ public class CopycatServer {
     private Supplier<StateMachine> stateMachineFactory;
     private Address clientAddress;
     private Address serverAddress;
-    private Set<Address> cluster;
     private Duration electionTimeout = DEFAULT_ELECTION_TIMEOUT;
     private Duration heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
     private Duration sessionTimeout = DEFAULT_SESSION_TIMEOUT;
     private Duration globalSuspendTimeout = DEFAULT_GLOBAL_SUSPEND_TIMEOUT;
 
-    private Builder(Address clientAddress, Address serverAddress, Collection<Address> cluster) {
+    private Builder(Address clientAddress, Address serverAddress) {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
       this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
-      this.cluster = new HashSet<>(Assert.notNull(cluster, "cluster"));
-      this.type = cluster.contains(serverAddress) ? Member.Type.ACTIVE : Member.Type.RESERVE;
     }
 
     /**
@@ -968,7 +1052,7 @@ public class CopycatServer {
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
       ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name), serializer);
 
-      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, cluster, storage, serializer, stateMachineFactory, connections, threadContext);
+      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, serializer, stateMachineFactory, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout)

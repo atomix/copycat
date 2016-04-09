@@ -21,6 +21,7 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.JoinRequest;
 import io.atomix.copycat.server.protocol.LeaveRequest;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -163,32 +164,132 @@ public interface Cluster {
   Collection<Member> members();
 
   /**
+   * Bootstraps the cluster.
+   * <p>
+   * Bootstrapping the cluster results in a new cluster being formed with the provided configuration. The initial
+   * nodes in a cluster must always be bootstrapped. This is necessary to prevent split brain. If the provided
+   * configuration is empty, the local server will form a single-node cluster.
+   * <p>
+   * Only {@link Member.Type#ACTIVE} members can be included in a bootstrap configuration. If the local server is
+   * not initialized as an active member, it cannot be part of the bootstrap configuration for the cluster.
+   * <p>
+   * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
+   * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
+   * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
+   * members may be {@link #join(Address...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * reach a quorum to elect a leader, bootstrap will continue until successful.
+   * <p>
+   * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
+   * Bootstrapping multiple servers with different configurations may result in split brain.
+   * <p>
+   * The {@link CompletableFuture} returned by this method will be completed once the cluster has been bootstrapped,
+   * a leader has been elected, and the leader has been notified of the local server's client configurations.
+   *
+   * @param cluster The bootstrap cluster configuration.
+   * @return A completable future to be completed once the cluster has been bootstrapped.
+   */
+  default CompletableFuture<Void> bootstrap(Address... cluster) {
+    return bootstrap(Arrays.asList(cluster));
+  }
+
+  /**
+   * Bootstraps the cluster.
+   * <p>
+   * Bootstrapping the cluster results in a new cluster being formed with the provided configuration. The initial
+   * nodes in a cluster must always be bootstrapped. This is necessary to prevent split brain. If the provided
+   * configuration is empty, the local server will form a single-node cluster.
+   * <p>
+   * Only {@link Member.Type#ACTIVE} members can be included in a bootstrap configuration. If the local server is
+   * not initialized as an active member, it cannot be part of the bootstrap configuration for the cluster.
+   * <p>
+   * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
+   * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
+   * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
+   * members may be {@link #join(Address...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * reach a quorum to elect a leader, bootstrap will continue until successful.
+   * <p>
+   * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
+   * Bootstrapping multiple servers with different configurations may result in split brain.
+   * <p>
+   * The {@link CompletableFuture} returned by this method will be completed once the cluster has been bootstrapped,
+   * a leader has been elected, and the leader has been notified of the local server's client configurations.
+   *
+   * @param cluster The bootstrap cluster configuration.
+   * @return A completable future to be completed once the cluster has been bootstrapped.
+   */
+  CompletableFuture<Void> bootstrap(Collection<Address> cluster);
+
+  /**
    * Joins the cluster.
    * <p>
-   * Invocations of this method will cause the local {@link CopycatServer} to join the cluster.
-   * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#open()}
-   * to open a new server and join the cluster in order to ensure all associated resources are property opened.
+   * Joining the cluster results in the local server being added to an existing cluster that has already been
+   * bootstrapped. The provided configuration will be used to connect to the existing cluster and submit a join
+   * request. Once the server has been added to the existing cluster's configuration, the join operation is complete.
    * <p>
-   * When a server joins the cluster, the server will connect to arbitrary {@link Member}s, attempting to locate
-   * the cluster leader and send a {@link JoinRequest}. Once the leader has been
-   * found, the leader will replicate and commit a configuration change, notifying other members of the cluster of
-   * the joining server.
+   * Any {@link Member.Type type} of server may join a cluster. In order to join a cluster, the provided list of
+   * bootstrapped members must be non-empty and must include at least one active member of the cluster. If no member
+   * in the configuration is reachable, the server will continue to attempt to join the cluster until successful. If
+   * the provided cluster configuration is empty, the returned {@link CompletableFuture} will be completed exceptionally.
+   * <p>
+   * When the server joins the cluster, the local server will be transitioned into its initial state as defined by
+   * the configured {@link Member.Type}. Once the server has joined, it will immediately begin participating in
+   * Raft and asynchronous replication according to its configuration.
+   * <p>
+   * It's important to note that the provided cluster configuration will only be used the first time the server attempts
+   * to join the cluster. Thereafter, in the event that the server crashes and is restarted by {@code join}ing the cluster
+   * again, the last known configuration will be used assuming the server is configured with persistent storage. Only when
+   * the server leaves the cluster will its configuration and log be reset.
    * <p>
    * In order to preserve safety during configuration changes, Copycat leaders do not allow concurrent configuration
    * changes. In the event that an existing configuration change (a server joining or leaving the cluster or a
    * member being {@link Member#promote() promoted} or {@link Member#demote() demoted}) is under way, the local
    * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
-   * the join will fail after a fixed number of failed attempts.
+   * the join will be retried until successful.
    *
+   * @param cluster A list of cluster member addresses to join.
    * @return A completable future to be completed once the local server has joined the cluster.
    */
-  CompletableFuture<Void> join();
+  default CompletableFuture<Void> join(Address... cluster) {
+    return join(Arrays.asList(cluster));
+  }
+
+  /**
+   * Joins the cluster.
+   * <p>
+   * Joining the cluster results in the local server being added to an existing cluster that has already been
+   * bootstrapped. The provided configuration will be used to connect to the existing cluster and submit a join
+   * request. Once the server has been added to the existing cluster's configuration, the join operation is complete.
+   * <p>
+   * Any {@link Member.Type type} of server may join a cluster. In order to join a cluster, the provided list of
+   * bootstrapped members must be non-empty and must include at least one active member of the cluster. If no member
+   * in the configuration is reachable, the server will continue to attempt to join the cluster until successful. If
+   * the provided cluster configuration is empty, the returned {@link CompletableFuture} will be completed exceptionally.
+   * <p>
+   * When the server joins the cluster, the local server will be transitioned into its initial state as defined by
+   * the configured {@link Member.Type}. Once the server has joined, it will immediately begin participating in
+   * Raft and asynchronous replication according to its configuration.
+   * <p>
+   * It's important to note that the provided cluster configuration will only be used the first time the server attempts
+   * to join the cluster. Thereafter, in the event that the server crashes and is restarted by {@code join}ing the cluster
+   * again, the last known configuration will be used assuming the server is configured with persistent storage. Only when
+   * the server leaves the cluster will its configuration and log be reset.
+   * <p>
+   * In order to preserve safety during configuration changes, Copycat leaders do not allow concurrent configuration
+   * changes. In the event that an existing configuration change (a server joining or leaving the cluster or a
+   * member being {@link Member#promote() promoted} or {@link Member#demote() demoted}) is under way, the local
+   * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
+   * the join will be retried until successful.
+   *
+   * @param cluster A collection of cluster member addresses to join.
+   * @return A completable future to be completed once the local server has joined the cluster.
+   */
+  CompletableFuture<Void> join(Collection<Address> cluster);
 
   /**
    * Leaves the cluster.
    * <p>
    * Invocations of this method will cause the local {@link CopycatServer} to leave the cluster.
-   * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#close()}
+   * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#leave()}
    * to leave the cluster and close a server in order to ensure all associated resources are properly closed.
    * <p>
    * When a server leaves the cluster, the server submits a {@link LeaveRequest}

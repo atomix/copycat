@@ -33,6 +33,7 @@ import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.util.StorageSerialization;
 import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
@@ -44,7 +45,6 @@ import org.testng.annotations.Test;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Abstract state test.
@@ -57,7 +57,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected ThreadContext serverCtx;
   protected LocalTransport transport;
   protected ServerContext serverContext;
-  protected List<ServerMember> members;
+  protected List<Member> members;
 
   /**
    * Sets up a server state.
@@ -80,8 +80,11 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
 
     serverCtx = new SingleThreadContext("test-server", serializer);
     new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
-      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), members.stream().map(ServerMember::serverAddress).collect(Collectors.toList()), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx);
-      resume();
+      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx);
+      serverContext.getThreadContext().executor().execute(() -> {
+        serverContext.getClusterState().configure(new Configuration(0, 0, Instant.now().toEpochMilli(), members));
+        resume();
+      });
     });
     await(1000);
   }
@@ -154,8 +157,8 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   /**
    * Creates a collection of member addresses.
    */
-  private List<ServerMember> createMembers(int nodes) {
-    List<ServerMember> members = new ArrayList<>();
+  private List<Member> createMembers(int nodes) {
+    List<Member> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
       members.add(new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i), Instant.now()));
     }

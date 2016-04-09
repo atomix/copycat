@@ -169,9 +169,9 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     });
 
     runOnServer(() -> {
-      for (Member member : serverContext.getCluster().members()) {
+      for (MemberState member : serverContext.getClusterState().getRemoteMemberStates()) {
         Server server = transport.server();
-        server.listen(member.serverAddress(), c -> {
+        server.listen(member.getMember().serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(true)
@@ -199,9 +199,9 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     });
 
     runOnServer(() -> {
-      for (Member member : serverContext.getCluster().members()) {
+      for (MemberState member : serverContext.getClusterState().getRemoteMemberStates()) {
         Server server = transport.server();
-        server.listen(member.serverAddress(), c -> {
+        server.listen(member.getMember().serverAddress(), c -> {
           c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(false)
