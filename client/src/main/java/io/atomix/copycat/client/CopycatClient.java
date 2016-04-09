@@ -386,7 +386,7 @@ public interface CopycatClient {
    * <p>
    * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
    * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
-   * and {@link Query.ConsistencyLevel#BOUNDED_LINEARIZABLE} consistency levels, queries will be forwarded
+   * and {@link Query.ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
    * to the cluster leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
    * by applying queries to an internal server state machine.
    * <p>

@@ -479,7 +479,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests submitting a query.
    */
   public void testOneNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(1, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+    testSubmitQuery(1, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
@@ -500,7 +500,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests submitting a query.
    */
   public void testTwoNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(2, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+    testSubmitQuery(2, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
@@ -521,7 +521,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests submitting a query.
    */
   public void testThreeNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(3, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+    testSubmitQuery(3, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
@@ -542,7 +542,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests submitting a query.
    */
   public void testFourNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(4, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+    testSubmitQuery(4, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
@@ -563,7 +563,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests submitting a query.
    */
   public void testFiveNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(5, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+    testSubmitQuery(5, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
@@ -723,7 +723,7 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests that operations are properly sequenced on the client.
    */
   public void testSequenceBoundedLinearizableOperations() throws Throwable {
-    testSequenceOperations(5, Query.ConsistencyLevel.BOUNDED_LINEARIZABLE);
+    testSequenceOperations(5, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**

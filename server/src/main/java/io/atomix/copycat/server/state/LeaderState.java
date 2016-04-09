@@ -578,7 +578,7 @@ final class LeaderState extends ActiveState {
     switch (consistency) {
       case SEQUENTIAL:
         return queryLocal(entry);
-      case BOUNDED_LINEARIZABLE:
+      case LINEARIZABLE_LEASE:
         return queryBoundedLinearizable(entry);
       case LINEARIZABLE:
         return queryLinearizable(entry);

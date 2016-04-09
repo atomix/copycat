@@ -27,7 +27,7 @@ package io.atomix.copycat;
  * sent in a message to the server to which the client is currently connected. The server handles the query requests
  * based on the configured {@link Query.ConsistencyLevel}. For {@link ConsistencyLevel#SEQUENTIAL} consistency, followers
  * are allowed to execute queries with certain constraints for faster reads. For higher consistency levels like
- * {@link ConsistencyLevel#LINEARIZABLE} and {@link ConsistencyLevel#BOUNDED_LINEARIZABLE}, queries are forwarded to the
+ * {@link ConsistencyLevel#LINEARIZABLE} and {@link ConsistencyLevel#LINEARIZABLE_LEASE}, queries are forwarded to the
  * cluster leader. See the {@link Query.ConsistencyLevel} documentation for more info.
  * <p>
  * By default, all queries should use the strongest consistency level, {@link ConsistencyLevel#LINEARIZABLE}.
@@ -70,7 +70,7 @@ public interface Query<T> extends Operation<T> {
     SEQUENTIAL,
 
     /**
-     * Enforces bounded linearizable query consistency based on leader lease.
+     * Enforces linearizable query consistency based on leader lease.
      * <p>
      * Bounded linearizability is a special implementation of linearizable reads that relies on the semantics of Raft's
      * election timers to determine whether it is safe to immediately apply a query to the Raft state machine. When a
@@ -82,7 +82,7 @@ public interface Query<T> extends Operation<T> {
      * hasn't contacted a majority of the cluster within an election timeout, the leader will handle the query as if it were
      * submitted with {@link #LINEARIZABLE} consistency.
      */
-    BOUNDED_LINEARIZABLE,
+    LINEARIZABLE_LEASE,
 
     /**
      * Enforces linearizable query consistency.
