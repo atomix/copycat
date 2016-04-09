@@ -455,7 +455,11 @@ public interface CopycatClient {
    * @return A completable future to be completed once the client's {@link #session()} is registered.
    */
   default CompletableFuture<CopycatClient> connect(Address... members) {
-    return connect(Arrays.asList(Assert.notNull(members, "members")));
+    if (members == null) {
+      return connect();
+    } else {
+      return connect(Arrays.asList(members));
+    }
   }
 
   /**
