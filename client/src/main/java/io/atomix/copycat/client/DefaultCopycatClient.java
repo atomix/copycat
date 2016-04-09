@@ -394,7 +394,7 @@ public class DefaultCopycatClient implements CopycatClient {
      * Registers the session event listener.
      */
     public void register(ClientSession session) {
-      parent = session.onEvent(event, callback);
+      parent = session.onEvent(event, this);
     }
 
     @Override
