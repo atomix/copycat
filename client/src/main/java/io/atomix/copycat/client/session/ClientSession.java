@@ -18,7 +18,6 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Managed;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
@@ -38,7 +37,7 @@ import java.util.function.Consumer;
  * The client session is responsible for maintaining a client's connection to a Copycat cluster and coordinating
  * the submission of {@link Command commands} and {@link Query queries} to various nodes in the cluster. Client
  * sessions are single-use objects that represent the context within which a cluster can guarantee linearizable
- * semantics for state machine operations. When a session is {@link #open() opened}, the session will register
+ * semantics for state machine operations. When a session is {@link #register() opened}, the session will register
  * itself with the cluster by attempting to contact each of the known servers. Once the session has been successfully
  * registered, kee-alive requests will be periodically sent to keep the session alive.
  * <p>
@@ -51,7 +50,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ClientSession implements Session, Managed<Session> {
+public class ClientSession implements Session {
   private final ClientSessionState state;
   private final ClientConnection connection;
   private final ClientSessionManager manager;
@@ -134,13 +133,8 @@ public class ClientSession implements Session, Managed<Session> {
    *
    * @return A completable future to be completed once the session is opened.
    */
-  public CompletableFuture<Session> open() {
+  public CompletableFuture<Session> register() {
     return manager.open().thenApply(v -> this);
-  }
-
-  @Override
-  public boolean isOpen() {
-    return state.getState() == State.OPEN || state.getState() == State.UNSTABLE;
   }
 
   /**
@@ -202,11 +196,6 @@ public class ClientSession implements Session, Managed<Session> {
       .thenCompose(v -> listener.close())
       .thenCompose(v -> manager.kill())
       .thenCompose(v -> connection.close());
-  }
-
-  @Override
-  public boolean isClosed() {
-    return state.getState() == State.EXPIRED || state.getState() == State.CLOSED;
   }
 
   @Override

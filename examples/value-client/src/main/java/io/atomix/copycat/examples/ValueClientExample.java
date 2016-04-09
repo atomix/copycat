@@ -50,7 +50,7 @@ public class ValueClientExample {
       members.add(new Address(parts[0], Integer.valueOf(parts[1])));
     }
 
-    CopycatClient client = CopycatClient.builder(members)
+    CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(RecoveryStrategies.RECOVER)
@@ -61,7 +61,7 @@ public class ValueClientExample {
     client.serializer().register(GetQuery.class, 2);
     client.serializer().register(DeleteCommand.class, 3);
 
-    client.connect().join();
+    client.connect(members).join();
 
     AtomicInteger counter = new AtomicInteger();
     AtomicLong timer = new AtomicLong();

@@ -43,9 +43,6 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -81,14 +78,9 @@ public class ServerStateMachineTest extends ConcurrentTestCase {
     transport = new LocalTransport(registry);
     Storage storage = new Storage(StorageLevel.MEMORY);
     ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000), Instant.now());
-    Collection<Address> members = new ArrayList<>(Arrays.asList(
-      new Address("localhost", 5000),
-      new Address("localhost", 5000),
-      new Address("localhost", 5000)
-    ));
 
     new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
-      state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), members, storage, serializer, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
+      state = new ServerContext("test", member.type(), member.serverAddress(), member.clientAddress(), storage, serializer, TestStateMachine::new, new ConnectionManager(new LocalTransport(registry).client()), callerContext);
       resume();
     });
     await(1000);

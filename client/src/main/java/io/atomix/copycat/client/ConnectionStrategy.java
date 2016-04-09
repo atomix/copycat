@@ -27,7 +27,7 @@ import java.time.Duration;
  * strategy will dictate how to handle the failure.
  * <p>
  * Connection strategies are used in the same manner when attempting to recover a lost session. In
- * the event that a client's connection to the cluster is lost and the client must open a new session,
+ * the event that a client's connection to the cluster is lost and the client must register a new session,
  * if recovering the client's session fails then the connection strategy will again dictate how to
  * handle the failure.
  *

@@ -49,7 +49,7 @@ public class ValueStateMachineExample {
       members.add(new Address(parts[0], Integer.valueOf(parts[1])));
     }
 
-    CopycatServer server = CopycatServer.builder(address, members)
+    CopycatServer server = CopycatServer.builder(address)
       .withStateMachine(ValueStateMachine::new)
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
@@ -64,7 +64,7 @@ public class ValueStateMachineExample {
     server.serializer().register(GetQuery.class, 2);
     server.serializer().register(DeleteCommand.class, 3);
 
-    server.start().join();
+    server.bootstrap(members).join();
 
     while (server.isRunning()) {
       Thread.sleep(1000);
