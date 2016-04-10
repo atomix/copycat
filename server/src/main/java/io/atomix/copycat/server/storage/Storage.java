@@ -17,7 +17,6 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotFile;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -62,7 +61,6 @@ public class Storage {
   private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
-  private static final int DEFAULT_MAX_SNAPSHOT_SIZE = 1024 * 1024 * 32;
   private static final boolean DEFAULT_RETAIN_STALE_SNAPSHOTS = false;
   private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
   private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
@@ -73,7 +71,6 @@ public class Storage {
   private File directory = new File(DEFAULT_DIRECTORY);
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
-  private int maxSnapshotSize = DEFAULT_MAX_SNAPSHOT_SIZE;
   private boolean retainStaleSnapshots = DEFAULT_RETAIN_STALE_SNAPSHOTS;
   private int compactionThreads = DEFAULT_COMPACTION_THREADS;
   private Duration minorCompactionInterval = DEFAULT_MINOR_COMPACTION_INTERVAL;
@@ -162,18 +159,6 @@ public class Storage {
    */
   public int maxEntriesPerSegment() {
     return maxEntriesPerSegment;
-  }
-
-  /**
-   * Returns the maximum snapshot size.
-   * <p>
-   * The maximum snapshot size dictates the maximum number of bytes allowed to be stored in a single
-   * {@link Snapshot}.
-   *
-   * @return The maximum snapshot size in bytes.
-   */
-  public int maxSnapshotSize() {
-    return maxSnapshotSize;
   }
 
   /**
@@ -428,23 +413,6 @@ public class Storage {
       Assert.argNot(maxEntriesPerSegment > DEFAULT_MAX_ENTRIES_PER_SEGMENT,
         "max entries per segment cannot be greater than " + DEFAULT_MAX_ENTRIES_PER_SEGMENT);
       storage.maxEntriesPerSegment = maxEntriesPerSegment;
-      return this;
-    }
-
-    /**
-     * Sets the maximum size of snapshot files on disk, returning the builder for method chaining.
-     * <p>
-     * The maximum snapshot size dictates the size in bytes of a single snapshot file on disk. Reducing the
-     * maximum snapshot file size can help ensure that the system is not bogged down with storing and replicating
-     * snapshots. By default, snapshots are practically unlimited with a 2GB limit, but in practice they should be
-     * fairly small.
-     *
-     * @param maxSnapshotSize The maximum snapshot size in bytes.
-     * @return The storage builder.
-     * @throws IllegalArgumentException if the {@code maxSnapshotSize} is not positive or is less than {@code 64}
-     */
-    public Builder withMaxSnapshotSize(int maxSnapshotSize) {
-      storage.maxSnapshotSize = Assert.arg(maxSnapshotSize, maxSnapshotSize >= 64, "max snapshot size must be positive");
       return this;
     }
 
