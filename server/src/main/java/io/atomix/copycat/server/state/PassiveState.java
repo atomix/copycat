@@ -19,19 +19,10 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.CopycatException;
-import io.atomix.copycat.protocol.ConnectRequest;
-import io.atomix.copycat.protocol.QueryRequest;
-import io.atomix.copycat.protocol.ConnectResponse;
-import io.atomix.copycat.protocol.QueryResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.AcceptRequest;
-import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.InstallRequest;
-import io.atomix.copycat.server.protocol.AcceptResponse;
-import io.atomix.copycat.server.protocol.AppendResponse;
-import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
@@ -39,6 +30,7 @@ import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 /**
@@ -231,8 +223,7 @@ class PassiveState extends ReserveState {
     logRequest(request);
 
     // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
-    if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL
-      || request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
+    if (request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
 
       // If this server has not yet applied entries up to the client's session ID, forward the
       // query to the leader. This ensures that a follower does not tell the client its session
@@ -249,7 +240,15 @@ class PassiveState extends ReserveState {
         return queryForward(request);
       }
 
-      return queryLocal(request);
+      QueryEntry entry = context.getLog().create(QueryEntry.class)
+        .setIndex(request.index())
+        .setTerm(context.getTerm())
+        .setTimestamp(System.currentTimeMillis())
+        .setSession(request.session())
+        .setSequence(request.sequence())
+        .setQuery(request.query());
+
+      return queryLocal(entry);
     } else {
       return queryForward(request);
     }
@@ -278,52 +277,114 @@ class PassiveState extends ReserveState {
   /**
    * Performs a local query.
    */
-  private CompletableFuture<QueryResponse> queryLocal(QueryRequest request) {
+  protected CompletableFuture<QueryResponse> queryLocal(QueryEntry entry) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+    sequenceQuery(entry, future);
+    return future;
+  }
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(request.index())
-      .setTerm(context.getTerm())
-      .setTimestamp(System.currentTimeMillis())
-      .setSession(request.session())
-      .setSequence(request.sequence())
-      .setQuery(request.query());
-
-    // For CAUSAL queries, the state machine version is the last index applied to the state machine. For other consistency
-    // levels, the state machine may actually wait until those queries are applied to the state machine, so the last applied
-    // index is not necessarily the index at which the query will be applied, but it will be applied after its sequence.
-    final long index;
-    if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-      index = context.getStateMachine().getLastApplied();
+  /**
+   * Sequences the given query.
+   */
+  private void sequenceQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    if (session == null) {
+      future.complete(logResponse(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
     } else {
-      index = Math.max(request.sequence(), context.getStateMachine().getLastApplied());
+      sequenceQuery(entry, session, future);
     }
+  }
 
-    context.getStateMachine().apply(entry).whenCompleteAsync((result, error) -> {
-      if (isOpen()) {
-        if (error == null) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.OK)
-            .withIndex(index)
-            .withResult(result)
-            .build()));
-        } else if (error instanceof CopycatException) {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withIndex(index)
-            .withError(((CopycatException) error).getType())
-            .build()));
-        } else {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withIndex(index)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
+  /**
+   * Sequences the given query.
+   */
+  private void sequenceQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+    // If the query's sequence number is greater than the session's current sequence number, queue the request for
+    // handling once the state machine is caught up.
+    if (entry.getSequence() > session.getCommandSequence()) {
+      session.registerSequenceQuery(entry.getSequence(), () -> indexQuery(entry, future));
+    } else {
+      indexQuery(entry, future);
+    }
+  }
+
+  /**
+   * Ensures the given query is applied after the appropriate index.
+   */
+  private void indexQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+    // Get the client's server session. If the session doesn't exist, return an unknown session error.
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    if (session == null) {
+      future.complete(logResponse(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()));
+    } else {
+      indexQuery(entry, session, future);
+    }
+  }
+
+  /**
+   * Ensures the given query is applied after the appropriate index.
+   */
+  private void indexQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+    // If the query index is greater than the session's last applied index, queue the request for handling once the
+    // state machine is caught up.
+    if (entry.getIndex() > session.getLastApplied()) {
+      session.registerIndexQuery(entry.getIndex(), () -> applyQuery(entry, future));
+    } else {
+      applyQuery(entry, future);
+    }
+  }
+
+  /**
+   * Applies a query to the state machine.
+   */
+  protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+    // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
+    // indexes will be the last applied index.
+    context.getStateMachine().<ServerStateMachine.Result>apply(entry).whenComplete((result, error) -> {
+      completeOperation(result, QueryResponse.builder(), error, future);
+      entry.release();
+    });
+    return future;
+  }
+
+  /**
+   * Completes an operation.
+   */
+  protected  <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
+    if (isOpen()) {
+      if (result != null) {
+        builder.withIndex(result.index);
+        builder.withEventIndex(result.eventIndex);
+        if (result.result instanceof Exception) {
+          error = (Exception) result.result;
         }
       }
-      entry.release();
-    }, context.getThreadContext().executor());
-    return future;
+
+      if (error == null) {
+        future.complete(logResponse(builder.withStatus(Response.Status.OK)
+          .withResult(result.result)
+          .build()));
+      } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
+        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
+          .withError(((CopycatException) error.getCause()).getType())
+          .build()));
+      } else if (error instanceof CopycatException) {
+        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
+          .withError(((CopycatException) error).getType())
+          .build()));
+      } else {
+        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.INTERNAL_ERROR)
+          .build()));
+      }
+    }
   }
 
   @Override

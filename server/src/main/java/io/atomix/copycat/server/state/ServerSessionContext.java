@@ -20,7 +20,6 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
 import io.atomix.catalyst.util.Listeners;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
@@ -32,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
@@ -66,10 +64,9 @@ class ServerSessionContext implements ServerSession {
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
-  private final Map<Long, Object> responses = new HashMap<>();
+  private final Map<Long, ServerStateMachine.Result> results = new HashMap<>();
   private final Queue<EventHolder> events = new ArrayDeque<>();
   private EventHolder event;
-  private final Map<Long, CompletableFuture<Void>> futures = new HashMap<>();
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
@@ -414,25 +411,23 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
-   * Registers a session response.
+   * Registers a session result.
    * <p>
-   * Responses are stored in memory on all servers in order to provide linearizable semantics. When a command
+   * Results are stored in memory on all servers in order to provide linearizable semantics. When a command
    * is applied to the state machine, the command's return value is stored with the sequence number. Once the
-   * client acknowledges receipt of the command output the response will be cleared from memory.
+   * client acknowledges receipt of the command output the result will be cleared from memory.
    *
-   * @param sequence The response sequence number.
-   * @param response The response.
+   * @param sequence The result sequence number.
+   * @param result The result.
    * @return The server session.
    */
-  ServerSessionContext registerResponse(long sequence, Object response, CompletableFuture<Void> future) {
-    responses.put(sequence, response);
-    if (future != null)
-      futures.put(sequence, future);
+  ServerSessionContext registerResult(long sequence, ServerStateMachine.Result result) {
+    results.put(sequence, result);
     return this;
   }
 
   /**
-   * Clears command responses up to the given sequence number.
+   * Clears command results up to the given sequence number.
    * <p>
    * Command output is removed from memory up to the given sequence number. Additionally, since we know the
    * client received a response for all commands up to the given sequence number, command futures are removed
@@ -441,11 +436,10 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The sequence to clear.
    * @return The server session.
    */
-  ServerSessionContext clearResponses(long sequence) {
+  ServerSessionContext clearResults(long sequence) {
     if (sequence > commandLowWaterMark) {
       for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
-        responses.remove(i);
-        futures.remove(i);
+        results.remove(i);
         commandLowWaterMark = i;
       }
     }
@@ -458,18 +452,8 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The response sequence.
    * @return The response.
    */
-  Object getResponse(long sequence) {
-    return responses.get(sequence);
-  }
-
-  /**
-   * Returns the response future for the given sequence.
-   *
-   * @param sequence The response sequence.
-   * @return The response future.
-   */
-  CompletableFuture<Void> getResponseFuture(long sequence) {
-    return futures.get(sequence);
+  ServerStateMachine.Result getResult(long sequence) {
+    return results.get(sequence);
   }
 
   /**
@@ -504,6 +488,15 @@ class ServerSessionContext implements ServerSession {
     return address;
   }
 
+  /**
+   * Returns the session event index.
+   *
+   * @return The session event index.
+   */
+  long getEventIndex() {
+    return eventIndex;
+  }
+
   @Override
   public Session publish(String event) {
     return publish(event, null);
@@ -514,7 +507,7 @@ class ServerSessionContext implements ServerSession {
     Assert.state(open, "cannot publish events during session registration");
     Assert.stateNot(state == State.CLOSED, "session is closed");
     Assert.stateNot(state == State.EXPIRED, "session is expired");
-    Assert.state(context.consistency() != null, "session events can only be published during command execution");
+    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "session events can only be published during command execution");
 
     // If the client acked an index greater than the current event sequence number since we know the
     // client must have received it from another server.
@@ -528,11 +521,6 @@ class ServerSessionContext implements ServerSession {
       this.event = new EventHolder(eventIndex, previousIndex);
     }
 
-    // If the current context is LINEARIZABLE and no future has been set for the event, create one.
-    if (context.consistency() == Command.ConsistencyLevel.LINEARIZABLE && this.event.future == null) {
-      this.event.future = new CompletableFuture<>();
-    }
-
     // Add the event to the event holder.
     this.event.events.add(new Event<>(event, message));
 
@@ -542,13 +530,11 @@ class ServerSessionContext implements ServerSession {
   /**
    * Commits events for the given index.
    */
-  CompletableFuture<Void> commit(long index) {
+  void commit(long index) {
     if (event != null && event.eventIndex == index) {
       events.add(event);
       sendEvent(event);
-      return event.future;
     }
-    return null;
   }
 
   /**
@@ -578,8 +564,6 @@ class ServerSessionContext implements ServerSession {
       while (event != null && event.eventIndex <= index) {
         events.remove();
         completeIndex = event.eventIndex;
-        if (event.future != null)
-          event.future.complete(null);
         event = events.peek();
       }
       completeIndex = index;
@@ -596,7 +580,7 @@ class ServerSessionContext implements ServerSession {
   ServerSessionContext resendEvents(long index) {
     clearEvents(index);
     for (EventHolder event : events) {
-      sendSequentialEvent(event);
+      sendEvent(event);
     }
     return this;
   }
@@ -605,29 +589,6 @@ class ServerSessionContext implements ServerSession {
    * Sends an event to the session.
    */
   private void sendEvent(EventHolder event) {
-    // Linearizable events must be sent synchronously, so only send them within a synchronous context.
-    if (context.synchronous() && context.consistency() == Command.ConsistencyLevel.LINEARIZABLE) {
-      sendLinearizableEvent(event);
-    } else if (context.consistency() != Command.ConsistencyLevel.LINEARIZABLE) {
-      sendSequentialEvent(event);
-    }
-  }
-
-  /**
-   * Sends a linearizable event.
-   */
-  private void sendLinearizableEvent(EventHolder event) {
-    if (connection != null) {
-      sendEvent(event, connection);
-    } else if (address != null) {
-      context.connections().getConnection(address).thenAccept(connection -> sendEvent(event, connection));
-    }
-  }
-
-  /**
-   * Sends a sequential event.
-   */
-  private void sendSequentialEvent(EventHolder event) {
     if (connection != null) {
       sendEvent(event, connection);
     }
@@ -694,7 +655,6 @@ class ServerSessionContext implements ServerSession {
    * @param index The index at which to expire the session.
    */
   void expire(long index) {
-    cleanEvents();
     setState(State.EXPIRED);
     cleanState(index);
   }
@@ -705,20 +665,8 @@ class ServerSessionContext implements ServerSession {
    * @param index The index at which to close the session.
    */
   void close(long index) {
-    cleanEvents();
     setState(State.CLOSED);
     cleanState(index);
-  }
-
-  /**
-   * Cleans up session events on close.
-   */
-  private void cleanEvents() {
-    for (EventHolder event : events) {
-      if (event.future != null) {
-        event.future.complete(null);
-      }
-    }
   }
 
   /**
@@ -765,7 +713,6 @@ class ServerSessionContext implements ServerSession {
     private final long eventIndex;
     private final long previousIndex;
     private final List<Event<?>> events = new ArrayList<>(8);
-    private CompletableFuture<Void> future;
 
     private EventHolder(long eventIndex, long previousIndex) {
       this.eventIndex = eventIndex;

@@ -19,12 +19,7 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.RetryStrategies;
-import io.atomix.copycat.protocol.CommandRequest;
-import io.atomix.copycat.protocol.QueryRequest;
-import io.atomix.copycat.protocol.CommandResponse;
-import io.atomix.copycat.protocol.QueryResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.Session;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
@@ -64,7 +59,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context, RetryStrategies.RETRY);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
     assertEquals(submitter.submit(new TestCommand()).get(), "Hello world!");
     assertEquals(state.getCommandRequest(), 1);
     assertEquals(state.getCommandResponse(), 1);
@@ -91,7 +86,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context, RetryStrategies.RETRY);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
     CompletableFuture<String> result1 = submitter.submit(new TestCommand());
     CompletableFuture<String> result2 = submitter.submit(new TestCommand());
@@ -145,7 +140,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context, RetryStrategies.RETRY);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
     assertEquals(submitter.submit(new TestQuery()).get(), "Hello world!");
     assertEquals(state.getResponseIndex(), 10);
   }
@@ -170,7 +165,7 @@ public class ClientSessionSubmitterTest {
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, context, RetryStrategies.RETRY);
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
     CompletableFuture<String> result1 = submitter.submit(new TestQuery());
     CompletableFuture<String> result2 = submitter.submit(new TestQuery());

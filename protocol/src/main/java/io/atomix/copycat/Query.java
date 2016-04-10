@@ -25,11 +25,10 @@ package io.atomix.copycat;
  * All queries must specify a {@link #consistency()} with which to execute the query. The provided consistency level
  * dictates how queries are submitted to the Raft cluster. When a query is submitted to the cluster, the query is
  * sent in a message to the server to which the client is currently connected. The server handles the query requests
- * based on the configured {@link Query.ConsistencyLevel}. For lower consistency levels
- * like {@link ConsistencyLevel#CAUSAL} or {@link ConsistencyLevel#SEQUENTIAL}, followers are allowed to execute
- * queries with certain constraints for faster reads. For higher consistency levels like {@link ConsistencyLevel#LINEARIZABLE}
- * and {@link ConsistencyLevel#BOUNDED_LINEARIZABLE}, queries are forwarded to the cluster leader. See the
- * {@link Query.ConsistencyLevel} documentation for more info.
+ * based on the configured {@link Query.ConsistencyLevel}. For {@link ConsistencyLevel#SEQUENTIAL} consistency, followers
+ * are allowed to execute queries with certain constraints for faster reads. For higher consistency levels like
+ * {@link ConsistencyLevel#LINEARIZABLE} and {@link ConsistencyLevel#LINEARIZABLE_LEASE}, queries are forwarded to the
+ * cluster leader. See the {@link Query.ConsistencyLevel} documentation for more info.
  * <p>
  * By default, all queries should use the strongest consistency level, {@link ConsistencyLevel#LINEARIZABLE}.
  * It is essential that users understand the trade-offs in the various consistency levels before using them.
@@ -60,17 +59,6 @@ public interface Query<T> extends Operation<T> {
   enum ConsistencyLevel {
 
     /**
-     * Enforces causal query consistency.
-     * <p>
-     * Causal consistency requires that clients always see non-overlapping state progress monotonically. This constraint allows
-     * reads from followers. When a causally consistent {@link Query} is submitted to the cluster, the first server that
-     * receives the query will attempt to handle it. If the server that receives the query is more than a heartbeat behind the
-     * leader, the query will be forwarded to the leader. If the server that receives the query has not advanced past the
-     * client's last write, the read will be queued until it can be satisfied.
-     */
-    CAUSAL,
-
-    /**
      * Enforces sequential query consistency.
      * <p>
      * Sequential read consistency requires that clients always see state progress in monotonically increasing order. Note that
@@ -82,7 +70,7 @@ public interface Query<T> extends Operation<T> {
     SEQUENTIAL,
 
     /**
-     * Enforces bounded linearizable query consistency based on leader lease.
+     * Enforces linearizable query consistency based on leader lease.
      * <p>
      * Bounded linearizability is a special implementation of linearizable reads that relies on the semantics of Raft's
      * election timers to determine whether it is safe to immediately apply a query to the Raft state machine. When a
@@ -94,7 +82,7 @@ public interface Query<T> extends Operation<T> {
      * hasn't contacted a majority of the cluster within an election timeout, the leader will handle the query as if it were
      * submitted with {@link #LINEARIZABLE} consistency.
      */
-    BOUNDED_LINEARIZABLE,
+    LINEARIZABLE_LEASE,
 
     /**
      * Enforces linearizable query consistency.

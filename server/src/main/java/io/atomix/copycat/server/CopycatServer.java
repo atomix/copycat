@@ -387,27 +387,26 @@ public class CopycatServer {
    * {@link Serializer#register(Class) registered} on the returned serializer will be reflected in serialization
    * throughout the server, including in the state machine and logs.
    * <p>
-   * By default, the returned serializer does not support serialization of arbitrary classes and class names for
-   * security reasons. Users must explicitly whitelist serializable types with the serializer to ensure the server
-   * can serialize and deserialize required objects, including state machine {@link Command commands} and
-   * {@link Query queries} and any objects that need to be serialized within them.
+   * By default, serializers support serialization of arbitrary classes and class names. However, this default
+   * serialization is significantly slower than explicitly registering serializable types since. Users should
+   * explicitly whitelist serializable types with the serializer to ensure the server can more efficiently serialize
+   * and deserialize required objects, including state machine {@link Command commands} and {@link Query queries} and
+   * any objects that need to be serialized within them.
    * <pre>
    *   {@code
    *   server.serializer().register(MySerializableType.class, 123, MySerializableSerializer.class);
    *   }
    * </pre>
-   * Alternatively, users can {@link Serializer#disableWhitelist() disable whitelisting} in the Catalyst serializer
-   * to ensure that the server can receive operations from any client.
+   * Alternatively, users can {@link Serializer#enableWhitelist() enabled whitelisting} in the Catalyst serializer
+   * to force serializable types to be explicitly registered.
    * <pre>
    *   {@code
-   *   server.serializer().disableWhitelist();
+   *   server.serializer().enableWhitelist();
    *   }
    * </pre>
-   * When whitelisting is disabled, serializable types that are not explicitly {@link Serializer#register(Class) registered}
-   * with the serializer will be serialized with their fully qualified class name to be used during deserialization.
-   * However, while disabling whitelisting can improve usability, serializing class names can significantly impact the
-   * performance of serialization. Therefore, while it's an acceptable solution in development, it is recommended that
-   * users explicitly register serializable types for more efficient serialization in production.
+   * Whitelisting of serializable classes is recommended in insecure environments. The default disabled whitelisting
+   * presents security risks wherein arbitrary classes can be deserialized by malicious actors. See the {@link Serializer}
+   * documentation for more information.
    * <p>
    * <em>It's important to note that because the returned {@link Serializer} affects the on-disk binary representation
    * of commands and queries and other objects submitted to the cluster, users must take care to avoid directly changing

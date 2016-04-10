@@ -46,7 +46,6 @@ public class ClientSessionStateTest {
     assertEquals(state.getCommandResponse(), 0);
     assertEquals(state.getResponseIndex(), 0);
     assertEquals(state.getEventIndex(), 0);
-    assertEquals(state.getCompleteIndex(), 0);
   }
 
   /**
@@ -57,7 +56,6 @@ public class ClientSessionStateTest {
     assertEquals(state.setSessionId(1).getSessionId(), 1);
     assertEquals(state.getResponseIndex(), 1);
     assertEquals(state.getEventIndex(), 1);
-    assertEquals(state.getCompleteIndex(), 1);
     assertEquals(state.setState(Session.State.OPEN).getState(), Session.State.OPEN);
     assertEquals(state.setCommandRequest(2).getCommandRequest(), 2);
     assertEquals(state.nextCommandRequest(), 3);
@@ -66,8 +64,6 @@ public class ClientSessionStateTest {
     assertEquals(state.setResponseIndex(4).getResponseIndex(), 4);
     assertEquals(state.setResponseIndex(3).getResponseIndex(), 4);
     assertEquals(state.setEventIndex(5).getEventIndex(), 5);
-    assertEquals(state.setCompleteIndex(6).getCompleteIndex(), 6);
-    assertEquals(state.setCompleteIndex(5).getCompleteIndex(), 6);
   }
 
   /**

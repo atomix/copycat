@@ -20,7 +20,6 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.error.ApplicationException;
@@ -100,8 +99,8 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   /**
    * Initializes the execution of a task.
    */
-  void init(long index, Instant instant, boolean synchronous, Command.ConsistencyLevel consistency) {
-    context.update(index, instant, synchronous, consistency);
+  void init(long index, Instant instant, ServerStateMachineContext.Type type) {
+    context.update(index, instant, type);
   }
 
   /**
@@ -152,11 +151,11 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    * Commits the application of a command to the state machine.
    */
   @SuppressWarnings("unchecked")
-  CompletableFuture<Void> commit() {
+  void commit() {
     // Execute any tasks that were queue during execution of the command.
     if (!tasks.isEmpty()) {
       for (ServerTask task : tasks) {
-        context.update(context.index(), context.clock().instant(), false, Command.ConsistencyLevel.SEQUENTIAL);
+        context.update(context.index(), context.clock().instant(), ServerStateMachineContext.Type.COMMAND);
         try {
           task.future.complete(task.callback.get());
         } catch (Exception e) {
@@ -165,7 +164,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
       tasks.clear();
     }
-    return context.commit();
+    context.commit();
   }
 
   /**
@@ -181,7 +180,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       while (iterator.hasNext()) {
         ServerScheduledTask task = iterator.next();
         if (task.complete(timestamp)) {
-          context.update(index, Instant.ofEpochMilli(task.time), false, Command.ConsistencyLevel.SEQUENTIAL);
+          context.update(index, Instant.ofEpochMilli(task.time), ServerStateMachineContext.Type.COMMAND);
           task.execute();
           complete.add(task);
           iterator.remove();
@@ -209,7 +208,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   @Override
   public <T> CompletableFuture<T> execute(Supplier<T> callback) {
-    Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
+    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
     CompletableFuture<T> future = new CompletableFuture<>();
     tasks.add(new ServerTask(callback, future));
     return future;
@@ -217,14 +216,14 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   @Override
   public Scheduled schedule(Duration delay, Runnable callback) {
-    Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
+    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
     LOGGER.debug("Scheduled callback {} with delay {}", callback, delay);
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
-    Assert.state(context.consistency() != null, "callbacks can only be scheduled during command execution");
+    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
     LOGGER.debug("Scheduled repeating callback {} with initial delay {} and interval {}", callback, initialDelay, interval);
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }

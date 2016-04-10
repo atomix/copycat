@@ -40,7 +40,6 @@ final class ClientSessionState {
   private long commandResponse;
   private long responseIndex;
   private long eventIndex;
-  private long completeIndex;
   private final Set<Listener<Session.State>> changeListeners = new CopyOnWriteArraySet<>();
 
   ClientSessionState(UUID clientId) {
@@ -75,7 +74,6 @@ final class ClientSessionState {
     this.sessionId = sessionId;
     this.responseIndex = sessionId;
     this.eventIndex = sessionId;
-    this.completeIndex = sessionId;
     return this;
   }
 
@@ -219,26 +217,6 @@ final class ClientSessionState {
    */
   public long getEventIndex() {
     return eventIndex;
-  }
-
-  /**
-   * Sets the highest index for which an event has been processed in sequence.
-   *
-   * @param completeIndex The highest index for which an event has been processed in sequence.
-   * @return The client session state.
-   */
-  public ClientSessionState setCompleteIndex(long completeIndex) {
-    this.completeIndex = Math.max(this.completeIndex, completeIndex);
-    return this;
-  }
-
-  /**
-   * Returns the highest index for which an event has been processed in sequence.
-   *
-   * @return The highest index for which an event has been processed in sequence.
-   */
-  public long getCompleteIndex() {
-    return completeIndex;
   }
 
 }

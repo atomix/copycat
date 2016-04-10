@@ -30,9 +30,9 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.testng.Assert.*;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.*;
+import static org.testng.Assert.*;
 
 /**
  * Client session listener test.
@@ -59,7 +59,7 @@ public class ClientSessionListenerTest {
 
     state.setSessionId(1).setState(Session.State.OPEN);
 
-    ClientSessionListener listener = new ClientSessionListener(connection, state, context);
+    ClientSessionListener listener = new ClientSessionListener(connection, state, new ClientSequencer(state), context);
     verify(connection).handler(any(Class.class), captor.capture());
     handler = captor.getValue();
     return listener;
@@ -88,7 +88,6 @@ public class ClientSessionListenerTest {
     assertEquals(response.status(), Response.Status.OK);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
-    assertEquals(state.getCompleteIndex(), 10);
     assertTrue(received.get());
   }
 
@@ -115,7 +114,6 @@ public class ClientSessionListenerTest {
     assertEquals(response.status(), Response.Status.OK);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
-    assertEquals(state.getCompleteIndex(), 10);
     assertTrue(received.get());
 
     received.set(false);
@@ -129,7 +127,6 @@ public class ClientSessionListenerTest {
     assertEquals(response.status(), Response.Status.ERROR);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
-    assertEquals(state.getCompleteIndex(), 10);
     assertFalse(received.get());
   }
 

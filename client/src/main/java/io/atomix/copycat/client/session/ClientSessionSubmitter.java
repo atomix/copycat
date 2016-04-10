@@ -21,10 +21,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
-import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.RetryStrategy;
-import io.atomix.copycat.client.util.ClientSequencer;
 import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.QueryException;
@@ -35,6 +32,8 @@ import io.atomix.copycat.session.Session;
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
@@ -47,17 +46,19 @@ import java.util.function.Predicate;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class ClientSessionSubmitter {
+  private static final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
+  private static final Predicate<Throwable> EXCEPTION_PREDICATE = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
   private final Connection connection;
   private final ClientSessionState state;
+  private final ClientSequencer sequencer;
   private final ThreadContext context;
-  private final RetryStrategy strategy;
-  private final ClientSequencer sequencer = new ClientSequencer();
+  private final Map<Long, OperationAttempt> attempts = new HashMap<>();
 
-  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ThreadContext context, RetryStrategy retryStrategy) {
+  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
+    this.sequencer = Assert.notNull(sequencer, "sequencer");
     this.context = Assert.notNull(context, "context");
-    this.strategy = Assert.notNull(retryStrategy, "retryStrategy");
   }
 
   /**
@@ -89,7 +90,7 @@ final class ClientSessionSubmitter {
    * Submits a command request to the cluster.
    */
   private <T> void submitCommand(CommandRequest request, CompletableFuture<T> future) {
-    submit(new CommandAttempt<>(sequencer.nextSequence(), request, future));
+    submit(new CommandAttempt<>(sequencer.nextRequest(), request, future));
   }
 
   /**
@@ -109,30 +110,20 @@ final class ClientSessionSubmitter {
    * Submits a query to the cluster.
    */
   private <T> void submitQuery(Query<T> query, CompletableFuture<T> future) {
-    if (query.consistency() == Query.ConsistencyLevel.CAUSAL) {
-      QueryRequest request = QueryRequest.builder()
-        .withSession(state.getSessionId())
-        .withSequence(state.getCommandResponse())
-        .withIndex(state.getResponseIndex())
-        .withQuery(query)
-        .build();
-      submitQuery(request, future);
-    } else {
-      QueryRequest request = QueryRequest.builder()
-        .withSession(state.getSessionId())
-        .withSequence(state.getCommandRequest())
-        .withIndex(state.getResponseIndex())
-        .withQuery(query)
-        .build();
-      submitQuery(request, future);
-    }
+    QueryRequest request = QueryRequest.builder()
+      .withSession(state.getSessionId())
+      .withSequence(state.getCommandRequest())
+      .withIndex(state.getResponseIndex())
+      .withQuery(query)
+      .build();
+    submitQuery(request, future);
   }
 
   /**
    * Submits a query request to the cluster.
    */
   private <T> void submitQuery(QueryRequest request, CompletableFuture<T> future) {
-    submit(new QueryAttempt<>(sequencer.nextSequence(), request, future));
+    submit(new QueryAttempt<>(sequencer.nextRequest(), request, future));
   }
 
   /**
@@ -145,6 +136,7 @@ final class ClientSessionSubmitter {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
       state.getLogger().debug("{} - Sending {}", state.getSessionId(), attempt.request);
+      attempts.put(attempt.sequence, attempt);
       connection.<T, U>send(attempt.request).whenComplete(attempt);
     }
   }
@@ -155,13 +147,16 @@ final class ClientSessionSubmitter {
    * @return A completable future to be completed with a list of pending operations.
    */
   public CompletableFuture<Void> close() {
+    for (OperationAttempt attempt : attempts.values()) {
+      attempt.fail(new ClosedSessionException("session closed"));
+    }
     return CompletableFuture.completedFuture(null);
   }
 
   /**
    * Operation attempt.
    */
-  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse, V> implements RetryStrategy.Attempt, BiConsumer<U, Throwable> {
+  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse, V> implements BiConsumer<U, Throwable> {
     protected final long sequence;
     protected final int attempt;
     protected final T request;
@@ -172,35 +167,6 @@ final class ClientSessionSubmitter {
       this.attempt = attempt;
       this.request = request;
       this.future = future;
-    }
-
-    @Override
-    public int attempt() {
-      return attempt;
-    }
-
-    @Override
-    public Operation<?> operation() {
-      return request.operation();
-    }
-
-    @Override
-    public void accept(U response, Throwable error) {
-      Predicate<Throwable> retryableCheck = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
-      if (error == null) {
-        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
-        if (response.status() == Response.Status.OK) {
-          complete(response);
-        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
-          complete(response.error().createException());
-        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
-          strategy.attemptFailed(this, response.error().createException());
-        }
-      } else if (retryableCheck.test(error) || (error instanceof CompletionException && retryableCheck.test(error.getCause()))) {
-        strategy.attemptFailed(this, error);
-      } else {
-        fail(error);
-      }
     }
 
     /**
@@ -234,28 +200,41 @@ final class ClientSessionSubmitter {
     /**
      * Runs the given callback in proper sequence.
      *
+     * @param response The operation response.
      * @param callback The callback to run in sequence.
      */
-    protected final void sequence(Runnable callback) {
-      sequencer.sequence(sequence, callback);
+    protected final void sequence(OperationResponse response, Runnable callback) {
+      sequencer.sequenceResponse(sequence, response, callback);
     }
 
-    @Override
+    /**
+     * Fails the attempt.
+     */
     public void fail() {
       fail(defaultException());
     }
 
-    @Override
+    /**
+     * Fails the attempt with the given exception.
+     *
+     * @param t The exception with which to fail the attempt.
+     */
     public void fail(Throwable t) {
       complete(t);
     }
 
-    @Override
+    /**
+     * Immediately retries the attempt.
+     */
     public void retry() {
       context.executor().execute(() -> submit(next()));
     }
 
-    @Override
+    /**
+     * Retries the attempt after the given duration.
+     *
+     * @param after The duration after which to retry the attempt.
+     */
     public void retry(Duration after) {
       context.schedule(after, () -> submit(next()));
     }
@@ -265,6 +244,7 @@ final class ClientSessionSubmitter {
    * Command operation attempt.
    */
   private final class CommandAttempt<T> extends OperationAttempt<CommandRequest, CommandResponse, T> {
+
     public CommandAttempt(long sequence, CommandRequest request, CompletableFuture<T> future) {
       super(sequence, 1, request, future);
     }
@@ -284,6 +264,24 @@ final class ClientSessionSubmitter {
     }
 
     @Override
+    public void accept(CommandResponse response, Throwable error) {
+      if (error == null) {
+        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+        if (response.status() == Response.Status.OK) {
+          complete(response);
+        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
+          complete(response.error().createException());
+        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+          retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
+        }
+      } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
+        retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
+      } else {
+        fail(error);
+      }
+    }
+
+    @Override
     public void fail(Throwable t) {
       super.fail(t);
       CommandRequest request = CommandRequest.builder()
@@ -297,7 +295,7 @@ final class ClientSessionSubmitter {
     @Override
     @SuppressWarnings("unchecked")
     protected void complete(CommandResponse response) {
-      sequence(() -> {
+      sequence(response, () -> {
         state.setCommandResponse(request.sequence());
         state.setResponseIndex(response.index());
         future.complete((T) response.result());
@@ -306,7 +304,7 @@ final class ClientSessionSubmitter {
 
     @Override
     protected void complete(Throwable error) {
-      sequence(() -> future.completeExceptionally(error));
+      sequence(null, () -> future.completeExceptionally(error));
     }
   }
 
@@ -333,28 +331,26 @@ final class ClientSessionSubmitter {
     }
 
     @Override
+    public void accept(QueryResponse response, Throwable error) {
+      if (error == null) {
+        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+        if (response.status() == Response.Status.OK) {
+          complete(response);
+        } else {
+          complete(response.error().createException());
+        }
+      } else {
+        fail(error);
+      }
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     protected void complete(QueryResponse response) {
-      // If the query consistency level is CAUSAL, we can simply complete queries in sequential order.
-      if (request.query().consistency() == Query.ConsistencyLevel.CAUSAL) {
-        sequence(() -> {
-          state.setResponseIndex(response.index());
-          future.complete((T) response.result());
-        });
-      }
-      // If the query consistency level is strong, the query must be executed sequentially. In order to ensure responses
-      // are received in a sequential manner, we compare the response index number with the highest index for which
-      // we've received a response and resubmit queries with output resulting from stale (prior) versions.
-      else {
-        if (response.index() > 0 && response.index() < state.getResponseIndex()) {
-          retry();
-        } else {
-          sequence(() -> {
-            state.setResponseIndex(response.index());
-            future.complete((T) response.result());
-          });
-        }
-      }
+      sequence(response, () -> {
+        state.setResponseIndex(response.index());
+        future.complete((T) response.result());
+      });
     }
 
     @Override

@@ -19,15 +19,9 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategy;
-import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.KeepAliveRequest;
-import io.atomix.copycat.protocol.RegisterRequest;
-import io.atomix.copycat.protocol.UnregisterRequest;
-import io.atomix.copycat.protocol.KeepAliveResponse;
-import io.atomix.copycat.protocol.RegisterResponse;
-import io.atomix.copycat.protocol.Response;
-import io.atomix.copycat.protocol.UnregisterResponse;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.Session;
 
 import java.net.ConnectException;
@@ -116,7 +110,7 @@ final class ClientSessionManager {
     KeepAliveRequest request = KeepAliveRequest.builder()
       .withSession(sessionId)
       .withCommandSequence(state.getCommandResponse())
-      .withEventIndex(state.getCompleteIndex())
+      .withEventIndex(state.getEventIndex())
       .build();
 
     state.getLogger().debug("{} - Sending {}", sessionId, request);

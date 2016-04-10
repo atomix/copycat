@@ -26,7 +26,7 @@ public class GetQuery implements Query<Object> {
 
   @Override
   public ConsistencyLevel consistency() {
-    return ConsistencyLevel.BOUNDED_LINEARIZABLE;
+    return ConsistencyLevel.LINEARIZABLE_LEASE;
   }
 
 }

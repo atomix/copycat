@@ -21,7 +21,7 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
+import io.atomix.catalyst.util.concurrent.SingleThreadContext;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
@@ -71,8 +71,7 @@ import java.util.function.Consumer;
  * <p>
  * Sessions work to provide linearizable semantics for client {@link Command commands}. When a command is submitted to the cluster,
  * the command will be forwarded to the leader where it will be logged and replicated. Once the command is stored on a majority
- * of servers, the leader will apply it to its state machine and respond according to the command's {@link Command#consistency()}.
- * See the {@link Command.ConsistencyLevel} documentation for more info.
+ * of servers, the leader will apply it to its state machine and respond.
  * <p>
  * Sessions also allow {@link Query queries} (read-only requests) submitted by the client to optionally be executed on follower
  * nodes. When a query is submitted to the cluster, the query's {@link Query#consistency()} will be used to determine how the
@@ -104,6 +103,40 @@ import java.util.function.Consumer;
  * the client cannot communicate with the cluster and consistency guarantees <em>may</em> have been broken. While in this
  * state, the client's session from the perspective of servers may timeout, the {@link Session} events sent to the client
  * by the cluster may be lost.
+ * <h3>Session events</h3>
+ * Clients can receive arbitrary event notifications from the cluster by registering an event listener via
+ * {@link #onEvent(String, Consumer)}. When a command is applied to a state machine, the state machine may publish any number
+ * of events to any open session. Events will be sent to the client by the server to which the client is connected as dictated
+ * by the configured {@link ServerSelectionStrategy}. In the event a client is disconnected from a server, events will be
+ * retained in memory on all servers until the client reconnects to another server or its session expires. Once a client
+ * reconnects to a new server, the new server will resume sending session events to the client.
+ * <pre>
+ *   {@code
+ *   client.<ChangeEvent>onEvent("change", change -> {
+ *     System.out.println("value changed from " + change.oldValue() + " to " + change.newValue());
+ *   });
+ *   }
+ * </pre>
+ * <h3>Session consistency</h3>
+ * Sessions guarantee linearizability for all <em>commands</em> submitted by the client within the context of a session.
+ * This means when the client submits a command, the command is guaranteed to be applied to the replicated state machine
+ * between invocation and response. Furthermore, concurrent operations from a single client are guaranteed to be applied
+ * in FIFO order even when switching between writes to the leader and reads from followers. In the event that a session
+ * is expired by the cluster, linearizability guarantees are lost. It's possible for a command to be applied to the cluster
+ * without a successful response if the client's session expires.
+ * <p>
+ * Clients guarantee that all operations submitted to the cluster will be applied in sequential order and responses will
+ * be received by the client in sequential order. This means the {@link CompletableFuture}s returned when submitting
+ * operations through the client are guaranteed to be completed in the order in which they were created.
+ * <p>
+ * Sequential consistency is also guaranteed for {@link #onEvent(String, Consumer) events} received by a client, and events
+ * are sequenced with command and query responses. If a client submits a command that publishes an event and then immediately
+ * submits a concurrent query, the client will first receive the command response, then the event message, then the query
+ * response.
+ * <p>
+ * All events and responses are received in the client's event thread. Because all operation results are received on the same
+ * thread, it is critical that clients not block the event thread. If clients need to perform blocking actions on response to
+ * an event or response, do so on another thread.
  * <h3>Serialization</h3>
  * All {@link Command commands}, {@link Query queries}, and session {@link #onEvent(String, Consumer) events} must be
  * serializable by the {@link Serializer} associated with the client. Serializable types can be registered at any time.
@@ -162,7 +195,7 @@ public interface CopycatClient {
      * <p>
      * The {@code CONNECTED} state indicates that the client is healthy and operating normally. {@link Command commands}
      * and {@link Query queries} submitted and completed while the client is in this state are guaranteed to adhere to
-     * the respective {@link Command.ConsistencyLevel consistency}
+     * consistency guarantees.
      * {@link Query.ConsistencyLevel levels}.
      */
     CONNECTED,
@@ -351,7 +384,7 @@ public interface CopycatClient {
    * <p>
    * Note that all client submissions are guaranteed to be completed in the same order in which they were sent (program order)
    * and on the same thread. This does not, however, mean that they'll be applied to the server-side replicated state machine
-   * in that order. State machine order is dependent on the configured {@link Command.ConsistencyLevel}.
+   * in that order.
    *
    * @param command The command to submit.
    * @param <T> The command result type.
@@ -366,7 +399,7 @@ public interface CopycatClient {
    * <p>
    * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
    * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
-   * and {@link Query.ConsistencyLevel#BOUNDED_LINEARIZABLE} consistency levels, queries will be forwarded
+   * and {@link Query.ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
    * to the cluster leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
    * by applying queries to an internal server state machine.
    * <p>
@@ -522,11 +555,8 @@ public interface CopycatClient {
     private final Collection<Address> cluster;
     private Transport transport;
     private Serializer serializer;
-    private CatalystThreadFactory threadFactory;
-    private ThreadContext context;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
-    private RetryStrategy retryStrategy = RetryStrategies.FIBONACCI_BACKOFF;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
 
     private Builder(Collection<Address> cluster) {
@@ -561,29 +591,6 @@ public interface CopycatClient {
     }
 
     /**
-     * Sets the client thread factory.
-     *
-     * @param factory The client thread factory.
-     * @return The client builder.
-     */
-    public Builder withThreadFactory(CatalystThreadFactory factory) {
-      this.threadFactory = Assert.notNull(factory, "factory");
-      return this;
-    }
-
-    /**
-     * Sets the client thread context.
-     *
-     * @param context The client thread context.
-     * @return The client builder.
-     * @throws NullPointerException if the thread context is {@code null}
-     */
-    public Builder withThreadContext(ThreadContext context) {
-      this.context = Assert.notNull(context, "context");
-      return this;
-    }
-
-    /**
      * Sets the client connection strategy.
      *
      * @param connectionStrategy The client connection strategy.
@@ -603,17 +610,6 @@ public interface CopycatClient {
      */
     public Builder withServerSelectionStrategy(ServerSelectionStrategy serverSelectionStrategy) {
       this.serverSelectionStrategy = Assert.notNull(serverSelectionStrategy, "serverSelectionStrategy");
-      return this;
-    }
-
-    /**
-     * Sets the operation retry strategy.
-     *
-     * @param retryStrategy The operation retry strategy.
-     * @return The client builder.
-     */
-    public Builder withRetryStrategy(RetryStrategy retryStrategy) {
-      this.retryStrategy = Assert.notNull(retryStrategy, "retryStrategy");
       return this;
     }
 
@@ -643,30 +639,17 @@ public interface CopycatClient {
         }
       }
 
-      if (threadFactory == null) {
-        threadFactory = new CatalystThreadFactory("copycat-client-%d");
+      // If no serializer instance was provided, create one.
+      if (serializer == null) {
+        serializer = new Serializer();
       }
 
-      // If a thread context was provided, pass the context to the client.
-      if (context != null) {
-        context.serializer().resolve(new ClientRequestTypeResolver());
-        context.serializer().resolve(new ClientResponseTypeResolver());
-        context.serializer().resolve(new ProtocolSerialization());
+      // Add service loader types to the primary serializer.
+      serializer.resolve(new ClientRequestTypeResolver());
+      serializer.resolve(new ClientResponseTypeResolver());
+      serializer.resolve(new ProtocolSerialization());
 
-        return new DefaultCopycatClient(cluster, transport, context, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
-      } else {
-        // If no serializer instance was provided, create one.
-        if (serializer == null) {
-          serializer = new Serializer();
-        }
-
-        // Add service loader types to the primary serializer.
-        serializer.resolve(new ClientRequestTypeResolver());
-        serializer.resolve(new ClientResponseTypeResolver());
-        serializer.resolve(new ProtocolSerialization());
-
-        return new DefaultCopycatClient(cluster, transport, serializer, threadFactory, serverSelectionStrategy, connectionStrategy, retryStrategy, recoveryStrategy);
-      }
+      return new DefaultCopycatClient(cluster, transport, new SingleThreadContext("copycat-client-io-%d", serializer.clone()), new SingleThreadContext("copycat-client-event-%d", serializer.clone()), serverSelectionStrategy, connectionStrategy, recoveryStrategy);
     }
   }
 

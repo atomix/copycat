@@ -18,7 +18,6 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Listeners;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.error.UnknownSessionException;
@@ -27,11 +26,11 @@ import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.session.Event;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
 /**
@@ -42,11 +41,13 @@ import java.util.function.Consumer;
 final class ClientSessionListener {
   private final ClientSessionState state;
   private final ThreadContext context;
-  private final Map<String, Listeners<Object>> eventListeners = new ConcurrentHashMap<>();
+  private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
+  private final ClientSequencer sequencer;
 
-  public ClientSessionListener(Connection connection, ClientSessionState state, ThreadContext context) {
+  public ClientSessionListener(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
+    this.sequencer = Assert.notNull(sequencer, "sequencer");
     connection.handler(PublishRequest.class, this::handlePublish);
   }
 
@@ -63,8 +64,18 @@ final class ClientSessionListener {
    */
   @SuppressWarnings("unchecked")
   public <T> Listener<T> onEvent(String event, Consumer listener) {
-    return (Listener<T>) eventListeners.computeIfAbsent(Assert.notNull(event, "event"), e -> new Listeners<>())
-      .add(Assert.notNull(listener, "listener"));
+    Set<Consumer> listeners = eventListeners.computeIfAbsent(event, e -> new CopyOnWriteArraySet<>());
+    listeners.add(listener);
+    return new Listener<T>() {
+      @Override
+      public void accept(T event) {
+        listener.accept(event);
+      }
+      @Override
+      public void close() {
+        listeners.remove(listener);
+      }
+    };
   }
 
   /**
@@ -98,31 +109,21 @@ final class ClientSessionListener {
     // Store the event index. This will be used to verify that events are received in sequential order.
     state.setEventIndex(request.eventIndex());
 
-    // For each event in the events batch, call the appropriate event listener and create a CompletableFuture
-    // to be called once the event callback is complete. Futures will ensure that an event is not acknowledged
-    // until all event callbacks have completed.
-    List<CompletableFuture<Void>> futures = new ArrayList<>(request.events().size());
-    for (Event<?> event : request.events()) {
-      Listeners<Object> listeners = eventListeners.get(event.name());
-      if (listeners != null) {
-        futures.add(listeners.accept(event.message()));
+    sequencer.sequenceEvent(request, () -> {
+      for (Event<?> event : request.events()) {
+        Set<Consumer> listeners = eventListeners.get(event.name());
+        if (listeners != null) {
+          for (Consumer listener : listeners) {
+            listener.accept(event.message());
+          }
+        }
       }
-    }
+    });
 
-    // Wait for all event listeners to complete and then respond to the event message. This ensures that
-    // linearizable events are completed between their invocation and response. If the async queue is backed
-    // up and we don't wait for callbacks to complete, the cluster will believe an event to have been received
-    // and handled before it has indeed been received and handled.
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
-      .handleAsync((result, error) -> {
-        // Store the highest index for which event callbacks have completed.
-        state.setCompleteIndex(request.eventIndex());
-
-        return PublishResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withIndex(state.getCompleteIndex())
-          .build();
-      }, context.executor());
+    return CompletableFuture.completedFuture(PublishResponse.builder()
+      .withStatus(Response.Status.OK)
+      .withIndex(request.eventIndex())
+      .build());
   }
 
   /**

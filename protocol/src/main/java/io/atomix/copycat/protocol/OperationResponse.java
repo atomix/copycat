@@ -34,15 +34,25 @@ import java.util.Objects;
  */
 public abstract class OperationResponse extends SessionResponse {
   protected long index;
+  protected long eventIndex;
   protected Object result;
 
   /**
-   * Returns the query index.
+   * Returns the operation index.
    *
-   * @return The query index.
+   * @return The operation index.
    */
   public long index() {
     return index;
+  }
+
+  /**
+   * Returns the event index.
+   *
+   * @return The event index.
+   */
+  public long eventIndex() {
+    return eventIndex;
   }
 
   /**
@@ -58,6 +68,7 @@ public abstract class OperationResponse extends SessionResponse {
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
     index = buffer.readLong();
+    eventIndex = buffer.readLong();
     if (status == Status.OK) {
       error = null;
       result = serializer.readObject(buffer);
@@ -68,7 +79,9 @@ public abstract class OperationResponse extends SessionResponse {
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeByte(status.id()).writeLong(index);
+    buffer.writeByte(status.id());
+    buffer.writeLong(index);
+    buffer.writeLong(eventIndex);
     if (status == Status.OK) {
       serializer.writeObject(result, buffer);
     } else {
@@ -87,6 +100,7 @@ public abstract class OperationResponse extends SessionResponse {
       OperationResponse response = (OperationResponse) object;
       return response.status == status
         && response.index == index
+        && response.eventIndex == eventIndex
         && ((response.result == null && result == null)
         || response.result != null && result != null && response.result.equals(result));
     }
@@ -95,7 +109,7 @@ public abstract class OperationResponse extends SessionResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d, result=%s]", getClass().getSimpleName(), status, index, result);
+    return String.format("%s[status=%s, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, index, eventIndex, result);
   }
 
   /**
@@ -109,13 +123,26 @@ public abstract class OperationResponse extends SessionResponse {
     /**
      * Sets the response index.
      *
-     * @param index The request index.
+     * @param index The response index.
      * @return The response builder.
      * @throws IllegalArgumentException If the response index is not positive.
      */
     @SuppressWarnings("unchecked")
     public T withIndex(long index) {
       response.index = Assert.argNot(index, index < 0, "index must be positive");
+      return (T) this;
+    }
+
+    /**
+     * Sets the response index.
+     *
+     * @param eventIndex The response event index.
+     * @return The response builder.
+     * @throws IllegalArgumentException If the response index is not positive.
+     */
+    @SuppressWarnings("unchecked")
+    public T withEventIndex(long eventIndex) {
+      response.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex must be positive");
       return (T) this;
     }
 

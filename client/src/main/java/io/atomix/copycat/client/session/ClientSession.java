@@ -23,7 +23,6 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategy;
-import io.atomix.copycat.client.RetryStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.session.Session;
@@ -44,8 +43,7 @@ import java.util.function.Consumer;
  * <p>
  * Sessions are responsible for sequencing concurrent operations to ensure they're applied to the system state
  * in the order in which they were submitted by the client. To do so, the session coordinates with its server-side
- * counterpart using unique per-operation sequence numbers. The session relies upon the client's various configured
- * {@link io.atomix.copycat.client.RetryStrategies strategies} to ensure fault-tolerance of state machine operations.
+ * counterpart using unique per-operation sequence numbers.
  * <p>
  * In the event that the client session expires, clients are responsible for opening a new session by creating and
  * opening a new session object.
@@ -54,27 +52,26 @@ import java.util.function.Consumer;
  */
 public class ClientSession implements Session {
   private final ClientSessionState state;
-  private final ThreadContext context;
   private final ClientConnection connection;
   private final ClientSessionManager manager;
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(UUID.randomUUID(), client, selector, context, connectionStrategy, retryStrategy);
+  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
+    this(UUID.randomUUID(), client, selector, context, connectionStrategy);
   }
 
-  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy, retryStrategy);
+  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
+    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy);
   }
 
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, RetryStrategy retryStrategy) {
+  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
-    this.context = Assert.notNull(context, "context");
     this.manager = new ClientSessionManager(connection, state, context, connectionStrategy);
-    this.listener = new ClientSessionListener(connection, state, context);
-    this.submitter = new ClientSessionSubmitter(connection, state, context, retryStrategy);
+    ClientSequencer sequencer = new ClientSequencer(state);
+    this.listener = new ClientSessionListener(connection, state, sequencer, context);
+    this.submitter = new ClientSessionSubmitter(connection, state, sequencer, context);
   }
 
   @Override
@@ -183,20 +180,10 @@ public class ClientSession implements Session {
    * @return A completable future to be completed once the session is closed.
    */
   public CompletableFuture<Void> close() {
-    ThreadContext context = ThreadContext.currentContext();
-    if (context != null) {
-      return submitter.close()
-        .thenCompose(v -> listener.close())
-        .thenCompose(v -> manager.close())
-        .thenCompose(v -> connection.close())
-        .whenCompleteAsync((result, error) -> this.context.close(), context.executor());
-    } else {
-      return submitter.close()
-        .thenCompose(v -> listener.close())
-        .thenCompose(v -> manager.close())
-        .thenCompose(v -> connection.close())
-        .whenCompleteAsync((result, error) -> this.context.close());
-    }
+    return submitter.close()
+      .thenCompose(v -> listener.close())
+      .thenCompose(v -> manager.close())
+      .thenCompose(v -> connection.close());
   }
 
   /**
@@ -205,27 +192,17 @@ public class ClientSession implements Session {
    * @return A completable future to be completed once the session has been killed.
    */
   public CompletableFuture<Void> kill() {
-    ThreadContext context = ThreadContext.currentContext();
-    if (context != null) {
-      return submitter.close()
-        .thenCompose(v -> listener.close())
-        .thenCompose(v -> manager.kill())
-        .thenCompose(v -> connection.close())
-        .whenCompleteAsync((result, error) -> this.context.close(), context.executor());
-    } else {
-      return submitter.close()
-        .thenCompose(v -> listener.close())
-        .thenCompose(v -> manager.kill())
-        .thenCompose(v -> connection.close())
-        .whenCompleteAsync((result, error) -> this.context.close());
-    }
+    return submitter.close()
+      .thenCompose(v -> listener.close())
+      .thenCompose(v -> manager.kill())
+      .thenCompose(v -> connection.close());
   }
 
   @Override
   public int hashCode() {
     int hashCode = 31;
     long id = id();
-    hashCode = 37 * hashCode + (int)(id ^ (id >>> 32));
+    hashCode = 37 * hashCode + (int) (id ^ (id >>> 32));
     return hashCode;
   }
 
