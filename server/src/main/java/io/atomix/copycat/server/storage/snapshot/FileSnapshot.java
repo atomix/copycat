@@ -56,7 +56,7 @@ final class FileSnapshot extends Snapshot {
       .withTimestamp(file.timestamp())
       .build();
 
-    Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES, store.storage.maxSnapshotSize());
+    Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES);
     descriptor.copyTo(buffer);
 
     int length = buffer.position(SnapshotDescriptor.BYTES).readInt();
@@ -73,7 +73,7 @@ final class FileSnapshot extends Snapshot {
   @Override
   public synchronized SnapshotReader reader() {
     Assert.state(file.file().exists(), "missing snapshot file: %s", file.file());
-    Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES, store.storage.maxSnapshotSize());
+    Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES);
     SnapshotDescriptor descriptor = new SnapshotDescriptor(buffer);
     int length = buffer.position(SnapshotDescriptor.BYTES).readInt();
     return openReader(new SnapshotReader(buffer.mark().limit(SnapshotDescriptor.BYTES + Integer.BYTES + length), this, store.serializer()), descriptor);
@@ -81,7 +81,7 @@ final class FileSnapshot extends Snapshot {
 
   @Override
   public Snapshot complete() {
-    Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES, store.storage.maxSnapshotSize());
+    Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES);
     try (SnapshotDescriptor descriptor = new SnapshotDescriptor(buffer)) {
       Assert.stateNot(descriptor.locked(), "cannot complete locked snapshot descriptor");
       descriptor.lock();
