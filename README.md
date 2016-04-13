@@ -9,21 +9,21 @@
 Copycat is a feature complete, fully asynchronous implementation of the [Raft consensus algorithm][Raft] in Java 8
 built for [Atomix][Atomix] and designed for use in any project. The implementation provides a fully featured [client][clients] and
 [server][servers] to operate on [replicated state machines][state machines]. The implementation includes:
-* [Pre-vote election protocol](http://atomix.io/copycat/docs/internals/#preventing-disruptions-due-to-leader-changes) (§[4.2.3][dissertation])
-* [Session-based linearizable writes](http://atomix.io/copycat/docs/internals/#client-commands) (§[6.3][dissertation])
-* [Lease-based fast linearizable reads from leaders](http://atomix.io/copycat/docs/internals/#client-queries) (§[6.4.1][dissertation])
-* [Fast sequential reads from followers](http://atomix.io/copycat/docs/internals/#processing-queries-on-followers) (§[6.4.1][dissertation])
-* [FIFO consistency for concurrent/asynchronous operations](http://atomix.io/copycat/docs/internals/#preserving-program-order) (§[11.1.2][dissertation])
-* [Session-based sequential/linearizable state machine events](http://atomix.io/copycat/docs/internals/#session-events) (§[6.3][dissertation])
-* [Membership changes](http://atomix.io/copycat/docs/internals/#membership-changes) (§[4.3][dissertation])
-* [Asynchronous gossip protocol](http://atomix.io/copycat/docs/internals/#passive-members)
-* [Incremental log compaction](http://atomix.io/copycat/docs/internals/#log-compaction-algorithm) (§[5.3][dissertation])
-* [Snapshots](http://atomix.io/copycat/docs/internals/#snapshots-via-log-compaction) (§[5.1][dissertation])
+* [Pre-vote election protocol](http://atomix.io/copycat/docs/client-interaction/#preventing-disruptions-due-to-leader-changes) (§[4.2.3][dissertation])
+* [Session-based linearizable writes](http://atomix.io/copycat/docs/client-interaction/#linearizable-semantics) (§[6.3][dissertation])
+* [Lease-based fast linearizable reads from leaders](http://atomix.io/copycat/docs/client-interaction/#client-queries) (§[6.4.1][dissertation])
+* [Fast sequential reads from followers](http://atomix.io/copycat/docs/client-interaction/#processing-queries-on-followers) (§[6.4.1][dissertation])
+* [FIFO consistency for concurrent/asynchronous operations](http://atomix.io/copycat/docs/client-interaction/#preserving-program-order) (§[11.1.2][dissertation])
+* [Session-based state machine events](http://atomix.io/copycat/docs/session-events/) (§[6.3][dissertation])
+* [Membership changes](http://atomix.io/copycat/docs/membership/) (§[4.3][dissertation])
+* [Asynchronous gossip protocol](http://atomix.io/copycat/docs/membership/#passive-members-)
+* [Incremental log compaction](http://atomix.io/copycat/docs/log-compaction/#log-compaction-algorithm) (§[5.3][dissertation])
+* [Snapshots](http://atomix.io/copycat/docs/log-compaction/#snapshots-via-incremental-compaction) (§[5.1][dissertation])
 
 Additionally, this implementation has undergone extensive [Jepsen testing](http://github.com/atomix/atomix-jepsen)
 to verify it maintains linearizability in a number of different failure scenarios.
 
-*For more information on the Raft implementation itself, see [Copycat internals](http://atomix.io/copycat/docs/internals/)*
+*For more information on the Raft implementation itself, see [Copycat architecture](http://atomix.io/copycat/docs/architecture-introduction/)*
 
 #### [Website][Website] • [Javadoc][Javadoc] • [Atomix][Atomix] • [Jepsen Tests](https://github.com/atomix/atomix-jepsen) • [Google Group][Google group]
 
