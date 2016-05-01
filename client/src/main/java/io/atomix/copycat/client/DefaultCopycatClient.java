@@ -198,7 +198,7 @@ public class DefaultCopycatClient implements CopycatClient {
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
 
-    BlockingFuture<T> future = new BlockingFuture<>(eventContext);
+    BlockingFuture<T> future = new BlockingFuture<>();
     session.submit(command).whenComplete((result, error) -> {
       if (eventContext.isBlocked()) {
         future.accept(result, error);
@@ -215,7 +215,7 @@ public class DefaultCopycatClient implements CopycatClient {
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
 
-    BlockingFuture<T> future = new BlockingFuture<>(eventContext);
+    BlockingFuture<T> future = new BlockingFuture<>();
     session.submit(query).whenComplete((result, error) -> {
       if (eventContext.isBlocked()) {
         future.accept(result, error);
