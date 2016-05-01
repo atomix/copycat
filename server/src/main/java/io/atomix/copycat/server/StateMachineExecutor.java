@@ -77,6 +77,19 @@ public interface StateMachineExecutor extends ThreadContext {
    */
   StateMachineContext context();
 
+  @Override
+  default boolean isBlocked() {
+    return false;
+  }
+
+  @Override
+  default void block() {
+  }
+
+  @Override
+  default void unblock() {
+  }
+
   /**
    * Registers a void operation callback.
    * <p>
