@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.util.concurrent.NonBlockingFuture;
 import io.atomix.catalyst.util.concurrent.Scheduled;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.NoOpCommand;
@@ -209,7 +210,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   @Override
   public <T> CompletableFuture<T> execute(Supplier<T> callback) {
     Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
-    CompletableFuture<T> future = new CompletableFuture<>();
+    CompletableFuture<T> future = new NonBlockingFuture<>();
     tasks.add(new ServerTask(callback, future));
     return future;
   }

@@ -20,10 +20,10 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.util.concurrent.BlockingFuture;
 import io.atomix.catalyst.util.concurrent.Futures;
 import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.client.util.AddressSelector;
@@ -35,7 +35,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
 /**
@@ -199,20 +200,10 @@ public class DefaultCopycatClient implements CopycatClient {
 
     BlockingFuture<T> future = new BlockingFuture<>();
     session.submit(command).whenComplete((result, error) -> {
-      if (future.blocked) {
-        if (error == null) {
-          future.complete(result);
-        } else {
-          future.completeExceptionally(error);
-        }
+      if (eventContext.isBlocked()) {
+        future.accept(result, error);
       } else {
-        eventContext.executor().execute(() -> {
-          if (error == null) {
-            future.complete(result);
-          } else {
-            future.completeExceptionally(error);
-          }
-        });
+        eventContext.executor().execute(() -> future.accept(result, error));
       }
     });
     return future;
@@ -226,20 +217,10 @@ public class DefaultCopycatClient implements CopycatClient {
 
     BlockingFuture<T> future = new BlockingFuture<>();
     session.submit(query).whenComplete((result, error) -> {
-      if (future.blocked) {
-        if (error == null) {
-          future.complete(result);
-        } else {
-          future.completeExceptionally(error);
-        }
+      if (eventContext.isBlocked()) {
+        future.accept(result, error);
       } else {
-        eventContext.executor().execute(() -> {
-          if (error == null) {
-            future.complete(result);
-          } else {
-            future.completeExceptionally(error);
-          }
-        });
+        eventContext.executor().execute(() -> future.accept(result, error));
       }
     });
     return future;
@@ -344,17 +325,6 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   /**
-   * A completable future related to a single operation.
-   */
-  private static final class OperationFuture<T> extends CompletableFuture<T> {
-    private final Operation<T> operation;
-
-    private OperationFuture(Operation<T> operation) {
-      this.operation = operation;
-    }
-  }
-
-  /**
    * State change listener.
    */
   private final class StateChangeListener implements Listener<State> {
@@ -399,7 +369,11 @@ public class DefaultCopycatClient implements CopycatClient {
 
     @Override
     public void accept(T message) {
-      eventContext.executor().execute(() -> callback.accept(message));
+      if (eventContext.isBlocked()) {
+        callback.accept(message);
+      } else {
+        eventContext.executor().execute(() -> callback.accept(message));
+      }
     }
 
     @Override
@@ -408,34 +382,4 @@ public class DefaultCopycatClient implements CopycatClient {
       eventListeners.remove(this);
     }
   }
-
-  /**
-   * Future that sets a flag when blocked.
-   */
-  private static class BlockingFuture<T> extends CompletableFuture<T> {
-    private volatile boolean blocked;
-
-    @Override
-    public T get() throws InterruptedException, ExecutionException {
-      blocked = true;
-      return super.get();
-    }
-
-    @Override
-    public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-      blocked = true;
-      try {
-        return super.get(timeout, unit);
-      } finally {
-        blocked = false;
-      }
-    }
-
-    @Override
-    public T join() {
-      blocked = true;
-      return super.join();
-    }
-  }
-
 }
