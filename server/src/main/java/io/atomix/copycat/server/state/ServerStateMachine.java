@@ -269,7 +269,6 @@ final class ServerStateMachine implements AutoCloseable {
       for (long i = lastApplied + 1; i <= lastIndex; i++) {
         Entry entry = log.get(i);
         if (entry != null) {
-          LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
           apply(entry).whenComplete((result, error) -> entry.release());
         }
         setLastApplied(i);
