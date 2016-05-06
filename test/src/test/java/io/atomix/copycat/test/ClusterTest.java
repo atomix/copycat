@@ -46,6 +46,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -139,7 +142,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client = createClient();
     submit(client, 0, 1000);
     await(30000);
-    servers.get(0).shutdown().join();
+    servers.get(0).shutdown().get(10, TimeUnit.SECONDS);
     CopycatServer server = createServer(members.get(0));
     server.join(members.stream().map(Member::serverAddress).collect(Collectors.toList())).thenRun(this::resume);
     await(30000);
@@ -788,7 +791,11 @@ public class ClusterTest extends ConcurrentTestCase {
 
     client.onEvent("test", event -> {
       threadAssertEquals(index.get(), event);
-      threadAssertTrue(index.get() <= client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).join());
+      try {
+        threadAssertTrue(index.get() <= client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).get(10, TimeUnit.SECONDS));
+      } catch (InterruptedException | TimeoutException | ExecutionException e) {
+        threadFail(e);
+      }
       resume();
     });
 
@@ -866,7 +873,7 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
-    leader.shutdown().join();
+    leader.shutdown().get(10, TimeUnit.SECONDS);
 
     for (int i = 0 ; i < 10; i++) {
       client.submit(new TestEvent(true)).thenAccept(result -> {
@@ -919,7 +926,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     CopycatServer follower = servers.stream().filter(s -> s.state() == CopycatServer.State.FOLLOWER).findFirst().get();
-    follower.shutdown().join();
+    follower.shutdown().get(10, TimeUnit.SECONDS);
 
     await(30000, 2);
 
@@ -967,7 +974,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
-    leader.shutdown().join();
+    leader.shutdown().get(10, TimeUnit.SECONDS);
 
     await(30000, 2);
 
@@ -1183,7 +1190,7 @@ public class ClusterTest extends ConcurrentTestCase {
   public void clearTests() throws Exception {
     clients.forEach(c -> {
       try {
-        c.close().join();
+        c.close().get(10, TimeUnit.SECONDS);
       } catch (Exception e) {
       }
     });
@@ -1191,7 +1198,7 @@ public class ClusterTest extends ConcurrentTestCase {
     servers.forEach(s -> {
       try {
         if (s.isRunning()) {
-          s.shutdown().join();
+          s.shutdown().get(10, TimeUnit.SECONDS);
         }
       } catch (Exception e) {
       }
