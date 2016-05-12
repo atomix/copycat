@@ -26,7 +26,7 @@ import io.atomix.catalyst.util.Assert;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class OrderedOffsetIndex implements OffsetIndex {
+public class SearchableOffsetIndex implements OffsetIndex {
   private static final long MAX_POSITION = (long) Math.pow(2, 32) - 1;
   private static final int OFFSET_SIZE = 8;
   private static final int POSITION_SIZE = 4;
@@ -41,7 +41,7 @@ public class OrderedOffsetIndex implements OffsetIndex {
   /**
    * @throws NullPointerException if {@code buffer} is null
    */
-  public OrderedOffsetIndex(OffsetIndex index) {
+  public SearchableOffsetIndex(OffsetIndex index) {
     this.buffer = HeapBuffer.allocate();
     for (long i = 0; i < index.size(); i++) {
       this.buffer.writeLong(i).writeUnsignedInt(index.position(i));

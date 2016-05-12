@@ -37,7 +37,7 @@ public class DelegatingOffsetIndex implements OffsetIndex {
   @Override
   public boolean index(long offset, long position) {
     if (!index.index(offset, position)) {
-      index = new OrderedOffsetIndex(index);
+      index = new SearchableOffsetIndex(index);
       return index.index(offset, position);
     }
     return true;
