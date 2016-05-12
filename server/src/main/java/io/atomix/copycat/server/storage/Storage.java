@@ -61,6 +61,7 @@ public class Storage {
   private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
+  private static final int DEFAULT_ENTRY_BUFFER_SIZE = 1024;
   private static final boolean DEFAULT_RETAIN_STALE_SNAPSHOTS = false;
   private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
   private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
@@ -71,6 +72,7 @@ public class Storage {
   private File directory = new File(DEFAULT_DIRECTORY);
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
+  private int entryBufferSize = DEFAULT_ENTRY_BUFFER_SIZE;
   private boolean retainStaleSnapshots = DEFAULT_RETAIN_STALE_SNAPSHOTS;
   private int compactionThreads = DEFAULT_COMPACTION_THREADS;
   private Duration minorCompactionInterval = DEFAULT_MINOR_COMPACTION_INTERVAL;
@@ -159,6 +161,18 @@ public class Storage {
    */
   public int maxEntriesPerSegment() {
     return maxEntriesPerSegment;
+  }
+
+  /**
+   * Returns the entry buffer size.
+   * <p>
+   * The entry buffer size dictates the number of entries that will be held in memory for read operations
+   * at the tail of the log.
+   *
+   * @return The entry buffer size.
+   */
+  public int entryBufferSize() {
+    return entryBufferSize;
   }
 
   /**
@@ -413,6 +427,22 @@ public class Storage {
       Assert.argNot(maxEntriesPerSegment > DEFAULT_MAX_ENTRIES_PER_SEGMENT,
         "max entries per segment cannot be greater than " + DEFAULT_MAX_ENTRIES_PER_SEGMENT);
       storage.maxEntriesPerSegment = maxEntriesPerSegment;
+      return this;
+    }
+
+    /**
+     * Sets the entry buffer size.
+     * <p>
+     * The entry buffer size dictates the number of entries to hold in memory at the tail of the log. Increasing
+     * the buffer size increases the number of entries that will be held in memory and thus implies greater memory
+     * consumption, but server performance may be improved due to reduced disk access.
+     *
+     * @param entryBufferSize The entry buffer size.
+     * @return The storage builder.
+     * @throws IllegalArgumentException if the buffer size is not positive
+     */
+    public Builder withEntryBufferSize(int entryBufferSize) {
+      storage.entryBufferSize = Assert.arg(entryBufferSize, entryBufferSize > 0, "entryBufferSize must be positive");
       return this;
     }
 

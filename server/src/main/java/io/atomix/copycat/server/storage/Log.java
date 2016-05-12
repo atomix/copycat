@@ -22,6 +22,7 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.TypedEntryPool;
+import io.atomix.copycat.server.storage.util.EntryBuffer;
 
 import java.util.concurrent.Executors;
 
@@ -116,6 +117,7 @@ import java.util.concurrent.Executors;
 public class Log implements AutoCloseable {
   final SegmentManager segments;
   private final Compactor compactor;
+  private final EntryBuffer entryBuffer;
   private final TypedEntryPool entryPool = new TypedEntryPool();
   private boolean open = true;
 
@@ -125,6 +127,7 @@ public class Log implements AutoCloseable {
   protected Log(String name, Storage storage, Serializer serializer) {
     this.segments = new SegmentManager(name, storage, serializer);
     this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-compactor-%d")));
+    this.entryBuffer = new EntryBuffer(storage.entryBufferSize());
   }
 
   /**
@@ -286,7 +289,9 @@ public class Log implements AutoCloseable {
     checkRoll();
 
     // Append the entry to the appropriate segment.
-    return segments.currentSegment().append(entry);
+    long index = segments.currentSegment().append(entry);
+    entryBuffer.append(entry);
+    return index;
   }
 
   /**
@@ -342,7 +347,10 @@ public class Log implements AutoCloseable {
 
     // Get the entry from the segment. If the entry hasn't already been compacted from the segment,
     // it will be non-null.
-    T entry = segment.get(index);
+    T entry = entryBuffer.get(index);
+    if (entry == null) {
+      entry = segment.get(index);
+    }
 
     // For non-null entries, we determine whether the entry should be exposed to the Raft algorithm
     // based on the type of entry and whether it has been released.
@@ -512,6 +520,7 @@ public class Log implements AutoCloseable {
         segments.removeSegment(segment);
       }
     }
+    entryBuffer.clear();
     return this;
   }
 
