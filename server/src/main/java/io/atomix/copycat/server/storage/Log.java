@@ -114,6 +114,7 @@ import java.util.concurrent.Executors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class Log implements AutoCloseable {
+  private final Storage storage;
   final SegmentManager segments;
   private final Compactor compactor;
   private final TypedEntryPool entryPool = new TypedEntryPool();
@@ -123,6 +124,7 @@ public class Log implements AutoCloseable {
    * @throws NullPointerException if {@code name} or {@code storage} is null
    */
   protected Log(String name, Storage storage, Serializer serializer) {
+    this.storage = Assert.notNull(storage, "storage");
     this.segments = new SegmentManager(name, storage, serializer);
     this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads(), new CatalystThreadFactory("copycat-compactor-%d")));
   }
@@ -452,6 +454,9 @@ public class Log implements AutoCloseable {
     if (index > 0) {
       assertValidIndex(index);
       segments.commitIndex(index);
+      if (storage.flushOnCommit()) {
+        segments.currentSegment().flush();
+      }
     }
     return this;
   }

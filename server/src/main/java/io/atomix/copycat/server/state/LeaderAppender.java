@@ -323,7 +323,6 @@ final class LeaderAppender extends AbstractAppender {
     // the index of the leader's no-op entry. Update the commit index and trigger commit futures.
     long previousCommitIndex = context.getCommitIndex();
     if (commitIndex > 0 && commitIndex > previousCommitIndex && (leaderIndex > 0 && commitIndex >= leaderIndex)) {
-      context.getLog().flush();
       context.setCommitIndex(commitIndex);
       completeCommits(previousCommitIndex, commitIndex);
     }
