@@ -19,7 +19,7 @@ import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.util.OffsetIndex;
+import io.atomix.copycat.server.storage.index.OffsetIndex;
 import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import io.atomix.copycat.server.storage.util.TermIndex;
 

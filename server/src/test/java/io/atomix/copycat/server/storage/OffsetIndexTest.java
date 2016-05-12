@@ -16,7 +16,8 @@
 package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.copycat.server.storage.util.OffsetIndex;
+import io.atomix.copycat.server.storage.index.DelegatingOffsetIndex;
+import io.atomix.copycat.server.storage.index.OffsetIndex;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.*;
@@ -33,7 +34,7 @@ public class OffsetIndexTest {
    * Tests indexing an offset and checking whether the index contains the offset.
    */
   public void testIndexContainsCommitted() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     assertFalse(index.contains(10));
     index.index(10, 1234);
     assertTrue(index.contains(10));
@@ -45,7 +46,7 @@ public class OffsetIndexTest {
    * Tests indexing an offset and checking whether the index contains the offset.
    */
   public void testIndexContainsUncommitted() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     assertFalse(index.contains(1));
     index.index(0, 1234);
     index.index(1, 2345);
@@ -58,7 +59,7 @@ public class OffsetIndexTest {
    * Tests that the position cache works properly.
    */
   public void testPositionCache() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(2, 0);
     index.index(3, 40);
     index.index(4, 80);
@@ -71,7 +72,7 @@ public class OffsetIndexTest {
    * Tests reading the position and length of an offset.
    */
   public void testIndexPositionAndLength() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(1, 0);
     assertEquals(index.position(1), 0);
     assertEquals(index.position(10), -1);
@@ -89,7 +90,7 @@ public class OffsetIndexTest {
    * Tests truncating entries.
    */
   public void testTruncateMiddle() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(0, 0);
     index.index(1, 10);
     index.index(2, 20);
@@ -102,7 +103,7 @@ public class OffsetIndexTest {
    * Tests truncating entries.
    */
   public void testTruncateLast() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(0, 0);
     index.index(1, 10);
     index.index(2, 20);
@@ -115,7 +116,7 @@ public class OffsetIndexTest {
    * Tests truncating missing entries.
    */
   public void testTruncateMissing() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(0, 0);
     index.index(1, 10);
     index.index(3, 30);
@@ -127,7 +128,7 @@ public class OffsetIndexTest {
    * Tests truncating skipped entries.
    */
   public void testTruncateSkipped() {
-    OffsetIndex index = new OffsetIndex(HeapBuffer.allocate(1024 * 8));
+    OffsetIndex index = new DelegatingOffsetIndex(HeapBuffer.allocate(1024 * 8));
     index.index(0, 0);
     index.index(1, 10);
     index.index(3, 30);

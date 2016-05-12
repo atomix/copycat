@@ -21,7 +21,8 @@ import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.buffer.MappedBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.server.storage.util.OffsetIndex;
+import io.atomix.copycat.server.storage.index.DelegatingOffsetIndex;
+import io.atomix.copycat.server.storage.index.OffsetIndex;
 import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -393,7 +394,7 @@ public class SegmentManager implements AutoCloseable {
    * Creates an in memory segment index.
    */
   private OffsetIndex createIndex(SegmentDescriptor descriptor) {
-    return new OffsetIndex(HeapBuffer.allocate(Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxEntries()), OffsetIndex.size(descriptor.maxEntries())));
+    return new DelegatingOffsetIndex(HeapBuffer.allocate(Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxEntries()), OffsetIndex.size(descriptor.maxEntries())));
   }
 
   /**
