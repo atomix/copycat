@@ -62,6 +62,7 @@ public class Storage {
   private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
   private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
   private static final int DEFAULT_ENTRY_BUFFER_SIZE = 1024;
+  private static final boolean DEFAULT_FLUSH_ON_COMMIT = false;
   private static final boolean DEFAULT_RETAIN_STALE_SNAPSHOTS = false;
   private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
   private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
@@ -73,6 +74,7 @@ public class Storage {
   private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
   private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
   private int entryBufferSize = DEFAULT_ENTRY_BUFFER_SIZE;
+  private boolean flushOnCommit = DEFAULT_FLUSH_ON_COMMIT;
   private boolean retainStaleSnapshots = DEFAULT_RETAIN_STALE_SNAPSHOTS;
   private int compactionThreads = DEFAULT_COMPACTION_THREADS;
   private Duration minorCompactionInterval = DEFAULT_MINOR_COMPACTION_INTERVAL;
@@ -173,6 +175,16 @@ public class Storage {
    */
   public int entryBufferSize() {
     return entryBufferSize;
+  }
+
+  /**
+   *
+   * Returns whether to flush buffers to disk when entries are committed.
+   *
+   * @return Whether to flush buffers to disk when entries are committed.
+   */
+  public boolean flushOnCommit() {
+    return flushOnCommit;
   }
 
   /**
@@ -447,7 +459,35 @@ public class Storage {
     }
 
     /**
-     * Sets whether to retain stale snapshots on disk, returning the builder for method chaining.
+     * Enables flushing buffers to disk when entries are committed to a segment, returning the builder
+     * for method chaining.
+     * <p>
+     * When flush-on-commit is enabled, log entry buffers will be automatically flushed to disk each time
+     * an entry is committed in a given segment.
+     *
+     * @return The storage builder.
+     */
+    public Builder withFlushOnCommit() {
+      return withFlushOnCommit(true);
+    }
+
+    /**
+     * Sets whether to flush buffers to disk when entries are committed to a segment, returning the builder
+     * for method chaining.
+     * <p>
+     * When flush-on-commit is enabled, log entry buffers will be automatically flushed to disk each time
+     * an entry is committed in a given segment.
+     *
+     * @param flushOnCommit Whether to flush buffers to disk when entries are committed to a segment.
+     * @return The storage builder.
+     */
+    public Builder withFlushOnCommit(boolean flushOnCommit) {
+      storage.flushOnCommit = flushOnCommit;
+      return this;
+    }
+
+    /**
+     * Enables retaining stale snapshots on disk, returning the builder for method chaining.
      * <p>
      * As the system state progresses, periodic snapshots of the state machine's state are taken.
      * Once a new snapshot of the state machine is taken, all preceding snapshots no longer contribute
