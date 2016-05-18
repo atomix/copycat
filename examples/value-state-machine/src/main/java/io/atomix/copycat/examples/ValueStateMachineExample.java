@@ -25,7 +25,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Value state machine example.
+ * Value state machine example. Expects at least 2 arguments:
+ * 
+ * <ul>
+ * <li>path - the sub-directory to store log files in</li>
+ * <li>host:port pairs - the host address and port of cluster members</li>
+ * </ul>
+ * <p>Example cluster arguments: <pre>logs 10.0.1.10:5000 10.0.1.11:5001 10.0.1.12:5002</pre>
+ * <p>Example single node arguments: <pre>logs localhost:5000</pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */

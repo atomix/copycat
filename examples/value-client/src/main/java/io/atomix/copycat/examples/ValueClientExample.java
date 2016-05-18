@@ -30,7 +30,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Value client example.
+ * Value client example. Expects at least 1 argument:
+ * 
+ * <ul>
+ * <li>host:port pairs - the host address and port of cluster members</li>
+ * </ul>
+ * <p>Example cluster arguments: <pre>10.0.1.10:5000 10.0.1.11:5001 10.0.1.12:5002</pre>
+ * <p>Example single node arguments: <pre>localhost:5000</pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -41,7 +47,7 @@ public class ValueClientExample {
    */
   public static void main(String[] args) throws Exception {
     if (args.length < 1)
-      throw new IllegalArgumentException("must supply a path and set of host:port tuples");
+      throw new IllegalArgumentException("must supply a set of host:port tuples");
 
     // Build a list of all member addresses to which to connect.
     List<Address> members = new ArrayList<>();
