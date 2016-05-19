@@ -138,6 +138,7 @@ final class ClientSessionSubmitter {
       state.getLogger().debug("{} - Sending {}", state.getSessionId(), attempt.request);
       attempts.put(attempt.sequence, attempt);
       connection.<T, U>send(attempt.request).whenComplete(attempt);
+      attempt.future.whenComplete((r, e) -> attempts.remove(attempt.sequence));
     }
   }
 
@@ -355,7 +356,7 @@ final class ClientSessionSubmitter {
 
     @Override
     protected void complete(Throwable error) {
-      future.completeExceptionally(error);
+      sequence(null, () -> future.completeExceptionally(error));
     }
   }
 
