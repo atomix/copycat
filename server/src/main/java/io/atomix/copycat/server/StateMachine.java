@@ -350,7 +350,7 @@ public abstract class StateMachine implements AutoCloseable {
       try {
         method.invoke(this, c);
       } catch (InvocationTargetException e) {
-        throw new CommandException(e.getCause());
+        throw new CommandException(e);
       } catch (IllegalAccessException e) {
         throw new AssertionError(e);
       }
@@ -372,7 +372,9 @@ public abstract class StateMachine implements AutoCloseable {
     return c -> {
       try {
         return method.invoke(this, c);
-      } catch (IllegalAccessException | InvocationTargetException e) {
+      } catch (InvocationTargetException e) {
+        throw new CommandException(e);
+      } catch (IllegalAccessException e) {
         throw new AssertionError(e);
       }
     };
