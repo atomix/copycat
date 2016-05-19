@@ -17,10 +17,10 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.LocalServerRegistry;
-import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.catalyst.util.concurrent.SingleThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.transport.local.LocalServerRegistry;
+import io.atomix.catalyst.transport.local.LocalTransport;
+import io.atomix.catalyst.concurrent.SingleThreadContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.AbstractResponse;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;

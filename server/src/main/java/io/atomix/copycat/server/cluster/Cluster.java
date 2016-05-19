@@ -16,9 +16,8 @@
 package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.JoinRequest;
 import io.atomix.copycat.server.protocol.LeaveRequest;
 
 import java.util.Arrays;

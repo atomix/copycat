@@ -17,7 +17,7 @@ package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ConnectRequest;
 import io.atomix.copycat.protocol.ConnectResponse;

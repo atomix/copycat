@@ -17,9 +17,9 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.concurrent.Futures;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;

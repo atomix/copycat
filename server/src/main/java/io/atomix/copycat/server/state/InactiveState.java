@@ -16,7 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.concurrent.Futures;
+import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.*;

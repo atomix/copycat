@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.session;
 
-import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.concurrent.Listener;
 
 import java.util.function.Consumer;
 

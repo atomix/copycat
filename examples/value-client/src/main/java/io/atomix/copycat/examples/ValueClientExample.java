@@ -16,7 +16,7 @@
 package io.atomix.copycat.examples;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.NettyTransport;
+import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.RecoveryStrategies;

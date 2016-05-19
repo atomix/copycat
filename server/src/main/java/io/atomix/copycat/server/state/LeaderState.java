@@ -16,8 +16,8 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.concurrent.ComposableFuture;
-import io.atomix.catalyst.util.concurrent.Scheduled;
+import io.atomix.catalyst.concurrent.ComposableFuture;
+import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;

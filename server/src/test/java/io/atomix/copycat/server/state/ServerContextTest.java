@@ -15,11 +15,17 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.*;
-import io.atomix.catalyst.util.concurrent.SingleThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.SingleThreadContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.transport.Client;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.Server;
+import io.atomix.catalyst.transport.Transport;
+import io.atomix.catalyst.transport.local.LocalServerRegistry;
+import io.atomix.catalyst.transport.local.LocalTransport;
 import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
+
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -43,6 +49,7 @@ public class ServerContextTest extends AbstractStateTest<AbstractState> {
   /**
    * Sets up a server state.
    */
+  @Override
   @BeforeMethod
   void beforeMethod() throws Throwable {
     super.beforeMethod();
@@ -75,6 +82,7 @@ public class ServerContextTest extends AbstractStateTest<AbstractState> {
   /**
    * Clears test logs.
    */
+  @Override
   @AfterMethod
   void afterMethod() throws Throwable {
     serverCtx.execute(() -> server.close().whenComplete((result, error) -> resume()));

@@ -16,9 +16,9 @@
 package io.atomix.copycat.test;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.LocalServerRegistry;
-import io.atomix.catalyst.transport.LocalTransport;
-import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.transport.local.LocalServerRegistry;
+import io.atomix.catalyst.transport.local.LocalTransport;
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategies;

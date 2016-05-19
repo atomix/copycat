@@ -16,8 +16,8 @@
 package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.serializer.SerializationException;
-import io.atomix.catalyst.util.ReferenceManager;
-import io.atomix.catalyst.util.ReferencePool;
+import io.atomix.catalyst.util.reference.ReferenceManager;
+import io.atomix.catalyst.util.reference.ReferencePool;
 import io.atomix.copycat.server.storage.StorageException;
 
 import java.lang.reflect.Constructor;
@@ -45,7 +45,7 @@ public class TypedEntryPool {
         c.setAccessible(true);
         pool = new ReferencePool<>((r) -> {
           try {
-            return (T) c.newInstance(r);
+            return c.newInstance(r);
           } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new StorageException(e);
           }

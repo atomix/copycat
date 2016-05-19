@@ -16,7 +16,7 @@
 package io.atomix.copycat.server.cluster;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.concurrent.Listener;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
