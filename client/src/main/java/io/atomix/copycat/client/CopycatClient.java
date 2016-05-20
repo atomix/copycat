@@ -625,7 +625,7 @@ public interface CopycatClient {
     }
 
     /**
-     * @throws ConfigurationException if transport is not configured and {@code io.atomix.catalyst.transport.NettyTransport}
+     * @throws ConfigurationException if transport is not configured and {@code io.atomix.catalyst.transport.netty.NettyTransport}
      * is not found on the classpath
      */
     @Override
@@ -633,7 +633,7 @@ public interface CopycatClient {
       // If the transport is not configured, attempt to use the default Netty transport.
       if (transport == null) {
         try {
-          transport = (Transport) Class.forName("io.atomix.catalyst.transport.NettyTransport").newInstance();
+          transport = (Transport) Class.forName("io.atomix.catalyst.transport.netty.NettyTransport").newInstance();
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
           throw new ConfigurationException("transport not configured");
         }

@@ -824,7 +824,7 @@ public class CopycatServer {
    *   }
    * </pre>
    * Similarly critical to the operation of the server are the {@link Transport} and {@link Storage} layers. By default,
-   * servers are configured with the {@code io.atomix.catalyst.transport.NettyTransport} transport if it's available on
+   * servers are configured with the {@code io.atomix.catalyst.transport.netty.NettyTransport} transport if it's available on
    * the classpath. Users should provide a {@link Storage} instance to specify how the server stores state changes.
    */
   public static class Builder implements io.atomix.catalyst.util.Builder<CopycatServer> {
@@ -1020,7 +1020,7 @@ public class CopycatServer {
       // If the transport is not configured, attempt to use the default Netty transport.
       if (serverTransport == null) {
         try {
-          serverTransport = (Transport) Class.forName("io.atomix.catalyst.transport.NettyTransport").newInstance();
+          serverTransport = (Transport) Class.forName("io.atomix.catalyst.transport.netty.NettyTransport").newInstance();
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
           throw new ConfigurationException("transport not configured");
         }
