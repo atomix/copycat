@@ -16,7 +16,7 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.QueryException;

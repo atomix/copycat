@@ -17,7 +17,7 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.CatalystThreadFactory;
+import io.atomix.catalyst.concurrent.CatalystThreadFactory;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -161,7 +161,7 @@ public class Log implements AutoCloseable {
 
   /**
    * Asserts that the log is open.
-   * 
+   *
    * @throws IllegalStateException if the log is not open
    */
   private void assertIsOpen() {
@@ -170,7 +170,7 @@ public class Log implements AutoCloseable {
 
   /**
    * Asserts that the index is a valid index.
-   * 
+   *
    * @throws IndexOutOfBoundsException if the {@code index} is out of bounds
    */
   private void assertValidIndex(long index) {
@@ -541,7 +541,7 @@ public class Log implements AutoCloseable {
 
   /**
    * Closes the log.
-   * 
+   *
    * @throws IllegalStateException If the log is not open.
    */
   @Override

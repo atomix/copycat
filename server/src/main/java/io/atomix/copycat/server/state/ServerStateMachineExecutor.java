@@ -18,9 +18,9 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.NonBlockingFuture;
-import io.atomix.catalyst.util.concurrent.Scheduled;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.NonBlockingFuture;
+import io.atomix.catalyst.concurrent.Scheduled;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.error.ApplicationException;

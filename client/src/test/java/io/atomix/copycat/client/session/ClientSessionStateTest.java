@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.util.Listener;
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.session.Session;
 import org.testng.annotations.Test;
 

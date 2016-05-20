@@ -16,9 +16,9 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.ComposableFuture;
-import io.atomix.catalyst.util.concurrent.Futures;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.ComposableFuture;
+import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.error.InternalException;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.server.Snapshottable;

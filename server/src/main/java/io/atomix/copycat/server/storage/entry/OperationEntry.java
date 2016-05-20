@@ -19,7 +19,7 @@ import io.atomix.copycat.Operation;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.ReferenceManager;
+import io.atomix.catalyst.util.reference.ReferenceManager;
 
 /**
  * Stores a state machine operation.

@@ -16,8 +16,8 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.Scheduled;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.Scheduled;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.error.CopycatError;

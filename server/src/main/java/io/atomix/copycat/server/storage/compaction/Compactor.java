@@ -16,8 +16,8 @@
 package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
-import io.atomix.catalyst.util.concurrent.ThreadPoolContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.ThreadPoolContext;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;

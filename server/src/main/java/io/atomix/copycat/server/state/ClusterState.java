@@ -17,10 +17,10 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.Listener;
-import io.atomix.catalyst.util.Listeners;
-import io.atomix.catalyst.util.concurrent.Futures;
-import io.atomix.catalyst.util.concurrent.Scheduled;
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.Listeners;
+import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
@@ -487,6 +487,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   /**
    * Leaves the cluster.
    */
+  @Override
   public synchronized CompletableFuture<Void> leave() {
     if (leaveFuture != null)
       return leaveFuture;

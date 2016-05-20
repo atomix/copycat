@@ -15,17 +15,23 @@
  */
 package io.atomix.copycat.client.session;
 
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.QueryException;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.OperationRequest;
+import io.atomix.copycat.protocol.OperationResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
