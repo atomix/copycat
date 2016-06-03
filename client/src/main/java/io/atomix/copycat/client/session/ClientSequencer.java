@@ -179,7 +179,7 @@ final class ClientSequencer {
 
     // If after completing pending events the eventIndex is equal to the response's eventIndex, complete the response.
     // Note that the event protocol initializes the eventIndex to the session ID.
-    if (response.eventIndex() == eventIndex || (eventIndex == 0 && response.eventIndex() == state.getSessionId())) {
+    if (response.eventIndex() <= eventIndex || (eventIndex == 0 && response.eventIndex() == state.getSessionId())) {
       callback.run();
       return true;
     } else {
