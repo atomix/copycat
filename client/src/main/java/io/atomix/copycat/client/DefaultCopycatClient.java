@@ -15,14 +15,14 @@
  */
 package io.atomix.copycat.client;
 
+import io.atomix.catalyst.concurrent.BlockingFuture;
+import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.BlockingFuture;
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
@@ -242,21 +242,23 @@ public class DefaultCopycatClient implements CopycatClient {
   public synchronized CompletableFuture<CopycatClient> recover() {
     if (recoverFuture == null) {
       LOGGER.debug("Recovering session {}", this.session.id());
-      // Open the new child session. If an exception occurs opening the new child session, consider this session expired.
-      ClientSession session = newSession();
-      recoverFuture = session.register().handleAsync((result, error) -> {
-        // Reset recoverFuture to null in case we need to rerun recovery
-        recoverFuture = null;
-        if (error == null) {
-          LOGGER.debug("Recovered by replacing session {} with session {}", this.session.id(), session.id());
-          ClientSession oldSession = this.session;
-          this.session = session;
-          return oldSession.close();
-        } else {
-          setState(State.CLOSED);
-          return Futures.exceptionalFuture(error);
+      recoverFuture = session.close().handleAsync((result, error) -> {
+        synchronized (this) {
+          session = newSession();
+          return session.register();
         }
-      }, eventContext.executor()).thenApply(v -> this);
+      }, eventContext.executor()).handleAsync((result, error) -> {
+        synchronized (this) {
+          recoverFuture = null;
+          if (error == null) {
+            return CompletableFuture.completedFuture(this);
+          } else {
+            setState(State.CLOSED);
+            return Futures.exceptionalFuture(error);
+          }
+        }
+      }, eventContext.executor())
+        .thenApply(v -> this);
     }
     return recoverFuture;
   }
