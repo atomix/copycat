@@ -38,7 +38,8 @@ import io.atomix.copycat.session.Session;
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -58,7 +59,7 @@ final class ClientSessionSubmitter {
   private final ClientSessionState state;
   private final ClientSequencer sequencer;
   private final ThreadContext context;
-  private final Map<Long, OperationAttempt> attempts = new HashMap<>();
+  private final Map<Long, OperationAttempt> attempts = new LinkedHashMap<>();
 
   public ClientSessionSubmitter(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
@@ -154,7 +155,7 @@ final class ClientSessionSubmitter {
    * @return A completable future to be completed with a list of pending operations.
    */
   public CompletableFuture<Void> close() {
-    for (OperationAttempt attempt : attempts.values()) {
+    for (OperationAttempt attempt : new ArrayList<>(attempts.values())) {
       attempt.fail(new ClosedSessionException("session closed"));
     }
     return CompletableFuture.completedFuture(null);
@@ -202,7 +203,9 @@ final class ClientSessionSubmitter {
      *
      * @param error The completion exception.
      */
-    protected abstract void complete(Throwable error);
+    protected void complete(Throwable error) {
+      sequence(null, () -> future.completeExceptionally(error));
+    }
 
     /**
      * Runs the given callback in proper sequence.
@@ -308,11 +311,6 @@ final class ClientSessionSubmitter {
         future.complete((T) response.result());
       });
     }
-
-    @Override
-    protected void complete(Throwable error) {
-      sequence(null, () -> future.completeExceptionally(error));
-    }
   }
 
   /**
@@ -358,11 +356,6 @@ final class ClientSessionSubmitter {
         state.setResponseIndex(response.index());
         future.complete((T) response.result());
       });
-    }
-
-    @Override
-    protected void complete(Throwable error) {
-      sequence(null, () -> future.completeExceptionally(error));
     }
   }
 
