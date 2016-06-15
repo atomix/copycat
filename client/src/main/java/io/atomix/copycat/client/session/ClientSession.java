@@ -17,6 +17,7 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
@@ -25,6 +26,7 @@ import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
 import java.util.UUID;
@@ -114,6 +116,10 @@ public class ClientSession implements Session {
    * @return A completable future to be completed with the command result.
    */
   public <T> CompletableFuture<T> submit(Command<T> command) {
+    State state = state();
+    if (state == State.CLOSED || state == State.EXPIRED) {
+      return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
+    }
     return submitter.submit(command);
   }
 
@@ -125,6 +131,10 @@ public class ClientSession implements Session {
    * @return A completable future to be completed with the query result.
    */
   public <T> CompletableFuture<T> submit(Query<T> query) {
+    State state = state();
+    if (state == State.CLOSED || state == State.EXPIRED) {
+      return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
+    }
     return submitter.submit(query);
   }
 
