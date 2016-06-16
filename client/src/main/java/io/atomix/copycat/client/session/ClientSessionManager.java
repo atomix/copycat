@@ -60,6 +60,22 @@ final class ClientSessionManager {
   }
 
   /**
+   * Expires the manager.
+   *
+   * @return A completable future to be completed once the session has been expired.
+   */
+  public CompletableFuture<Void> expire() {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    context.executor().execute(() -> {
+      if (keepAlive != null)
+        keepAlive.cancel();
+      state.setState(Session.State.EXPIRED);
+      future.complete(null);
+    });
+    return future;
+  }
+
+  /**
    * Registers a session.
    */
   private void register(RegisterAttempt attempt) {
