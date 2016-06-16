@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.transport.Client;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
@@ -194,6 +194,15 @@ public class ClientSession implements Session {
       .thenCompose(v -> listener.close())
       .thenCompose(v -> manager.close())
       .thenCompose(v -> connection.close());
+  }
+
+  /**
+   * Expires the session.
+   *
+   * @return A completable future to be completed once the session has been expired.
+   */
+  public CompletableFuture<Void> expire() {
+    return manager.expire();
   }
 
   /**
