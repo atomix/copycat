@@ -242,23 +242,19 @@ public class DefaultCopycatClient implements CopycatClient {
   public synchronized CompletableFuture<CopycatClient> recover() {
     if (recoverFuture == null) {
       LOGGER.debug("Recovering session {}", this.session.id());
-      recoverFuture = session.close().handleAsync((result, error) -> {
-        synchronized (this) {
-          session = newSession();
-          return session.register();
-        }
-      }, eventContext.executor()).handleAsync((result, error) -> {
-        synchronized (this) {
-          recoverFuture = null;
-          if (error == null) {
-            return CompletableFuture.completedFuture(this);
+      recoverFuture = new CompletableFuture<>();
+      session.close().whenCompleteAsync((closeResult, closeError) -> {
+        session = newSession();
+        session.register().whenCompleteAsync((registerResult, registerError) -> {
+          CompletableFuture<CopycatClient> recoverFuture = this.recoverFuture;
+          if (registerError == null) {
+            recoverFuture.complete(this);
           } else {
-            setState(State.CLOSED);
-            return Futures.exceptionalFuture(error);
+            recoverFuture.completeExceptionally(registerError);
           }
-        }
-      }, eventContext.executor())
-        .thenApply(v -> this);
+          this.recoverFuture = null;
+        }, eventContext.executor());
+      }, eventContext.executor());
     }
     return recoverFuture;
   }
