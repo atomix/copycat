@@ -108,7 +108,7 @@ public class PublishResponse extends SessionResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d]", getClass().getSimpleName(), status, index);
+    return String.format("%s[status=%s, error=%s, index=%d]", getClass().getSimpleName(), status, error, index);
   }
 
   /**
