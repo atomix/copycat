@@ -95,6 +95,13 @@ final class ClientSessionListener {
       return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
     }
 
+    if (request.eventIndex() <= state.getEventIndex()) {
+      return CompletableFuture.completedFuture(PublishResponse.builder()
+          .withStatus(Response.Status.OK)
+          .withIndex(state.getEventIndex())
+          .build());
+    }
+
     // If the request's previous event index doesn't equal the previous received event index,
     // respond with an undefined error and the last index received. This will cause the cluster
     // to resend events starting at eventIndex + 1.
