@@ -128,7 +128,7 @@ public class ClientSessionListenerTest {
       .withEvents(new Event<String>("foo", "Hello world!"))
       .build()).get();
 
-    assertEquals(response.status(), Response.Status.ERROR);
+    assertEquals(response.status(), Response.Status.OK);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertFalse(received.get());
