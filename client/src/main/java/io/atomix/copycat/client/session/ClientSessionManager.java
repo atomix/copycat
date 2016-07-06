@@ -22,6 +22,7 @@ import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
 import java.net.ConnectException;
@@ -250,10 +251,10 @@ final class ClientSessionManager {
             connection.reset(null, connection.servers());
             unregister(false, future);
           }
-          // If no leader was set, set the session state to unstable and schedule another unregister attempt.
+          // If no leader was set, set the session state to unstable and fail the unregister attempt.
           else {
             state.setState(Session.State.UNSTABLE);
-            keepAlive = context.schedule(interval, () -> unregister(future));
+            future.completeExceptionally(new ClosedSessionException("failed to unregister session"));
           }
         }
         // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
@@ -265,7 +266,7 @@ final class ClientSessionManager {
         // If no leader was set, set the session state to unstable and schedule another unregister attempt.
         else {
           state.setState(Session.State.UNSTABLE);
-          keepAlive = context.schedule(interval, () -> unregister(future));
+          future.completeExceptionally(new ClosedSessionException("failed to unregister session"));
         }
       }
     });

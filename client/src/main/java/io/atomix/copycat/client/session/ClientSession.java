@@ -190,10 +190,22 @@ public class ClientSession implements Session {
    * @return A completable future to be completed once the session is closed.
    */
   public CompletableFuture<Void> close() {
-    return submitter.close()
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    submitter.close()
       .thenCompose(v -> listener.close())
       .thenCompose(v -> manager.close())
-      .thenCompose(v -> connection.close());
+      .whenComplete((managerResult, managerError) -> {
+        connection.close().whenComplete((connectionResult, connectionError) -> {
+          if (managerError != null) {
+            future.completeExceptionally(managerError);
+          } else if (connectionError != null) {
+            future.completeExceptionally(connectionError);
+          } else {
+            future.complete(null);
+          }
+        });
+      });
+    return future;
   }
 
   /**
