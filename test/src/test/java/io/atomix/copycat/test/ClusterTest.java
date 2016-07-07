@@ -1058,7 +1058,6 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testStateTransitionWithRecovery() throws Throwable {
     createServers(3);
     final CopycatClient client = createClient(RecoveryStrategies.RECOVER);
-    ((ClientSession) client.session()).expire().thenAccept(v -> resume());
     final AtomicReference<CopycatClient.State> prev =
         new AtomicReference<>(CopycatClient.State.CONNECTED);
     client.onStateChange(s -> {
@@ -1077,6 +1076,7 @@ public class ClusterTest extends ConcurrentTestCase {
           threadFail("State not allowed");
       }
     });
+    ((ClientSession) client.session()).expire().thenAccept(v -> resume());
     await(5000, 2);
   }
 
