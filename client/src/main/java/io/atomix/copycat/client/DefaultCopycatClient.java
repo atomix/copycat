@@ -150,6 +150,7 @@ public class DefaultCopycatClient implements CopycatClient {
       case EXPIRED:
         setState(State.SUSPENDED);
         recoveryStrategy.recover(this);
+        break;
       case CLOSED:
         setState(State.CLOSED);
         break;

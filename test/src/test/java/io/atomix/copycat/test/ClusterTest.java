@@ -24,6 +24,9 @@ import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.DefaultCopycatClient;
+import io.atomix.copycat.client.RecoveryStrategies;
+import io.atomix.copycat.client.RecoveryStrategy;
+import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -51,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -1049,6 +1053,34 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
+   * Tests state transition with recovery
+   */
+  public void testStateTransitionWithRecovery() throws Throwable {
+    createServers(3);
+    final CopycatClient client = createClient(RecoveryStrategies.RECOVER);
+    ((ClientSession) client.session()).expire().thenAccept(v -> resume());
+    final AtomicReference<CopycatClient.State> prev =
+        new AtomicReference<>(CopycatClient.State.CONNECTED);
+    client.onStateChange(s -> {
+      switch (s) {
+        case CONNECTED:
+          threadAssertEquals(CopycatClient.State.SUSPENDED,
+              prev.getAndSet(CopycatClient.State.CONNECTED));
+          resume();
+          break;
+        case SUSPENDED:
+          threadAssertEquals(CopycatClient.State.CONNECTED,
+              prev.getAndSet(CopycatClient.State.SUSPENDED));
+          resume();
+          break;
+        case CLOSED:
+          threadFail("State not allowed");
+      }
+    });
+    await(5000, 2);
+  }
+
+  /**
    * Tests a session expiring.
    */
   private void testSessionExpire(int nodes) throws Throwable {
@@ -1174,9 +1206,17 @@ public class ClusterTest extends ConcurrentTestCase {
    * Creates a Copycat client.
    */
   private CopycatClient createClient() throws Throwable {
+    return createClient(RecoveryStrategies.CLOSE);
+  }
+
+  /**
+   * Creates a Copycat client.
+   */
+  private CopycatClient createClient(RecoveryStrategy strategy) throws Throwable {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new LocalTransport(registry))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
+      .withRecoveryStrategy(strategy)
       .build();
     client.serializer().disableWhitelist();
     client.connect(members.stream().map(Member::clientAddress).collect(Collectors.toList())).thenRun(this::resume);
