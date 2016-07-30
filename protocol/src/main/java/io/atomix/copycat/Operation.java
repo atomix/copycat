@@ -31,6 +31,7 @@ import java.io.Serializable;
  * @see Command
  * @see Query
  *
+ * @param <T> operation result type
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public interface Operation<T> extends Serializable {

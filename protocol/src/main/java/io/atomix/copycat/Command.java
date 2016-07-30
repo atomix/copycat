@@ -42,6 +42,7 @@ package io.atomix.copycat;
  *
  * @see CompactionMode
  *
+ * @param <T> command result type
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public interface Command<T> extends Operation<T> {

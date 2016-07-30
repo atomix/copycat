@@ -41,6 +41,7 @@ package io.atomix.copycat;
  *
  * @see ConsistencyLevel
  *
+ * @param <T> query result type
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public interface Query<T> extends Operation<T> {
