@@ -203,7 +203,7 @@ final class CandidateState extends ActiveState {
     }
 
     // If the vote request is not for this candidate then reject the vote.
-    if (request.candidate() == context.getCluster().member().address().hashCode()) {
+    if (request.candidate() == context.getCluster().member().id()) {
       return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
