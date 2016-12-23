@@ -126,9 +126,9 @@ class ServerSessionManager implements Sessions {
   ServerSessionContext unregisterSession(long sessionId) {
     ServerSessionContext session = sessions.remove(sessionId);
     if (session != null) {
-      clients.remove(session.client());
-      addresses.remove(session.client());
-      connections.remove(session.client());
+      clients.remove(session.client(), session);
+      addresses.remove(session.client(), session.getAddress());
+      connections.remove(session.client(), session.getConnection());
     }
     return session;
   }
