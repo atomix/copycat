@@ -15,14 +15,15 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.MessageHandler;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -39,7 +40,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -518,12 +521,50 @@ public class ServerContext implements AutoCloseable {
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
     connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    connection.handler(KeepAliveRequest.class, new SessionChecker<KeepAliveRequest,KeepAliveResponse>(request -> state.keepAlive(request)));
+    connection.handler(UnregisterRequest.class, new SessionChecker<UnregisterRequest,UnregisterResponse>(request -> state.unregister(request)));
+    connection.handler(CommandRequest.class, new SessionChecker<CommandRequest,CommandResponse>(request -> state.command(request)));
+    connection.handler(QueryRequest.class, new SessionChecker<QueryRequest,QueryResponse>(request -> state.query(request)));
 
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+  }
+
+  private class SessionChecker<T extends SessionRequest, U extends SessionResponse> implements MessageHandler<T, U> {
+
+    private final MessageHandler<T, U> innerHandler;
+
+    public SessionChecker(MessageHandler<T,U> innerHandler) {
+      this.innerHandler = innerHandler;
+    }
+
+    protected <T extends Request, U extends Response> boolean checkRequestClientConnection(T request, CompletableFuture<U> future) {
+
+      if (request instanceof SessionRequest) {
+        LOGGER.debug("Checking request for client connection: {}", request);
+        SessionRequest sessionRequest = (SessionRequest) request;
+        if (sessionRequest.wasForwarded()) {
+          LOGGER.debug("Forwarded request: need to handle it: {}", request);
+          return true;
+        }
+
+        if (!getStateMachine().executor().context().sessions().hasConnection(sessionRequest.session())) {
+          LOGGER.debug("No connection to client, dropping request: {} {}", sessionRequest.session(), request);
+          future.completeExceptionally(new TimeoutException()); //Will eventually timeout?
+          return false;
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public CompletableFuture<U> handle(T message) {
+
+      CompletableFuture<U> future = new CompletableFuture<>();
+      if (!checkRequestClientConnection(message, future))
+        return future;
+
+      return this.innerHandler.handle(message);
+    }
   }
 
   /**
@@ -538,9 +579,9 @@ public class ServerContext implements AutoCloseable {
     connection.handler(RegisterRequest.class, request -> state.register(request));
     connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
     connection.handler(AcceptRequest.class, request -> state.accept(request));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(PublishRequest.class, request -> state.publish(request));
+    connection.handler(KeepAliveRequest.class, new SessionChecker<KeepAliveRequest,KeepAliveResponse>(request -> state.keepAlive(request)));
+    connection.handler(UnregisterRequest.class, new SessionChecker<UnregisterRequest, UnregisterResponse>(request -> state.unregister(request)));
+    connection.handler(PublishRequest.class, new SessionChecker<PublishRequest, PublishResponse>(request -> state.publish(request)));
     connection.handler(ConfigureRequest.class, request -> state.configure(request));
     connection.handler(InstallRequest.class, request -> state.install(request));
     connection.handler(JoinRequest.class, request -> state.join(request));
@@ -549,8 +590,8 @@ public class ServerContext implements AutoCloseable {
     connection.handler(AppendRequest.class, request -> state.append(request));
     connection.handler(PollRequest.class, request -> state.poll(request));
     connection.handler(VoteRequest.class, request -> state.vote(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    connection.handler(CommandRequest.class, new SessionChecker<CommandRequest, CommandResponse>(request -> state.command(request)));
+    connection.handler(QueryRequest.class, new SessionChecker<QueryRequest, QueryResponse>(request -> state.query(request)));
 
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }
