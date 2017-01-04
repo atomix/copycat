@@ -312,18 +312,18 @@ public class CopycatServer {
 
   }
 
-  private final String name;
-  private final Transport clientTransport;
-  private final Transport serverTransport;
-  private final Server clientServer;
-  private final Server internalServer;
-  private final ServerContext context;
+  protected final String name;
+  protected final Transport clientTransport;
+  protected final Transport serverTransport;
+  protected final Server clientServer;
+  protected final Server internalServer;
+  protected final ServerContext context;
   private volatile CompletableFuture<CopycatServer> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
   private Listener<Member> electionListener;
   private volatile boolean started;
 
-  private CopycatServer(String name, Transport clientTransport, Transport serverTransport, ServerContext context) {
+  protected CopycatServer(String name, Transport clientTransport, Transport serverTransport, ServerContext context) {
     this.name = Assert.notNull(name, "name");
     this.clientTransport = Assert.notNull(clientTransport, "clientTransport");
     this.serverTransport = Assert.notNull(serverTransport, "serverTransport");

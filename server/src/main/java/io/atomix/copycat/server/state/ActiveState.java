@@ -38,7 +38,7 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
+  public CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -146,7 +146,7 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  protected CompletableFuture<PollResponse> poll(PollRequest request) {
+  public CompletableFuture<PollResponse> poll(PollRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), 0);
@@ -183,7 +183,7 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
+  public CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
 

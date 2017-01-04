@@ -19,8 +19,8 @@ import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
@@ -53,7 +53,7 @@ final class CandidateState extends ActiveState {
   }
 
   @Override
-  public synchronized CompletableFuture<AbstractState> open() {
+  public synchronized CompletableFuture<ServerState> open() {
     return super.open().thenRun(this::startElection).thenApply(v -> this);
   }
 

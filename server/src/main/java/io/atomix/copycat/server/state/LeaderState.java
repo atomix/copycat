@@ -58,7 +58,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public synchronized CompletableFuture<AbstractState> open() {
+  public synchronized CompletableFuture<ServerState> open() {
     // Reset state for the leader.
     takeLeadership();
 
@@ -462,7 +462,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<CommandResponse> command(final CommandRequest request) {
+  public CompletableFuture<CommandResponse> command(final CommandRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -555,7 +555,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<QueryResponse> query(final QueryRequest request) {
+  public CompletableFuture<QueryResponse> query(final QueryRequest request) {
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
@@ -680,7 +680,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
+  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -755,7 +755,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
     context.checkThread();
     logRequest(request);
 
@@ -778,7 +778,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -839,7 +839,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -907,7 +907,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 

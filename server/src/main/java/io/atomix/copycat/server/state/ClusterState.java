@@ -427,7 +427,7 @@ final class ClusterState implements Cluster, AutoCloseable {
     Member leader = context.getLeader();
     if (joinFuture != null && leader != null) {
       if (context.getLeader().equals(member())) {
-        if (context.getState() == CopycatServer.State.LEADER && !((LeaderState) context.getAbstractState()).configuring()) {
+        if (context.getState() == CopycatServer.State.LEADER && !((LeaderState) context.getServerState()).configuring()) {
           if (joinFuture != null)
             joinFuture.complete(null);
         } else {
@@ -526,7 +526,7 @@ final class ClusterState implements Cluster, AutoCloseable {
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    context.getAbstractState().leave(LeaveRequest.builder()
+    context.getServerState().leave(LeaveRequest.builder()
       .withMember(member())
       .build()).whenComplete((response, error) -> {
       // Cancel the leave timer.

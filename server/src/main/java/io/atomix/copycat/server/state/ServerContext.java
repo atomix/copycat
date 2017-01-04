@@ -15,14 +15,14 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -55,19 +55,19 @@ public class ServerContext implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerContext.class);
   private final Listeners<CopycatServer.State> stateChangeListeners = new Listeners<>();
   private final Listeners<Member> electionListeners = new Listeners<>();
-  private final String name;
-  private final ThreadContext threadContext;
-  private final Supplier<StateMachine> stateMachineFactory;
-  private final ClusterState cluster;
-  private final Storage storage;
-  private final Serializer serializer;
+  protected final String name;
+  protected final ThreadContext threadContext;
+  protected final Supplier<StateMachine> stateMachineFactory;
+  protected final ClusterState cluster;
+  protected final Storage storage;
+  protected final Serializer serializer;
   private MetaStore meta;
   private Log log;
   private SnapshotStore snapshot;
   private ServerStateMachine stateMachine;
-  private final ThreadContext stateContext;
-  private final ConnectionManager connections;
-  private AbstractState state = new InactiveState(this);
+  protected final ThreadContext stateContext;
+  protected final ConnectionManager connections;
+  protected ServerState state = new InactiveState(this);
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
@@ -430,7 +430,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The current server state.
    */
-  AbstractState getAbstractState() {
+  ServerState getServerState() {
     return state;
   }
 
