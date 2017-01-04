@@ -185,8 +185,16 @@ class PassiveState extends ReserveState {
    * Appends entries to the local log.
    */
   protected AppendResponse appendEntries(AppendRequest request) {
+    // Get the last entry index or default to the request log index.
+    long lastEntryIndex = request.logIndex();
+    if (!request.entries().isEmpty()) {
+      lastEntryIndex = request.entries().get(request.entries().size() - 1).getIndex();
+    }
+
+    // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
+    long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
+
     // Append entries to the log starting at the last log index.
-    long commitIndex = Math.max(context.getCommitIndex(), request.commitIndex());
     for (Entry entry : request.entries()) {
       // If the entry index is greater than the last index and less than the commit index, append the entry.
       // We perform no additional consistency checks here since passive members may only receive committed entries.

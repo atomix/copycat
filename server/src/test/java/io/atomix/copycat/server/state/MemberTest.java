@@ -71,8 +71,8 @@ public class MemberTest {
     member.update(Member.Type.INACTIVE, instant);
     assertEquals(member.type(), Member.Type.INACTIVE);
     assertEquals(member.updated(), instant);
-    member.update(ServerMember.Status.UNAVAILABLE, instant);
     instant = Instant.now();
+    member.update(ServerMember.Status.UNAVAILABLE, instant);
     assertEquals(member.status(), ServerMember.Status.UNAVAILABLE);
     assertNull(member.clientAddress());
     assertEquals(member.updated(), instant);
