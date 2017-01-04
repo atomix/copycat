@@ -143,7 +143,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       try {
         return (U) function.apply(commit);
       } catch (Exception e) {
-        throw new ApplicationException("An application error occurred", e);
+        throw new ApplicationException(e, "An application error occurred");
       }
     }
   }
