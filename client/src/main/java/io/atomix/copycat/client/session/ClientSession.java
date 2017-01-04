@@ -29,6 +29,7 @@ import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -58,14 +59,14 @@ public class ClientSession implements Session {
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy);
+  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
+    this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy, sessionTimeout);
   }
 
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
+  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
-    this.manager = new ClientSessionManager(connection, state, context, connectionStrategy);
+    this.manager = new ClientSessionManager(connection, state, context, connectionStrategy, sessionTimeout);
     ClientSequencer sequencer = new ClientSequencer(state);
     this.listener = new ClientSessionListener(connection, state, sequencer, context);
     this.submitter = new ClientSessionSubmitter(connection, state, sequencer, context);

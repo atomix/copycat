@@ -56,6 +56,7 @@ public class RegisterRequest extends AbstractRequest {
   }
 
   private String client;
+  private long timeout;
 
   /**
    * Returns the client ID.
@@ -66,16 +67,27 @@ public class RegisterRequest extends AbstractRequest {
     return client;
   }
 
+  /**
+   * Returns the client session timeout.
+   *
+   * @return The client session timeout.
+   */
+  public long timeout() {
+    return timeout;
+  }
+
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeString(client);
+    buffer.writeLong(timeout);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     client = buffer.readString();
+    timeout = buffer.readLong();
   }
 
   @Override
@@ -87,7 +99,7 @@ public class RegisterRequest extends AbstractRequest {
   public boolean equals(Object object) {
     if (object instanceof RegisterRequest) {
       RegisterRequest request = (RegisterRequest) object;
-      return request.client.equals(client);
+      return request.client.equals(client) && request.timeout == timeout;
     }
     return false;
   }
@@ -114,6 +126,18 @@ public class RegisterRequest extends AbstractRequest {
      */
     public Builder withClient(String client) {
       request.client = Assert.notNull(client, "client");
+      return this;
+    }
+
+    /**
+     * Sets the client session timeout.
+     *
+     * @param timeout The client session timeout.
+     * @return The request builder.
+     * @throws IllegalArgumentException if the timeout is not {@code -1} or a positive number
+     */
+    public Builder withTimeout(long timeout) {
+      request.timeout = Assert.arg(timeout, timeout >= -1, "timeout must be -1 or greater");
       return this;
     }
 

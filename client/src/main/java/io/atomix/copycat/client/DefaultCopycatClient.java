@@ -32,6 +32,7 @@ import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
@@ -54,6 +55,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final ThreadContext ioContext;
   private final ThreadContext eventContext;
   private final AddressSelector selector;
+  private final Duration sessionTimeout;
   private final ConnectionStrategy connectionStrategy;
   private final RecoveryStrategy recoveryStrategy;
   private ClientSession session;
@@ -65,7 +67,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.cluster = Assert.notNull(cluster, "cluster");
     this.transport = Assert.notNull(transport, "transport");
@@ -74,6 +76,7 @@ public class DefaultCopycatClient implements CopycatClient {
     this.selector = new AddressSelector(selectionStrategy);
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
+    this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
   }
 
   @Override
@@ -122,7 +125,7 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy);
+    ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy, sessionTimeout);
 
     // Update the session change listener.
     if (changeListener != null)

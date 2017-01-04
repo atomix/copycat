@@ -16,16 +16,16 @@
 package io.atomix.copycat.server;
 
 import io.atomix.catalyst.buffer.PooledHeapAllocator;
+import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.SingleThreadContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Server;
 import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
@@ -463,9 +463,9 @@ public class CopycatServer {
    * <p>
    * The thread context is the event loop that this server uses to communicate other Raft servers.
    * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
-   * executed on a single thread via the returned {@link io.atomix.catalyst.util.concurrent.ThreadContext}.
+   * executed on a single thread via the returned {@link io.atomix.catalyst.concurrent.ThreadContext}.
    * <p>
-   * The {@link io.atomix.catalyst.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
+   * The {@link io.atomix.catalyst.concurrent.ThreadContext} can also be used to access the Raft server's internal
    * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
    * are not thread safe, so to use the context serializer, users should clone it:
    * <pre>
