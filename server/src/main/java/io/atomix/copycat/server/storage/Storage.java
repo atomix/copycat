@@ -24,6 +24,8 @@ import io.atomix.copycat.server.storage.system.MetaStore;
 import java.io.File;
 import java.time.Duration;
 
+import static java.lang.Math.max;
+
 /**
  * Immutable log configuration and {@link Log} factory.
  * <p>
@@ -64,7 +66,7 @@ public class Storage {
   private static final int DEFAULT_ENTRY_BUFFER_SIZE = 1024;
   private static final boolean DEFAULT_FLUSH_ON_COMMIT = false;
   private static final boolean DEFAULT_RETAIN_STALE_SNAPSHOTS = false;
-  private static final int DEFAULT_COMPACTION_THREADS = Runtime.getRuntime().availableProcessors() / 2;
+  private static final int DEFAULT_COMPACTION_THREADS = max(1, Runtime.getRuntime().availableProcessors() / 2);
   private static final Duration DEFAULT_MINOR_COMPACTION_INTERVAL = Duration.ofMinutes(1);
   private static final Duration DEFAULT_MAJOR_COMPACTION_INTERVAL = Duration.ofHours(1);
   private static final double DEFAULT_COMPACTION_THRESHOLD = 0.5;
