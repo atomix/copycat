@@ -15,11 +15,9 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Managed;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.Request;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class AbstractState implements Managed<AbstractState> {
+public abstract class AbstractState implements ServerState {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerContext context;
   private boolean open = true;
@@ -63,7 +61,7 @@ public abstract class AbstractState implements Managed<AbstractState> {
   }
 
   @Override
-  public CompletableFuture<AbstractState> open() {
+  public CompletableFuture<ServerState> open() {
     context.checkThread();
     open = true;
     return CompletableFuture.completedFuture(null);
@@ -111,86 +109,6 @@ public abstract class AbstractState implements Managed<AbstractState> {
     }
     return false;
   }
-
-  /**
-   * Handles a register request.
-   */
-  protected abstract CompletableFuture<RegisterResponse> register(RegisterRequest request);
-
-  /**
-   * Handles a connect request.
-   */
-  protected abstract CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection);
-
-  /**
-   * Handles an accept request.
-   */
-  protected abstract CompletableFuture<AcceptResponse> accept(AcceptRequest request);
-
-  /**
-   * Handles a keep alive request.
-   */
-  protected abstract CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
-
-  /**
-   * Handles an unregister request.
-   */
-  protected abstract CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
-
-  /**
-   * Handles a publish request.
-   */
-  protected abstract CompletableFuture<PublishResponse> publish(PublishRequest request);
-
-  /**
-   * Handles a configure request.
-   */
-  protected abstract CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
-
-  /**
-   * Handles an install request.
-   */
-  protected abstract CompletableFuture<InstallResponse> install(InstallRequest request);
-
-  /**
-   * Handles a join request.
-   */
-  protected abstract CompletableFuture<JoinResponse> join(JoinRequest request);
-
-  /**
-   * Handles a configure request.
-   */
-  protected abstract CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request);
-
-  /**
-   * Handles a leave request.
-   */
-  protected abstract CompletableFuture<LeaveResponse> leave(LeaveRequest request);
-
-  /**
-   * Handles an append request.
-   */
-  protected abstract CompletableFuture<AppendResponse> append(AppendRequest request);
-
-  /**
-   * Handles a poll request.
-   */
-  protected abstract CompletableFuture<PollResponse> poll(PollRequest request);
-
-  /**
-   * Handles a vote request.
-   */
-  protected abstract CompletableFuture<VoteResponse> vote(VoteRequest request);
-
-  /**
-   * Handles a command request.
-   */
-  protected abstract CompletableFuture<CommandResponse> command(CommandRequest request);
-
-  /**
-   * Handles a query request.
-   */
-  protected abstract CompletableFuture<QueryResponse> query(QueryRequest request);
 
   @Override
   public CompletableFuture<Void> close() {

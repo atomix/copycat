@@ -15,14 +15,14 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -67,7 +67,7 @@ public class ServerContext implements AutoCloseable {
   private ServerStateMachine stateMachine;
   protected final ThreadContext stateContext;
   protected final ConnectionManager connections;
-  protected AbstractState state = new InactiveState(this);
+  protected ServerState state = new InactiveState(this);
   private Duration electionTimeout = Duration.ofMillis(500);
   private Duration sessionTimeout = Duration.ofMillis(5000);
   private Duration heartbeatInterval = Duration.ofMillis(150);
@@ -430,7 +430,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The current server state.
    */
-  AbstractState getAbstractState() {
+  ServerState getServerState() {
     return state;
   }
 

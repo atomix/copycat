@@ -52,7 +52,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<AbstractState> open() {
+  public CompletableFuture<ServerState> open() {
     return super.open()
       .thenRun(this::truncateUncommittedEntries)
       .thenApply(v -> this);
@@ -68,7 +68,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
     context.checkThread();
     logRequest(request);
 
@@ -103,7 +103,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  protected CompletableFuture<AppendResponse> append(final AppendRequest request) {
+  public CompletableFuture<AppendResponse> append(final AppendRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
@@ -218,7 +218,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  protected CompletableFuture<QueryResponse> query(QueryRequest request) {
+  public CompletableFuture<QueryResponse> query(QueryRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -388,7 +388,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+  public CompletableFuture<InstallResponse> install(InstallRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());

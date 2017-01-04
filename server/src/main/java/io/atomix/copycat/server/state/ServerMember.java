@@ -227,7 +227,7 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    cluster.getContext().getAbstractState().reconfigure(ReconfigureRequest.builder()
+    cluster.getContext().getServerState().reconfigure(ReconfigureRequest.builder()
       .withIndex(cluster.getConfiguration().index())
       .withTerm(cluster.getConfiguration().term())
       .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))

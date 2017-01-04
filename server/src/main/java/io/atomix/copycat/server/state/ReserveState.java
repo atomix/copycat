@@ -41,7 +41,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<AbstractState> open() {
+  public CompletableFuture<ServerState> open() {
     return super.open().thenRun(() -> {
       if (type() == CopycatServer.State.RESERVE) {
         context.reset();
@@ -50,7 +50,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<AppendResponse> append(AppendRequest request) {
+  public CompletableFuture<AppendResponse> append(AppendRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
@@ -68,7 +68,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<PollResponse> poll(PollRequest request) {
+  public CompletableFuture<PollResponse> poll(PollRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -79,7 +79,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<VoteResponse> vote(VoteRequest request) {
+  public CompletableFuture<VoteResponse> vote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), 0);
@@ -91,7 +91,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<CommandResponse> command(CommandRequest request) {
+  public CompletableFuture<CommandResponse> command(CommandRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -111,7 +111,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<QueryResponse> query(QueryRequest request) {
+  public CompletableFuture<QueryResponse> query(QueryRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -131,7 +131,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
+  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -151,7 +151,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
     context.checkThread();
     logRequest(request);
     return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
@@ -161,7 +161,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -172,7 +172,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -192,7 +192,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<PublishResponse> publish(PublishRequest request) {
+  public CompletableFuture<PublishResponse> publish(PublishRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -221,7 +221,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -241,7 +241,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<JoinResponse> join(JoinRequest request) {
+  public CompletableFuture<JoinResponse> join(JoinRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -261,7 +261,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request) {
+  public CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -281,7 +281,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<LeaveResponse> leave(LeaveRequest request) {
+  public CompletableFuture<LeaveResponse> leave(LeaveRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -301,7 +301,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+  public CompletableFuture<InstallResponse> install(InstallRequest request) {
     context.checkThread();
     logRequest(request);
 

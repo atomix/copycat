@@ -50,7 +50,7 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  public synchronized CompletableFuture<AbstractState> open() {
+  public synchronized CompletableFuture<ServerState> open() {
     return super.open().thenRun(this::startHeartbeatTimeout).thenApply(v -> this);
   }
 
@@ -173,14 +173,14 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected CompletableFuture<InstallResponse> install(InstallRequest request) {
+  public CompletableFuture<InstallResponse> install(InstallRequest request) {
     CompletableFuture<InstallResponse> future = super.install(request);
     resetHeartbeatTimeout();
     return future;
   }
 
   @Override
-  protected CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
+  public CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
     CompletableFuture<ConfigureResponse> future = super.configure(request);
     resetHeartbeatTimeout();
     return future;
