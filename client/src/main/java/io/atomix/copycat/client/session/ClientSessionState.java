@@ -15,14 +15,13 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
@@ -33,7 +32,7 @@ import java.util.function.Consumer;
  */
 final class ClientSessionState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientSession.class);
-  private final UUID clientId;
+  private final String clientId;
   private volatile long sessionId;
   private volatile Session.State state = Session.State.CLOSED;
   private long commandRequest;
@@ -42,7 +41,7 @@ final class ClientSessionState {
   private long eventIndex;
   private final Set<Listener<Session.State>> changeListeners = new CopyOnWriteArraySet<>();
 
-  ClientSessionState(UUID clientId) {
+  ClientSessionState(String clientId) {
     this.clientId = Assert.notNull(clientId, "clientId");
   }
 
@@ -51,7 +50,7 @@ final class ClientSessionState {
    *
    * @return The client ID.
    */
-  public UUID getClientId() {
+  public String getClientId() {
     return clientId;
   }
 

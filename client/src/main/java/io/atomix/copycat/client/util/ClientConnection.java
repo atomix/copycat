@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.client.util;
 
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ConnectRequest;
 import io.atomix.copycat.protocol.ConnectResponse;
@@ -30,7 +30,6 @@ import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -43,7 +42,7 @@ import java.util.function.Consumer;
  */
 public class ClientConnection implements Connection {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnection.class);
-  private final UUID id;
+  private final String id;
   private final Client client;
   private final AddressSelector selector;
   private CompletableFuture<Connection> connectFuture;
@@ -51,7 +50,7 @@ public class ClientConnection implements Connection {
   private Connection connection;
   private boolean open = true;
 
-  public ClientConnection(UUID id, Client client, AddressSelector selector) {
+  public ClientConnection(String id, Client client, AddressSelector selector) {
     this.id = Assert.notNull(id, "id");
     this.client = Assert.notNull(client, "client");
     this.selector = Assert.notNull(selector, "selector");

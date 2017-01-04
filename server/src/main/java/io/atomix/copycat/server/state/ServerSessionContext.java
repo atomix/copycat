@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
@@ -41,7 +41,7 @@ import java.util.function.Consumer;
 class ServerSessionContext implements ServerSession {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
   private final long id;
-  private final UUID client;
+  private final String client;
   private final Log log;
   private final ServerStateMachineContext context;
   private boolean open;
@@ -70,7 +70,7 @@ class ServerSessionContext implements ServerSession {
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, UUID client, Log log, ServerStateMachineContext context, long timeout) {
+  ServerSessionContext(long id, String client, Log log, ServerStateMachineContext context, long timeout) {
     this.id = id;
     this.client = Assert.notNull(client, "client");
     this.log = Assert.notNull(log, "log");
@@ -91,7 +91,7 @@ class ServerSessionContext implements ServerSession {
    *
    * @return The session client ID.
    */
-  public UUID client() {
+  public String client() {
     return client;
   }
 

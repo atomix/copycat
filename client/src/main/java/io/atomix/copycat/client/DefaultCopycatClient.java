@@ -48,6 +48,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultCopycatClient.class);
   private static final String DEFAULT_HOST = "0.0.0.0";
   private static final int DEFAULT_PORT = 8700;
+  private final String clientId;
   private final Collection<Address> cluster;
   private final Transport transport;
   private final ThreadContext ioContext;
@@ -64,7 +65,8 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
+  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy) {
+    this.clientId = Assert.notNull(clientId, "clientId");
     this.cluster = Assert.notNull(cluster, "cluster");
     this.transport = Assert.notNull(transport, "transport");
     this.ioContext = Assert.notNull(ioContext, "ioContext");
@@ -120,7 +122,7 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(transport.client(), selector, ioContext, connectionStrategy);
+    ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy);
 
     // Update the session change listener.
     if (changeListener != null)

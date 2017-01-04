@@ -22,8 +22,6 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.reference.ReferenceManager;
 import io.atomix.copycat.protocol.RegisterRequest;
 
-import java.util.UUID;
-
 /**
  * Stores a client register request.
  * <p>
@@ -36,7 +34,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
-  private UUID client;
+  private String client;
   private long timeout;
 
   public RegisterEntry() {
@@ -51,7 +49,7 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
    *
    * @return The entry client ID.
    */
-  public UUID getClient() {
+  public String getClient() {
     return client;
   }
 
@@ -62,7 +60,7 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
    * @return The register entry.
    * @throws NullPointerException if {@code client} is null
    */
-  public RegisterEntry setClient(UUID client) {
+  public RegisterEntry setClient(String client) {
     this.client = Assert.notNull(client, "client");
     return this;
   }
@@ -90,14 +88,14 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client.toString());
+    buffer.writeString(client);
     buffer.writeLong(timeout);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = UUID.fromString(buffer.readString());
+    client = buffer.readString();
     timeout = buffer.readLong();
   }
 

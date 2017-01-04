@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Connect client request.
@@ -55,27 +54,27 @@ public class ConnectRequest extends AbstractRequest {
     return new Builder(request);
   }
 
-  private UUID client;
+  private String client;
 
   /**
    * Returns the connecting client ID.
    *
    * @return The connecting client ID.
    */
-  public UUID client() {
+  public String client() {
     return client;
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client.toString());
+    buffer.writeString(client);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = UUID.fromString(buffer.readString());
+    client = buffer.readString();
   }
 
   @Override
@@ -107,7 +106,7 @@ public class ConnectRequest extends AbstractRequest {
      * @param clientId The connecting client ID.
      * @return The connect request builder.
      */
-    public Builder withClientId(UUID clientId) {
+    public Builder withClientId(String clientId) {
       request.client = Assert.notNull(clientId, "clientId");
       return this;
     }

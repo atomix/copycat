@@ -21,7 +21,6 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Register session request.
@@ -56,27 +55,27 @@ public class RegisterRequest extends AbstractRequest {
     return new Builder(request);
   }
 
-  private UUID client;
+  private String client;
 
   /**
    * Returns the client ID.
    *
    * @return The client ID.
    */
-  public UUID client() {
+  public String client() {
     return client;
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client.toString());
+    buffer.writeString(client);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = UUID.fromString(buffer.readString());
+    client = buffer.readString();
   }
 
   @Override
@@ -113,7 +112,7 @@ public class RegisterRequest extends AbstractRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code client} is null
      */
-    public Builder withClient(UUID client) {
+    public Builder withClient(String client) {
       request.client = Assert.notNull(client, "client");
       return this;
     }

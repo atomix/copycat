@@ -29,7 +29,6 @@ import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -59,11 +58,7 @@ public class ClientSession implements Session {
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
-    this(UUID.randomUUID(), client, selector, context, connectionStrategy);
-  }
-
-  public ClientSession(UUID id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
+  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy) {
     this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy);
   }
 

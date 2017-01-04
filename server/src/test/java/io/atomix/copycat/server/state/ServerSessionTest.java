@@ -37,7 +37,7 @@ public class ServerSessionTest {
    */
   public void testInitializeSession() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
+    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID().toString(), mock(Log.class), context, 1000);
     assertEquals(session.id(), 10);
     assertEquals(session.getLastCompleted(), 9);
     assertEquals(session.getLastApplied(), 9);
@@ -48,7 +48,7 @@ public class ServerSessionTest {
    */
   public void testSequenceCommand() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
+    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID().toString(), mock(Log.class), context, 1000);
     assertEquals(session.getRequestSequence(), 0);
     AtomicBoolean complete = new AtomicBoolean();
     session.registerRequest(2, () -> complete.set(true));
@@ -62,7 +62,7 @@ public class ServerSessionTest {
    */
   public void testSequenceIndexQuery() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
+    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID().toString(), mock(Log.class), context, 1000);
     AtomicBoolean complete = new AtomicBoolean();
     session.registerIndexQuery(10, () -> complete.set(true));
     assertFalse(complete.get());
@@ -77,7 +77,7 @@ public class ServerSessionTest {
    */
   public void testSequenceSequenceQuery() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
+    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID().toString(), mock(Log.class), context, 1000);
     AtomicBoolean complete = new AtomicBoolean();
     session.registerSequenceQuery(10, () -> complete.set(true));
     assertFalse(complete.get());
@@ -92,7 +92,7 @@ public class ServerSessionTest {
    */
   public void testCacheResponse() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID(), mock(Log.class), context, 1000);
+    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID().toString(), mock(Log.class), context, 1000);
     session.registerResult(2, new ServerStateMachine.Result(2, 2, "Hello world!"));
     assertEquals(session.getResult(2).result, "Hello world!");
     session.clearResults(3);
