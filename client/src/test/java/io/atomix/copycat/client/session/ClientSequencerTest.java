@@ -39,7 +39,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventBeforeCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID()));
+    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -64,7 +64,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAfterCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID()));
+    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -89,7 +89,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAtCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID()));
+    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -114,7 +114,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAfterAllCommands() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID()));
+    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request1 = PublishRequest.builder()
@@ -146,7 +146,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAbsentCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID()));
+    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
 
     PublishRequest request1 = PublishRequest.builder()
       .withSession(1)
@@ -170,7 +170,7 @@ public class ClientSequencerTest {
    * Tests sequencing callbacks with the sequencer.
    */
   public void testSequenceResponses() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID()));
+    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence1 = sequencer.nextRequest();
     long sequence2 = sequencer.nextRequest();
     assertTrue(sequence2 == sequence1 + 1);

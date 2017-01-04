@@ -23,7 +23,6 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.AbstractRequest;
 
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Accept client request.
@@ -58,7 +57,7 @@ public class AcceptRequest extends AbstractRequest {
     return new Builder(request);
   }
 
-  private UUID client;
+  private String client;
   private Address address;
 
   /**
@@ -66,7 +65,7 @@ public class AcceptRequest extends AbstractRequest {
    *
    * @return The accepted client ID.
    */
-  public UUID client() {
+  public String client() {
     return client;
   }
 
@@ -82,14 +81,14 @@ public class AcceptRequest extends AbstractRequest {
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = UUID.fromString(buffer.readString());
+    client = buffer.readString();
     address = serializer.readObject(buffer);
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client.toString());
+    buffer.writeString(client);
     serializer.writeObject(address, buffer);
   }
 
@@ -126,7 +125,7 @@ public class AcceptRequest extends AbstractRequest {
      * @param client The request client.
      * @return The request builder.
      */
-    public Builder withClient(UUID client) {
+    public Builder withClient(String client) {
       request.client = Assert.notNull(client, "client");
       return this;
     }

@@ -37,7 +37,7 @@ public class ClientSessionStateTest {
    * Tests session state defaults.
    */
   public void testSessionStateDefaults() {
-    UUID clientId = UUID.randomUUID();
+    String clientId = UUID.randomUUID().toString();
     ClientSessionState state = new ClientSessionState(clientId);
     assertEquals(state.getClientId(), clientId);
     assertEquals(state.getSessionId(), 0);
@@ -52,7 +52,7 @@ public class ClientSessionStateTest {
    * Tests updating client session state.
    */
   public void testSessionState() {
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID());
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
     assertEquals(state.setSessionId(1).getSessionId(), 1);
     assertEquals(state.getResponseIndex(), 1);
     assertEquals(state.getEventIndex(), 1);
@@ -70,7 +70,7 @@ public class ClientSessionStateTest {
    * Tests session state change callbacks.
    */
   public void testSessionStateChange() {
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID());
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
     AtomicBoolean changed = new AtomicBoolean();
     AtomicReference<Session.State> change = new AtomicReference<>();
     Listener<Session.State> listener = state.onStateChange(s -> {

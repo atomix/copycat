@@ -18,12 +18,8 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.protocol.RegisterRequest;
-import io.atomix.copycat.protocol.UnregisterRequest;
-import io.atomix.copycat.protocol.RegisterResponse;
-import io.atomix.copycat.protocol.Response;
-import io.atomix.copycat.protocol.UnregisterResponse;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.Session;
 import org.testng.annotations.Test;
 
@@ -63,7 +59,7 @@ public class ClientSessionManagerTest {
         .withTimeout(1000)
         .build()));
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID());
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
     ThreadContext context = mock(ThreadContext.class);
     Executor executor = new MockExecutor();
     when(context.executor()).thenReturn(executor);

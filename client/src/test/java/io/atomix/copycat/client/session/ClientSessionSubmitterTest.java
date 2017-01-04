@@ -15,14 +15,13 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.Session;
-
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
 
@@ -53,7 +52,7 @@ public class ClientSessionSubmitterTest {
         .withResult("Hello world!")
         .build()));
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID())
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
@@ -80,7 +79,7 @@ public class ClientSessionSubmitterTest {
       .thenReturn(future1)
       .thenReturn(future2);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID())
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
@@ -134,7 +133,7 @@ public class ClientSessionSubmitterTest {
         .withResult("Hello world!")
         .build()));
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID())
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
@@ -159,7 +158,7 @@ public class ClientSessionSubmitterTest {
       .thenReturn(future1)
       .thenReturn(future2);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID())
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
@@ -209,7 +208,7 @@ public class ClientSessionSubmitterTest {
       .thenReturn(future1)
       .thenReturn(future2);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID())
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 

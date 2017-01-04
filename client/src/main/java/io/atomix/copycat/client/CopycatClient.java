@@ -34,6 +34,7 @@ import io.atomix.copycat.util.ProtocolSerialization;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -553,6 +554,7 @@ public interface CopycatClient {
    */
   final class Builder implements io.atomix.catalyst.util.Builder<CopycatClient> {
     private final Collection<Address> cluster;
+    private String clientId = UUID.randomUUID().toString();
     private Transport transport;
     private Serializer serializer;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
@@ -561,6 +563,21 @@ public interface CopycatClient {
 
     private Builder(Collection<Address> cluster) {
       this.cluster = Assert.notNull(cluster, "cluster");
+    }
+
+    /**
+     * Sets the client ID.
+     * <p>
+     * The client ID is a name that should be unique among all clients. The ID will be used to resolve
+     * and recover sessions.
+     *
+     * @param clientId The client ID.
+     * @return The client builder.
+     * @throws NullPointerException if {@code clientId} is null
+     */
+    public Builder withClientId(String clientId) {
+      this.clientId = Assert.notNull(clientId, "clientId");
+      return this;
     }
 
     /**
@@ -649,7 +666,7 @@ public interface CopycatClient {
       serializer.resolve(new ClientResponseTypeResolver());
       serializer.resolve(new ProtocolSerialization());
 
-      return new DefaultCopycatClient(cluster, transport, new SingleThreadContext("copycat-client-io-%d", serializer.clone()), new SingleThreadContext("copycat-client-event-%d", serializer.clone()), serverSelectionStrategy, connectionStrategy, recoveryStrategy);
+      return new DefaultCopycatClient(clientId, cluster, transport, new SingleThreadContext("copycat-client-io-%d", serializer.clone()), new SingleThreadContext("copycat-client-event-%d", serializer.clone()), serverSelectionStrategy, connectionStrategy, recoveryStrategy);
     }
   }
 

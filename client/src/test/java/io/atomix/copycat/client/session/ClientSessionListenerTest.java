@@ -15,13 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.transport.MessageHandler;
@@ -30,13 +23,16 @@ import io.atomix.copycat.protocol.PublishResponse;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
+import org.mockito.ArgumentCaptor;
+import org.testng.annotations.Test;
 
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.mockito.ArgumentCaptor;
-import org.testng.annotations.Test;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.*;
+import static org.testng.Assert.*;
 
 /**
  * Client session listener test.
@@ -56,7 +52,7 @@ public class ClientSessionListenerTest {
     ArgumentCaptor<MessageHandler> captor = ArgumentCaptor.forClass(MessageHandler.class);
     Connection connection = mock(Connection.class);
 
-    state = new ClientSessionState(UUID.randomUUID());
+    state = new ClientSessionState(UUID.randomUUID().toString());
     Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
     when(context.executor()).thenReturn(executor);

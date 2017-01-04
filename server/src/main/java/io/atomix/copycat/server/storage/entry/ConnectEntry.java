@@ -22,8 +22,6 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.reference.ReferenceManager;
 
-import java.util.UUID;
-
 /**
  * Stores a connection between a client and server.
  * <p>
@@ -34,7 +32,7 @@ import java.util.UUID;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
-  private UUID client;
+  private String client;
   private Address address;
 
   public ConnectEntry() {
@@ -49,7 +47,7 @@ public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
    *
    * @return The entry client ID.
    */
-  public UUID getClient() {
+  public String getClient() {
     return client;
   }
 
@@ -60,7 +58,7 @@ public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
    * @return The register entry.
    * @throws NullPointerException if {@code client} is null
    */
-  public ConnectEntry setClient(UUID client) {
+  public ConnectEntry setClient(String client) {
     this.client = Assert.notNull(client, "client");
     return this;
   }
@@ -89,14 +87,14 @@ public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client.toString());
+    buffer.writeString(client);
     serializer.writeObject(address, buffer);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = UUID.fromString(buffer.readString());
+    client = buffer.readString();
     address = serializer.readObject(buffer);
   }
 
