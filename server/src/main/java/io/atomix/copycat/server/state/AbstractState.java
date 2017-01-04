@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-abstract class AbstractState implements Managed<AbstractState> {
+public abstract class AbstractState implements Managed<AbstractState> {
   protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   protected final ServerContext context;
   private boolean open = true;
