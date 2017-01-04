@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.error.CopycatError;
@@ -39,14 +39,16 @@ final class ClientSessionManager {
   private final ClientConnection connection;
   private final ThreadContext context;
   private final ConnectionStrategy strategy;
+  private final Duration sessionTimeout;
   private Duration interval;
   private Scheduled keepAlive;
 
-  ClientSessionManager(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy) {
+  ClientSessionManager(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.strategy = Assert.notNull(connectionStrategy, "connectionStrategy");
+    this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
   }
 
   /**
@@ -84,6 +86,7 @@ final class ClientSessionManager {
 
     RegisterRequest request = RegisterRequest.builder()
       .withClient(state.getClientId())
+      .withTimeout(sessionTimeout.toMillis())
       .build();
 
     state.getLogger().debug("Sending {}", request);

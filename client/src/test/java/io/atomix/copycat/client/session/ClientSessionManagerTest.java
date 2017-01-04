@@ -23,6 +23,7 @@ import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.Session;
 import org.testng.annotations.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
@@ -64,7 +65,7 @@ public class ClientSessionManagerTest {
     Executor executor = new MockExecutor();
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionManager manager = new ClientSessionManager(connection, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF);
+    ClientSessionManager manager = new ClientSessionManager(connection, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF, Duration.ZERO);
     manager.open().join();
 
     assertEquals(state.getSessionId(), 1);

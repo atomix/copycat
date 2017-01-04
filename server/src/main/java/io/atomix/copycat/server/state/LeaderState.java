@@ -683,11 +683,20 @@ final class LeaderState extends ActiveState {
   protected CompletableFuture<RegisterResponse> register(RegisterRequest request) {
     final long timestamp = System.currentTimeMillis();
     final long index;
-    final long timeout = context.getSessionTimeout().toMillis();
+
+    // If the client submitted a session timeout, use the client's timeout, otherwise use the configured
+    // default server session timeout.
+    final long timeout;
+    if (request.timeout() != 0) {
+      timeout = request.timeout();
+    } else {
+      timeout = context.getSessionTimeout().toMillis();
+    }
 
     context.checkThread();
     logRequest(request);
 
+    // The timeout is logged in the RegisterEntry to ensure that all nodes see a consistent timeout for the session.
     try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
       entry.setTerm(context.getTerm())
         .setTimestamp(timestamp)

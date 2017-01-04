@@ -31,6 +31,7 @@ import io.atomix.copycat.protocol.ClientResponseTypeResolver;
 import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.ProtocolSerialization;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -557,6 +558,7 @@ public interface CopycatClient {
     private String clientId = UUID.randomUUID().toString();
     private Transport transport;
     private Serializer serializer;
+    private Duration sessionTimeout = Duration.ZERO;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
@@ -604,6 +606,19 @@ public interface CopycatClient {
      */
     public Builder withSerializer(Serializer serializer) {
       this.serializer = Assert.notNull(serializer, "serializer");
+      return this;
+    }
+
+    /**
+     * Sets the client session timeout.
+     *
+     * @param sessionTimeout The client's session timeout.
+     * @return The client builder.
+     * @throws NullPointerException if the session timeout is null
+     * @throws IllegalArgumentException if the session timeout is not {@code -1} or positive
+     */
+    public Builder withSessionTimeout(Duration sessionTimeout) {
+      this.sessionTimeout = Assert.arg(Assert.notNull(sessionTimeout, "sessionTimeout"), sessionTimeout.toMillis() >= -1, "session timeout must be positive or -1");
       return this;
     }
 
@@ -666,7 +681,16 @@ public interface CopycatClient {
       serializer.resolve(new ClientResponseTypeResolver());
       serializer.resolve(new ProtocolSerialization());
 
-      return new DefaultCopycatClient(clientId, cluster, transport, new SingleThreadContext("copycat-client-io-%d", serializer.clone()), new SingleThreadContext("copycat-client-event-%d", serializer.clone()), serverSelectionStrategy, connectionStrategy, recoveryStrategy);
+      return new DefaultCopycatClient(
+        clientId,
+        cluster,
+        transport,
+        new SingleThreadContext("copycat-client-io-%d", serializer.clone()),
+        new SingleThreadContext("copycat-client-event-%d", serializer.clone()),
+        serverSelectionStrategy,
+        connectionStrategy,
+        recoveryStrategy,
+        sessionTimeout);
     }
   }
 
