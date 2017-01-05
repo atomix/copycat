@@ -139,7 +139,7 @@ final class FollowerState extends ActiveState {
       LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
       PollRequest request = PollRequest.builder()
         .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().member().address().hashCode())
+        .withCandidate(context.getCluster().member().id())
         .withLogIndex(lastIndex)
         .withLogTerm(lastTerm)
         .build();
