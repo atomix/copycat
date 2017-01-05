@@ -328,7 +328,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
      */
     private void reschedule() {
       if (interval > 0) {
-        time = timestamp + delay;
+        time = timestamp + interval;
         schedule();
       }
     }
