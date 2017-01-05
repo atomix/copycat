@@ -43,6 +43,9 @@ import java.util.stream.Collectors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class LeaderState extends ActiveState {
+  // Max request queue size *per session* - necessary to limit the stack size
+  private static final int MAX_REQUEST_QUEUE_SIZE = 100;
+
   private final LeaderAppender appender;
   private Scheduled appendTimer;
   private long configuring;
@@ -490,7 +493,18 @@ final class LeaderState extends ActiveState {
     // sequence number. In that case, it's likely that the command was submitted more than once to the
     // cluster, and the command will be deduplicated once applied to the state machine.
     if (request.sequence() > session.nextRequestSequence()) {
-      session.registerRequest(request.sequence(), () -> applyCommand(request, session, future));
+      // If the request sequence number is more than 1k requests above the last sequenced request, reject the request.
+      // The client should resubmit a request that fails with a COMMAND_ERROR.
+      if (request.sequence() - session.getRequestSequence() > MAX_REQUEST_QUEUE_SIZE) {
+        future.complete(CommandResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.COMMAND_ERROR)
+          .build());
+      }
+      // Register the request in the request queue if it's not too far ahead of the current sequence number.
+      else {
+        session.registerRequest(request.sequence(), () -> applyCommand(request, session, future));
+      }
     } else {
       applyCommand(request, session, future);
     }
