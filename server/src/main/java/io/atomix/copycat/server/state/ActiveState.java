@@ -18,7 +18,6 @@ package io.atomix.copycat.server.state;
 import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -93,45 +92,50 @@ abstract class ActiveState extends PassiveState {
 
   @Override
   protected AppendResponse appendEntries(AppendRequest request) {
-    // If the log contains entries after the request's previous log index
-    // then remove those entries to be replaced by the request entries.
+    // Get the last entry index or default to the request log index.
+    long lastEntryIndex = request.logIndex();
     if (!request.entries().isEmpty()) {
+      lastEntryIndex = request.entries().get(request.entries().size() - 1).getIndex();
+    }
 
-      // Iterate through request entries and append them to the log.
-      for (Entry entry : request.entries()) {
-        // If the entry index is greater than the last log index, skip missing entries.
-        if (context.getLog().lastIndex() < entry.getIndex()) {
-          context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-          LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-        } else if (context.getCommitIndex() >= entry.getIndex()) {
-          continue;
-        } else {
-          // Compare the term of the received entry with the matching entry in the log.
-          long term = context.getLog().term(entry.getIndex());
-          if (term != 0) {
-            if (entry.getTerm() != term) {
-              // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
-              // If appending to the log fails, apply commits and reply false to the append request.
-              LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
-              context.getLog().truncate(entry.getIndex() - 1).append(entry);
-              LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-            }
-          } else {
+    // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
+    long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
+
+    // Iterate through request entries and append them to the log.
+    for (Entry entry : request.entries()) {
+      // If the entry index is greater than the last log index, skip missing entries.
+      if (context.getLog().lastIndex() < entry.getIndex()) {
+        context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
+        LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
+      } else if (context.getCommitIndex() >= entry.getIndex()) {
+        continue;
+      } else {
+        // Compare the term of the received entry with the matching entry in the log.
+        long term = context.getLog().term(entry.getIndex());
+        if (term != 0) {
+          if (entry.getTerm() != term) {
+            // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
+            // If appending to the log fails, apply commits and reply false to the append request.
+            LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
             context.getLog().truncate(entry.getIndex() - 1).append(entry);
             LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
           }
+        } else {
+          context.getLog().truncate(entry.getIndex() - 1).append(entry);
+          LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
         }
+      }
 
-        // If the entry is a connect entry then immediately configure the connection.
-        if (entry instanceof ConnectEntry) {
-          ConnectEntry connectEntry = (ConnectEntry) entry;
-          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
-        }
+      // If the entry is a connect entry then immediately configure the connection.
+      if (entry instanceof ConnectEntry) {
+        ConnectEntry connectEntry = (ConnectEntry) entry;
+        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
       }
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.setCommitIndex(request.commitIndex());
+    LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
 
     // Apply commits to the local state machine.
