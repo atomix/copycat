@@ -18,6 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.concurrent.ComposableFuture;
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
@@ -94,7 +95,7 @@ final class LeaderState extends ActiveState {
     try (InitializeEntry entry = context.getLog().create(InitializeEntry.class)) {
       entry.setTerm(term)
         .setTimestamp(appender.time());
-      assert context.getLog().append(entry) == appender.index();
+      Assert.state(context.getLog().append(entry) == appender.index(), "Initialize entry not appended at the start of the leader's term");
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
@@ -224,7 +225,7 @@ final class LeaderState extends ActiveState {
         .setTimestamp(System.currentTimeMillis())
         .setMembers(members);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
@@ -528,7 +529,7 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     // Replicate the command to followers.
