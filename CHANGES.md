@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 1.1.5 - 2017-01-12
+## 1.2.0 - 2017-01-12
 ### CRITICAL
 * [#270](https://github.com/atomix/copycat/pull/270) - Remove `assert` statement with side effects preventing `InitializeEntry` from being appended
 * [#266](https://github.com/atomix/copycat/pull/266) and [#269](https://github.com/atomix/copycat/pull/269) - Prevent `commitIndex` from being incremented beyond the last index in an `AppendRequest`
