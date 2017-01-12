@@ -19,7 +19,7 @@
   <parent>
     <groupId>io.atomix.copycat</groupId>
     <artifactId>copycat-examples-parent</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>copycat-value-client-example</artifactId>
