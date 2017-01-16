@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.session;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.Serializer;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Transports a named event from a server to a client {@link Session}.
@@ -30,14 +29,17 @@ import io.atomix.catalyst.serializer.Serializer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class Event<T> implements CatalystSerializable {
+public class Event<T> {
+  @JsonProperty("event")
   private String event;
+  @JsonProperty("message")
   private Object message;
 
   public Event() {
   }
 
-  public Event(String event, Object message) {
+  @JsonCreator
+  public Event(@JsonProperty("event") String event, @JsonProperty("message") Object message) {
     this.event = event;
     this.message = message;
   }
@@ -47,6 +49,7 @@ public class Event<T> implements CatalystSerializable {
    *
    * @return The event name.
    */
+  @JsonGetter("event")
   public String name() {
     return event;
   }
@@ -56,21 +59,10 @@ public class Event<T> implements CatalystSerializable {
    *
    * @return The event message.
    */
+  @JsonGetter("message")
   @SuppressWarnings("unchecked")
   public T message() {
     return (T) message;
-  }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeUTF8(event);
-    serializer.writeObject(message, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    event = buffer.readUTF8();
-    message = serializer.readObject(buffer);
   }
 
   @Override

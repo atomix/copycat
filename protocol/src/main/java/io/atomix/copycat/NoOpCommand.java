@@ -15,11 +15,6 @@
  */
 package io.atomix.copycat;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.Serializer;
-
 /**
  * Special placeholder command representing a client operation that has no effect on the state machine.
  * <p>
@@ -31,19 +26,9 @@ import io.atomix.catalyst.serializer.Serializer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NoOpCommand implements Command<Void>, CatalystSerializable {
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-  }
-
+public class NoOpCommand implements Command<Void> {
   @Override
   public String toString() {
     return getClass().getSimpleName();
   }
-
 }

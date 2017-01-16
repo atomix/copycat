@@ -32,5 +32,15 @@
       <artifactId>catalyst-transport</artifactId>
       <version>${catalyst.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-core</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>de.undercouch</groupId>
+      <artifactId>bson4jackson</artifactId>
+      <version>${jackson.bson.version}</version>
+    </dependency>
   </dependencies>
 </project>
