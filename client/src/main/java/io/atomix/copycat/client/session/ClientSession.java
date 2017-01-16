@@ -18,7 +18,6 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
@@ -26,6 +25,7 @@ import io.atomix.copycat.Query;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.protocol.ProtocolClient;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
@@ -59,7 +59,7 @@ public class ClientSession implements Session {
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
+  public ClientSession(String id, ProtocolClient client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
     this(new ClientConnection(id, client, selector), new ClientSessionState(id), context, connectionStrategy, sessionTimeout);
   }
 

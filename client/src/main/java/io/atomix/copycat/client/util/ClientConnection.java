@@ -16,41 +16,41 @@
 package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.ConnectRequest;
-import io.atomix.copycat.protocol.ConnectResponse;
-import io.atomix.copycat.protocol.Request;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.request.*;
+import io.atomix.copycat.protocol.response.*;
+import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.ConnectException;
+import java.net.ProtocolException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Client connection that recursively connects to servers in the cluster and attempts to submit requests.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ClientConnection implements Connection {
+public class ClientConnection implements ProtocolClientConnection {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnection.class);
   private final String id;
-  private final Client client;
+  private final ProtocolClient client;
   private final AddressSelector selector;
-  private CompletableFuture<Connection> connectFuture;
-  private final Map<Class<?>, MessageHandler<?, ?>> handlers = new ConcurrentHashMap<>();
-  private Connection connection;
+  private CompletableFuture<ProtocolClientConnection> connectFuture;
+  private ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> publishListener;
+  private ProtocolClientConnection connection;
   private boolean open = true;
 
-  public ClientConnection(String id, Client client, AddressSelector selector) {
+  public ClientConnection(String id, ProtocolClient client, AddressSelector selector) {
     this.id = Assert.notNull(id, "id");
     this.client = Assert.notNull(client, "client");
     this.selector = Assert.notNull(selector, "selector");
@@ -97,36 +97,76 @@ public class ClientConnection implements Connection {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public <T, U> CompletableFuture<U> send(T request) {
-    CompletableFuture<U> future = new CompletableFuture<>();
-    sendRequest((Request) request, (CompletableFuture<Response>) future);
+  public CompletableFuture<ConnectResponse> connect(ProtocolRequestFactory<ConnectRequest.Builder, ConnectRequest> builder) {
+    CompletableFuture<ConnectResponse> future = new CompletableFuture<>();
+    sendRequest(connection -> connection.connect(builder), future);
     return future;
+  }
+
+  @Override
+  public CompletableFuture<RegisterResponse> register(ProtocolRequestFactory<RegisterRequest.Builder, RegisterRequest> builder) {
+    CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
+    sendRequest(connection -> connection.register(builder), future);
+    return future;
+  }
+
+  @Override
+  public CompletableFuture<KeepAliveResponse> keepAlive(ProtocolRequestFactory<KeepAliveRequest.Builder, KeepAliveRequest> builder) {
+    CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
+    sendRequest(connection -> connection.keepAlive(builder), future);
+    return future;
+  }
+
+  @Override
+  public CompletableFuture<UnregisterResponse> unregister(ProtocolRequestFactory<UnregisterRequest.Builder, UnregisterRequest> builder) {
+    CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
+    sendRequest(connection -> connection.unregister(builder), future);
+    return future;
+  }
+
+  @Override
+  public CompletableFuture<CommandResponse> command(ProtocolRequestFactory<CommandRequest.Builder, CommandRequest> builder) {
+    CompletableFuture<CommandResponse> future = new CompletableFuture<>();
+    sendRequest(connection -> connection.command(builder), future);
+    return future;
+  }
+
+  @Override
+  public CompletableFuture<QueryResponse> query(ProtocolRequestFactory<QueryRequest.Builder, QueryRequest> builder) {
+    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+    sendRequest(connection -> connection.query(builder), future);
+    return future;
+  }
+
+  @Override
+  public ProtocolClientConnection onPublish(ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> listener) {
+    this.publishListener = listener;
+    return this;
   }
 
   /**
    * Sends the given request attempt to the cluster.
    */
-  private <T extends Request, U extends Response> void sendRequest(T request, CompletableFuture<U> future) {
+  private <T extends ProtocolRequest, U extends ProtocolResponse> void sendRequest(Function<ProtocolClientConnection, CompletableFuture<U>> factory, CompletableFuture<U> future) {
     if (open) {
-      connect().whenComplete((c, e) -> sendRequest(request, c, e, future));
+      connect().whenComplete((c, e) -> sendRequest(factory, c, e, future));
     }
   }
 
   /**
    * Sends the given request attempt to the cluster via the given connection if connected.
    */
-  private <T extends Request, U extends Response> void sendRequest(T request, Connection connection, Throwable error, CompletableFuture<U> future) {
+  private <T extends ProtocolRequest, U extends ProtocolResponse> void sendRequest(Function<ProtocolClientConnection, CompletableFuture<U>> factory, ProtocolClientConnection connection, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
         if (connection != null) {
-          connection.<T, U>send(request).whenComplete((r, e) -> handleResponse(request, r, e, future));
+          factory.apply(connection).whenComplete((r, e) -> handleResponse(factory, r, e, future));
         } else {
           future.completeExceptionally(new ConnectException("failed to connect"));
         }
       } else {
         this.connection = null;
-        next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+        next().whenComplete((c, e) -> sendRequest(factory, c, e, future));
       }
     }
   }
@@ -134,20 +174,20 @@ public class ClientConnection implements Connection {
   /**
    * Handles a response from the cluster.
    */
-  private <T extends Request, U extends Response> void handleResponse(T request, U response, Throwable error, CompletableFuture<U> future) {
+  private <T extends ProtocolRequest, U extends ProtocolResponse> void handleResponse(Function<ProtocolClientConnection, CompletableFuture<U>> factory, U response, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
-        if (response.status() == Response.Status.OK
+        if (response.status() == WebSocketResponse.Status.OK
           || response.error() == CopycatError.Type.COMMAND_ERROR
           || response.error() == CopycatError.Type.QUERY_ERROR
           || response.error() == CopycatError.Type.APPLICATION_ERROR
           || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           future.complete(response);
         } else {
-          next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+          next().whenComplete((c, e) -> sendRequest(factory, c, e, future));
         }
-      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
-        next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+      } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof ProtocolException || error instanceof ClosedChannelException) {
+        next().whenComplete((c, e) -> sendRequest(factory, c, e, future));
       } else {
         future.completeExceptionally(error);
       }
@@ -157,13 +197,13 @@ public class ClientConnection implements Connection {
   /**
    * Connects to the cluster.
    */
-  private CompletableFuture<Connection> connect() {
+  private CompletableFuture<ProtocolClientConnection> connect() {
     // If the address selector has been then reset the connection.
     if (selector.state() == AddressSelector.State.RESET && connection != null) {
       if (connectFuture != null)
         return connectFuture;
 
-      CompletableFuture<Connection> future = new CompletableFuture<>();
+      CompletableFuture<ProtocolClientConnection> future = new CompletableFuture<>();
       connectFuture = future;
       connection.close().whenComplete((result, error) -> connect(future));
       return connectFuture.whenComplete((result, error) -> connectFuture = null);
@@ -188,7 +228,7 @@ public class ClientConnection implements Connection {
   /**
    * Connects to the cluster using the next connection.
    */
-  private CompletableFuture<Connection> next() {
+  private CompletableFuture<ProtocolClientConnection> next() {
     if (connection != null)
       return connection.close().thenRun(() -> connection = null).thenCompose(v -> connect());
     return connect();
@@ -197,7 +237,7 @@ public class ClientConnection implements Connection {
   /**
    * Attempts to connect to the cluster.
    */
-  private void connect(CompletableFuture<Connection> future) {
+  private void connect(CompletableFuture<ProtocolClientConnection> future) {
     if (!selector.hasNext()) {
       LOGGER.debug("Failed to connect to the cluster");
       future.complete(null);
@@ -211,7 +251,7 @@ public class ClientConnection implements Connection {
   /**
    * Handles a connection to a server.
    */
-  private void handleConnection(Address address, Connection connection, Throwable error, CompletableFuture<Connection> future) {
+  private void handleConnection(Address address, ProtocolClientConnection connection, Throwable error, CompletableFuture<ProtocolClientConnection> future) {
     if (open) {
       if (error == null) {
         setupConnection(address, connection, future);
@@ -225,7 +265,7 @@ public class ClientConnection implements Connection {
    * Sets up the given connection.
    */
   @SuppressWarnings("unchecked")
-  private void setupConnection(Address address, Connection connection, CompletableFuture<Connection> future) {
+  private void setupConnection(Address address, ProtocolClientConnection connection, CompletableFuture<ProtocolClientConnection> future) {
     LOGGER.debug("Setting up connection to {}", address);
 
     this.connection = connection;
@@ -242,31 +282,26 @@ public class ClientConnection implements Connection {
       }
     });
 
-    for (Map.Entry<Class<?>, MessageHandler<?, ?>> entry : handlers.entrySet()) {
-      connection.handler((Class) entry.getKey(), entry.getValue());
+    if (publishListener != null) {
+      connection.onPublish(publishListener);
     }
 
     // When we first connect to a new server, first send a ConnectRequest to the server to establish
     // the connection with the server-side state machine.
-    ConnectRequest request = ConnectRequest.builder()
-      .withClientId(id)
-      .build();
-
-    LOGGER.debug("Sending {}", request);
-    connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
+    connection.connect(builder -> builder.withClient(id).build())
+      .whenComplete((r, e) -> handleConnectResponse(r, e, future));
   }
 
   /**
    * Handles a connect response.
    */
-  private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<Connection> future) {
+  private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<ProtocolClientConnection> future) {
     if (open) {
       if (error == null) {
-        LOGGER.debug("Received {}", response);
         // If the connection was successfully created, immediately send a keep-alive request
         // to the server to ensure we maintain our session and get an updated list of server addresses.
-        if (response.status() == Response.Status.OK) {
-          selector.reset(response.leader(), response.members());
+        if (response.status() == WebSocketResponse.Status.OK) {
+          selector.reset(new Address(response.leader()), response.members().stream().map(Address::new).collect(Collectors.toList()));
           future.complete(connection);
         } else {
           connect(future);
@@ -278,22 +313,12 @@ public class ClientConnection implements Connection {
   }
 
   @Override
-  public <T, U> Connection handler(Class<T> type, MessageHandler<T, U> handler) {
-    Assert.notNull(type, "type");
-    Assert.notNull(handler, "handler");
-    handlers.put(type, handler);
-    if (connection != null)
-      connection.handler(type, handler);
-    return this;
-  }
-
-  @Override
   public Listener<Throwable> exceptionListener(Consumer<Throwable> listener) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public Listener<Connection> closeListener(Consumer<Connection> listener) {
+  public Listener<ProtocolConnection> closeListener(Consumer<ProtocolConnection> listener) {
     throw new UnsupportedOperationException();
   }
 

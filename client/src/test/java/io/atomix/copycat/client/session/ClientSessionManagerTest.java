@@ -16,10 +16,13 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.util.ClientConnection;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.ProtocolRequestFactory;
+import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketUnregisterResponse;
 import io.atomix.copycat.session.Session;
 import org.testng.annotations.Test;
 
@@ -44,18 +47,19 @@ public class ClientSessionManagerTest {
   /**
    * Tests registering a session with a client session manager.
    */
+  @SuppressWarnings("unchecked")
   public void testSessionRegisterUnregister() throws Throwable {
     ClientConnection connection = mock(ClientConnection.class);
     when(connection.reset()).thenReturn(connection);
     when(connection.servers()).thenReturn(Collections.singletonList(new Address("localhost", 5000)));
-    when(connection.send(any(RegisterRequest.class)))
-      .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
+    when(connection.register(any(ProtocolRequestFactory.class)))
+      .thenReturn(CompletableFuture.completedFuture(new WebSocketRegisterResponse.Builder(1)
         .withSession(1)
-        .withLeader(new Address("localhost", 5000))
+        .withLeader(new Address("localhost:5000"))
         .withMembers(Arrays.asList(
-          new Address("localhost", 5000),
-          new Address("localhost", 5001),
-          new Address("localhost", 5002)
+          new Address("localhost:5000"),
+          new Address("localhost:5001"),
+          new Address("localhost:5002")
         ))
         .withTimeout(1000)
         .build()));
@@ -77,9 +81,9 @@ public class ClientSessionManagerTest {
       new Address("localhost", 5002)
     ));
 
-    when(connection.send(any(UnregisterRequest.class)))
-      .thenReturn(CompletableFuture.completedFuture(UnregisterResponse.builder()
-        .withStatus(Response.Status.OK)
+    when(connection.unregister(any(ProtocolRequestFactory.class)))
+      .thenReturn(CompletableFuture.completedFuture(new WebSocketUnregisterResponse.Builder(2)
+        .withStatus(WebSocketResponse.Status.OK)
         .build()));
 
     manager.close().join();

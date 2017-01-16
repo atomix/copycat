@@ -15,16 +15,14 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.transport.Address;
+import io.atomix.copycat.protocol.Address;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.*;
 
 /**
  * Server selection strategies test.

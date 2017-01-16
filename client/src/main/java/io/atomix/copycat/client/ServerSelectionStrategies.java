@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.Query;
+import io.atomix.copycat.protocol.Address;
 
 import java.util.ArrayList;
 import java.util.Collections;

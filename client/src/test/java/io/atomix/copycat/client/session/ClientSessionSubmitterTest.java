@@ -16,11 +16,16 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.QueryException;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.ProtocolClientConnection;
+import io.atomix.copycat.protocol.ProtocolRequestFactory;
+import io.atomix.copycat.protocol.response.CommandResponse;
+import io.atomix.copycat.protocol.response.QueryResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketQueryResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.session.Session;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
@@ -43,11 +48,12 @@ public class ClientSessionSubmitterTest {
   /**
    * Tests submitting a command to the cluster.
    */
+  @SuppressWarnings("unchecked")
   public void testSubmitCommand() throws Throwable {
-    Connection connection = mock(Connection.class);
-    when(connection.send(any(CommandRequest.class)))
-      .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
-        .withStatus(Response.Status.OK)
+    ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
+    when(connection.command(any(ProtocolRequestFactory.class)))
+      .thenReturn(CompletableFuture.completedFuture(new WebSocketCommandResponse.Builder(1)
+        .withStatus(WebSocketResponse.Status.OK)
         .withIndex(10)
         .withResult("Hello world!")
         .build()));
@@ -70,12 +76,13 @@ public class ClientSessionSubmitterTest {
   /**
    * Test resequencing a command response.
    */
+  @SuppressWarnings("unchecked")
   public void testResequenceCommand() throws Throwable {
     CompletableFuture<CommandResponse> future1 = new CompletableFuture<>();
     CompletableFuture<CommandResponse> future2 = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<CommandResponse>>when(connection.send(any(CommandRequest.class)))
+    ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
+    Mockito.when(connection.command(any(ProtocolRequestFactory.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -92,8 +99,8 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<String> result1 = submitter.submit(new TestCommand());
     CompletableFuture<String> result2 = submitter.submit(new TestCommand());
 
-    future2.complete(CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    future2.complete(new WebSocketCommandResponse.Builder(2)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(10)
       .withResult("Hello world again!")
       .build());
@@ -105,8 +112,8 @@ public class ClientSessionSubmitterTest {
     assertFalse(result1.isDone());
     assertFalse(result2.isDone());
 
-    future1.complete(CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    future1.complete(new WebSocketCommandResponse.Builder(3)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(9)
       .withResult("Hello world!")
       .build());
@@ -124,11 +131,12 @@ public class ClientSessionSubmitterTest {
   /**
    * Tests submitting a query to the cluster.
    */
+  @SuppressWarnings("unchecked")
   public void testSubmitQuery() throws Throwable {
-    Connection connection = mock(Connection.class);
-    when(connection.send(any(QueryRequest.class)))
-      .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
-        .withStatus(Response.Status.OK)
+    ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
+    when(connection.query(any(ProtocolRequestFactory.class)))
+      .thenReturn(CompletableFuture.completedFuture(new WebSocketQueryResponse.Builder(1)
+        .withStatus(WebSocketResponse.Status.OK)
         .withIndex(10)
         .withResult("Hello world!")
         .build()));
@@ -149,12 +157,13 @@ public class ClientSessionSubmitterTest {
   /**
    * Tests resequencing a query response.
    */
+  @SuppressWarnings("unchecked")
   public void testResequenceQuery() throws Throwable {
     CompletableFuture<QueryResponse> future1 = new CompletableFuture<>();
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+    ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
+    Mockito.when(connection.query(any(ProtocolRequestFactory.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -171,8 +180,8 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<String> result1 = submitter.submit(new TestQuery());
     CompletableFuture<String> result2 = submitter.submit(new TestQuery());
 
-    future2.complete(QueryResponse.builder()
-      .withStatus(Response.Status.OK)
+    future2.complete(new WebSocketQueryResponse.Builder(1)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(10)
       .withResult("Hello world again!")
       .build());
@@ -182,8 +191,8 @@ public class ClientSessionSubmitterTest {
     assertFalse(result1.isDone());
     assertFalse(result2.isDone());
 
-    future1.complete(QueryResponse.builder()
-      .withStatus(Response.Status.OK)
+    future1.complete(new WebSocketQueryResponse.Builder(2)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(9)
       .withResult("Hello world!")
       .build());
@@ -199,12 +208,13 @@ public class ClientSessionSubmitterTest {
   /**
    * Tests skipping over a failed query attempt.
    */
+  @SuppressWarnings("unchecked")
   public void testSkippingOverFailedQuery() throws Throwable {
     CompletableFuture<QueryResponse> future1 = new CompletableFuture<>();
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+    ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
+    Mockito.when(connection.query(any(ProtocolRequestFactory.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -227,8 +237,8 @@ public class ClientSessionSubmitterTest {
     assertFalse(result2.isDone());
 
     future1.completeExceptionally(new QueryException("failure"));
-    future2.complete(QueryResponse.builder()
-        .withStatus(Response.Status.OK)
+    future2.complete(new WebSocketQueryResponse.Builder(1)
+        .withStatus(WebSocketResponse.Status.OK)
         .withIndex(10)
         .withResult("Hello world!")
         .build());

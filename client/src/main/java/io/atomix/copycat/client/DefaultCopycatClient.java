@@ -20,13 +20,13 @@ import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.client.util.AddressSelector;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
@@ -51,7 +51,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private static final int DEFAULT_PORT = 8700;
   private final String clientId;
   private final Collection<Address> cluster;
-  private final Transport transport;
+  private final Protocol protocol;
   private final ThreadContext ioContext;
   private final ThreadContext eventContext;
   private final AddressSelector selector;
@@ -67,10 +67,10 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout) {
+  DefaultCopycatClient(String clientId, Collection<Address> cluster, Protocol protocol, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.cluster = Assert.notNull(cluster, "cluster");
-    this.transport = Assert.notNull(transport, "transport");
+    this.protocol = Assert.notNull(protocol, "protocol");
     this.ioContext = Assert.notNull(ioContext, "ioContext");
     this.eventContext = Assert.notNull(eventContext, "eventContext");
     this.selector = new AddressSelector(selectionStrategy);
@@ -101,11 +101,6 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public Transport transport() {
-    return transport;
-  }
-
-  @Override
   public Serializer serializer() {
     ThreadContext context = ThreadContext.currentContext();
     return context != null ? context.serializer() : this.eventContext.serializer();
@@ -125,7 +120,7 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy, sessionTimeout);
+    ClientSession session = new ClientSession(clientId, protocol.createClient(), selector, ioContext, connectionStrategy, sessionTimeout);
 
     // Update the session change listener.
     if (changeListener != null)
@@ -278,7 +273,7 @@ public class DefaultCopycatClient implements CopycatClient {
         CompletableFuture.runAsync(() -> {
           ioContext.close();
           eventContext.close();
-          transport.close();
+          protocol.close();
           if (error == null) {
             closeFuture.complete(null);
           } else {
@@ -306,7 +301,7 @@ public class DefaultCopycatClient implements CopycatClient {
           CompletableFuture.runAsync(() -> {
             ioContext.close();
             eventContext.close();
-            transport.close();
+            protocol.close();
           });
         });
     }

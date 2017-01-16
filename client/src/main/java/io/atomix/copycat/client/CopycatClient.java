@@ -19,17 +19,14 @@ import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.protocol.ClientRequestTypeResolver;
-import io.atomix.copycat.protocol.ClientResponseTypeResolver;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.session.Session;
-import io.atomix.copycat.util.ProtocolSerialization;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -312,17 +309,6 @@ public interface CopycatClient {
   ThreadContext context();
 
   /**
-   * Returns the client transport.
-   * <p>
-   * The transport is the mechanism through which the client communicates with the cluster. The transport cannot
-   * be used to access client internals, but it serves only as a mechanism for providing users with the same
-   * transport/protocol used by the client.
-   *
-   * @return The client transport.
-   */
-  Transport transport();
-
-  /**
    * Returns the client serializer.
    * <p>
    * The serializer can be used to manually register serializable types for submitted {@link Command commands} and
@@ -548,7 +534,7 @@ public interface CopycatClient {
    * <pre>
    *   {@code
    *     CopycatClient client = CopycatClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000)
-   *       .withTransport(new NettyTransport())
+   *       .withProtocol(new NettyTransport())
    *       .build();
    *   }
    * </pre>
@@ -556,7 +542,7 @@ public interface CopycatClient {
   final class Builder implements io.atomix.catalyst.util.Builder<CopycatClient> {
     private final Collection<Address> cluster;
     private String clientId = UUID.randomUUID().toString();
-    private Transport transport;
+    private Protocol protocol;
     private Serializer serializer;
     private Duration sessionTimeout = Duration.ZERO;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
@@ -583,17 +569,14 @@ public interface CopycatClient {
     }
 
     /**
-     * Sets the client transport.
-     * <p>
-     * By default, the client will use the {@code NettyTransport} with an event loop pool equal to
-     * {@link Runtime#availableProcessors()}.
+     * Sets the client protocol.
      *
-     * @param transport The client transport.
+     * @param protocol The client protocol.
      * @return The client builder.
-     * @throws NullPointerException if {@code transport} is null
+     * @throws NullPointerException if {@code protocol} is null
      */
-    public Builder withTransport(Transport transport) {
-      this.transport = Assert.notNull(transport, "transport");
+    public Builder withProtocol(Protocol protocol) {
+      this.protocol = Assert.notNull(protocol, "protocol");
       return this;
     }
 
@@ -662,29 +645,15 @@ public interface CopycatClient {
      */
     @Override
     public CopycatClient build() {
-      // If the transport is not configured, attempt to use the default Netty transport.
-      if (transport == null) {
-        try {
-          transport = (Transport) Class.forName("io.atomix.catalyst.transport.netty.NettyTransport").newInstance();
-        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-          throw new ConfigurationException("transport not configured");
-        }
-      }
-
       // If no serializer instance was provided, create one.
       if (serializer == null) {
         serializer = new Serializer();
       }
 
-      // Add service loader types to the primary serializer.
-      serializer.resolve(new ClientRequestTypeResolver());
-      serializer.resolve(new ClientResponseTypeResolver());
-      serializer.resolve(new ProtocolSerialization());
-
       return new DefaultCopycatClient(
         clientId,
         cluster,
-        transport,
+        protocol,
         new SingleThreadContext("copycat-client-io-%d", serializer.clone()),
         new SingleThreadContext("copycat-client-event-%d", serializer.clone()),
         serverSelectionStrategy,

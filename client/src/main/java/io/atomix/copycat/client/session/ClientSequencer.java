@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.protocol.OperationResponse;
-import io.atomix.copycat.protocol.PublishRequest;
+import io.atomix.copycat.protocol.request.PublishRequest;
+import io.atomix.copycat.protocol.response.OperationResponse;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;

@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.client.ServerSelectionStrategies;
+import io.atomix.copycat.protocol.Address;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;

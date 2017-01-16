@@ -23,7 +23,7 @@
  * <pre>
  *   {@code
  *   CopycatClient client = CopycatClient.builder(servers)
- *     .withTransport(new NettyTransport())
+ *     .withProtocol(new NettyTransport())
  *     .build();
  *   client.open().join();
  *   }

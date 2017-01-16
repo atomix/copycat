@@ -15,10 +15,13 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.protocol.CommandResponse;
-import io.atomix.copycat.protocol.PublishRequest;
-import io.atomix.copycat.protocol.QueryResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.request.PublishRequest;
+import io.atomix.copycat.protocol.response.CommandResponse;
+import io.atomix.copycat.protocol.response.QueryResponse;
+import io.atomix.copycat.protocol.websocket.request.WebSocketPublishRequest;
+import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketQueryResponse;
+import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import org.testng.annotations.Test;
 
 import java.util.UUID;
@@ -42,14 +45,14 @@ public class ClientSequencerTest {
     ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
-    PublishRequest request = PublishRequest.builder()
+    PublishRequest request = new WebSocketPublishRequest.Builder(1)
       .withSession(1)
       .withEventIndex(1)
       .withPreviousIndex(0)
       .build();
 
-    CommandResponse response = CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    CommandResponse response = new WebSocketCommandResponse.Builder(2)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(2)
       .withEventIndex(1)
       .build();
@@ -67,14 +70,14 @@ public class ClientSequencerTest {
     ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
-    PublishRequest request = PublishRequest.builder()
+    PublishRequest request = new WebSocketPublishRequest.Builder(1)
       .withSession(1)
       .withEventIndex(1)
       .withPreviousIndex(0)
       .build();
 
-    CommandResponse response = CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    CommandResponse response = new WebSocketCommandResponse.Builder(2)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(2)
       .withEventIndex(1)
       .build();
@@ -92,14 +95,14 @@ public class ClientSequencerTest {
     ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
-    PublishRequest request = PublishRequest.builder()
+    PublishRequest request = new WebSocketPublishRequest.Builder(1)
       .withSession(1)
       .withEventIndex(2)
       .withPreviousIndex(0)
       .build();
 
-    CommandResponse response = CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    CommandResponse response = new WebSocketCommandResponse.Builder(2)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(2)
       .withEventIndex(2)
       .build();
@@ -117,20 +120,20 @@ public class ClientSequencerTest {
     ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
     long sequence = sequencer.nextRequest();
 
-    PublishRequest request1 = PublishRequest.builder()
+    PublishRequest request1 = new WebSocketPublishRequest.Builder(1)
       .withSession(1)
       .withEventIndex(2)
       .withPreviousIndex(0)
       .build();
 
-    PublishRequest request2 = PublishRequest.builder()
+    PublishRequest request2 = new WebSocketPublishRequest.Builder(2)
       .withSession(1)
       .withEventIndex(3)
       .withPreviousIndex(2)
       .build();
 
-    CommandResponse response = CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    CommandResponse response = new WebSocketCommandResponse.Builder(3)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(2)
       .withEventIndex(2)
       .build();
@@ -148,13 +151,13 @@ public class ClientSequencerTest {
   public void testSequenceEventAbsentCommand() throws Throwable {
     ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
 
-    PublishRequest request1 = PublishRequest.builder()
+    PublishRequest request1 = new WebSocketPublishRequest.Builder(1)
       .withSession(1)
       .withEventIndex(2)
       .withPreviousIndex(0)
       .build();
 
-    PublishRequest request2 = PublishRequest.builder()
+    PublishRequest request2 = new WebSocketPublishRequest.Builder(2)
       .withSession(1)
       .withEventIndex(3)
       .withPreviousIndex(2)
@@ -175,14 +178,14 @@ public class ClientSequencerTest {
     long sequence2 = sequencer.nextRequest();
     assertTrue(sequence2 == sequence1 + 1);
 
-    CommandResponse commandResponse = CommandResponse.builder()
-      .withStatus(Response.Status.OK)
+    CommandResponse commandResponse = new WebSocketCommandResponse.Builder(1)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(2)
       .withEventIndex(0)
       .build();
 
-    QueryResponse queryResponse = QueryResponse.builder()
-      .withStatus(Response.Status.OK)
+    QueryResponse queryResponse = new WebSocketQueryResponse.Builder(2)
+      .withStatus(WebSocketResponse.Status.OK)
       .withIndex(2)
       .withEventIndex(0)
       .build();

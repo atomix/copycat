@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.ServerSelectionStrategy;
+import io.atomix.copycat.protocol.Address;
 
 import java.util.ArrayList;
 import java.util.Collection;

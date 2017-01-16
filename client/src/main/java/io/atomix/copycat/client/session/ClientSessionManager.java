@@ -21,7 +21,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
@@ -84,30 +84,28 @@ final class ClientSessionManager {
   private void register(RegisterAttempt attempt) {
     state.getLogger().debug("Registering session: attempt {}", attempt.attempt);
 
-    RegisterRequest request = RegisterRequest.builder()
-      .withClient(state.getClientId())
-      .withTimeout(sessionTimeout.toMillis())
-      .build();
-
-    state.getLogger().debug("Sending {}", request);
-    connection.reset().<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
-      if (error == null) {
-        state.getLogger().debug("Received {}", response);
-        if (response.status() == Response.Status.OK) {
-          interval = Duration.ofMillis(response.timeout()).dividedBy(2);
-          connection.reset(response.leader(), response.members());
-          state.setSessionId(response.session())
-            .setState(Session.State.OPEN);
-          state.getLogger().info("Registered session {}", response.session());
-          attempt.complete();
-          keepAlive();
+    connection.reset().register(builder ->
+      builder.withClient(state.getClientId())
+        .withTimeout(sessionTimeout.toMillis())
+        .build())
+      .whenComplete((response, error) -> {
+        if (error == null) {
+          state.getLogger().debug("Received {}", response);
+          if (response.status() == WebSocketResponse.Status.OK) {
+            interval = Duration.ofMillis(response.timeout()).dividedBy(2);
+            connection.reset(response.leader(), response.members());
+            state.setSessionId(response.session())
+              .setState(Session.State.OPEN);
+            state.getLogger().info("Registered session {}", response.session());
+            attempt.complete();
+            keepAlive();
+          } else {
+            strategy.attemptFailed(attempt);
+          }
         } else {
           strategy.attemptFailed(attempt);
         }
-      } else {
-        strategy.attemptFailed(attempt);
-      }
-    });
+      });
   }
 
   /**
@@ -124,29 +122,40 @@ final class ClientSessionManager {
     long sessionId = state.getSessionId();
 
     // If the current sessions state is unstable, reset the connection before sending a keep-alive.
-    if (state.getState() == Session.State.UNSTABLE)
+    if (state.getState() == Session.State.UNSTABLE) {
       connection.reset();
+    }
 
-    KeepAliveRequest request = KeepAliveRequest.builder()
-      .withSession(sessionId)
-      .withCommandSequence(state.getCommandResponse())
-      .withEventIndex(state.getEventIndex())
-      .build();
-
-    state.getLogger().debug("{} - Sending {}", sessionId, request);
-    connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
-      if (state.getState() != Session.State.CLOSED) {
-        if (error == null) {
-          state.getLogger().debug("{} - Received {}", sessionId, response);
-          // If the request was successful, update the address selector and schedule the next keep-alive.
-          if (response.status() == Response.Status.OK) {
-            connection.reset(response.leader(), response.members());
-            state.setState(Session.State.OPEN);
-            scheduleKeepAlive();
-          }
-          // If the session is unknown, immediate expire the session.
-          else if (response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
-            state.setState(Session.State.EXPIRED);
+    connection.keepAlive(builder ->
+      builder.withSession(sessionId)
+        .withCommandSequence(state.getCommandResponse())
+        .withEventIndex(state.getEventIndex())
+        .build())
+      .whenComplete((response, error) -> {
+        if (state.getState() != Session.State.CLOSED) {
+          if (error == null) {
+            state.getLogger().debug("{} - Received {}", sessionId, response);
+            // If the request was successful, update the address selector and schedule the next keep-alive.
+            if (response.status() == WebSocketResponse.Status.OK) {
+              connection.reset(response.leader(), response.members());
+              state.setState(Session.State.OPEN);
+              scheduleKeepAlive();
+            }
+            // If the session is unknown, immediate expire the session.
+            else if (response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+              state.setState(Session.State.EXPIRED);
+            }
+            // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
+            // This will ensure that the address selector selects all servers without filtering on the leader.
+            else if (retryOnFailure && connection.leader() != null) {
+              connection.reset(null, connection.servers());
+              keepAlive(false);
+            }
+            // If no leader was set, set the session state to unstable and schedule another keep-alive.
+            else {
+              state.setState(Session.State.UNSTABLE);
+              scheduleKeepAlive();
+            }
           }
           // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
           // This will ensure that the address selector selects all servers without filtering on the leader.
@@ -160,19 +169,7 @@ final class ClientSessionManager {
             scheduleKeepAlive();
           }
         }
-        // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
-        // This will ensure that the address selector selects all servers without filtering on the leader.
-        else if (retryOnFailure && connection.leader() != null) {
-          connection.reset(null, connection.servers());
-          keepAlive(false);
-        }
-        // If no leader was set, set the session state to unstable and schedule another keep-alive.
-        else {
-          state.setState(Session.State.UNSTABLE);
-          scheduleKeepAlive();
-        }
-      }
-    });
+      });
   }
 
   /**
@@ -222,31 +219,43 @@ final class ClientSessionManager {
     state.getLogger().debug("Unregistering session: {}", sessionId);
 
     // If a keep-alive request is already pending, cancel it.
-    if (keepAlive != null)
+    if (keepAlive != null) {
       keepAlive.cancel();
+    }
 
     // If the current sessions state is unstable, reset the connection before sending an unregister request.
-    if (state.getState() == Session.State.UNSTABLE)
+    if (state.getState() == Session.State.UNSTABLE) {
       connection.reset();
+    }
 
-    UnregisterRequest request = UnregisterRequest.builder()
-      .withSession(sessionId)
-      .build();
-
-    state.getLogger().debug("{} - Sending {}", sessionId, request);
-    connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
-      if (state.getState() != Session.State.CLOSED) {
-        if (error == null) {
-          state.getLogger().debug("{} - Received {}", sessionId, response);
-          // If the request was successful, update the session state and complete the close future.
-          if (response.status() == Response.Status.OK) {
-            state.setState(Session.State.CLOSED);
-            future.complete(null);
-          }
-          // If the session is unknown, immediate expire the session and complete the close future.
-          else if (response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
-            state.setState(Session.State.EXPIRED);
-            future.complete(null);
+    connection.unregister(builder ->
+      builder.withSession(sessionId)
+        .build())
+      .whenComplete((response, error) -> {
+        if (state.getState() != Session.State.CLOSED) {
+          if (error == null) {
+            state.getLogger().debug("{} - Received {}", sessionId, response);
+            // If the request was successful, update the session state and complete the close future.
+            if (response.status() == WebSocketResponse.Status.OK) {
+              state.setState(Session.State.CLOSED);
+              future.complete(null);
+            }
+            // If the session is unknown, immediate expire the session and complete the close future.
+            else if (response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+              state.setState(Session.State.EXPIRED);
+              future.complete(null);
+            }
+            // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
+            // This will ensure that the address selector selects all servers without filtering on the leader.
+            else if (retryOnFailure && connection.leader() != null) {
+              connection.reset(null, connection.servers());
+              unregister(false, future);
+            }
+            // If no leader was set, set the session state to unstable and fail the unregister attempt.
+            else {
+              state.setState(Session.State.UNSTABLE);
+              future.completeExceptionally(new ClosedSessionException("failed to unregister session"));
+            }
           }
           // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
           // This will ensure that the address selector selects all servers without filtering on the leader.
@@ -254,25 +263,13 @@ final class ClientSessionManager {
             connection.reset(null, connection.servers());
             unregister(false, future);
           }
-          // If no leader was set, set the session state to unstable and fail the unregister attempt.
+          // If no leader was set, set the session state to unstable and schedule another unregister attempt.
           else {
             state.setState(Session.State.UNSTABLE);
             future.completeExceptionally(new ClosedSessionException("failed to unregister session"));
           }
         }
-        // If a leader is still set in the address selector, unset the leader and send another unregister attempt.
-        // This will ensure that the address selector selects all servers without filtering on the leader.
-        else if (retryOnFailure && connection.leader() != null) {
-          connection.reset(null, connection.servers());
-          unregister(false, future);
-        }
-        // If no leader was set, set the session state to unstable and schedule another unregister attempt.
-        else {
-          state.setState(Session.State.UNSTABLE);
-          future.completeExceptionally(new ClosedSessionException("failed to unregister session"));
-        }
-      }
-    });
+      });
   }
 
   /**

@@ -27,7 +27,7 @@ import java.time.Duration;
  * <pre>
  *   {@code
  *   CopycatClient client = CopycatClient.builder(members)
- *     .withTransport(new NettyTransport())
+ *     .withProtocol(new NettyTransport())
  *     .withConnectionStrategy(ConnectionStrategies.EXPONENTIAL_BACKOFF)
  *     .build();
  *   }

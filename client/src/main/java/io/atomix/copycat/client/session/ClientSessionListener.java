@@ -15,15 +15,15 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.UnknownSessionException;
-import io.atomix.copycat.protocol.PublishRequest;
-import io.atomix.copycat.protocol.PublishResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.ProtocolClientConnection;
+import io.atomix.copycat.protocol.request.PublishRequest;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.protocol.response.PublishResponse;
 import io.atomix.copycat.session.Event;
 
 import java.util.Map;
@@ -44,11 +44,11 @@ final class ClientSessionListener {
   private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
   private final ClientSequencer sequencer;
 
-  public ClientSessionListener(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
+  public ClientSessionListener(ProtocolClientConnection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.sequencer = Assert.notNull(sequencer, "sequencer");
-    connection.handler(PublishRequest.class, this::handlePublish);
+    connection.onPublish(this::handlePublish);
   }
 
   /**
@@ -71,6 +71,7 @@ final class ClientSessionListener {
       public void accept(T event) {
         listener.accept(event);
       }
+
       @Override
       public void close() {
         listeners.remove(listener);
@@ -85,7 +86,7 @@ final class ClientSessionListener {
    * @return A completable future to be completed with the publish response.
    */
   @SuppressWarnings("unchecked")
-  private CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
+  private CompletableFuture<PublishResponse> handlePublish(PublishRequest request, PublishResponse.Builder builder) {
     state.getLogger().debug("{} - Received {}", state.getSessionId(), request);
 
     // If the request is for another session ID, this may be a session that was previously opened
@@ -96,8 +97,8 @@ final class ClientSessionListener {
     }
 
     if (request.eventIndex() <= state.getEventIndex()) {
-      return CompletableFuture.completedFuture(PublishResponse.builder()
-          .withStatus(Response.Status.OK)
+      return CompletableFuture.completedFuture(
+        builder.withStatus(ProtocolResponse.Status.OK)
           .withIndex(state.getEventIndex())
           .build());
     }
@@ -107,10 +108,10 @@ final class ClientSessionListener {
     // to resend events starting at eventIndex + 1.
     if (request.previousIndex() != state.getEventIndex()) {
       state.getLogger().debug("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
-      return CompletableFuture.completedFuture(PublishResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withIndex(state.getEventIndex())
-        .build());
+      return CompletableFuture.completedFuture(
+        builder.withStatus(ProtocolResponse.Status.ERROR)
+          .withIndex(state.getEventIndex())
+          .build());
     }
 
     // Store the event index. This will be used to verify that events are received in sequential order.
@@ -127,10 +128,10 @@ final class ClientSessionListener {
       }
     });
 
-    return CompletableFuture.completedFuture(PublishResponse.builder()
-      .withStatus(Response.Status.OK)
-      .withIndex(request.eventIndex())
-      .build());
+    return CompletableFuture.completedFuture(
+      builder.withStatus(ProtocolResponse.Status.OK)
+        .withIndex(request.eventIndex())
+        .build());
   }
 
   /**
