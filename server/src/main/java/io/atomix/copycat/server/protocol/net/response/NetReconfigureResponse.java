@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.response.ReconfigureResponse;
@@ -47,6 +50,31 @@ public class NetReconfigureResponse extends NetConfigurationResponse implements 
     @Override
     public NetReconfigureResponse build() {
       return new NetReconfigureResponse(id, status, error, index, term, timestamp, members);
+    }
+  }
+
+  /**
+   * Reconfigure response serializer.
+   */
+  public static class Serializer extends NetConfigurationResponse.Serializer<NetReconfigureResponse> {
+    @Override
+    public void write(Kryo kryo, Output output, NetReconfigureResponse response) {
+      output.writeLong(response.id);
+      output.writeByte(response.status.id());
+      if (response.error == null) {
+        output.writeByte(0);
+      } else {
+        output.writeByte(response.error.id());
+      }
+      output.writeLong(response.index);
+      output.writeLong(response.term);
+      output.writeLong(response.timestamp);
+      kryo.writeObject(output, response.members);
+    }
+
+    @Override
+    public NetReconfigureResponse read(Kryo kryo, Input input, Class<NetReconfigureResponse> type) {
+      return new NetReconfigureResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
     }
   }
 }

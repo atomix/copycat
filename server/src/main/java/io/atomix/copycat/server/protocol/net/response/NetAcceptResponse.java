@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
@@ -76,4 +79,24 @@ public class NetAcceptResponse extends AbstractNetResponse implements AcceptResp
     }
   }
 
+  /**
+   * Accept response serializer.
+   */
+  public static class Serializer extends AbstractNetResponse.Serializer<NetAcceptResponse> {
+    @Override
+    public void write(Kryo kryo, Output output, NetAcceptResponse response) {
+      output.writeLong(response.id);
+      output.writeByte(response.status.id());
+      if (response.error == null) {
+        output.writeByte(0);
+      } else {
+        output.writeByte(response.error.id());
+      }
+    }
+
+    @Override
+    public NetAcceptResponse read(Kryo kryo, Input input, Class<NetAcceptResponse> type) {
+      return new NetAcceptResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
+    }
+  }
 }

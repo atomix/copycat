@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
 import io.atomix.copycat.server.protocol.request.InstallRequest;
@@ -168,4 +171,25 @@ public class NetInstallRequest extends AbstractNetRequest implements InstallRequ
     }
   }
 
+  /**
+   * Install request serializer.
+   */
+  public static class Serializer extends AbstractNetRequest.Serializer<NetInstallRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetInstallRequest request) {
+      output.writeLong(request.id);
+      output.writeLong(request.term);
+      output.writeInt(request.leader);
+      output.writeLong(request.index);
+      output.writeInt(request.offset);
+      output.writeInt(request.data.length);
+      output.write(request.data);
+      output.writeBoolean(request.complete);
+    }
+
+    @Override
+    public NetInstallRequest read(Kryo kryo, Input input, Class<NetInstallRequest> type) {
+      return new NetInstallRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readInt(), input.readBytes(input.readInt()), input.readBoolean());
+    }
+  }
 }

@@ -86,4 +86,11 @@ public abstract class NetConfigurationRequest extends AbstractNetRequest impleme
     }
   }
 
+  /**
+   * Configuration request serializer.
+   */
+  public static abstract class Serializer<T extends NetConfigurationRequest> extends AbstractNetRequest.Serializer<T> {
+
+  }
+
 }

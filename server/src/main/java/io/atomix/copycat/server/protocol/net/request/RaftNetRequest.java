@@ -15,8 +15,11 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.net.request.*;
 import io.atomix.copycat.server.protocol.request.RaftProtocolRequest;
+
+import java.util.function.Supplier;
 
 /**
  * Raft TCP request.
@@ -29,47 +32,46 @@ public interface RaftNetRequest extends NetRequest, RaftProtocolRequest {
    * Protocol request type.
    */
   enum Types implements Type {
-    CONNECT_REQUEST(0x00, NetConnectRequest.class),
-    REGISTER_REQUEST(0x01, NetRegisterRequest.class),
-    KEEP_ALIVE_REQUEST(0x02, NetKeepAliveRequest.class),
-    UNREGISTER_REQUEST(0x03, NetUnregisterRequest.class),
-    QUERY_REQUEST(0x04, NetQueryRequest.class),
-    COMMAND_REQUEST(0x05, NetCommandRequest.class),
-    PUBLISH_REQUEST(0x06, NetPublishRequest.class),
-    JOIN_REQUEST(0x07, NetJoinRequest.class),
-    LEAVE_REQUEST(0x08, NetLeaveRequest.class),
-    INSTALL_REQUEST(0x09, NetInstallRequest.class),
-    CONFIGURE_REQUEST(0x0a, NetConfigureRequest.class),
-    RECONFIGURE_REQUEST(0x0b, NetReconfigureRequest.class),
-    ACCEPT_REQUEST(0x0c, NetAcceptRequest.class),
-    POLL_REQUEST(0x0d, NetPollRequest.class),
-    VOTE_REQUEST(0x0e, NetVoteRequest.class),
-    APPEND_REQUEST(0x0f, NetAppendRequest.class);
+    CONNECT_REQUEST(0x00, NetConnectRequest.class, NetConnectRequest.Serializer::new),
+    REGISTER_REQUEST(0x01, NetRegisterRequest.class, NetRegisterRequest.Serializer::new),
+    KEEP_ALIVE_REQUEST(0x02, NetKeepAliveRequest.class, NetKeepAliveRequest.Serializer::new),
+    UNREGISTER_REQUEST(0x03, NetUnregisterRequest.class, NetUnregisterRequest.Serializer::new),
+    QUERY_REQUEST(0x04, NetQueryRequest.class, NetQueryRequest.Serializer::new),
+    COMMAND_REQUEST(0x05, NetCommandRequest.class, NetCommandRequest.Serializer::new),
+    PUBLISH_REQUEST(0x06, NetPublishRequest.class, NetPublishRequest.Serializer::new),
+    JOIN_REQUEST(0x07, NetJoinRequest.class, NetJoinRequest.Serializer::new),
+    LEAVE_REQUEST(0x08, NetLeaveRequest.class, NetLeaveRequest.Serializer::new),
+    INSTALL_REQUEST(0x09, NetInstallRequest.class, NetInstallRequest.Serializer::new),
+    CONFIGURE_REQUEST(0x0a, NetConfigureRequest.class, NetConfigureRequest.Serializer::new),
+    RECONFIGURE_REQUEST(0x0b, NetReconfigureRequest.class, NetReconfigureRequest.Serializer::new),
+    ACCEPT_REQUEST(0x0c, NetAcceptRequest.class, NetAcceptRequest.Serializer::new),
+    POLL_REQUEST(0x0d, NetPollRequest.class, NetPollRequest.Serializer::new),
+    VOTE_REQUEST(0x0e, NetVoteRequest.class, NetVoteRequest.Serializer::new),
+    APPEND_REQUEST(0x0f, NetAppendRequest.class, NetAppendRequest.Serializer::new);
 
     private final int id;
     private final Class<? extends NetRequest> type;
+    private final Supplier<Serializer<?>> serializer;
 
-    Types(int id, Class<? extends NetRequest> type) {
+    Types(int id, Class<? extends NetRequest> type, Supplier<Serializer<?>> serializer) {
       this.id = id;
       this.type = type;
+      this.serializer = serializer;
     }
 
-    /**
-     * Returns the request type ID.
-     *
-     * @return The request type ID.
-     */
+    @Override
     public int id() {
       return id;
     }
 
-    /**
-     * Returns the request type class.
-     *
-     * @return The request type class.
-     */
+    @Override
     public Class<? extends NetRequest> type() {
       return type;
+    }
+
+    @Override
+    public Supplier<Serializer<?>> serializer() {
+      return serializer;
     }
 
     /**

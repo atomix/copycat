@@ -20,6 +20,7 @@ import io.atomix.copycat.protocol.ProtocolListener;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.net.NetServerConnection;
 import io.atomix.copycat.protocol.net.request.NetRequest;
+import io.atomix.copycat.protocol.net.response.NetResponse;
 import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
 import io.atomix.copycat.server.protocol.net.request.RaftNetRequest;
 import io.atomix.copycat.server.protocol.net.response.*;
@@ -48,8 +49,16 @@ public class RaftNetServerConnection extends NetServerConnection implements Raft
   }
 
   @Override
-  protected void handleMessage(int type, byte[] bytes) {
-    onRequest(kryo.readObject(new Input(bytes), RaftNetRequest.Types.forId(type).type()));
+  protected void handleMessage(int id, byte[] bytes) {
+    if (RaftNetRequest.Types.isProtocolRequest(id)) {
+      RaftNetRequest.Type type = RaftNetRequest.Types.forId(id);
+      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
+      onRequest(request);
+    } else if (RaftNetResponse.Types.isProtocolResponse(id)) {
+      RaftNetResponse.Type type = RaftNetResponse.Types.forId(id);
+      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
+      onResponse(response);
+    };
   }
 
   @Override

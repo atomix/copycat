@@ -15,7 +15,10 @@
  */
 package io.atomix.copycat.protocol.net.response;
 
+import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
+
+import java.util.function.Supplier;
 
 /**
  * Base interface for responses.
@@ -43,44 +46,48 @@ public interface NetResponse extends ProtocolResponse {
      * Returns the request type class.
      */
     Class<? extends NetResponse> type();
+
+    /**
+     * Returns the request type serializer supplier.
+     */
+    Supplier<Serializer<?>> serializer();
   }
 
   /**
    * Protocol response type.
    */
   enum Types implements Type {
-    CONNECT_RESPONSE(0x10, NetConnectResponse.class),
-    REGISTER_RESPONSE(0x11, NetRegisterResponse.class),
-    KEEP_ALIVE_RESPONSE(0x12, NetKeepAliveResponse.class),
-    UNREGISTER_RESPONSE(0x13, NetUnregisterResponse.class),
-    QUERY_RESPONSE(0x14, NetQueryResponse.class),
-    COMMAND_RESPONSE(0x15, NetCommandResponse.class),
-    PUBLISH_RESPONSE(0x16, NetPublishResponse.class);
+    CONNECT_RESPONSE(0x10, NetConnectResponse.class, NetConnectResponse.Serializer::new),
+    REGISTER_RESPONSE(0x11, NetRegisterResponse.class, NetRegisterResponse.Serializer::new),
+    KEEP_ALIVE_RESPONSE(0x12, NetKeepAliveResponse.class, NetKeepAliveResponse.Serializer::new),
+    UNREGISTER_RESPONSE(0x13, NetUnregisterResponse.class, NetUnregisterResponse.Serializer::new),
+    QUERY_RESPONSE(0x14, NetQueryResponse.class, NetQueryResponse.Serializer::new),
+    COMMAND_RESPONSE(0x15, NetCommandResponse.class, NetCommandResponse.Serializer::new),
+    PUBLISH_RESPONSE(0x16, NetPublishResponse.class, NetPublishResponse.Serializer::new);
 
     private final int id;
     private final Class<? extends NetResponse> type;
+    private final Supplier<Serializer<?>> serializer;
 
-    Types(int id, Class<? extends NetResponse> type) {
+    Types(int id, Class<? extends NetResponse> type, Supplier<Serializer<?>> serializer) {
       this.id = id;
       this.type = type;
+      this.serializer = serializer;
     }
 
-    /**
-     * Returns the response type ID.
-     *
-     * @return The response type ID.
-     */
+    @Override
     public int id() {
       return id;
     }
 
-    /**
-     * Returns the response type class.
-     *
-     * @return The response type class.
-     */
+    @Override
     public Class<? extends NetResponse> type() {
       return type;
+    }
+
+    @Override
+    public Supplier<Serializer<?>> serializer() {
+      return serializer;
     }
 
     /**

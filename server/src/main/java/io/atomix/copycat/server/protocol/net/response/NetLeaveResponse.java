@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.server.cluster.Member;
@@ -56,4 +59,28 @@ public class NetLeaveResponse extends NetConfigurationResponse implements LeaveR
     }
   }
 
+  /**
+   * Leave response serializer.
+   */
+  public static class Serializer extends NetConfigurationResponse.Serializer<NetLeaveResponse> {
+    @Override
+    public void write(Kryo kryo, Output output, NetLeaveResponse response) {
+      output.writeLong(response.id);
+      output.writeByte(response.status.id());
+      if (response.error == null) {
+        output.writeByte(0);
+      } else {
+        output.writeByte(response.error.id());
+      }
+      output.writeLong(response.index);
+      output.writeLong(response.term);
+      output.writeLong(response.timestamp);
+      kryo.writeObject(output, response.members);
+    }
+
+    @Override
+    public NetLeaveResponse read(Kryo kryo, Input input, Class<NetLeaveResponse> type) {
+      return new NetLeaveResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+    }
+  }
 }

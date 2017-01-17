@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
@@ -73,4 +76,24 @@ public class NetInstallResponse extends AbstractNetResponse implements InstallRe
     }
   }
 
+  /**
+   * Install response serializer.
+   */
+  public static class Serializer extends AbstractNetResponse.Serializer<NetInstallResponse> {
+    @Override
+    public void write(Kryo kryo, Output output, NetInstallResponse response) {
+      output.writeLong(response.id);
+      output.writeByte(response.status.id());
+      if (response.error == null) {
+        output.writeByte(0);
+      } else {
+        output.writeByte(response.error.id());
+      }
+    }
+
+    @Override
+    public NetInstallResponse read(Kryo kryo, Input input, Class<NetInstallResponse> type) {
+      return new NetInstallResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
+    }
+  }
 }

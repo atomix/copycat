@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.LeaveRequest;
 
@@ -51,4 +54,19 @@ public class NetLeaveRequest extends NetConfigurationRequest implements LeaveReq
     }
   }
 
+  /**
+   * Leave request serializer.
+   */
+  public static class Serializer extends NetConfigurationRequest.Serializer<NetLeaveRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetLeaveRequest request) {
+      output.writeLong(request.id);
+      kryo.writeClassAndObject(output, request.member);
+    }
+
+    @Override
+    public NetLeaveRequest read(Kryo kryo, Input input, Class<NetLeaveRequest> type) {
+      return new NetLeaveRequest(input.readLong(), (Member) kryo.readClassAndObject(input));
+    }
+  }
 }

@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.ReconfigureRequest;
@@ -99,4 +102,21 @@ public class NetReconfigureRequest extends NetConfigurationRequest implements Re
     }
   }
 
+  /**
+   * Reconfigure request serializer.
+   */
+  public static class Serializer extends NetConfigurationRequest.Serializer<NetReconfigureRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetReconfigureRequest request) {
+      output.writeLong(request.id);
+      kryo.writeClassAndObject(output, request.member);
+      output.writeLong(request.index);
+      output.writeLong(request.term);
+    }
+
+    @Override
+    public NetReconfigureRequest read(Kryo kryo, Input input, Class<NetReconfigureRequest> type) {
+      return new NetReconfigureRequest(input.readLong(), (Member) kryo.readClassAndObject(input), input.readLong(), input.readLong());
+    }
+  }
 }

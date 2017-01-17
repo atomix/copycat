@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
@@ -185,6 +188,29 @@ public class NetAppendRequest extends AbstractNetRequest implements AppendReques
     @Override
     public NetAppendRequest build() {
       return new NetAppendRequest(id, term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
+    }
+  }
+
+  /**
+   * Append request serializer.
+   */
+  public static class Serializer extends AbstractNetRequest.Serializer<NetAppendRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetAppendRequest request) {
+      output.writeLong(request.id);
+      output.writeLong(request.term);
+      output.writeInt(request.leader);
+      output.writeLong(request.logIndex);
+      output.writeLong(request.logTerm);
+      kryo.writeObject(output, request.entries);
+      output.writeLong(request.commitIndex);
+      output.writeLong(request.globalIndex);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public NetAppendRequest read(Kryo kryo, Input input, Class<NetAppendRequest> type) {
+      return new NetAppendRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), kryo.readObject(input, List.class), input.readLong(), input.readLong());
     }
   }
 }

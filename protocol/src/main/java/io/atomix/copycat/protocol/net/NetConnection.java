@@ -79,12 +79,14 @@ public abstract class NetConnection implements ProtocolConnection {
   /**
    * Handles a message.
    */
-  protected void handleMessage(int type, byte[] bytes) {
-    if (NetRequest.Types.isProtocolRequest(type)) {
-      NetRequest request = kryo.readObject(new Input(bytes), NetRequest.Types.forId(type).type());
+  protected void handleMessage(int id, byte[] bytes) {
+    if (NetRequest.Types.isProtocolRequest(id)) {
+      NetRequest.Type type = NetRequest.Types.forId(id);
+      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
       onRequest(request);
-    } else if (NetResponse.Types.isProtocolResponse(type)) {
-      NetResponse response = kryo.readObject(new Input(bytes), NetResponse.Types.forId(type).type());
+    } else if (NetResponse.Types.isProtocolResponse(id)) {
+      NetResponse.Type type = NetResponse.Types.forId(id);
+      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
       onResponse(response);
     }
   }
@@ -114,7 +116,7 @@ public abstract class NetConnection implements ProtocolConnection {
     logger().debug("Sending {}", request);
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     Output output = new Output(os);
-    kryo.writeObject(output, request);
+    kryo.writeObject(output, request, request.type().serializer().get());
     byte[] bytes = os.toByteArray();
     Buffer buffer = Buffer.buffer()
       .appendInt(1 + bytes.length)
@@ -131,7 +133,7 @@ public abstract class NetConnection implements ProtocolConnection {
     logger().debug("Sending {}", response);
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     Output output = new Output(os);
-    kryo.writeObject(output, response);
+    kryo.writeObject(output, response, response.type().serializer().get());
     byte[] bytes = os.toByteArray();
     Buffer buffer = Buffer.buffer()
       .appendInt(1 + bytes.length)

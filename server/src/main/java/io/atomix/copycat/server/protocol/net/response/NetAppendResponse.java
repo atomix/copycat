@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
@@ -125,6 +128,30 @@ public class NetAppendResponse extends AbstractNetResponse implements AppendResp
     @Override
     public NetAppendResponse build() {
       return new NetAppendResponse(id, status, error, term, succeeded, logIndex);
+    }
+  }
+
+  /**
+   * Append response serializer.
+   */
+  public static class Serializer extends AbstractNetResponse.Serializer<NetAppendResponse> {
+    @Override
+    public void write(Kryo kryo, Output output, NetAppendResponse response) {
+      output.writeLong(response.id);
+      output.writeByte(response.status.id());
+      if (response.error == null) {
+        output.writeByte(0);
+      } else {
+        output.writeByte(response.error.id());
+      }
+      output.writeLong(response.term);
+      output.writeBoolean(response.succeeded);
+      output.writeLong(response.logIndex);
+    }
+
+    @Override
+    public NetAppendResponse read(Kryo kryo, Input input, Class<NetAppendResponse> type) {
+      return new NetAppendResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean(), input.readLong());
     }
   }
 }

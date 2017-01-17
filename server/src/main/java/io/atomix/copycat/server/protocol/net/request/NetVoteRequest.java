@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
 import io.atomix.copycat.server.protocol.request.VoteRequest;
@@ -128,13 +131,28 @@ public class NetVoteRequest extends AbstractNetRequest implements VoteRequest, R
       return this;
     }
 
-    /**
-     * @throws IllegalStateException if candidate is not positive or if term, logIndex or logTerm are negative
-     */
     @Override
     public NetVoteRequest build() {
       return new NetVoteRequest(id, term, candidate, logIndex, logTerm);
     }
   }
 
+  /**
+   * Vote request serializer.
+   */
+  public static class Serializer extends AbstractNetRequest.Serializer<NetVoteRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetVoteRequest request) {
+      output.writeLong(request.id);
+      output.writeLong(request.term);
+      output.writeInt(request.candidate);
+      output.writeLong(request.logIndex);
+      output.writeLong(request.logTerm);
+    }
+
+    @Override
+    public NetVoteRequest read(Kryo kryo, Input input, Class<NetVoteRequest> type) {
+      return new NetVoteRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong());
+    }
+  }
 }

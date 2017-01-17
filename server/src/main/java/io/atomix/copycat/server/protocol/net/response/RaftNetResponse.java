@@ -15,8 +15,11 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
+import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.net.response.*;
 import io.atomix.copycat.server.protocol.response.RaftProtocolResponse;
+
+import java.util.function.Supplier;
 
 /**
  * Raft TCP response.
@@ -29,47 +32,46 @@ public interface RaftNetResponse extends NetResponse, RaftProtocolResponse {
    * Protocol response type.
    */
   enum Types implements Type {
-    CONNECT_RESPONSE(0x10, NetConnectResponse.class),
-    REGISTER_RESPONSE(0x11, NetRegisterResponse.class),
-    KEEP_ALIVE_RESPONSE(0x12, NetKeepAliveResponse.class),
-    UNREGISTER_RESPONSE(0x13, NetUnregisterResponse.class),
-    QUERY_RESPONSE(0x14, NetQueryResponse.class),
-    COMMAND_RESPONSE(0x15, NetCommandResponse.class),
-    PUBLISH_RESPONSE(0x16, NetPublishResponse.class),
-    JOIN_RESPONSE(0x17, NetJoinResponse.class),
-    LEAVE_RESPONSE(0x18, NetLeaveResponse.class),
-    INSTALL_RESPONSE(0x19, NetInstallResponse.class),
-    CONFIGURE_RESPONSE(0x1a, NetConfigureResponse.class),
-    RECONFIGURE_RESPONSE(0x1b, NetReconfigureResponse.class),
-    ACCEPT_RESPONSE(0x1c, NetAcceptResponse.class),
-    POLL_RESPONSE(0x1d, NetPollResponse.class),
-    VOTE_RESPONSE(0x1e, NetVoteResponse.class),
-    APPEND_RESPONSE(0x1f, NetAppendResponse.class);
+    CONNECT_RESPONSE(0x10, NetConnectResponse.class, NetConnectResponse.Serializer::new),
+    REGISTER_RESPONSE(0x11, NetRegisterResponse.class, NetRegisterResponse.Serializer::new),
+    KEEP_ALIVE_RESPONSE(0x12, NetKeepAliveResponse.class, NetKeepAliveResponse.Serializer::new),
+    UNREGISTER_RESPONSE(0x13, NetUnregisterResponse.class, NetUnregisterResponse.Serializer::new),
+    QUERY_RESPONSE(0x14, NetQueryResponse.class, NetQueryResponse.Serializer::new),
+    COMMAND_RESPONSE(0x15, NetCommandResponse.class, NetCommandResponse.Serializer::new),
+    PUBLISH_RESPONSE(0x16, NetPublishResponse.class, NetPublishResponse.Serializer::new),
+    JOIN_RESPONSE(0x17, NetJoinResponse.class, NetJoinResponse.Serializer::new),
+    LEAVE_RESPONSE(0x18, NetLeaveResponse.class, NetLeaveResponse.Serializer::new),
+    INSTALL_RESPONSE(0x19, NetInstallResponse.class, NetInstallResponse.Serializer::new),
+    CONFIGURE_RESPONSE(0x1a, NetConfigureResponse.class, NetConfigureResponse.Serializer::new),
+    RECONFIGURE_RESPONSE(0x1b, NetReconfigureResponse.class, NetReconfigureResponse.Serializer::new),
+    ACCEPT_RESPONSE(0x1c, NetAcceptResponse.class, NetAcceptResponse.Serializer::new),
+    POLL_RESPONSE(0x1d, NetPollResponse.class, NetPollResponse.Serializer::new),
+    VOTE_RESPONSE(0x1e, NetVoteResponse.class, NetVoteResponse.Serializer::new),
+    APPEND_RESPONSE(0x1f, NetAppendResponse.class, NetAppendResponse.Serializer::new);
 
     private final int id;
     private final Class<? extends NetResponse> type;
+    private final Supplier<Serializer<?>> serializer;
 
-    Types(int id, Class<? extends NetResponse> type) {
+    Types(int id, Class<? extends NetResponse> type, Supplier<Serializer<?>> serializer) {
       this.id = id;
       this.type = type;
+      this.serializer = serializer;
     }
 
-    /**
-     * Returns the response type ID.
-     *
-     * @return The response type ID.
-     */
+    @Override
     public int id() {
       return id;
     }
 
-    /**
-     * Returns the response type class.
-     *
-     * @return The response type class.
-     */
+    @Override
     public Class<? extends NetResponse> type() {
       return type;
+    }
+
+    @Override
+    public Supplier<Serializer<?>> serializer() {
+      return serializer;
     }
 
     /**

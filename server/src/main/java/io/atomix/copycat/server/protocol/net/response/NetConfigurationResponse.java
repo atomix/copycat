@@ -151,4 +151,11 @@ public abstract class NetConfigurationResponse extends AbstractNetResponse imple
       return (T) this;
     }
   }
+
+  /**
+   * Configuration response serializer.
+   */
+  public static abstract class Serializer<T extends NetConfigurationResponse> extends AbstractNetResponse.Serializer<T> {
+
+  }
 }

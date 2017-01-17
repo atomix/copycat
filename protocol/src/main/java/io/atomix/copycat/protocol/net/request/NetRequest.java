@@ -15,7 +15,10 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
+import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.request.ProtocolRequest;
+
+import java.util.function.Supplier;
 
 /**
  * Base interface for requests.
@@ -39,44 +42,48 @@ public interface NetRequest extends ProtocolRequest {
      * Returns the request type class.
      */
     Class<? extends NetRequest> type();
+
+    /**
+     * Returns the request serializer class.
+     */
+    Supplier<Serializer<?>> serializer();
   }
 
   /**
    * Protocol request type.
    */
   enum Types implements Type {
-    CONNECT_REQUEST(0x00, NetConnectRequest.class),
-    REGISTER_REQUEST(0x01, NetRegisterRequest.class),
-    KEEP_ALIVE_REQUEST(0x02, NetKeepAliveRequest.class),
-    UNREGISTER_REQUEST(0x03, NetUnregisterRequest.class),
-    QUERY_REQUEST(0x04, NetQueryRequest.class),
-    COMMAND_REQUEST(0x05, NetCommandRequest.class),
-    PUBLISH_REQUEST(0x06, NetPublishRequest.class);
+    CONNECT_REQUEST(0x00, NetConnectRequest.class, NetConnectRequest.Serializer::new),
+    REGISTER_REQUEST(0x01, NetRegisterRequest.class, NetRegisterRequest.Serializer::new),
+    KEEP_ALIVE_REQUEST(0x02, NetKeepAliveRequest.class, NetKeepAliveRequest.Serializer::new),
+    UNREGISTER_REQUEST(0x03, NetUnregisterRequest.class, NetUnregisterRequest.Serializer::new),
+    QUERY_REQUEST(0x04, NetQueryRequest.class, NetQueryRequest.Serializer::new),
+    COMMAND_REQUEST(0x05, NetCommandRequest.class, NetCommandRequest.Serializer::new),
+    PUBLISH_REQUEST(0x06, NetPublishRequest.class, NetPublishRequest.Serializer::new);
 
     private final int id;
     private final Class<? extends NetRequest> type;
+    private final Supplier<Serializer<?>> serializer;
 
-    Types(int id, Class<? extends NetRequest> type) {
+    Types(int id, Class<? extends NetRequest> type, Supplier<Serializer<?>> serializer) {
       this.id = id;
       this.type = type;
+      this.serializer = serializer;
     }
 
-    /**
-     * Returns the request type ID.
-     *
-     * @return The request type ID.
-     */
+    @Override
     public int id() {
       return id;
     }
 
-    /**
-     * Returns the request type class.
-     *
-     * @return The request type class.
-     */
+    @Override
     public Class<? extends NetRequest> type() {
       return type;
+    }
+
+    @Override
+    public Supplier<Serializer<?>> serializer() {
+      return serializer;
     }
 
     /**

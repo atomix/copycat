@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
@@ -85,4 +88,20 @@ public class NetAcceptRequest extends AbstractNetRequest implements AcceptReques
     }
   }
 
+  /**
+   * Accept request serializer.
+   */
+  public static class Serializer extends AbstractNetRequest.Serializer<NetAcceptRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetAcceptRequest request) {
+      output.writeLong(request.id);
+      output.writeString(request.client);
+      kryo.writeClassAndObject(output, request.address);
+    }
+
+    @Override
+    public NetAcceptRequest read(Kryo kryo, Input input, Class<NetAcceptRequest> type) {
+      return new NetAcceptRequest(input.readLong(), input.readString(), (Address) kryo.readClassAndObject(input));
+    }
+  }
 }

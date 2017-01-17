@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.JoinRequest;
 
@@ -51,4 +54,19 @@ public class NetJoinRequest extends NetConfigurationRequest implements JoinReque
     }
   }
 
+  /**
+   * Join request serializer.
+   */
+  public static class Serializer extends NetConfigurationRequest.Serializer<NetJoinRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetJoinRequest request) {
+      output.writeLong(request.id);
+      kryo.writeClassAndObject(output, request.member);
+    }
+
+    @Override
+    public NetJoinRequest read(Kryo kryo, Input input, Class<NetJoinRequest> type) {
+      return new NetJoinRequest(input.readLong(), (Member) kryo.readClassAndObject(input));
+    }
+  }
 }
