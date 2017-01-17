@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol;
+package io.atomix.copycat.server.protocol;
+
+import io.atomix.copycat.protocol.ProtocolServerBase;
 
 /**
- * Copycat protocol server.
+ * Raft protocol server.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface ProtocolServer extends ProtocolServerBase<ProtocolServerConnection> {
+public interface RaftProtocolServer extends ProtocolServerBase<RaftProtocolServerConnection> {
 }

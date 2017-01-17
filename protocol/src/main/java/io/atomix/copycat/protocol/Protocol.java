@@ -15,29 +15,15 @@
  */
 package io.atomix.copycat.protocol;
 
-import java.io.Closeable;
-
 /**
  * Protocol.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface Protocol extends Closeable {
-
-  /**
-   * Creates a new protocol client.
-   *
-   * @return A new protocol client.
-   */
+public interface Protocol extends ProtocolBase {
+  @Override
   ProtocolClient createClient();
 
-  /**
-   * Creates a new protocol server.
-   *
-   * @return A new protocol server.
-   */
-  ProtocolServer createServer();
-
   @Override
-  void close();
+  ProtocolServer createServer();
 }

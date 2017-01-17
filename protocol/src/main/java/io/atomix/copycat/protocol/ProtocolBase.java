@@ -15,10 +15,31 @@
  */
 package io.atomix.copycat.protocol;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Copycat protocol server.
+ * Protocol base.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface ProtocolServer extends ProtocolServerBase<ProtocolServerConnection> {
+public interface ProtocolBase {
+
+  /**
+   * Creates a new protocol client.
+   *
+   * @return A new protocol client.
+   */
+  ProtocolClientBase<?> createClient();
+
+  /**
+   * Creates a new protocol server.
+   *
+   * @return A new protocol server.
+   */
+  ProtocolServerBase<?> createServer();
+
+  /**
+   * Closes the protocol.
+   */
+  CompletableFuture<Void> close();
 }

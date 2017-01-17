@@ -13,12 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol;
+package io.atomix.copycat.server.protocol.response;
 
 /**
- * Copycat protocol server.
+ * Snapshot installation response.
+ * <p>
+ * Install responses are sent once a snapshot installation request has been received and processed.
+ * Install responses provide no additional metadata aside from indicating whether or not the request
+ * was successful.
  *
- * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ProtocolServer extends ProtocolServerBase<ProtocolServerConnection> {
+public interface InstallResponse extends RaftProtocolResponse {
+
+  /**
+   * Install response builder.
+   */
+  interface Builder extends RaftProtocolResponse.Builder<Builder, InstallResponse> {
+  }
+
 }
