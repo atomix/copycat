@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol.websocket.request;
+package io.atomix.copycat.protocol.tcp.request;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonGetter;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.protocol.request.CommandRequest;
@@ -40,24 +40,20 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class WebSocketCommandRequest extends WebSocketOperationRequest implements CommandRequest {
-  @JsonProperty("command")
+public class NetSocketCommandRequest extends NetSocketOperationRequest implements CommandRequest {
   private final Command command;
 
-  @JsonCreator
-  protected WebSocketCommandRequest(@JsonProperty("id") long id, @JsonProperty("session") long session, @JsonProperty("sequence") long sequence, @JsonProperty("command") Command command) {
+  protected NetSocketCommandRequest(long id, long session, long sequence, Command command) {
     super(id, session, sequence);
     this.command = command;
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.COMMAND_REQUEST;
   }
 
   @Override
-  @JsonGetter("command")
   public Command command() {
     return command;
   }
@@ -74,8 +70,8 @@ public class WebSocketCommandRequest extends WebSocketOperationRequest implement
 
   @Override
   public boolean equals(Object object) {
-    if (object instanceof WebSocketCommandRequest) {
-      WebSocketCommandRequest request = (WebSocketCommandRequest) object;
+    if (object instanceof NetSocketCommandRequest) {
+      NetSocketCommandRequest request = (NetSocketCommandRequest) object;
       return request.session == session
         && request.sequence == sequence
         && request.command.equals(command);
@@ -91,7 +87,7 @@ public class WebSocketCommandRequest extends WebSocketOperationRequest implement
   /**
    * Write request builder.
    */
-  public static class Builder extends WebSocketOperationRequest.Builder<CommandRequest.Builder, CommandRequest> implements CommandRequest.Builder {
+  public static class Builder extends NetSocketOperationRequest.Builder<CommandRequest.Builder, CommandRequest> implements CommandRequest.Builder {
     private Command command;
 
     public Builder(long id) {
@@ -109,7 +105,25 @@ public class WebSocketCommandRequest extends WebSocketOperationRequest implement
      */
     @Override
     public CommandRequest build() {
-      return new WebSocketCommandRequest(id, session, sequence, command);
+      return new NetSocketCommandRequest(id, session, sequence, command);
+    }
+  }
+
+  /**
+   * Command request serializer.
+   */
+  public static class Serializer extends NetSocketOperationRequest.Serializer<NetSocketCommandRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetSocketCommandRequest request) {
+      output.writeLong(request.id);
+      output.writeLong(request.session);
+      output.writeLong(request.sequence);
+      kryo.writeClassAndObject(output, request.command);
+    }
+
+    @Override
+    public NetSocketCommandRequest read(Kryo kryo, Input input, Class<NetSocketCommandRequest> type) {
+      return new NetSocketCommandRequest(input.readLong(), input.readLong(), input.readLong(), (Command) kryo.readClassAndObject(input));
     }
   }
 }

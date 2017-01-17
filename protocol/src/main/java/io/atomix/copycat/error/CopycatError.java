@@ -34,6 +34,8 @@ public interface CopycatError {
    */
   static CopycatError forId(int id) {
     switch (id) {
+      case 0:
+        return null;
       case 1:
         return Type.NO_LEADER_ERROR;
       case 2:

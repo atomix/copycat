@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol.websocket.request;
+package io.atomix.copycat.protocol.tcp.request;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonGetter;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.ConnectRequest;
 
@@ -33,24 +33,20 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class WebSocketConnectRequest extends AbstractWebSocketRequest implements ConnectRequest {
-  @JsonProperty("client")
+public class NetSocketConnectRequest extends AbstractNetSocketRequest implements ConnectRequest {
   private final String client;
 
-  @JsonCreator
-  protected WebSocketConnectRequest(@JsonProperty("id") long id, @JsonProperty("client") String client) {
+  protected NetSocketConnectRequest(long id, String client) {
     super(id);
     this.client = client;
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.CONNECT_REQUEST;
   }
 
   @Override
-  @JsonGetter("client")
   public String client() {
     return client;
   }
@@ -62,7 +58,7 @@ public class WebSocketConnectRequest extends AbstractWebSocketRequest implements
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof WebSocketConnectRequest && ((WebSocketConnectRequest) object).client.equals(client);
+    return object instanceof NetSocketConnectRequest && ((NetSocketConnectRequest) object).client.equals(client);
   }
 
   @Override
@@ -73,7 +69,7 @@ public class WebSocketConnectRequest extends AbstractWebSocketRequest implements
   /**
    * Register client request builder.
    */
-  public static class Builder extends AbstractWebSocketRequest.Builder<ConnectRequest.Builder, ConnectRequest> implements ConnectRequest.Builder {
+  public static class Builder extends AbstractNetSocketRequest.Builder<ConnectRequest.Builder, ConnectRequest> implements ConnectRequest.Builder {
     private String client;
 
     public Builder(long id) {
@@ -88,7 +84,23 @@ public class WebSocketConnectRequest extends AbstractWebSocketRequest implements
 
     @Override
     public ConnectRequest build() {
-      return new WebSocketConnectRequest(id, client);
+      return new NetSocketConnectRequest(id, client);
+    }
+  }
+
+  /**
+   * Connect request serializer.
+   */
+  public static class Serializer extends AbstractNetSocketRequest.Serializer<NetSocketConnectRequest> {
+    @Override
+    public void write(Kryo kryo, Output output, NetSocketConnectRequest request) {
+      output.writeLong(request.id);
+      output.writeString(request.client);
+    }
+
+    @Override
+    public NetSocketConnectRequest read(Kryo kryo, Input input, Class<NetSocketConnectRequest> type) {
+      return new NetSocketConnectRequest(input.readLong(), input.readString());
     }
   }
 }
