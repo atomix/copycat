@@ -18,7 +18,6 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.ProtocolListener;
-import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.PublishResponse;
 import io.atomix.copycat.protocol.websocket.request.WebSocketPublishRequest;
 import io.atomix.copycat.protocol.websocket.response.WebSocketPublishResponse;

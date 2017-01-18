@@ -33,8 +33,6 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.entry.*;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
-import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.ProtocolSerialization;
 import net.jodah.concurrentunit.ConcurrentTestCase;

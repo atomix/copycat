@@ -20,16 +20,15 @@ import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.compaction.Compaction;
@@ -511,17 +510,17 @@ public class ServerContext implements AutoCloseable {
   /**
    * Handles a connection from a client.
    */
-  public void connectClient(Connection connection) {
+  public void connectClient(ProtocolServerConnection connection) {
     threadContext.checkThread();
 
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    connection.onRegister((request, builder) -> state.onRegister(request, builder));
+    connection.onConnect((request, builder) -> state.onConnect(request, builder, connection));
+    connection.onKeepAlive((request, builder) -> state.onKeepAlive(request, builder));
+    connection.onUnregister((request, builder) -> state.onUnregister(request, builder));
+    connection.onCommand((request, builder) -> state.onCommand(request, builder));
+    connection.onQuery((request, builder) -> state.onQuery(request, builder));
 
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }
@@ -529,28 +528,27 @@ public class ServerContext implements AutoCloseable {
   /**
    * Handles a connection from another server.
    */
-  public void connectServer(Connection connection) {
+  public void connectServer(RaftProtocolServerConnection connection) {
     threadContext.checkThread();
 
     // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(AcceptRequest.class, request -> state.accept(request));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(PublishRequest.class, request -> state.publish(request));
-    connection.handler(ConfigureRequest.class, request -> state.configure(request));
-    connection.handler(InstallRequest.class, request -> state.install(request));
-    connection.handler(JoinRequest.class, request -> state.join(request));
-    connection.handler(ReconfigureRequest.class, request -> state.reconfigure(request));
-    connection.handler(LeaveRequest.class, request -> state.leave(request));
-    connection.handler(AppendRequest.class, request -> state.append(request));
-    connection.handler(PollRequest.class, request -> state.poll(request));
-    connection.handler(VoteRequest.class, request -> state.vote(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    connection.onRegister((request, builder) -> state.onRegister(request, builder));
+    connection.onConnect((request, builder) -> state.onConnect(request, builder, connection));
+    connection.onAccept((request, builder) -> state.onAccept(request, builder));
+    connection.onKeepAlive((request, builder) -> state.onKeepAlive(request, builder));
+    connection.onUnregister((request, builder) -> state.onUnregister(request, builder));
+    connection.onConfigure((request, builder) -> state.onConfigure(request, builder));
+    connection.onInstall((request, builder) -> state.onInstall(request, builder));
+    connection.onJoin((request, builder) -> state.onJoin(request, builder));
+    connection.onReconfigure((request, builder) -> state.onReconfigure(request, builder));
+    connection.onLeave((request, builder) -> state.onLeave(request, builder));
+    connection.onAppend((request, builder) -> state.onAppend(request, builder));
+    connection.onPoll((request, builder) -> state.onPoll(request, builder));
+    connection.onVote((request, builder) -> state.onVote(request, builder));
+    connection.onCommand((request, builder) -> state.onCommand(request, builder));
+    connection.onQuery((request, builder) -> state.onQuery(request, builder));
 
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }

@@ -18,8 +18,6 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
-import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import org.testng.annotations.Test;
 

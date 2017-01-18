@@ -15,13 +15,15 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.protocol.Request;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.request.ProtocolRequest;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
+import io.atomix.copycat.server.protocol.RaftProtocolClientConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 /**
  * Abstract state.
@@ -47,7 +49,7 @@ public abstract class AbstractState implements ServerState {
   /**
    * Logs a request.
    */
-  protected final <R extends Request> R logRequest(R request) {
+  protected final <R extends ProtocolRequest> R logRequest(R request) {
     LOGGER.debug("{} - Received {}", context.getCluster().member().address(), request);
     return request;
   }
@@ -55,7 +57,7 @@ public abstract class AbstractState implements ServerState {
   /**
    * Logs a response.
    */
-  protected final <R extends Response> R logResponse(R response) {
+  protected final <R extends ProtocolResponse> R logResponse(R response) {
     LOGGER.debug("{} - Sent {}", context.getCluster().member().address(), response);
     return response;
   }
@@ -75,11 +77,11 @@ public abstract class AbstractState implements ServerState {
   /**
    * Forwards the given request to the leader if possible.
    */
-  protected <T extends Request, U extends Response> CompletableFuture<U> forward(T request) {
-    CompletableFuture<U> future = new CompletableFuture<>();
+  protected <T extends ProtocolResponse> CompletableFuture<T> forward(Function<RaftProtocolClientConnection, CompletableFuture<T>> factory) {
+    CompletableFuture<T> future = new CompletableFuture<>();
     context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
-        connection.<T, U>send(request).whenComplete((response, responseError) -> {
+        factory.apply(connection).whenComplete((response, responseError) -> {
           if (responseError == null) {
             future.complete(response);
           } else {

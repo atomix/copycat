@@ -17,15 +17,17 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.ComposableFuture;
 import io.atomix.catalyst.concurrent.Scheduled;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.CopycatException;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.request.*;
+import io.atomix.copycat.protocol.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.request.*;
+import io.atomix.copycat.server.protocol.response.*;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.session.Session;
@@ -242,7 +244,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<JoinResponse> join(final JoinRequest request) {
+  public CompletableFuture<JoinResponse> onJoin(final JoinRequest request, JoinResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
@@ -251,15 +253,15 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .build()));
     }
 
     // If the member is already a known member of the cluster, complete the join successfully.
     if (context.getCluster().member(request.member().id()) != null) {
-      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
-        .withStatus(Response.Status.OK)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.OK)
         .withIndex(context.getClusterState().getConfiguration().index())
         .withTerm(context.getClusterState().getConfiguration().term())
         .withTime(context.getClusterState().getConfiguration().time())
@@ -279,16 +281,16 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(JoinResponse.builder()
-            .withStatus(Response.Status.OK)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.OK)
             .withIndex(index)
             .withTerm(context.getClusterState().getConfiguration().term())
             .withTime(context.getClusterState().getConfiguration().time())
             .withMembers(members)
             .build()));
         } else {
-          future.complete(logResponse(JoinResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -298,7 +300,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<ReconfigureResponse> reconfigure(final ReconfigureRequest request) {
+  public CompletableFuture<ReconfigureResponse> onReconfigure(final ReconfigureRequest request, ReconfigureResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
@@ -307,16 +309,16 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .build()));
     }
 
     // If the member is not a known member of the cluster, fail the promotion.
     ServerMember existingMember = context.getClusterState().member(request.member().id());
     if (existingMember == null) {
-      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
@@ -325,8 +327,8 @@ final class LeaderState extends ActiveState {
     // the leader, fail the request to ensure servers can't reconfigure an old configuration.
     if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index() || request.term() != context.getClusterState().getConfiguration().term()
       && (existingMember.type() != request.member().type() || existingMember.status() != request.member().status())) {
-      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.CONFIGURATION_ERROR)
         .build()));
     }
@@ -348,16 +350,16 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(ReconfigureResponse.builder()
-            .withStatus(Response.Status.OK)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.OK)
             .withIndex(index)
             .withTerm(context.getClusterState().getConfiguration().term())
             .withTime(context.getClusterState().getConfiguration().time())
             .withMembers(members)
             .build()));
         } else {
-          future.complete(logResponse(ReconfigureResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -367,7 +369,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<LeaveResponse> leave(final LeaveRequest request) {
+  public CompletableFuture<LeaveResponse> onLeave(final LeaveRequest request, LeaveResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
@@ -376,15 +378,15 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .build()));
     }
 
     // If the leaving member is not a known member of the cluster, complete the leave successfully.
     if (context.getCluster().member(request.member().id()) == null) {
-      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
-        .withStatus(Response.Status.OK)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.OK)
         .withMembers(context.getCluster().members())
         .build()));
     }
@@ -399,16 +401,16 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(LeaveResponse.builder()
-            .withStatus(Response.Status.OK)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.OK)
             .withIndex(index)
             .withTerm(context.getClusterState().getConfiguration().term())
             .withTime(context.getClusterState().getConfiguration().time())
             .withMembers(members)
             .build()));
         } else {
-          future.complete(logResponse(LeaveResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -418,25 +420,25 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<PollResponse> poll(final PollRequest request) {
+  public CompletableFuture<PollResponse> onPoll(final PollRequest request, PollResponse.Builder responseBuilder) {
     logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
-      .withStatus(Response.Status.OK)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withAccepted(false)
       .build()));
   }
 
   @Override
-  public CompletableFuture<VoteResponse> vote(final VoteRequest request) {
+  public CompletableFuture<VoteResponse> onVote(final VoteRequest request, VoteResponse.Builder responseBuilder) {
     if (updateTermAndLeader(request.term(), 0)) {
       LOGGER.debug("{} - Received greater term", context.getCluster().member().address());
       context.transition(CopycatServer.State.FOLLOWER);
-      return super.vote(request);
+      return super.onVote(request, responseBuilder);
     } else {
       logRequest(request);
-      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-        .withStatus(Response.Status.OK)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withVoted(false)
         .build()));
@@ -444,49 +446,49 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<AppendResponse> append(final AppendRequest request) {
+  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request, AppendResponse.Builder responseBuilder) {
     context.checkThread();
     if (updateTermAndLeader(request.term(), request.leader())) {
-      CompletableFuture<AppendResponse> future = super.append(request);
+      CompletableFuture<AppendResponse> future = super.onAppend(request, responseBuilder);
       context.transition(CopycatServer.State.FOLLOWER);
       return future;
     } else if (request.term() < context.getTerm()) {
       logRequest(request);
-      return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
-        .withStatus(Response.Status.OK)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
         .withLogIndex(context.getLog().lastIndex())
         .build()));
     } else {
       context.setLeader(request.leader()).transition(CopycatServer.State.FOLLOWER);
-      return super.append(request);
+      return super.onAppend(request, responseBuilder);
     }
   }
 
   @Override
-  public CompletableFuture<CommandResponse> command(final CommandRequest request) {
+  public CompletableFuture<CommandResponse> onCommand(final CommandRequest request, CommandResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
     if (session == null) {
-      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
     ComposableFuture<CommandResponse> future = new ComposableFuture<>();
-    sequenceCommand(request, session, future);
+    sequenceCommand(request, responseBuilder, session, future);
     return future;
   }
 
   /**
    * Sequences the given command to the log.
    */
-  private void sequenceCommand(CommandRequest request, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
+  private void sequenceCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
     // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
     // sequence number, queue this request for handling later. We want to handle command requests in the order in which
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
@@ -496,24 +498,24 @@ final class LeaderState extends ActiveState {
       // If the request sequence number is more than 1k requests above the last sequenced request, reject the request.
       // The client should resubmit a request that fails with a COMMAND_ERROR.
       if (request.sequence() - session.getRequestSequence() > MAX_REQUEST_QUEUE_SIZE) {
-        future.complete(CommandResponse.builder()
-          .withStatus(Response.Status.ERROR)
+        future.complete(responseBuilder
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(CopycatError.Type.COMMAND_ERROR)
           .build());
       }
       // Register the request in the request queue if it's not too far ahead of the current sequence number.
       else {
-        session.registerRequest(request.sequence(), () -> applyCommand(request, session, future));
+        session.registerRequest(request.sequence(), () -> applyCommand(request, responseBuilder, session, future));
       }
     } else {
-      applyCommand(request, session, future);
+      applyCommand(request, responseBuilder, session, future);
     }
   }
 
   /**
    * Applies the given command to the log.
    */
-  private void applyCommand(CommandRequest request, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
+  private void applyCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
     final Command command = request.command();
 
     final long term = context.getTerm();
@@ -532,7 +534,7 @@ final class LeaderState extends ActiveState {
     }
 
     // Replicate the command to followers.
-    appendCommand(index, future);
+    appendCommand(index, responseBuilder, future);
 
     // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
     session.setRequestSequence(request.sequence());
@@ -541,15 +543,15 @@ final class LeaderState extends ActiveState {
   /**
    * Sends append requests for a command to followers.
    */
-  private void appendCommand(long index, CompletableFuture<CommandResponse> future) {
+  private void appendCommand(long index, CommandResponse.Builder responseBuilder, CompletableFuture<CommandResponse> future) {
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          applyCommand(index, future);
+          applyCommand(index, responseBuilder, future);
         } else {
-          future.complete(logResponse(CommandResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -560,16 +562,16 @@ final class LeaderState extends ActiveState {
   /**
    * Applies a command to the state machine.
    */
-  private void applyCommand(long index, CompletableFuture<CommandResponse> future) {
+  private void applyCommand(long index, CommandResponse.Builder responseBuilder, CompletableFuture<CommandResponse> future) {
     context.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
       if (isOpen()) {
-        completeOperation(result, CommandResponse.builder(), error, future);
+        completeOperation(result, responseBuilder, error, future);
       }
     });
   }
 
   @Override
-  public CompletableFuture<QueryResponse> query(final QueryRequest request) {
+  public CompletableFuture<QueryResponse> onQuery(final QueryRequest request, QueryResponse.Builder responseBuilder) {
     Query query = request.query();
 
     final long timestamp = System.currentTimeMillis();
@@ -587,15 +589,15 @@ final class LeaderState extends ActiveState {
 
     Query.ConsistencyLevel consistency = query.consistency();
     if (consistency == null)
-      return queryLinearizable(entry);
+      return queryLinearizable(entry, responseBuilder);
 
     switch (consistency) {
       case SEQUENTIAL:
-        return queryLocal(entry);
+        return queryLocal(entry, responseBuilder);
       case LINEARIZABLE_LEASE:
-        return queryBoundedLinearizable(entry);
+        return queryBoundedLinearizable(entry, responseBuilder);
       case LINEARIZABLE:
-        return queryLinearizable(entry);
+        return queryLinearizable(entry, responseBuilder);
       default:
         throw new IllegalStateException("unknown consistency level");
     }
@@ -604,65 +606,65 @@ final class LeaderState extends ActiveState {
   /**
    * Submits a query with lease bounded linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
     if (session == null) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    sequenceBoundedLinearizableQuery(entry, session, future);
+    sequenceBoundedLinearizableQuery(entry, responseBuilder, session, future);
     return future;
   }
 
   /**
    * Sequences a bounded linearizable query.
    */
-  private void sequenceBoundedLinearizableQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void sequenceBoundedLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
     if (entry.getSequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, future));
+      session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, responseBuilder, future));
     } else {
-      applyQuery(entry, future);
+      applyQuery(entry, responseBuilder, future);
     }
   }
 
   /**
    * Submits a query with strict linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> queryLinearizable(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> queryLinearizable(QueryEntry entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
     if (session == null) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    appendLinearizableQuery(entry, session, future);
+    appendLinearizableQuery(entry, responseBuilder, session, future);
     return future;
   }
 
   /**
    * Sends an append request for the given query entry.
    */
-  private void appendLinearizableQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void appendLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
           entry.acquire();
-          sequenceLinearizableQuery(entry, future);
+          sequenceLinearizableQuery(entry, responseBuilder, future);
         } else {
-          future.complete(logResponse(QueryResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.QUERY_ERROR)
             .build()));
         }
@@ -674,27 +676,27 @@ final class LeaderState extends ActiveState {
   /**
    * Sequences a linearizable query.
    */
-  private void sequenceLinearizableQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+  private void sequenceLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
     if (session == null) {
-      future.complete(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      future.complete(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     } else {
       // If the query's sequence number is greater than the session's current sequence number, queue the request for
       // handling once the state machine is caught up.
       if (entry.getSequence() > session.getCommandSequence()) {
-        session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, future));
+        session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, responseBuilder, future));
       } else {
-        applyQuery(entry, future);
+        applyQuery(entry, responseBuilder, future);
       }
     }
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
+  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder responseBuilder) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -728,8 +730,8 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(index).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.OK)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.OK)
                   .withSession((Long) sessionId)
                   .withTimeout(timeout)
                   .withLeader(context.getCluster().member().clientAddress())
@@ -738,18 +740,18 @@ final class LeaderState extends ActiveState {
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(((CopycatException) sessionError.getCause()).getType())
                   .build()));
               } else if (sessionError instanceof CopycatException) {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(((CopycatException) sessionError).getType())
                   .build()));
               } else {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -757,8 +759,8 @@ final class LeaderState extends ActiveState {
             }
           });
         } else {
-          future.complete(logResponse(RegisterResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -769,19 +771,19 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
     context.checkThread();
     logRequest(request);
 
     context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
-    AcceptRequest acceptRequest = AcceptRequest.builder()
+    AcceptRequest acceptRequest = new AcceptRequest.Builder()
       .withClient(request.client())
       .withAddress(context.getCluster().member().serverAddress())
       .build();
-    return accept(acceptRequest)
-      .thenApply(acceptResponse -> ConnectResponse.builder()
-        .withStatus(Response.Status.OK)
+    return onAccept(acceptRequest, new AcceptResponse.Builder())
+      .thenApply(acceptResponse -> responseBuilder
+        .withStatus(ProtocolResponse.Status.OK)
         .withLeader(context.getCluster().member().clientAddress())
         .withMembers(context.getCluster().members().stream()
           .map(Member::clientAddress)
@@ -792,7 +794,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder responseBuilder) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -818,22 +820,22 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(index).whenComplete((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.OK)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.OK)
                   .build()));
               } else if (connectError instanceof CompletionException && connectError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(((CopycatException) connectError.getCause()).getType())
                   .build()));
               } else if (connectError instanceof CopycatException) {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(((CopycatException) connectError).getType())
                   .build()));
               } else {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -841,8 +843,8 @@ final class LeaderState extends ActiveState {
             }
           });
         } else {
-          future.complete(logResponse(AcceptResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }
@@ -853,7 +855,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder responseBuilder) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -878,28 +880,28 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(index).whenComplete((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
-                future.complete(logResponse(KeepAliveResponse.builder()
-                  .withStatus(Response.Status.OK)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.OK)
                   .withLeader(context.getCluster().member().clientAddress())
                   .withMembers(context.getCluster().members().stream()
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(KeepAliveResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
                   .withError(((CopycatException) sessionError.getCause()).getType())
                   .build()));
               } else if (sessionError instanceof CopycatException) {
-                future.complete(logResponse(KeepAliveResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
                   .withError(((CopycatException) sessionError).getType())
                   .build()));
               } else {
-                future.complete(logResponse(KeepAliveResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
@@ -908,8 +910,8 @@ final class LeaderState extends ActiveState {
             }
           });
         } else {
-          future.complete(logResponse(KeepAliveResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withLeader(context.getCluster().member().clientAddress())
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
@@ -921,7 +923,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder responseBuilder) {
     final long timestamp = System.currentTimeMillis();
     final long index;
 
@@ -945,22 +947,22 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(index).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.OK)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.OK)
                   .build()));
               } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(((CopycatException) unregisterError.getCause()).getType())
                   .build()));
               } else if (unregisterError instanceof CopycatException) {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(((CopycatException) unregisterError).getType())
                   .build()));
               } else {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
+                future.complete(logResponse(responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
@@ -968,8 +970,8 @@ final class LeaderState extends ActiveState {
             }
           });
         } else {
-          future.complete(logResponse(UnregisterResponse.builder()
-            .withStatus(Response.Status.ERROR)
+          future.complete(logResponse(responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
             .build()));
         }

@@ -24,8 +24,6 @@ import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
-import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;

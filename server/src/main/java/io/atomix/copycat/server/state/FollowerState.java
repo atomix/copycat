@@ -17,7 +17,14 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.request.AppendRequest;
+import io.atomix.copycat.server.protocol.request.ConfigureRequest;
+import io.atomix.copycat.server.protocol.request.InstallRequest;
+import io.atomix.copycat.server.protocol.request.VoteRequest;
+import io.atomix.copycat.server.protocol.response.AppendResponse;
+import io.atomix.copycat.server.protocol.response.ConfigureResponse;
+import io.atomix.copycat.server.protocol.response.InstallResponse;
+import io.atomix.copycat.server.protocol.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 
@@ -137,58 +144,58 @@ final class FollowerState extends ActiveState {
     // of the cluster and vote each member for a vote.
     for (ServerMember member : votingMembers) {
       LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
-      PollRequest request = PollRequest.builder()
-        .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().member().id())
-        .withLogIndex(lastIndex)
-        .withLogTerm(lastTerm)
-        .build();
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.<PollRequest, PollResponse>send(request).whenCompleteAsync((response, error) -> {
-          context.checkThread();
-          if (isOpen() && !complete.get()) {
-            if (error != null) {
-              LOGGER.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
-              quorum.fail();
-            } else {
-              if (response.term() > context.getTerm()) {
-                context.setTerm(response.term());
-              }
-
-              if (!response.accepted()) {
-                LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
-                quorum.fail();
-              } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
+        connection.poll(builder ->
+          builder.withTerm(context.getTerm())
+            .withCandidate(context.getCluster().member().id())
+            .withLogIndex(lastIndex)
+            .withLogTerm(lastTerm)
+            .build())
+          .whenCompleteAsync((response, error) -> {
+            context.checkThread();
+            if (isOpen() && !complete.get()) {
+              if (error != null) {
+                LOGGER.warn("{} - {}", context.getCluster().member().address(), error.getMessage());
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
-                quorum.succeed();
+                if (response.term() > context.getTerm()) {
+                  context.setTerm(response.term());
+                }
+
+                if (!response.accepted()) {
+                  LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
+                  quorum.fail();
+                } else if (response.term() != context.getTerm()) {
+                  LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
+                  quorum.fail();
+                } else {
+                  LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
+                  quorum.succeed();
+                }
               }
             }
-          }
-        }, context.getThreadContext().executor());
+          }, context.getThreadContext().executor());
       });
     }
   }
 
   @Override
-  public CompletableFuture<InstallResponse> install(InstallRequest request) {
-    CompletableFuture<InstallResponse> future = super.install(request);
+  public CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder responseBuilder) {
+    CompletableFuture<InstallResponse> future = super.onInstall(request, responseBuilder);
     resetHeartbeatTimeout();
     return future;
   }
 
   @Override
-  public CompletableFuture<ConfigureResponse> configure(ConfigureRequest request) {
-    CompletableFuture<ConfigureResponse> future = super.configure(request);
+  public CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request, ConfigureResponse.Builder responseBuilder) {
+    CompletableFuture<ConfigureResponse> future = super.onConfigure(request, responseBuilder);
     resetHeartbeatTimeout();
     return future;
   }
 
   @Override
-  public CompletableFuture<AppendResponse> append(AppendRequest request) {
-    CompletableFuture<AppendResponse> future = super.append(request);
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
+    CompletableFuture<AppendResponse> future = super.onAppend(request, responseBuilder);
 
     // Reset the heartbeat timeout.
     resetHeartbeatTimeout();
@@ -199,9 +206,9 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected VoteResponse handleVote(VoteRequest request) {
+  protected VoteResponse handleVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
     // Reset the heartbeat timeout if we voted for another candidate.
-    VoteResponse response = super.handleVote(request);
+    VoteResponse response = super.handleVote(request, responseBuilder);
     if (response.voted()) {
       resetHeartbeatTimeout();
     }

@@ -17,17 +17,18 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.concurrent.Scheduled;
+import io.atomix.catalyst.serializer.CatalystSerializable;
+import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.net.request.NetReconfigureRequest;
+import io.atomix.copycat.server.protocol.net.response.NetReconfigureResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.time.Instant;
@@ -227,13 +228,13 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    cluster.getContext().getServerState().reconfigure(ReconfigureRequest.builder()
+    cluster.getContext().getServerState().onReconfigure(new NetReconfigureRequest.Builder(0)
       .withIndex(cluster.getConfiguration().index())
       .withTerm(cluster.getConfiguration().term())
       .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))
-      .build()).whenComplete((response, error) -> {
+      .build(), new NetReconfigureResponse.Builder(0)).whenComplete((response, error) -> {
       if (error == null) {
-        if (response.status() == Response.Status.OK) {
+        if (response.status() == ProtocolResponse.Status.OK) {
           cancelConfigureTimer();
           cluster.configure(new Configuration(response.index(), response.term(), response.timestamp(), response.members()));
           future.complete(null);

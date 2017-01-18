@@ -15,9 +15,10 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.ProtocolConnection;
+import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
@@ -35,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 class ServerSessionManager implements Sessions {
   private final Map<String, Address> addresses = new ConcurrentHashMap<>();
-  private final Map<String, Connection> connections = new ConcurrentHashMap<>();
+  private final Map<String, ProtocolServerConnection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
   final Map<String, ServerSessionContext> clients = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
@@ -71,7 +72,7 @@ class ServerSessionManager implements Sessions {
       session.setAddress(address);
       // If client was previously connected locally, close that connection.
       if (!address.equals(context.getCluster().member().serverAddress())) {
-        Connection connection = connections.remove(client);
+        ProtocolServerConnection connection = connections.remove(client);
         if (connection != null) {
           connection.close();
           session.setConnection(null);
@@ -85,7 +86,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers a connection.
    */
-  ServerSessionManager registerConnection(String client, Connection connection) {
+  ServerSessionManager registerConnection(String client, ProtocolServerConnection connection) {
     ServerSessionContext session = clients.get(client);
     if (session != null) {
       session.setConnection(connection);
@@ -97,10 +98,10 @@ class ServerSessionManager implements Sessions {
   /**
    * Unregisters a connection.
    */
-  ServerSessionManager unregisterConnection(Connection connection) {
-    Iterator<Map.Entry<String, Connection>> iterator = connections.entrySet().iterator();
+  ServerSessionManager unregisterConnection(ProtocolConnection connection) {
+    Iterator<Map.Entry<String, ProtocolServerConnection>> iterator = connections.entrySet().iterator();
     while (iterator.hasNext()) {
-      Map.Entry<String, Connection> entry = iterator.next();
+      Map.Entry<String, ProtocolServerConnection> entry = iterator.next();
       if (entry.getValue().equals(connection)) {
         ServerSessionContext session = clients.get(entry.getKey());
         if (session != null) {

@@ -18,9 +18,9 @@ package io.atomix.copycat.server.storage.entry;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.reference.ReferenceManager;
+import io.atomix.copycat.protocol.Address;
 
 /**
  * Stores a connection between a client and server.

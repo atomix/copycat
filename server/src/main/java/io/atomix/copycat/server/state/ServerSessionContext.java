@@ -17,12 +17,10 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.protocol.PublishRequest;
-import io.atomix.copycat.protocol.PublishResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.session.Event;
@@ -47,7 +45,7 @@ class ServerSessionContext implements ServerSession {
   private boolean open;
   private volatile State state = State.OPEN;
   private final long timeout;
-  private Connection connection;
+  private ProtocolServerConnection connection;
   private Address address;
   private volatile long references;
   private long connectIndex;
@@ -380,7 +378,7 @@ class ServerSessionContext implements ServerSession {
    * Registers a causal session query.
    *
    * @param sequence The session sequence number at which to execute the query.
-   * @param query The query to execute.
+   * @param query    The query to execute.
    * @return The server session.
    */
   ServerSessionContext registerSequenceQuery(long sequence, Runnable query) {
@@ -418,7 +416,7 @@ class ServerSessionContext implements ServerSession {
    * client acknowledges receipt of the command output the result will be cleared from memory.
    *
    * @param sequence The result sequence number.
-   * @param result The result.
+   * @param result   The result.
    * @return The server session.
    */
   ServerSessionContext registerResult(long sequence, ServerStateMachine.Result result) {
@@ -459,7 +457,7 @@ class ServerSessionContext implements ServerSession {
   /**
    * Sets the session connection.
    */
-  ServerSessionContext setConnection(Connection connection) {
+  ServerSessionContext setConnection(ProtocolServerConnection connection) {
     this.connection = connection;
     return this;
   }
@@ -469,7 +467,7 @@ class ServerSessionContext implements ServerSession {
    *
    * @return The session connection.
    */
-  Connection getConnection() {
+  ProtocolServerConnection getConnection() {
     return connection;
   }
 
@@ -597,28 +595,26 @@ class ServerSessionContext implements ServerSession {
   /**
    * Sends an event.
    */
-  private void sendEvent(EventHolder event, Connection connection) {
-    PublishRequest request = PublishRequest.builder()
-      .withSession(id())
-      .withEventIndex(event.eventIndex)
-      .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
-      .withEvents(event.events)
-      .build();
-
-    LOGGER.debug("{} - Sending {}", id, request);
-    connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
-      if (error == null) {
-        LOGGER.debug("{} - Received {}", id, response);
-        // If the event was received successfully, clear events up to the event index.
-        if (response.status() == Response.Status.OK) {
-          clearEvents(response.index());
+  private void sendEvent(EventHolder event, ProtocolServerConnection connection) {
+    connection.publish(builder ->
+      builder.withSession(id())
+        .withEventIndex(event.eventIndex)
+        .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
+        .withEvents(event.events)
+        .build())
+      .whenComplete((response, error) -> {
+        if (error == null) {
+          LOGGER.debug("{} - Received {}", id, response);
+          // If the event was received successfully, clear events up to the event index.
+          if (response.status() == ProtocolResponse.Status.OK) {
+            clearEvents(response.index());
+          }
+          // If the event failed and the response index is non-null, resend all events from the response index.
+          else if (response.error() == null && response.index() > 0) {
+            resendEvents(response.index());
+          }
         }
-        // If the event failed and the response index is non-null, resend all events from the response index.
-        else if (response.error() == null && response.index() > 0) {
-          resendEvents(response.index());
-        }
-      }
-    });
+      });
   }
 
   /**
@@ -692,7 +688,7 @@ class ServerSessionContext implements ServerSession {
   @Override
   public int hashCode() {
     int hashCode = 23;
-    hashCode = 37 * hashCode + (int)(id ^ (id >>> 32));
+    hashCode = 37 * hashCode + (int) (id ^ (id >>> 32));
     return hashCode;
   }
 

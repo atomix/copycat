@@ -16,12 +16,12 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.Scheduled;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.AppendResponse;
-import io.atomix.copycat.server.protocol.VoteRequest;
-import io.atomix.copycat.server.protocol.VoteResponse;
+import io.atomix.copycat.server.protocol.request.AppendRequest;
+import io.atomix.copycat.server.protocol.request.VoteRequest;
+import io.atomix.copycat.server.protocol.response.AppendResponse;
+import io.atomix.copycat.server.protocol.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
 
@@ -139,45 +139,44 @@ final class CandidateState extends ActiveState {
     // of the cluster and vote each member for a vote.
     for (ServerMember member : votingMembers) {
       LOGGER.debug("{} - Requesting vote from {} for term {}", context.getCluster().member().address(), member, context.getTerm());
-      VoteRequest request = VoteRequest.builder()
-        .withTerm(context.getTerm())
-        .withCandidate(context.getCluster().member().id())
-        .withLogIndex(lastIndex)
-        .withLogTerm(lastTerm)
-        .build();
-
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.<VoteRequest, VoteResponse>send(request).whenCompleteAsync((response, error) -> {
-          context.checkThread();
-          if (isOpen() && !complete.get()) {
-            if (error != null) {
-              LOGGER.warn(error.getMessage());
-              quorum.fail();
-            } else {
-              if (response.term() > context.getTerm()) {
-                LOGGER.debug("{} - Received greater term from {}", context.getCluster().member().address(), member);
-                context.setTerm(response.term());
-                complete.set(true);
-                context.transition(CopycatServer.State.FOLLOWER);
-              } else if (!response.voted()) {
-                LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().member().address(), member);
-                quorum.fail();
-              } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received successful vote for a different term from {}", context.getCluster().member().address(), member);
+        connection.vote(builder ->
+          builder.withTerm(context.getTerm())
+            .withCandidate(context.getCluster().member().id())
+            .withLogIndex(lastIndex)
+            .withLogTerm(lastTerm)
+            .build())
+          .whenCompleteAsync((response, error) -> {
+            context.checkThread();
+            if (isOpen() && !complete.get()) {
+              if (error != null) {
+                LOGGER.warn(error.getMessage());
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received successful vote from {}", context.getCluster().member().address(), member);
-                quorum.succeed();
+                if (response.term() > context.getTerm()) {
+                  LOGGER.debug("{} - Received greater term from {}", context.getCluster().member().address(), member);
+                  context.setTerm(response.term());
+                  complete.set(true);
+                  context.transition(CopycatServer.State.FOLLOWER);
+                } else if (!response.voted()) {
+                  LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().member().address(), member);
+                  quorum.fail();
+                } else if (response.term() != context.getTerm()) {
+                  LOGGER.debug("{} - Received successful vote for a different term from {}", context.getCluster().member().address(), member);
+                  quorum.fail();
+                } else {
+                  LOGGER.debug("{} - Received successful vote from {}", context.getCluster().member().address(), member);
+                  quorum.succeed();
+                }
               }
             }
-          }
-        }, context.getThreadContext().executor());
+          }, context.getThreadContext().executor());
       });
     }
   }
 
   @Override
-  public CompletableFuture<AppendResponse> append(AppendRequest request) {
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
     context.checkThread();
 
     // If the request indicates a term that is greater than the current term then
@@ -186,35 +185,37 @@ final class CandidateState extends ActiveState {
       context.setTerm(request.term());
       context.transition(CopycatServer.State.FOLLOWER);
     }
-    return super.append(request);
+    return super.onAppend(request, responseBuilder);
   }
 
   @Override
-  public CompletableFuture<VoteResponse> vote(VoteRequest request) {
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as a candidate.
     if (updateTermAndLeader(request.term(), 0)) {
-      CompletableFuture<VoteResponse> future = super.vote(request);
+      CompletableFuture<VoteResponse> future = super.onVote(request, responseBuilder);
       context.transition(CopycatServer.State.FOLLOWER);
       return future;
     }
 
     // If the vote request is not for this candidate then reject the vote.
     if (request.candidate() == context.getCluster().member().id()) {
-      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withVoted(true)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        responseBuilder
+          .withStatus(ProtocolResponse.Status.OK)
+          .withTerm(context.getTerm())
+          .withVoted(true)
+          .build()));
     } else {
-      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withVoted(false)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        responseBuilder
+          .withStatus(ProtocolResponse.Status.OK)
+          .withTerm(context.getTerm())
+          .withVoted(false)
+          .build()));
     }
   }
 

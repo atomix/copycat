@@ -15,11 +15,18 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.ProtocolRequestFactory;
+import io.atomix.copycat.protocol.request.ProtocolRequest;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.RaftProtocolClientConnection;
+import io.atomix.copycat.server.protocol.request.AppendRequest;
+import io.atomix.copycat.server.protocol.request.ConfigureRequest;
+import io.atomix.copycat.server.protocol.request.InstallRequest;
+import io.atomix.copycat.server.protocol.response.AppendResponse;
+import io.atomix.copycat.server.protocol.response.ConfigureResponse;
+import io.atomix.copycat.server.protocol.response.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -46,6 +53,24 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
+   * Logs a request by wrapping the request factory in a logging factory.
+   */
+  protected <T extends ProtocolRequest.Builder<T, U>, U extends ProtocolRequest> ProtocolRequestFactory<T, U> logRequest(ProtocolRequestFactory<T, U> factory, MemberState member) {
+    return builder -> {
+      U request = factory.build(builder);
+      LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
+      return request;
+    };
+  }
+
+  /**
+   * Logs a response received from a member.
+   */
+  protected void logResponse(ProtocolResponse response, MemberState member) {
+    LOGGER.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
+  }
+
+  /**
    * Sends an AppendRequest to the given member.
    *
    * @param member The member to which to send the append request.
@@ -58,16 +83,16 @@ abstract class AbstractAppender implements AutoCloseable {
    * @param member The member to which to send the request.
    * @return The append request.
    */
-  protected AppendRequest buildAppendRequest(MemberState member, long lastIndex) {
+  protected AppendRequest buildAppendRequest(MemberState member, AppendRequest.Builder builder, long lastIndex) {
     // If the log is empty then send an empty commit.
     // If the next index hasn't yet been set then we send an empty commit first.
     // If the next index is greater than the last index then send an empty commit.
     // If the member failed to respond to recent communication send an empty commit. This
     // helps avoid doing expensive work until we can ascertain the member is back up.
     if (context.getLog().isEmpty() || member.getNextIndex() > lastIndex || member.getFailureCount() > 0) {
-      return buildAppendEmptyRequest(member);
+      return buildAppendEmptyRequest(member, builder);
     } else {
-      return buildAppendEntriesRequest(member, lastIndex);
+      return buildAppendEntriesRequest(member, builder, lastIndex);
     }
   }
 
@@ -77,11 +102,11 @@ abstract class AbstractAppender implements AutoCloseable {
    * Empty append requests are used as heartbeats to followers.
    */
   @SuppressWarnings("unchecked")
-  protected AppendRequest buildAppendEmptyRequest(MemberState member) {
+  protected AppendRequest buildAppendEmptyRequest(MemberState member, AppendRequest.Builder builder) {
     Entry prevEntry = getPrevEntry(member);
 
     ServerMember leader = context.getLeader();
-    return AppendRequest.builder()
+    return builder
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
@@ -96,11 +121,11 @@ abstract class AbstractAppender implements AutoCloseable {
    * Builds a populated AppendEntries request.
    */
   @SuppressWarnings("unchecked")
-  protected AppendRequest buildAppendEntriesRequest(MemberState member, long lastIndex) {
+  protected AppendRequest buildAppendEntriesRequest(MemberState member, AppendRequest.Builder builder, long lastIndex) {
     Entry prevEntry = getPrevEntry(member);
 
     ServerMember leader = context.getLeader();
-    AppendRequest.Builder builder = AppendRequest.builder()
+    builder
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
@@ -165,23 +190,25 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Connects to the member and sends a commit message.
    */
-  protected void sendAppendRequest(MemberState member, AppendRequest request) {
+  protected void sendAppendRequest(MemberState member, ProtocolRequestFactory<AppendRequest.Builder, AppendRequest> factory) {
     // Start the append to the member.
     member.startAppend();
 
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
+    AppendRequest prototype = factory.build(new AppendRequest.Builder());
+
+    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), prototype, member.getMember().address());
     context.getConnections().getConnection(member.getMember().address()).whenComplete((connection, error) -> {
       context.checkThread();
 
       if (open) {
         if (error == null) {
-          sendAppendRequest(connection, member, request);
+          sendAppendRequest(connection, member, prototype);
         } else {
           // Complete the append to the member.
           member.completeAppend();
 
           // Trigger reactions to the request failure.
-          handleAppendRequestFailure(member, request, error);
+          handleAppendRequestFailure(member, prototype, error);
         }
       }
     });
@@ -190,9 +217,9 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a commit message.
    */
-  protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
+  protected void sendAppendRequest(RaftProtocolClientConnection connection, MemberState member, AppendRequest request) {
     long timestamp = System.nanoTime();
-    connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
+    connection.append(logRequest(builder -> builder.copy(request), member)).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the append to the member.
@@ -238,7 +265,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Handles an append response.
    */
   protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
-    if (response.status() == Response.Status.OK) {
+    if (response.status() == ProtocolResponse.Status.OK) {
       handleAppendResponseOk(member, request, response);
     } else {
       handleAppendResponseError(member, request, response);
@@ -246,7 +273,7 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
-   * Handles a {@link Response.Status#OK} response.
+   * Handles a {@link ProtocolResponse.Status#OK} response.
    */
   protected void handleAppendResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
     // Reset the member failure count and update the member's availability status if necessary.
@@ -280,7 +307,7 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
-   * Handles a {@link Response.Status#ERROR} response.
+   * Handles a {@link ProtocolResponse.Status#ERROR} response.
    */
   protected void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     // If any other error occurred, increment the failure count for the member. Log the first three failures,
@@ -335,7 +362,7 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void updateNextIndex(MemberState member, AppendRequest request) {
     // If the match index was set, update the next index to be greater than the match index if necessary.
     if (!request.entries().isEmpty()) {
-      member.setNextIndex(request.entries().get(request.entries().size()-1).getIndex()+1);
+      member.setNextIndex(request.entries().get(request.entries().size() - 1).getIndex() + 1);
     }
   }
 
@@ -362,9 +389,9 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Builds a configure request for the given member.
    */
-  protected ConfigureRequest buildConfigureRequest(MemberState member) {
+  protected ConfigureRequest buildConfigureRequest(MemberState member, ConfigureRequest.Builder builder) {
     ServerMember leader = context.getLeader();
-    return ConfigureRequest.builder()
+    return builder
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
       .withIndex(context.getClusterState().getConfiguration().index())
@@ -376,22 +403,24 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Connects to the member and sends a configure request.
    */
-  protected void sendConfigureRequest(MemberState member, ConfigureRequest request) {
+  protected void sendConfigureRequest(MemberState member, ProtocolRequestFactory<ConfigureRequest.Builder, ConfigureRequest> factory) {
     // Start the configure to the member.
     member.startConfigure();
+
+    ConfigureRequest prototype = factory.build(new ConfigureRequest.Builder());
 
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
       context.checkThread();
 
       if (open) {
         if (error == null) {
-          sendConfigureRequest(connection, member, request);
+          sendConfigureRequest(connection, member, prototype);
         } else {
           // Complete the configure to the member.
           member.completeConfigure();
 
           // Trigger reactions to the request failure.
-          handleConfigureRequestFailure(member, request, error);
+          handleConfigureRequestFailure(member, prototype, error);
         }
       }
     });
@@ -400,9 +429,9 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a configuration message.
    */
-  protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
+  protected void sendConfigureRequest(RaftProtocolClientConnection connection, MemberState member, ConfigureRequest request) {
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
+    connection.configure(logRequest(builder -> builder.copy(request), member)).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the configure to the member.
@@ -440,7 +469,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Handles a configuration response.
    */
   protected void handleConfigureResponse(MemberState member, ConfigureRequest request, ConfigureResponse response) {
-    if (response.status() == Response.Status.OK) {
+    if (response.status() == ProtocolResponse.Status.OK) {
       handleConfigureResponseOk(member, request, response);
     } else {
       handleConfigureResponseError(member, request, response);
@@ -474,7 +503,7 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Builds an install request for the given member.
    */
-  protected InstallRequest buildInstallRequest(MemberState member) {
+  protected InstallRequest buildInstallRequest(MemberState member, InstallRequest.Builder requestBuilder) {
     Snapshot snapshot = context.getSnapshotStore().currentSnapshot();
     if (member.getNextSnapshotIndex() != snapshot.index()) {
       member.setNextSnapshotIndex(snapshot.index()).setNextSnapshotOffset(0);
@@ -492,7 +521,7 @@ abstract class AbstractAppender implements AutoCloseable {
         // Create the install request, indicating whether this is the last chunk of data based on the number
         // of bytes remaining in the buffer.
         ServerMember leader = context.getLeader();
-        request = InstallRequest.builder()
+        request = requestBuilder
           .withTerm(context.getTerm())
           .withLeader(leader != null ? leader.id() : 0)
           .withIndex(member.getNextSnapshotIndex())
@@ -509,22 +538,23 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Connects to the member and sends a snapshot request.
    */
-  protected void sendInstallRequest(MemberState member, InstallRequest request) {
+  protected void sendInstallRequest(MemberState member, ProtocolRequestFactory<InstallRequest.Builder, InstallRequest> factory) {
     // Start the install to the member.
     member.startInstall();
 
+    InstallRequest prototype = factory.build(new InstallRequest.Builder());
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
       context.checkThread();
 
       if (open) {
         if (error == null) {
-          sendInstallRequest(connection, member, request);
+          sendInstallRequest(connection, member, prototype);
         } else {
           // Complete the install to the member.
           member.completeInstall();
 
           // Trigger reactions to the install request failure.
-          handleInstallRequestFailure(member, request, error);
+          handleInstallRequestFailure(member, prototype, error);
         }
       }
     });
@@ -533,9 +563,9 @@ abstract class AbstractAppender implements AutoCloseable {
   /**
    * Sends a snapshot message.
    */
-  protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
+  protected void sendInstallRequest(RaftProtocolClientConnection connection, MemberState member, InstallRequest request) {
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
+    connection.install(logRequest(builder -> builder.copy(request), member)).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the install to the member.
@@ -543,7 +573,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          LOGGER.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
+          logResponse(response, member);
           handleInstallResponse(member, request, response);
         } else {
           LOGGER.warn("{} - Failed to install {}", context.getCluster().member().address(), member.getMember().serverAddress());
@@ -579,7 +609,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Handles an install response.
    */
   protected void handleInstallResponse(MemberState member, InstallRequest request, InstallResponse response) {
-    if (response.status() == Response.Status.OK) {
+    if (response.status() == ProtocolResponse.Status.OK) {
       handleInstallResponseOk(member, request, response);
     } else {
       handleInstallResponseError(member, request, response);

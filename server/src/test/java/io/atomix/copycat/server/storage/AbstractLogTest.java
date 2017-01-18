@@ -19,7 +19,6 @@ import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.DirectBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.server.storage.compaction.Compaction;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
 import org.testng.annotations.*;
 
 import java.io.File;

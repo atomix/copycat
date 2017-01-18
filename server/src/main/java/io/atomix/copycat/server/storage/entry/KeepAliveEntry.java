@@ -19,7 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.reference.ReferenceManager;
-import io.atomix.copycat.protocol.KeepAliveRequest;
 import io.atomix.copycat.session.Session;
 
 /**
@@ -27,7 +26,7 @@ import io.atomix.copycat.session.Session;
  * <p>
  * The {@code KeepAliveEntry} is logged and replicated to the cluster to indicate that a client
  * has kept its {@link #getSession() session} alive. Each client must periodically submit a
- * {@link KeepAliveRequest} which results in a keep-alive entry
+ * {@link io.atomix.copycat.protocol.request.KeepAliveRequest} which results in a keep-alive entry
  * being written to the Raft log. When a keep-alive is committed to the internal Raft state machine,
  * the session timeout for the associated {@link Session} will be
  * reset.

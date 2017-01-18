@@ -17,10 +17,15 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.InternalException;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.request.AppendRequest;
+import io.atomix.copycat.server.protocol.request.ConfigureRequest;
+import io.atomix.copycat.server.protocol.request.InstallRequest;
+import io.atomix.copycat.server.protocol.response.AppendResponse;
+import io.atomix.copycat.server.protocol.response.ConfigureResponse;
+import io.atomix.copycat.server.protocol.response.InstallResponse;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -168,7 +173,7 @@ final class LeaderAppender extends AbstractAppender {
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
     if (member.getFailureCount() > 0) {
       if (member.canAppend()) {
-        sendAppendRequest(member, buildAppendEmptyRequest(member));
+        sendAppendRequest(member, builder -> buildAppendEmptyRequest(member, builder));
       }
     }
     // If the member term is less than the current term or the member's configuration index is less
@@ -178,13 +183,13 @@ final class LeaderAppender extends AbstractAppender {
     // Once the configuration is complete sendAppendRequest will be called recursively.
     else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getConfiguration().index()) {
       if (member.canConfigure()) {
-        sendConfigureRequest(member, buildConfigureRequest(member));
+        sendConfigureRequest(member, builder -> buildConfigureRequest(member, builder));
       }
     }
     // If the member is a reserve or passive member, send an empty AppendRequest to it.
     else if (member.getMember().type() == Member.Type.RESERVE || member.getMember().type() == Member.Type.PASSIVE) {
       if (member.canAppend()) {
-        sendAppendRequest(member, buildAppendEmptyRequest(member));
+        sendAppendRequest(member, builder -> buildAppendEmptyRequest(member, builder));
       }
     }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
@@ -193,12 +198,12 @@ final class LeaderAppender extends AbstractAppender {
       && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (member.canInstall()) {
-        sendInstallRequest(member, buildInstallRequest(member));
+        sendInstallRequest(member, builder -> buildInstallRequest(member, builder));
       }
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (member.canAppend()) {
-      sendAppendRequest(member, buildAppendRequest(member, context.getLog().lastIndex()));
+      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, context.getLog().lastIndex()));
     }
   }
 
@@ -343,12 +348,12 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Connects to the member and sends a commit message.
    */
-  protected void sendAppendRequest(MemberState member, AppendRequest request) {
+  protected void sendAppendRequest(MemberState member, ProtocolRequestFactory<AppendRequest.Builder, AppendRequest> factory) {
     // Set the start time of the member's current commit. This will be used to associate responses
     // with the current commit request.
     member.setHeartbeatStartTime(heartbeatTime);
 
-    super.sendAppendRequest(member, request);
+    super.sendAppendRequest(member, factory);
   }
 
   /**
@@ -382,7 +387,7 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   /**
-   * Handles a {@link Response.Status#OK} response.
+   * Handles a {@link io.atomix.copycat.protocol.response.ProtocolResponse.Status#OK} response.
    */
   protected void handleAppendResponseOk(MemberState member, AppendRequest request, AppendResponse response) {
     // Reset the member failure count and update the member's availability status if necessary.
@@ -421,7 +426,7 @@ final class LeaderAppender extends AbstractAppender {
   }
 
   /**
-   * Handles a {@link Response.Status#ERROR} response.
+   * Handles a {@link io.atomix.copycat.protocol.response.ProtocolResponse.Status#ERROR} response.
    */
   protected void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     // If we've received a greater term, update the term and transition back to follower.

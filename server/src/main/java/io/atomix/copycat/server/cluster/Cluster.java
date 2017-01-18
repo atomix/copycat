@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.server.cluster;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.LeaveRequest;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -291,7 +290,7 @@ public interface Cluster {
    * <em>This method is for advanced usage only.</em> Typically, users should use {@link CopycatServer#leave()}
    * to leave the cluster and close a server in order to ensure all associated resources are properly closed.
    * <p>
-   * When a server leaves the cluster, the server submits a {@link LeaveRequest}
+   * When a server leaves the cluster, the server submits a {@link io.atomix.copycat.server.protocol.request.LeaveRequest}
    * to the cluster leader. The leader will replicate and commit the configuration change in order to remove the
    * leaving server from the cluster and notify each member of the leaving server.
    * <p>

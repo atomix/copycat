@@ -34,8 +34,6 @@ import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.system.Configuration;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
-import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;

@@ -15,18 +15,19 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Scheduled;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.request.LeaveRequest;
+import io.atomix.copycat.server.protocol.response.LeaveResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -370,47 +371,47 @@ final class ClusterState implements Cluster, AutoCloseable {
       MemberState member = iterator.next();
       LOGGER.debug("{} - Attempting to join via {}", member().address(), member.getMember().serverAddress());
 
-      context.getConnections().getConnection(member.getMember().serverAddress()).thenCompose(connection -> {
-        JoinRequest request = JoinRequest.builder()
-          .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
-          .build();
-        return connection.<JoinRequest, JoinResponse>send(request);
-      }).whenComplete((response, error) -> {
-        // Cancel the join timer.
-        cancelJoinTimer();
+      context.getConnections().getConnection(member.getMember().serverAddress())
+        .thenCompose(connection ->
+          connection.join(builder -> builder
+            .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
+            .build()))
+        .whenComplete((response, error) -> {
+          // Cancel the join timer.
+          cancelJoinTimer();
 
-        if (error == null) {
-          if (response.status() == Response.Status.OK) {
-            LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
+          if (error == null) {
+            if (response.status() == ProtocolResponse.Status.OK) {
+              LOGGER.info("{} - Successfully joined via {}", member().address(), member.getMember().serverAddress());
 
-            Configuration configuration = new Configuration(response.index(), response.term(), response.timestamp(), response.members());
+              Configuration configuration = new Configuration(response.index(), response.term(), response.timestamp(), response.members());
 
-            // Configure the cluster with the join response.
-            // Commit the configuration as we know it was committed via the successful join response.
-            configure(configuration).commit();
+              // Configure the cluster with the join response.
+              // Commit the configuration as we know it was committed via the successful join response.
+              configure(configuration).commit();
 
-            // If the local member is not present in the configuration, fail the future.
-            if (!members.contains(this.member)) {
-              joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
-            } else if (joinFuture != null) {
-              joinFuture.complete(null);
+              // If the local member is not present in the configuration, fail the future.
+              if (!members.contains(this.member)) {
+                joinFuture.completeExceptionally(new IllegalStateException("not a member of the cluster"));
+              } else if (joinFuture != null) {
+                joinFuture.complete(null);
+              }
+            } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
+              // If the response error is null, that indicates that no error occurred but the leader was
+              // in a state that was incapable of handling the join request. Attempt to join the leader
+              // again after an election timeout.
+              LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
+              resetJoinTimer();
+            } else {
+              // If the response error was non-null, attempt to join via the next server in the members list.
+              LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
+              join(iterator);
             }
-          } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
-            // If the response error is null, that indicates that no error occurred but the leader was
-            // in a state that was incapable of handling the join request. Attempt to join the leader
-            // again after an election timeout.
-            LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
-            resetJoinTimer();
           } else {
-            // If the response error was non-null, attempt to join via the next server in the members list.
             LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
             join(iterator);
           }
-        } else {
-          LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
-          join(iterator);
-        }
-      });
+        });
     }
     // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
     // for servers to potentially timeout and elect a leader.
@@ -439,25 +440,24 @@ final class ClusterState implements Cluster, AutoCloseable {
         joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
 
         LOGGER.debug("{} - Sending server identification to {}", member().address(), leader.address());
-        context.getConnections().getConnection(leader.serverAddress()).thenCompose(connection -> {
-          ReconfigureRequest request = ReconfigureRequest.builder()
+        context.getConnections().getConnection(leader.serverAddress())
+          .thenCompose(connection -> connection.reconfigure(builder -> builder
             .withIndex(configuration.index())
             .withTerm(configuration.term())
             .withMember(member())
-            .build();
-          return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
-        }).whenComplete((response, error) -> {
-          cancelJoinTimer();
-          if (error == null) {
-            if (response.status() == Response.Status.OK) {
-              cancelJoinTimer();
-              if (joinFuture != null)
-                joinFuture.complete(null);
-            } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
-              joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
+            .build()))
+          .whenComplete((response, error) -> {
+            cancelJoinTimer();
+            if (error == null) {
+              if (response.status() == ProtocolResponse.Status.OK) {
+                cancelJoinTimer();
+                if (joinFuture != null)
+                  joinFuture.complete(null);
+              } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
+                joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
+              }
             }
-          }
-        });
+          });
       }
     }
     return joinFuture;
@@ -526,13 +526,13 @@ final class ClusterState implements Cluster, AutoCloseable {
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    context.getServerState().leave(LeaveRequest.builder()
+    context.getServerState().onLeave(new LeaveRequest.Builder()
       .withMember(member())
-      .build()).whenComplete((response, error) -> {
+      .build(), new LeaveResponse.Builder()).whenComplete((response, error) -> {
       // Cancel the leave timer.
       cancelLeaveTimer();
 
-      if (error == null && response.status() == Response.Status.OK) {
+      if (error == null && response.status() == ProtocolResponse.Status.OK) {
         Configuration configuration = new Configuration(response.index(), response.term(), response.timestamp(), response.members());
 
         // Configure the cluster and commit the configuration as we know the successful response

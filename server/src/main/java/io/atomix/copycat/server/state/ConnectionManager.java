@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.transport.Connection;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.server.protocol.RaftProtocolClient;
+import io.atomix.copycat.server.protocol.RaftProtocolClientConnection;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,10 +29,10 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public final class ConnectionManager {
-  private final Client client;
-  private final Map<Address, Connection> connections = new HashMap<>();
+  private final RaftProtocolClient client;
+  private final Map<Address, RaftProtocolClientConnection> connections = new HashMap<>();
 
-  public ConnectionManager(Client client) {
+  public ConnectionManager(RaftProtocolClient client) {
     this.client = client;
   }
 
@@ -42,8 +42,8 @@ public final class ConnectionManager {
    * @param address The member for which to get the connection.
    * @return A completable future to be called once the connection is received.
    */
-  public CompletableFuture<Connection> getConnection(Address address) {
-    Connection connection = connections.get(address);
+  public CompletableFuture<RaftProtocolClientConnection> getConnection(Address address) {
+    RaftProtocolClientConnection connection = connections.get(address);
     return connection == null ? createConnection(address) : CompletableFuture.completedFuture(connection);
   }
 
@@ -53,7 +53,7 @@ public final class ConnectionManager {
    * @param address The address for which to reset the connection.
    */
   public void resetConnection(Address address) {
-    Connection connection = connections.remove(address);
+    RaftProtocolClientConnection connection = connections.remove(address);
     if (connection != null) {
       connection.close();
     }
@@ -65,7 +65,7 @@ public final class ConnectionManager {
    * @param address The member for which to create the connection.
    * @return A completable future to be called once the connection has been created.
    */
-  private CompletableFuture<Connection> createConnection(Address address) {
+  private CompletableFuture<RaftProtocolClientConnection> createConnection(Address address) {
     return client.connect(address).thenApply(connection -> {
       connection.closeListener(c -> {
         if (connections.get(address) == c) {
@@ -86,7 +86,7 @@ public final class ConnectionManager {
     CompletableFuture[] futures = new CompletableFuture[connections.size()];
 
     int i = 0;
-    for (Connection connection : connections.values()) {
+    for (RaftProtocolClientConnection connection : connections.values()) {
       futures[i++] = connection.close();
     }
 

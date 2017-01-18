@@ -15,11 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Managed;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.request.*;
+import io.atomix.copycat.protocol.response.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.request.*;
+import io.atomix.copycat.server.protocol.response.*;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -41,128 +43,144 @@ public interface ServerState extends Managed<ServerState> {
    * Handles a register request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<RegisterResponse> register(RegisterRequest request);
+  CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder builder);
 
   /**
    * Handles a connect request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection);
+  CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder builder, ProtocolServerConnection connection);
 
   /**
    * Handles an accept request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<AcceptResponse> accept(AcceptRequest request);
+  CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder builder);
 
   /**
    * Handles a keep alive request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
+  CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder builder);
 
   /**
    * Handles an unregister request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
+  CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder builder);
 
   /**
    * Handles a publish request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<PublishResponse> publish(PublishRequest request);
+  CompletableFuture<PublishResponse> onPublish(PublishRequest request, PublishResponse.Builder builder);
 
   /**
    * Handles a configure request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
+  CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request, ConfigureResponse.Builder builder);
 
   /**
    * Handles an install request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<InstallResponse> install(InstallRequest request);
+  CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder builder);
 
   /**
    * Handles a join request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<JoinResponse> join(JoinRequest request);
+  CompletableFuture<JoinResponse> onJoin(JoinRequest request, JoinResponse.Builder builder);
 
   /**
    * Handles a configure request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request);
+  CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request, ReconfigureResponse.Builder builder);
 
   /**
    * Handles a leave request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<LeaveResponse> leave(LeaveRequest request);
+  CompletableFuture<LeaveResponse> onLeave(LeaveRequest request, LeaveResponse.Builder builder);
 
   /**
    * Handles an append request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<AppendResponse> append(AppendRequest request);
+  CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder builder);
 
   /**
    * Handles a poll request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<PollResponse> poll(PollRequest request);
+  CompletableFuture<PollResponse> onPoll(PollRequest request, PollResponse.Builder builder);
 
   /**
    * Handles a vote request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<VoteResponse> vote(VoteRequest request);
+  CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder builder);
 
   /**
    * Handles a command request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<CommandResponse> command(CommandRequest request);
+  CompletableFuture<CommandResponse> onCommand(CommandRequest request, CommandResponse.Builder builder);
 
   /**
    * Handles a query request.
    *
    * @param request The request to handle.
+   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<QueryResponse> query(QueryRequest request);
+  CompletableFuture<QueryResponse> onQuery(QueryRequest request, QueryResponse.Builder builder);
 
 }

@@ -15,31 +15,26 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.catalyst.buffer.PooledHeapAllocator;
 import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Server;
-import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.protocol.ClientRequestTypeResolver;
-import io.atomix.copycat.protocol.ClientResponseTypeResolver;
+import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.Protocol;
+import io.atomix.copycat.protocol.ProtocolServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.protocol.RaftProtocol;
+import io.atomix.copycat.server.protocol.RaftProtocolServer;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
-import io.atomix.copycat.server.util.ServerSerialization;
-import io.atomix.copycat.util.ProtocolSerialization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +76,7 @@ import java.util.function.Supplier;
  * and stateless states.
  * <h2>Transports</h2>
  * By default, the server will use the {@code NettyTransport} for communication. You can configure the transport via
- * {@link CopycatServer.Builder#withTransport(Transport)}. To use the Netty transport, ensure you have the
+ * {@link CopycatServer.Builder#withProtocol(RaftProtocol)}. To use the Netty transport, ensure you have the
  * {@code io.atomix.catalyst:catalyst-netty} jar on your classpath.
  * <pre>
  * {@code
@@ -111,28 +106,6 @@ import java.util.function.Supplier;
  * </pre>
  * Servers use the {@code Storage} object to manage the storage of cluster configurations, voting information, and
  * state machine snapshots in addition to logs. See the {@link Storage} documentation for more information.
- * <h2>Serialization</h2>
- * All serialization is performed with a Catalyst {@link Serializer}. The serializer is shared across all components of
- * the server. Users are responsible for ensuring that {@link Command commands} and {@link Query queries} submitted to the
- * cluster can be serialized by the server serializer by registering serializable types as necessary.
- * <p>
- * By default, the server serializer does not allow arbitrary classes to be serialized due to security concerns. However,
- * users can enable arbitrary class serialization by disabling the {@link Serializer#disableWhitelist() whitelisting feature}
- * on the Catalyst {@link Serializer}:
- * <pre>
- *   {@code
- *   server.serializer().disableWhitelist();
- *   }
- * </pre>
- * However, for more efficient serialization, users should explicitly register serializable classes and binary
- * {@link io.atomix.catalyst.serializer.TypeSerializer serializers}. Explicit registration of serializable typs allows
- * types to be serialized using more compact 8- 16- 24- and 32-bit serialization IDs rather than serializing complete
- * class names. Thus, serializable type registration is strongly recommended for production systems.
- * <pre>
- *   {@code
- *   server.serializer().register(MySerializable.class, 123, MySerializableSerializer.class);
- *   }
- * </pre>
  * <h2>Bootstrapping the cluster</h2>
  * Once a server has been built, it must either be {@link #bootstrap() bootstrapped} to form a new cluster or
  * {@link #join(Address...) joined} to an existing cluster. The simplest way to bootstrap a new cluster is to bootstrap
@@ -207,7 +180,7 @@ import java.util.function.Supplier;
  * </pre>
  *
  * @see StateMachine
- * @see Transport
+ * @see RaftProtocol
  * @see Storage
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
@@ -313,22 +286,22 @@ public class CopycatServer {
   }
 
   protected final String name;
-  protected final Transport clientTransport;
-  protected final Transport serverTransport;
-  protected final Server clientServer;
-  protected final Server internalServer;
+  protected final Protocol clientProtocol;
+  protected final RaftProtocol raftProtocol;
+  protected final ProtocolServer clientServer;
+  protected final RaftProtocolServer raftServer;
   protected final ServerContext context;
   private volatile CompletableFuture<CopycatServer> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
   private Listener<Member> electionListener;
   private volatile boolean started;
 
-  protected CopycatServer(String name, Transport clientTransport, Transport serverTransport, ServerContext context) {
+  protected CopycatServer(String name, Protocol clientProtocol, RaftProtocol raftProtocol, ServerContext context) {
     this.name = Assert.notNull(name, "name");
-    this.clientTransport = Assert.notNull(clientTransport, "clientTransport");
-    this.serverTransport = Assert.notNull(serverTransport, "serverTransport");
-    this.internalServer = serverTransport.server();
-    this.clientServer = !context.getCluster().member().serverAddress().equals(context.getCluster().member().clientAddress()) ? clientTransport.server() : null;
+    this.clientProtocol = clientProtocol;
+    this.raftProtocol = Assert.notNull(raftProtocol, "raftProtocol");
+    this.raftServer = raftProtocol.createServer();
+    this.clientServer = !context.getCluster().member().serverAddress().equals(context.getCluster().member().clientAddress()) ? clientProtocol.createServer() : null;
     this.context = Assert.notNull(context, "context");
   }
 
@@ -377,47 +350,6 @@ public class CopycatServer {
    */
   public Cluster cluster() {
     return context.getCluster();
-  }
-
-  /**
-   * Returns the server's binary serializer which is shared among the protocol, state machine, and storage.
-   * <p>
-   * The returned serializer is linked to all serialization performed within the Copycat server. Serializable types
-   * and associated {@link io.atomix.catalyst.serializer.TypeSerializer serializers} that are
-   * {@link Serializer#register(Class) registered} on the returned serializer will be reflected in serialization
-   * throughout the server, including in the state machine and logs.
-   * <p>
-   * By default, serializers support serialization of arbitrary classes and class names. However, this default
-   * serialization is significantly slower than explicitly registering serializable types since. Users should
-   * explicitly whitelist serializable types with the serializer to ensure the server can more efficiently serialize
-   * and deserialize required objects, including state machine {@link Command commands} and {@link Query queries} and
-   * any objects that need to be serialized within them.
-   * <pre>
-   *   {@code
-   *   server.serializer().register(MySerializableType.class, 123, MySerializableSerializer.class);
-   *   }
-   * </pre>
-   * Alternatively, users can {@link Serializer#enableWhitelist() enabled whitelisting} in the Catalyst serializer
-   * to force serializable types to be explicitly registered.
-   * <pre>
-   *   {@code
-   *   server.serializer().enableWhitelist();
-   *   }
-   * </pre>
-   * Whitelisting of serializable classes is recommended in insecure environments. The default disabled whitelisting
-   * presents security risks wherein arbitrary classes can be deserialized by malicious actors. See the {@link Serializer}
-   * documentation for more information.
-   * <p>
-   * <em>It's important to note that because the returned {@link Serializer} affects the on-disk binary representation
-   * of commands and queries and other objects submitted to the cluster, users must take care to avoid directly changing
-   * the binary format of serializable objects once they have been written to the server's logs. Doing so may result in
-   * errors during deserialization of objects in the log. To guard against this, serializable types can implement versioning
-   * by writing 8-bit version numbers as part of their normal serialization.</em>
-   *
-   * @return The server serializer.
-   */
-  public Serializer serializer() {
-    return context.getSerializer();
   }
 
   /**
@@ -694,7 +626,7 @@ public class CopycatServer {
   private CompletableFuture<Void> listen() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.getThreadContext().executor().execute(() -> {
-      internalServer.listen(cluster().member().serverAddress(), context::connectServer).whenComplete((internalResult, internalError) -> {
+      raftServer.listen(cluster().member().serverAddress(), context::connectServer).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
           // If the client address is different than the server address, start a separate client server.
           if (clientServer != null) {
@@ -738,7 +670,7 @@ public class CopycatServer {
       started = false;
       if (clientServer != null) {
         clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
-          internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
+          raftServer.close().whenCompleteAsync((internalResult, internalError) -> {
             if (internalError != null) {
               future.completeExceptionally(internalError);
             } else if (clientError != null) {
@@ -749,7 +681,7 @@ public class CopycatServer {
           }, context.getThreadContext().executor());
         }, context.getThreadContext().executor());
       } else {
-        internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
+        raftServer.close().whenCompleteAsync((internalResult, internalError) -> {
           if (internalError != null) {
             future.completeExceptionally(internalError);
           } else {
@@ -761,12 +693,16 @@ public class CopycatServer {
       context.transition(CopycatServer.State.INACTIVE);
     });
 
-    return future.whenCompleteAsync((result, error) -> {
-      clientTransport.close();
-      serverTransport.close();
-      context.close();
-      started = false;
-    });
+    return future.thenComposeAsync(v -> {
+      if (clientProtocol != null) {
+        return clientProtocol.close();
+      }
+      return CompletableFuture.completedFuture(null);
+    }).thenComposeAsync(v -> raftProtocol.close())
+      .whenCompleteAsync((result, error) -> {
+        context.close();
+        started = false;
+      });
   }
 
   /**
@@ -823,7 +759,7 @@ public class CopycatServer {
    *     .build();
    *   }
    * </pre>
-   * Similarly critical to the operation of the server are the {@link Transport} and {@link Storage} layers. By default,
+   * Similarly critical to the operation of the server are the {@link RaftProtocol} and {@link Storage} layers. By default,
    * servers are configured with the {@code io.atomix.catalyst.transport.netty.NettyTransport} transport if it's available on
    * the classpath. Users should provide a {@link Storage} instance to specify how the server stores state changes.
    */
@@ -836,10 +772,9 @@ public class CopycatServer {
 
     private String name = DEFAULT_NAME;
     private Member.Type type = Member.Type.ACTIVE;
-    private Transport clientTransport;
-    private Transport serverTransport;
+    private Protocol clientProtocol;
+    private RaftProtocol raftProtocol;
     private Storage storage;
-    private Serializer serializer;
     private Supplier<StateMachine> stateMachineFactory;
     private Address clientAddress;
     private Address serverAddress;
@@ -878,52 +813,39 @@ public class CopycatServer {
     }
 
     /**
-     * Sets the client and server transport.
+     * Sets the client and server protocol.
      *
-     * @param transport The client and server transport.
+     * @param protocol The client and server protocol.
      * @return The server builder.
-     * @throws NullPointerException if {@code transport} is null
+     * @throws NullPointerException if {@code protocol} is null
      */
-    public Builder withTransport(Transport transport) {
-      Assert.notNull(transport, "transport");
-      this.clientTransport = transport;
-      this.serverTransport = transport;
+    public Builder withProtocol(RaftProtocol protocol) {
+      Assert.notNull(protocol, "protocol");
+      this.raftProtocol = protocol;
       return this;
     }
 
     /**
-     * Sets the client transport.
+     * Sets the client protocol.
      *
-     * @param transport The client transport.
+     * @param protocol The client protocol.
      * @return The server builder.
-     * @throws NullPointerException if {@code transport} is null
+     * @throws NullPointerException if {@code protocol} is null
      */
-    public Builder withClientTransport(Transport transport) {
-      this.clientTransport = Assert.notNull(transport, "transport");
+    public Builder withClientProtocol(Protocol protocol) {
+      this.clientProtocol = Assert.notNull(protocol, "protocol");
       return this;
     }
 
     /**
-     * Sets the server transport.
+     * Sets the server protocol.
      *
-     * @param transport The server transport.
+     * @param protocol The server protocol.
      * @return The server builder.
-     * @throws NullPointerException if {@code transport} is null
+     * @throws NullPointerException if {@code protocol} is null
      */
-    public Builder withServerTransport(Transport transport) {
-      this.serverTransport = Assert.notNull(transport, "transport");
-      return this;
-    }
-
-    /**
-     * Sets the Raft serializer.
-     *
-     * @param serializer The Raft serializer.
-     * @return The Raft builder.
-     * @throws NullPointerException if {@code serializer} is null
-     */
-    public Builder withSerializer(Serializer serializer) {
-      this.serializer = Assert.notNull(serializer, "serializer");
+    public Builder withRaftProtocol(RaftProtocol protocol) {
+      this.raftProtocol = Assert.notNull(protocol, "protocol");
       return this;
     }
 
@@ -1017,38 +939,21 @@ public class CopycatServer {
       if (stateMachineFactory == null)
         throw new ConfigurationException("state machine not configured");
 
-      // If the transport is not configured, attempt to use the default Netty transport.
-      if (serverTransport == null) {
+      // If the Raft protocol is not configured, use the default protocol.
+      if (raftProtocol == null) {
         try {
-          serverTransport = (Transport) Class.forName("io.atomix.catalyst.transport.netty.NettyTransport").newInstance();
+          raftProtocol = (RaftProtocol) Class.forName("io.atomix.copycat.server.protocol.net.RaftNetProtocol").newInstance();
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-          throw new ConfigurationException("transport not configured");
+          throw new ConfigurationException("protocol not configured");
         }
       }
-
-      // If the client transport is not configured, default it to the server transport.
-      if (clientTransport == null) {
-        clientTransport = serverTransport;
-      }
-
-      // If no serializer instance was provided, create one.
-      if (serializer == null) {
-        serializer = new Serializer(new PooledHeapAllocator());
-      }
-
-      // Resolve serializable request/response and other types.
-      serializer.resolve(new ClientRequestTypeResolver());
-      serializer.resolve(new ClientResponseTypeResolver());
-      serializer.resolve(new ProtocolSerialization());
-      serializer.resolve(new ServerSerialization());
-      serializer.resolve(new StorageSerialization());
 
       // If the storage is not configured, create a new Storage instance with the configured serializer.
       if (storage == null) {
         storage = new Storage();
       }
 
-      ConnectionManager connections = new ConnectionManager(serverTransport.client());
+      ConnectionManager connections = new ConnectionManager(raftProtocol.createClient());
       ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name), serializer);
 
       ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, serializer, stateMachineFactory, connections, threadContext);
@@ -1057,7 +962,7 @@ public class CopycatServer {
         .setSessionTimeout(sessionTimeout)
         .setGlobalSuspendTimeout(globalSuspendTimeout);
 
-      return new CopycatServer(name, clientTransport, serverTransport, context);
+      return new CopycatServer(name, clientProtocol, raftProtocol, context);
     }
   }
 

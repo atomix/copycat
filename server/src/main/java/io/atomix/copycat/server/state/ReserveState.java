@@ -15,11 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.request.*;
+import io.atomix.copycat.protocol.response.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.request.*;
+import io.atomix.copycat.server.protocol.response.*;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -50,7 +52,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<AppendResponse> append(AppendRequest request) {
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
@@ -59,8 +61,8 @@ class ReserveState extends InactiveState {
     context.setCommitIndex(request.commitIndex());
     context.setGlobalIndex(request.globalIndex());
 
-    return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
-      .withStatus(Response.Status.OK)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
       .withLogIndex(0)
@@ -68,172 +70,214 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<PollResponse> poll(PollRequest request) {
+  public CompletableFuture<PollResponse> onPoll(PollRequest request, PollResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
-      .withStatus(Response.Status.ERROR)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.ERROR)
       .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
   @Override
-  public CompletableFuture<VoteResponse> vote(VoteRequest request) {
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), 0);
 
-    return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
-      .withStatus(Response.Status.ERROR)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.ERROR)
       .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
   @Override
-  public CompletableFuture<CommandResponse> command(CommandRequest request) {
+  public CompletableFuture<CommandResponse> onCommand(CommandRequest request, CommandResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(
+        logResponse(
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build()));
     } else {
-      return this.<CommandRequest, CommandResponse>forward(request)
-        .exceptionally(error -> CommandResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
+      return forward(connection ->
+        connection.command(builder ->
+          builder.withSession(request.session())
+            .withSequence(request.sequence())
+            .withCommand(request.command())
+            .build()))
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build())
         .thenApply(this::logResponse);
     }
   }
 
   @Override
-  public CompletableFuture<QueryResponse> query(QueryRequest request) {
+  public CompletableFuture<QueryResponse> onQuery(QueryRequest request, QueryResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(
+        logResponse(
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build()));
     } else {
-      return this.<QueryRequest, QueryResponse>forward(request)
-        .exceptionally(error -> QueryResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
+      return forward(connection ->
+        connection.query(builder ->
+          builder
+            .withSession(request.session())
+            .withSequence(request.sequence())
+            .withIndex(request.index())
+            .withQuery(request.query())
+            .build()))
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build())
         .thenApply(this::logResponse);
     }
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
+  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(RegisterResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<RegisterRequest, RegisterResponse>forward(request)
-        .exceptionally(error -> RegisterResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
+      return forward(connection ->
+        connection.register(builder ->
+          builder
+            .withClient(request.client())
+            .withTimeout(request.timeout())
+            .build()))
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build())
         .thenApply(this::logResponse);
     }
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
     context.checkThread();
     logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
-      .withStatus(Response.Status.ERROR)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.ERROR)
       .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
   @Override
-  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
+  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
-      .withStatus(Response.Status.ERROR)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.ERROR)
       .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<KeepAliveRequest, KeepAliveResponse>forward(request)
-        .exceptionally(error -> KeepAliveResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
+      return forward(connection ->
+        connection.keepAlive(builder ->
+          builder
+            .withSession(request.session())
+            .withCommandSequence(request.commandSequence())
+            .withEventIndex(request.commandSequence())
+            .build()))
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build())
         .thenApply(this::logResponse);
     }
   }
 
   @Override
-  public CompletableFuture<PublishResponse> publish(PublishRequest request) {
+  public CompletableFuture<PublishResponse> onPublish(PublishRequest request, PublishResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
     if (session == null || session.getConnection() == null) {
-      return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
     } else {
       CompletableFuture<PublishResponse> future = new CompletableFuture<>();
-      session.getConnection().<PublishRequest, PublishResponse>send(request).whenComplete((result, error) -> {
-        if (isOpen()) {
-          if (error == null) {
-            future.complete(result);
-          } else {
-            future.complete(logResponse(PublishResponse.builder()
-              .withStatus(Response.Status.ERROR)
-              .withError(CopycatError.Type.INTERNAL_ERROR)
-              .build()));
+      session.getConnection().publish(builder ->
+        builder
+          .withSession(request.session())
+          .withEventIndex(request.eventIndex())
+          .withPreviousIndex(request.previousIndex())
+          .withEvents(request.events())
+          .build())
+        .whenComplete((result, error) -> {
+          if (isOpen()) {
+            if (error == null) {
+              future.complete(result);
+            } else {
+              future.complete(logResponse(
+                responseBuilder
+                  .withStatus(ProtocolResponse.Status.ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .build()));
+            }
           }
-        }
-      });
+        });
       return future;
     }
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
+  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<UnregisterRequest, UnregisterResponse>forward(request)
-        .exceptionally(error -> UnregisterResponse.builder()
-          .withStatus(Response.Status.ERROR)
+      return forward(connection -> connection.unregister(builder ->
+        builder
+          .withSession(request.session())
+          .build()))
+        .exceptionally(error -> responseBuilder
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
           .build())
         .thenApply(this::logResponse);
@@ -241,19 +285,74 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<JoinResponse> join(JoinRequest request) {
+  public CompletableFuture<JoinResponse> onJoin(JoinRequest request, JoinResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      return CompletableFuture.completedFuture(
+        logResponse(
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build()));
+    } else {
+      return forward(connection -> connection.join(builder ->
+        builder.withMember(request.member())
+          .build()))
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build())
+        .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request, ReconfigureResponse.Builder responseBuilder) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(
+        responseBuilder
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build()));
+    } else {
+      return forward(connection -> connection.reconfigure(builder ->
+        builder
+          .withIndex(request.index())
+          .withTerm(request.term())
+          .withMember(request.member())
+          .build()))
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .build())
+        .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<LeaveResponse> onLeave(LeaveRequest request, LeaveResponse.Builder responseBuilder) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(responseBuilder
+        .withStatus(ProtocolResponse.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<JoinRequest, JoinResponse>forward(request)
-        .exceptionally(error -> JoinResponse.builder()
-          .withStatus(Response.Status.ERROR)
+      return forward(connection -> connection.leave(builder ->
+        builder
+          .withMember(request.member())
+          .build()))
+        .exceptionally(error -> responseBuilder
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
           .build())
         .thenApply(this::logResponse);
@@ -261,52 +360,12 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request) {
+  public CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder responseBuilder) {
     context.checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<ReconfigureRequest, ReconfigureResponse>forward(request)
-        .exceptionally(error -> ReconfigureResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
-        .thenApply(this::logResponse);
-    }
-  }
-
-  @Override
-  public CompletableFuture<LeaveResponse> leave(LeaveRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
-        .build()));
-    } else {
-      return this.<LeaveRequest, LeaveResponse>forward(request)
-        .exceptionally(error -> LeaveResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
-        .thenApply(this::logResponse);
-    }
-  }
-
-  @Override
-  public CompletableFuture<InstallResponse> install(InstallRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
-      .withStatus(Response.Status.ERROR)
+    return CompletableFuture.completedFuture(logResponse(responseBuilder
+      .withStatus(ProtocolResponse.Status.ERROR)
       .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
