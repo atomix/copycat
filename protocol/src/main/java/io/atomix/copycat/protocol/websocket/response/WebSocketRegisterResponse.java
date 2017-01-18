@@ -104,6 +104,11 @@ public class WebSocketRegisterResponse extends RegisterResponse implements WebSo
     }
 
     @Override
+    public RegisterResponse copy(RegisterResponse response) {
+      return new WebSocketRegisterResponse(id, response.status(), response.error(), response.session(), response.leader(), response.members(), response.timeout());
+    }
+
+    @Override
     public RegisterResponse build() {
       return new WebSocketRegisterResponse(id, status, error, session, leader, members, timeout);
     }

@@ -58,6 +58,11 @@ public class ConfigureResponse extends AbstractResponse {
    */
   public static class Builder extends AbstractResponse.Builder<ConfigureResponse.Builder, ConfigureResponse> {
     @Override
+    public ConfigureResponse copy(ConfigureResponse response) {
+      return new ConfigureResponse(response.status, response.error);
+    }
+
+    @Override
     public ConfigureResponse build() {
       return new ConfigureResponse(status, error);
     }

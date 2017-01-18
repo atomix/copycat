@@ -94,6 +94,11 @@ public class WebSocketCommandResponse extends CommandResponse implements WebSock
     }
 
     @Override
+    public CommandResponse copy(CommandResponse response) {
+      return new WebSocketCommandResponse(id, response.status(), response.error(), response.index(), response.eventIndex(), response.result());
+    }
+
+    @Override
     public CommandResponse build() {
       return new WebSocketCommandResponse(id, status, error, index, eventIndex, result);
     }

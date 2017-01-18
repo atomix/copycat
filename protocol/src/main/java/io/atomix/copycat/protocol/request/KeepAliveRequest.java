@@ -114,6 +114,11 @@ public class KeepAliveRequest extends SessionRequest {
     }
 
     @Override
+    public KeepAliveRequest copy(KeepAliveRequest request) {
+      return new KeepAliveRequest(request.session, request.commandSequence, request.eventIndex);
+    }
+
+    @Override
     public KeepAliveRequest build() {
       return new KeepAliveRequest(session, commandSequence, eventIndex);
     }

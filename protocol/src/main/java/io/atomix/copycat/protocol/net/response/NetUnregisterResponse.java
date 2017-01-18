@@ -55,6 +55,11 @@ public class NetUnregisterResponse extends UnregisterResponse implements NetResp
     }
 
     @Override
+    public UnregisterResponse copy(UnregisterResponse response) {
+      return new NetUnregisterResponse(id, response.status(), response.error());
+    }
+
+    @Override
     public UnregisterResponse build() {
       return new NetUnregisterResponse(id, status, error);
     }

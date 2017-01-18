@@ -158,6 +158,11 @@ public class VoteRequest extends AbstractRequest {
     }
 
     @Override
+    public VoteRequest copy(VoteRequest request) {
+      return new VoteRequest(request.term, request.candidate, request.logIndex, request.logTerm);
+    }
+
+    @Override
     public VoteRequest build() {
       return new VoteRequest(term, candidate, logIndex, logTerm);
     }

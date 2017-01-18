@@ -78,6 +78,11 @@ public class ConnectRequest extends AbstractRequest {
     }
 
     @Override
+    public ConnectRequest copy(ConnectRequest request) {
+      return new ConnectRequest(request.client);
+    }
+
+    @Override
     public ConnectRequest build() {
       return new ConnectRequest(client);
     }

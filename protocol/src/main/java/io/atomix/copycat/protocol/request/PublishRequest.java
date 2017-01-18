@@ -138,6 +138,11 @@ public class PublishRequest extends SessionRequest {
     }
 
     @Override
+    public PublishRequest copy(PublishRequest request) {
+      return new PublishRequest(request.session, request.eventIndex, request.previousIndex, request.events);
+    }
+
+    @Override
     public PublishRequest build() {
       return new PublishRequest(session, eventIndex, previousIndex, events);
     }

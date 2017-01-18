@@ -80,6 +80,11 @@ public class WebSocketCommandRequest extends CommandRequest implements WebSocket
     }
 
     @Override
+    public CommandRequest copy(CommandRequest request) {
+      return new WebSocketCommandRequest(id, request.session(), request.sequence(), request.command());
+    }
+
+    @Override
     public CommandRequest build() {
       return new WebSocketCommandRequest(id, session, sequence, command);
     }

@@ -90,6 +90,11 @@ public class WebSocketConnectResponse extends ConnectResponse implements WebSock
     }
 
     @Override
+    public ConnectResponse copy(ConnectResponse response) {
+      return new WebSocketConnectResponse(id, response.status(), response.error(), response.leader(), response.members());
+    }
+
+    @Override
     public ConnectResponse build() {
       return new WebSocketConnectResponse(id, status, error, leader, members);
     }

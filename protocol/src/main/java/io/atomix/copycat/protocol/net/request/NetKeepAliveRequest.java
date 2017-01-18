@@ -54,6 +54,11 @@ public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest 
     }
 
     @Override
+    public KeepAliveRequest copy(KeepAliveRequest request) {
+      return new NetKeepAliveRequest(id, request.session(), request.commandSequence(), request.eventIndex());
+    }
+
+    @Override
     public KeepAliveRequest build() {
       return new NetKeepAliveRequest(id, session, commandSequence, eventIndex);
     }

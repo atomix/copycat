@@ -54,6 +54,11 @@ public class NetVoteRequest extends VoteRequest implements RaftNetRequest {
     }
 
     @Override
+    public VoteRequest copy(VoteRequest request) {
+      return new NetVoteRequest(id, request.term(), request.candidate(), request.logIndex(), request.logTerm());
+    }
+
+    @Override
     public VoteRequest build() {
       return new NetVoteRequest(id, term, candidate, logIndex, logTerm);
     }

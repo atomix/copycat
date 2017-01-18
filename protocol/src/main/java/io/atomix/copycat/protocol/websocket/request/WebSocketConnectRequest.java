@@ -65,6 +65,11 @@ public class WebSocketConnectRequest extends ConnectRequest implements WebSocket
     }
 
     @Override
+    public ConnectRequest copy(ConnectRequest request) {
+      return new WebSocketConnectRequest(id, request.client());
+    }
+
+    @Override
     public ConnectRequest build() {
       return new WebSocketConnectRequest(id, client);
     }

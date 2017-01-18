@@ -59,6 +59,11 @@ public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse {
     }
 
     @Override
+    public LeaveResponse copy(LeaveResponse response) {
+      return new NetLeaveResponse(id, response.status(), response.error(), response.index(), response.term(), response.timestamp(), response.members());
+    }
+
+    @Override
     public LeaveResponse build() {
       return new NetLeaveResponse(id, status, error, index, term, timestamp, members);
     }

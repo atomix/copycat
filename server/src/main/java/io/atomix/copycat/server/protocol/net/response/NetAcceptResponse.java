@@ -56,6 +56,11 @@ public class NetAcceptResponse extends AcceptResponse implements RaftNetResponse
     }
 
     @Override
+    public AcceptResponse copy(AcceptResponse response) {
+      return new NetAcceptResponse(id, response.status(), response.error());
+    }
+
+    @Override
     public AcceptResponse build() {
       return new NetAcceptResponse(id, status, error);
     }

@@ -72,6 +72,11 @@ public class WebSocketRegisterRequest extends RegisterRequest implements WebSock
     }
 
     @Override
+    public RegisterRequest copy(RegisterRequest request) {
+      return new WebSocketRegisterRequest(id, request.client(), request.timeout());
+    }
+
+    @Override
     public RegisterRequest build() {
       return new WebSocketRegisterRequest(id, client, timeout);
     }

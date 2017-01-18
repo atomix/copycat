@@ -109,9 +109,11 @@ public class PollResponse extends AbstractResponse {
       return this;
     }
 
-    /**
-     * @throws IllegalStateException if status is OK and {@code term} is not positive
-     */
+    @Override
+    public PollResponse copy(PollResponse response) {
+      return new PollResponse(response.status, response.error, response.term, response.accepted);
+    }
+
     @Override
     public PollResponse build() {
       return new PollResponse(status, error, term, accepted);

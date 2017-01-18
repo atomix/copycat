@@ -56,6 +56,11 @@ public class NetConfigureResponse extends ConfigureResponse implements RaftNetRe
     }
 
     @Override
+    public ConfigureResponse copy(ConfigureResponse response) {
+      return new NetConfigureResponse(id, response.status(), response.error());
+    }
+
+    @Override
     public ConfigureResponse build() {
       return new NetConfigureResponse(id, status, error);
     }

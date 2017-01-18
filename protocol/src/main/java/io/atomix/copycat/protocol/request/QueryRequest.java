@@ -126,6 +126,11 @@ public class QueryRequest extends OperationRequest {
     }
 
     @Override
+    public QueryRequest copy(QueryRequest request) {
+      return new QueryRequest(request.session, request.sequence, request.index, request.query);
+    }
+
+    @Override
     public QueryRequest build() {
       return new QueryRequest(session, sequence, index, query);
     }

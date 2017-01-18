@@ -59,6 +59,11 @@ public class NetReconfigureResponse extends ReconfigureResponse implements RaftN
     }
 
     @Override
+    public ReconfigureResponse copy(ReconfigureResponse response) {
+      return new NetReconfigureResponse(id, response.status(), response.error(), response.index(), response.term(), response.timestamp(), response.members());
+    }
+
+    @Override
     public ReconfigureResponse build() {
       return new NetReconfigureResponse(id, status, error, index, term, timestamp, members);
     }

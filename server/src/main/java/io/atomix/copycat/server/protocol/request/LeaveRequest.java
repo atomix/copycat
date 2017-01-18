@@ -36,6 +36,11 @@ public class LeaveRequest extends ConfigurationRequest {
    */
   public static class Builder extends ConfigurationRequest.Builder<LeaveRequest.Builder, LeaveRequest> {
     @Override
+    public LeaveRequest copy(LeaveRequest request) {
+      return new LeaveRequest(request.member);
+    }
+
+    @Override
     public LeaveRequest build() {
       return new LeaveRequest(member);
     }

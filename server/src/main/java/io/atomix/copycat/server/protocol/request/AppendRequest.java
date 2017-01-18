@@ -91,7 +91,7 @@ public class AppendRequest extends AbstractRequest {
    *
    * @return A list of log entries.
    */
-  public List<? extends Entry> entries() {
+  public List<Entry> entries() {
     return entries;
   }
 
@@ -234,6 +234,11 @@ public class AppendRequest extends AbstractRequest {
     public Builder withGlobalIndex(long index) {
       this.globalIndex = Assert.argNot(index, index < 0, "global index must not be negative");
       return this;
+    }
+
+    @Override
+    public AppendRequest copy(AppendRequest request) {
+      return new AppendRequest(request.term, request.leader, request.logIndex, request.logTerm, request.entries, request.commitIndex, request.globalIndex);
     }
 
     @Override

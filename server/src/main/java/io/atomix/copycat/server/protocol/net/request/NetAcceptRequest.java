@@ -55,6 +55,11 @@ public class NetAcceptRequest extends AcceptRequest implements RaftNetRequest {
     }
 
     @Override
+    public AcceptRequest copy(AcceptRequest request) {
+      return new NetAcceptRequest(id, request.client(), request.address());
+    }
+
+    @Override
     public AcceptRequest build() {
       return new NetAcceptRequest(id, client, address);
     }

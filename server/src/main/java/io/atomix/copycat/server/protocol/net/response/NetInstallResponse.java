@@ -56,6 +56,11 @@ public class NetInstallResponse extends InstallResponse implements RaftNetRespon
     }
 
     @Override
+    public InstallResponse copy(InstallResponse response) {
+      return new NetInstallResponse(id, response.status(), response.error());
+    }
+
+    @Override
     public InstallResponse build() {
       return new NetInstallResponse(id, status, error);
     }

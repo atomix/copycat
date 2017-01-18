@@ -54,6 +54,11 @@ public class NetRegisterRequest extends RegisterRequest implements NetRequest {
     }
 
     @Override
+    public RegisterRequest copy(RegisterRequest request) {
+      return new NetRegisterRequest(id, request.client(), request.timeout());
+    }
+
+    @Override
     public RegisterRequest build() {
       return new NetRegisterRequest(id, client, timeout);
     }

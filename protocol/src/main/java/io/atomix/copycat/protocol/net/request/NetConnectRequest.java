@@ -54,6 +54,11 @@ public class NetConnectRequest extends ConnectRequest implements NetRequest {
     }
 
     @Override
+    public ConnectRequest copy(ConnectRequest request) {
+      return new NetConnectRequest(id, request.client());
+    }
+
+    @Override
     public ConnectRequest build() {
       return new NetConnectRequest(id, client);
     }

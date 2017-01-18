@@ -54,6 +54,11 @@ public class NetUnregisterRequest extends UnregisterRequest implements NetReques
     }
 
     @Override
+    public UnregisterRequest copy(UnregisterRequest request) {
+      return new NetUnregisterRequest(id, request.session());
+    }
+
+    @Override
     public UnregisterRequest build() {
       return new NetUnregisterRequest(id, session);
     }

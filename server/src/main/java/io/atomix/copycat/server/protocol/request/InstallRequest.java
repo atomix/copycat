@@ -209,6 +209,11 @@ public class InstallRequest extends AbstractRequest {
     }
 
     @Override
+    public InstallRequest copy(InstallRequest request) {
+      return new InstallRequest(request.term, request.leader, request.index, request.offset, request.data, request.complete);
+    }
+
+    @Override
     public InstallRequest build() {
       return new InstallRequest(term, leader, index, offset, data, complete);
     }

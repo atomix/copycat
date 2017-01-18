@@ -55,6 +55,11 @@ public class UnregisterRequest extends SessionRequest {
    */
   public static class Builder extends SessionRequest.Builder<UnregisterRequest.Builder, UnregisterRequest> {
     @Override
+    public UnregisterRequest copy(UnregisterRequest request) {
+      return new UnregisterRequest(request.session);
+    }
+
+    @Override
     public UnregisterRequest build() {
       return new UnregisterRequest(session);
     }

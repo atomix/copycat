@@ -158,6 +158,11 @@ public class PollRequest extends AbstractRequest {
     }
 
     @Override
+    public PollRequest copy(PollRequest request) {
+      return new PollRequest(request.term, request.candidate, request.logIndex, request.logTerm);
+    }
+
+    @Override
     public PollRequest build() {
       return new PollRequest(term, candidate, logIndex, logTerm);
     }

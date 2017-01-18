@@ -184,6 +184,11 @@ public class ConfigureRequest extends AbstractRequest {
     }
 
     @Override
+    public ConfigureRequest copy(ConfigureRequest request) {
+      return new ConfigureRequest(request.term, request.leader, request.index, request.timestamp, request.members);
+    }
+
+    @Override
     public ConfigureRequest build() {
       return new ConfigureRequest(term, leader, index, timestamp, members);
     }

@@ -57,6 +57,11 @@ public class NetAppendRequest extends AppendRequest implements RaftNetRequest {
     }
 
     @Override
+    public AppendRequest copy(AppendRequest request) {
+      return new NetAppendRequest(id, request.term(), request.leader(), request.logIndex(), request.logTerm(), request.entries(), request.commitIndex(), request.globalIndex());
+    }
+
+    @Override
     public AppendRequest build() {
       return new NetAppendRequest(id, term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
     }

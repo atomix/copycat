@@ -57,6 +57,11 @@ public class NetPublishRequest extends PublishRequest implements NetRequest {
     }
 
     @Override
+    public PublishRequest copy(PublishRequest request) {
+      return new NetPublishRequest(id, request.session(), request.eventIndex(), request.previousIndex(), request.events());
+    }
+
+    @Override
     public PublishRequest build() {
       return new NetPublishRequest(id, session, eventIndex, previousIndex, events);
     }

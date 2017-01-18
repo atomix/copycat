@@ -54,6 +54,11 @@ public class NetInstallRequest extends InstallRequest implements RaftNetRequest 
     }
 
     @Override
+    public InstallRequest copy(InstallRequest request) {
+      return new NetInstallRequest(id, request.term(), request.leader(), request.index(), request.offset(), request.data(), request.complete());
+    }
+
+    @Override
     public InstallRequest build() {
       return new NetInstallRequest(id, term, leader, index, offset, data, complete);
     }

@@ -41,6 +41,11 @@ public class CommandResponse extends OperationResponse {
    */
   public static class Builder extends OperationResponse.Builder<CommandResponse.Builder, CommandResponse> {
     @Override
+    public CommandResponse copy(CommandResponse response) {
+      return new CommandResponse(response.status, response.error, response.index, response.eventIndex, response.result);
+    }
+
+    @Override
     public CommandResponse build() {
       return new CommandResponse(status, error, index, eventIndex, result);
     }

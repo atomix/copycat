@@ -80,6 +80,11 @@ public class WebSocketPublishResponse extends PublishResponse implements WebSock
     }
 
     @Override
+    public PublishResponse copy(PublishResponse response) {
+      return new WebSocketPublishResponse(id, response.status(), response.error(), response.index());
+    }
+
+    @Override
     public PublishResponse build() {
       return new WebSocketPublishResponse(id, status, error, index);
     }

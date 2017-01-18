@@ -87,6 +87,11 @@ public class PublishResponse extends SessionResponse {
     }
 
     @Override
+    public PublishResponse copy(PublishResponse response) {
+      return new PublishResponse(response.status, response.error, response.index);
+    }
+
+    @Override
     public PublishResponse build() {
       return new PublishResponse(status, error, index);
     }

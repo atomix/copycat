@@ -114,5 +114,13 @@ public interface ProtocolResponse {
      * @throws NullPointerException if {@code error} is null
      */
     T withError(CopycatError error);
+
+    /**
+     * Creates a copy of the given response.
+     *
+     * @param response The response to copy.
+     * @return The copied response.
+     */
+    U copy(U response);
   }
 }

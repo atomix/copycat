@@ -90,6 +90,11 @@ public class WebSocketKeepAliveResponse extends KeepAliveResponse implements Web
     }
 
     @Override
+    public KeepAliveResponse copy(KeepAliveResponse response) {
+      return new WebSocketKeepAliveResponse(id, response.status(), response.error(), response.leader(), response.members());
+    }
+
+    @Override
     public KeepAliveResponse build() {
       return new WebSocketKeepAliveResponse(id, status, error, leader, members);
     }

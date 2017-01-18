@@ -113,6 +113,11 @@ public class ConnectResponse extends AbstractResponse {
     }
 
     @Override
+    public ConnectResponse copy(ConnectResponse response) {
+      return new ConnectResponse(response.status, response.error, response.leader, response.members);
+    }
+
+    @Override
     public ConnectResponse build() {
       return new ConnectResponse(status, error, leader, members);
     }

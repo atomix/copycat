@@ -55,6 +55,11 @@ public class NetQueryRequest extends QueryRequest implements NetRequest {
     }
 
     @Override
+    public QueryRequest copy(QueryRequest request) {
+      return new NetQueryRequest(id, request.session(), request.sequence(), request.index(), request.query());
+    }
+
+    @Override
     public QueryRequest build() {
       return new NetQueryRequest(id, session, sequence, index, query);
     }

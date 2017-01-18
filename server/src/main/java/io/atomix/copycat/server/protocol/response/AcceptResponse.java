@@ -61,6 +61,11 @@ public class AcceptResponse extends AbstractResponse {
    */
   public static class Builder extends AbstractResponse.Builder<AcceptResponse.Builder, AcceptResponse> {
     @Override
+    public AcceptResponse copy(AcceptResponse response) {
+      return new AcceptResponse(response.status, response.error);
+    }
+
+    @Override
     public AcceptResponse build() {
       return new AcceptResponse(status, error);
     }

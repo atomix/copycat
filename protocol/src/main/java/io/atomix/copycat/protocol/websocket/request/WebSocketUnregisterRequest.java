@@ -65,6 +65,11 @@ public class WebSocketUnregisterRequest extends UnregisterRequest implements Web
     }
 
     @Override
+    public UnregisterRequest copy(UnregisterRequest request) {
+      return new WebSocketUnregisterRequest(id, request.session());
+    }
+
+    @Override
     public UnregisterRequest build() {
       return new WebSocketUnregisterRequest(id, session);
     }

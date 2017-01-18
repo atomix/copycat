@@ -166,6 +166,11 @@ public class RegisterResponse extends AbstractResponse {
     }
 
     @Override
+    public RegisterResponse copy(RegisterResponse response) {
+      return new RegisterResponse(response.status, response.error, response.session, response.leader, response.members, response.timeout);
+    }
+
+    @Override
     public RegisterResponse build() {
       return new RegisterResponse(status, error, session, leader, members, timeout);
     }

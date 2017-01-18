@@ -102,6 +102,11 @@ public class ReconfigureRequest extends ConfigurationRequest {
     }
 
     @Override
+    public ReconfigureRequest copy(ReconfigureRequest request) {
+      return new ReconfigureRequest(request.member, request.index, request.term);
+    }
+
+    @Override
     public ReconfigureRequest build() {
       return new ReconfigureRequest(member, index, term);
     }

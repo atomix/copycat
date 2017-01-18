@@ -55,6 +55,11 @@ public class NetCommandRequest extends CommandRequest implements NetRequest {
     }
 
     @Override
+    public CommandRequest copy(CommandRequest request) {
+      return new NetCommandRequest(id, request.session(), request.sequence(), request.command());
+    }
+
+    @Override
     public CommandRequest build() {
       return new NetCommandRequest(id, session, sequence, command);
     }

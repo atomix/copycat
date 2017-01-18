@@ -56,6 +56,11 @@ public class NetPollResponse extends PollResponse implements RaftNetResponse {
     }
 
     @Override
+    public PollResponse copy(PollResponse response) {
+      return new NetPollResponse(id, response.status(), response.error(), response.term(), response.accepted());
+    }
+
+    @Override
     public PollResponse build() {
       return new NetPollResponse(id, status, error, term, accepted);
     }

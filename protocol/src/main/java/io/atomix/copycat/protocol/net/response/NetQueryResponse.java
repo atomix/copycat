@@ -55,6 +55,11 @@ public class NetQueryResponse extends QueryResponse implements NetResponse {
     }
 
     @Override
+    public QueryResponse copy(QueryResponse response) {
+      return new NetQueryResponse(id, response.status(), response.error(), response.index(), response.eventIndex(), response.result());
+    }
+
+    @Override
     public QueryResponse build() {
       return new NetQueryResponse(id, status, error, index, eventIndex, result);
     }

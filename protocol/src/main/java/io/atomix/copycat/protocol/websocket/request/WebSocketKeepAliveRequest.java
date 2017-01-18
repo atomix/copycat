@@ -79,6 +79,11 @@ public class WebSocketKeepAliveRequest extends KeepAliveRequest implements WebSo
     }
 
     @Override
+    public KeepAliveRequest copy(KeepAliveRequest request) {
+      return new WebSocketKeepAliveRequest(id, request.session(), request.commandSequence(), request.eventIndex());
+    }
+
+    @Override
     public KeepAliveRequest build() {
       return new WebSocketKeepAliveRequest(id, session, commandSequence, eventIndex);
     }

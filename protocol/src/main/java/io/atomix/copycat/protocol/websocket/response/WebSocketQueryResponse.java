@@ -94,6 +94,11 @@ public class WebSocketQueryResponse extends QueryResponse implements WebSocketRe
     }
 
     @Override
+    public QueryResponse copy(QueryResponse response) {
+      return new WebSocketQueryResponse(id, response.status(), response.error(), response.index(), response.eventIndex(), response.result());
+    }
+
+    @Override
     public QueryResponse build() {
       return new WebSocketQueryResponse(id, status, error, index, eventIndex, result);
     }

@@ -55,6 +55,11 @@ public class NetLeaveRequest extends LeaveRequest implements RaftNetRequest {
     }
 
     @Override
+    public LeaveRequest copy(LeaveRequest request) {
+      return new NetLeaveRequest(id, request.member());
+    }
+
+    @Override
     public LeaveRequest build() {
       return new NetLeaveRequest(id, member);
     }

@@ -55,6 +55,11 @@ public class NetPublishResponse extends PublishResponse implements NetResponse {
     }
 
     @Override
+    public PublishResponse copy(PublishResponse response) {
+      return new NetPublishResponse(id, response.status(), response.error(), response.index());
+    }
+
+    @Override
     public PublishResponse build() {
       return new NetPublishResponse(id, status, error, index);
     }

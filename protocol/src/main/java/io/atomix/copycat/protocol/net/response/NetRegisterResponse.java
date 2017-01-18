@@ -58,6 +58,11 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
     }
 
     @Override
+    public RegisterResponse copy(RegisterResponse response) {
+      return new NetRegisterResponse(id, response.status(), response.error(), response.session(), response.leader(), response.members(), response.timeout());
+    }
+
+    @Override
     public RegisterResponse build() {
       return new NetRegisterResponse(id, status, error, session, leader, members, timeout);
     }

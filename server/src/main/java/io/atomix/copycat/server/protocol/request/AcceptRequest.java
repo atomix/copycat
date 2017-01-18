@@ -87,6 +87,11 @@ public class AcceptRequest extends AbstractRequest {
     }
 
     @Override
+    public AcceptRequest copy(AcceptRequest request) {
+      return new AcceptRequest(request.client, request.address);
+    }
+
+    @Override
     public AcceptRequest build() {
       return new AcceptRequest(client, address);
     }

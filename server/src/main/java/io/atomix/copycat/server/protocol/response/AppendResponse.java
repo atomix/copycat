@@ -136,9 +136,11 @@ public class AppendResponse extends AbstractResponse {
       return this;
     }
 
-    /**
-     * @throws IllegalStateException if status is ok and term is not positive or log index is negative
-     */
+    @Override
+    public AppendResponse copy(AppendResponse response) {
+      return new AppendResponse(response.status, response.error, response.term, response.succeeded, response.logIndex);
+    }
+
     @Override
     public AppendResponse build() {
       return new AppendResponse(status, error, term, succeeded, logIndex);

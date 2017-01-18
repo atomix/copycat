@@ -54,6 +54,11 @@ public class NetPollRequest extends PollRequest implements RaftNetRequest {
     }
 
     @Override
+    public PollRequest copy(PollRequest request) {
+      return new NetPollRequest(id, request.term(), request.candidate(), request.logIndex(), request.logTerm());
+    }
+
+    @Override
     public PollRequest build() {
       return new NetPollRequest(id, term, candidate, logIndex, logTerm);
     }

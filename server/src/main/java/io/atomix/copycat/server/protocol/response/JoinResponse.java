@@ -40,6 +40,11 @@ public class JoinResponse extends ConfigurationResponse {
    */
   public static class Builder extends ConfigurationResponse.Builder<JoinResponse.Builder, JoinResponse> {
     @Override
+    public JoinResponse copy(JoinResponse response) {
+      return new JoinResponse(response.status, response.error, response.index, response.term, response.timestamp, response.members);
+    }
+
+    @Override
     public JoinResponse build() {
       return new JoinResponse(status, error, index, term, timestamp, members);
     }

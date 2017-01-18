@@ -55,6 +55,11 @@ public class NetJoinRequest extends JoinRequest implements RaftNetRequest {
     }
 
     @Override
+    public JoinRequest copy(JoinRequest request) {
+      return new NetJoinRequest(id, request.member());
+    }
+
+    @Override
     public JoinRequest build() {
       return new NetJoinRequest(id, member);
     }

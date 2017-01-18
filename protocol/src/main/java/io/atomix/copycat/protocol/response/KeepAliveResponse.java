@@ -115,6 +115,11 @@ public class KeepAliveResponse extends SessionResponse {
     }
 
     @Override
+    public KeepAliveResponse copy(KeepAliveResponse response) {
+      return new KeepAliveResponse(response.status, response.error, response.leader, response.members);
+    }
+
+    @Override
     public KeepAliveResponse build() {
       return new KeepAliveResponse(status, error, leader, members);
     }

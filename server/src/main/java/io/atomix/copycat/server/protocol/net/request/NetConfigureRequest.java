@@ -57,6 +57,11 @@ public class NetConfigureRequest extends ConfigureRequest implements RaftNetRequ
     }
 
     @Override
+    public ConfigureRequest copy(ConfigureRequest request) {
+      return new NetConfigureRequest(id, request.term(), request.leader(), request.index(), request.timestamp(), request.members());
+    }
+
+    @Override
     public ConfigureRequest build() {
       return new NetConfigureRequest(id, term, leader, index, timestamp, members);
     }

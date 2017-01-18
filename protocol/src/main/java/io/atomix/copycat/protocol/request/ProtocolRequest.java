@@ -27,5 +27,13 @@ public interface ProtocolRequest {
    *
    * @param <T> The builder type.
    */
-  interface Builder<T extends Builder<T, U>, U extends ProtocolRequest> extends io.atomix.catalyst.util.Builder<U> {}
+  interface Builder<T extends Builder<T, U>, U extends ProtocolRequest> extends io.atomix.catalyst.util.Builder<U> {
+    /**
+     * Creates a copy of the given request.
+     *
+     * @param request The request to copy.
+     * @return The copied request.
+     */
+    U copy(U request);
+  }
 }

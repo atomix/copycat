@@ -60,6 +60,11 @@ public class UnregisterResponse extends SessionResponse {
    */
   public static class Builder extends SessionResponse.Builder<UnregisterResponse.Builder, UnregisterResponse> {
     @Override
+    public UnregisterResponse copy(UnregisterResponse response) {
+      return new UnregisterResponse(response.status, response.error);
+    }
+
+    @Override
     public UnregisterResponse build() {
       return new UnregisterResponse(status, error);
     }

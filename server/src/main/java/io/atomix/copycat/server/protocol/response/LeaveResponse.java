@@ -40,6 +40,11 @@ public class LeaveResponse extends ConfigurationResponse {
    */
   public static class Builder extends ConfigurationResponse.Builder<LeaveResponse.Builder, LeaveResponse> {
     @Override
+    public LeaveResponse copy(LeaveResponse response) {
+      return new LeaveResponse(response.status, response.error, response.index, response.term, response.timestamp, response.members);
+    }
+
+    @Override
     public LeaveResponse build() {
       return new LeaveResponse(status, error, index, term, timestamp, members);
     }

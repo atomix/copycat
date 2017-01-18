@@ -110,6 +110,11 @@ public class VoteResponse extends AbstractResponse {
     }
 
     @Override
+    public VoteResponse copy(VoteResponse response) {
+      return new VoteResponse(response.status, response.error, response.term, response.voted);
+    }
+
+    @Override
     public VoteResponse build() {
       return new VoteResponse(status, error, term, voted);
     }

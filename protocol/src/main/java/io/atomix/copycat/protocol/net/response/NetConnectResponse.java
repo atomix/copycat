@@ -58,6 +58,11 @@ public class NetConnectResponse extends ConnectResponse implements NetResponse {
     }
 
     @Override
+    public ConnectResponse copy(ConnectResponse response) {
+      return new NetConnectResponse(id, response.status(), response.error(), response.leader(), response.members());
+    }
+
+    @Override
     public ConnectResponse build() {
       return new NetConnectResponse(id, status, error, leader, members);
     }

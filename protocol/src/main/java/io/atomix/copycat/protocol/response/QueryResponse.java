@@ -41,6 +41,11 @@ public class QueryResponse extends OperationResponse {
    */
   public static class Builder extends OperationResponse.Builder<QueryResponse.Builder, QueryResponse> {
     @Override
+    public QueryResponse copy(QueryResponse response) {
+      return new QueryResponse(response.status, response.error, response.index, response.eventIndex, response.result);
+    }
+
+    @Override
     public QueryResponse build() {
       return new QueryResponse(status, error, index, eventIndex, result);
     }

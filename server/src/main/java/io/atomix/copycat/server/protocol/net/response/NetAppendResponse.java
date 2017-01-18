@@ -56,6 +56,11 @@ public class NetAppendResponse extends AppendResponse implements RaftNetResponse
     }
 
     @Override
+    public AppendResponse copy(AppendResponse response) {
+      return new NetAppendResponse(id, response.status(), response.error(), response.term(), response.succeeded(), response.logIndex());
+    }
+
+    @Override
     public AppendResponse build() {
       return new NetAppendResponse(id, status, error, term, succeeded, logIndex);
     }

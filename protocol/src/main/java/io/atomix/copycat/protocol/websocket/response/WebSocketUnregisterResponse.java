@@ -73,6 +73,11 @@ public class WebSocketUnregisterResponse extends UnregisterResponse implements W
     }
 
     @Override
+    public UnregisterResponse copy(UnregisterResponse response) {
+      return new WebSocketUnregisterResponse(id, response.status(), response.error());
+    }
+
+    @Override
     public UnregisterResponse build() {
       return new WebSocketUnregisterResponse(id, status, error);
     }

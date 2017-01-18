@@ -35,6 +35,11 @@ public class ReconfigureResponse extends ConfigurationResponse {
    */
   public static class Builder extends ConfigurationResponse.Builder<ReconfigureResponse.Builder, ReconfigureResponse> {
     @Override
+    public ReconfigureResponse copy(ReconfigureResponse response) {
+      return new ReconfigureResponse(response.status, response.error, response.index, response.term, response.timestamp, response.members);
+    }
+
+    @Override
     public ReconfigureResponse build() {
       return new ReconfigureResponse(status, error, index, term, timestamp, members);
     }

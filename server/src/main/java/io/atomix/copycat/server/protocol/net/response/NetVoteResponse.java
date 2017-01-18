@@ -56,6 +56,11 @@ public class NetVoteResponse extends VoteResponse implements RaftNetResponse {
     }
 
     @Override
+    public VoteResponse copy(VoteResponse response) {
+      return new NetVoteResponse(id, response.status(), response.error(), response.term(), response.voted());
+    }
+
+    @Override
     public VoteResponse build() {
       return new NetVoteResponse(id, status, error, term, voted);
     }

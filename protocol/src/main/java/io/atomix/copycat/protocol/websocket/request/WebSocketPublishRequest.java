@@ -89,6 +89,11 @@ public class WebSocketPublishRequest extends PublishRequest implements WebSocket
     }
 
     @Override
+    public PublishRequest copy(PublishRequest request) {
+      return new WebSocketPublishRequest(id, request.session(), request.eventIndex(), request.previousIndex(), request.events());
+    }
+
+    @Override
     public PublishRequest build() {
       return new WebSocketPublishRequest(id, session, eventIndex, previousIndex, events);
     }

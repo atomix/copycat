@@ -98,6 +98,11 @@ public class CommandRequest extends OperationRequest {
     }
 
     @Override
+    public CommandRequest copy(CommandRequest request) {
+      return new CommandRequest(request.session, request.sequence, request.command);
+    }
+
+    @Override
     public CommandRequest build() {
       return new CommandRequest(session, sequence, command);
     }

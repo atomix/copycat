@@ -55,6 +55,11 @@ public class NetReconfigureRequest extends ReconfigureRequest implements RaftNet
     }
 
     @Override
+    public ReconfigureRequest copy(ReconfigureRequest request) {
+      return new NetReconfigureRequest(id, request.member(), request.index(), request.term());
+    }
+
+    @Override
     public ReconfigureRequest build() {
       return new NetReconfigureRequest(id, member, index, term);
     }

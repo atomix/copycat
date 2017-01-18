@@ -108,6 +108,11 @@ public class RegisterRequest extends AbstractRequest {
     }
 
     @Override
+    public RegisterRequest copy(RegisterRequest request) {
+      return new RegisterRequest(request.client, request.timeout);
+    }
+
+    @Override
     public RegisterRequest build() {
       return new RegisterRequest(client, timeout);
     }

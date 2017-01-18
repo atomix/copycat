@@ -59,6 +59,11 @@ public class NetJoinResponse extends JoinResponse implements RaftNetResponse {
     }
 
     @Override
+    public JoinResponse copy(JoinResponse response) {
+      return new NetJoinResponse(id, response.status(), response.error(), response.index(), response.term(), response.timestamp(), response.members());
+    }
+
+    @Override
     public JoinResponse build() {
       return new NetJoinResponse(id, status, error, index, term, timestamp, members);
     }

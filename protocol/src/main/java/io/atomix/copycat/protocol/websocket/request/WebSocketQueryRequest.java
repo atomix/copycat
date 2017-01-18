@@ -87,6 +87,11 @@ public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequ
     }
 
     @Override
+    public QueryRequest copy(QueryRequest request) {
+      return new WebSocketQueryRequest(id, request.session(), request.sequence(), request.index(), request.query());
+    }
+
+    @Override
     public QueryRequest build() {
       return new WebSocketQueryRequest(id, session, sequence, index, query);
     }

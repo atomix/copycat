@@ -55,6 +55,11 @@ public class NetCommandResponse extends CommandResponse implements NetResponse {
     }
 
     @Override
+    public CommandResponse copy(CommandResponse response) {
+      return new NetCommandResponse(id, response.status(), response.error(), response.index(), response.eventIndex(), response.result());
+    }
+
+    @Override
     public CommandResponse build() {
       return new NetCommandResponse(id, status, error, index, eventIndex, result);
     }

@@ -58,6 +58,11 @@ public class NetKeepAliveResponse extends KeepAliveResponse implements NetRespon
     }
 
     @Override
+    public KeepAliveResponse copy(KeepAliveResponse response) {
+      return new NetKeepAliveResponse(id, response.status(), response.error(), response.leader(), response.members());
+    }
+
+    @Override
     public KeepAliveResponse build() {
       return new NetKeepAliveResponse(id, status, error, leader, members);
     }

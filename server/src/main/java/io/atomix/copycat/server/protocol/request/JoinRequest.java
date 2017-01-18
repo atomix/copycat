@@ -36,6 +36,11 @@ public class JoinRequest extends ConfigurationRequest {
    */
   public static class Builder extends ConfigurationRequest.Builder<JoinRequest.Builder, JoinRequest> {
     @Override
+    public JoinRequest copy(JoinRequest request) {
+      return new JoinRequest(request.member);
+    }
+
+    @Override
     public JoinRequest build() {
       return new JoinRequest(member);
     }
