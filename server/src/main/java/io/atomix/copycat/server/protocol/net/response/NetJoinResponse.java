@@ -19,42 +19,47 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.response.JoinResponse;
 
 import java.util.Collection;
 
 /**
- * Server join configuration change response.
- * <p>
- * Join responses are sent in response to a request to add a server to the cluster configuration. If a
- * configuration change is failed due to a conflict, the response status will be
- * {@link WebSocketResponse.Status#ERROR} but the response {@link #error()} will
- * be {@code null}.
+ * TCP join response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetJoinResponse extends NetConfigurationResponse implements JoinResponse {
-  public NetJoinResponse(long id, Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
-    super(id, status, error, index, term, timestamp, members);
+public class NetJoinResponse extends JoinResponse implements RaftNetResponse {
+  private final long id;
+
+  public NetJoinResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error, index, term, timestamp, members);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.JOIN_RESPONSE;
+    return Types.JOIN_RESPONSE;
   }
 
   /**
-   * Join response builder.
+   * TCP join response builder.
    */
-  public static class Builder extends NetConfigurationResponse.Builder<JoinResponse.Builder, JoinResponse> implements JoinResponse.Builder {
+  public static class Builder extends JoinResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public NetJoinResponse build() {
+    public JoinResponse build() {
       return new NetJoinResponse(id, status, error, index, term, timestamp, members);
     }
   }
@@ -62,7 +67,7 @@ public class NetJoinResponse extends NetConfigurationResponse implements JoinRes
   /**
    * Join response serializer.
    */
-  public static class Serializer extends NetConfigurationResponse.Serializer<NetJoinResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetJoinResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetJoinResponse response) {
       output.writeLong(response.id);
@@ -81,7 +86,7 @@ public class NetJoinResponse extends NetConfigurationResponse implements JoinRes
     @Override
     @SuppressWarnings("unchecked")
     public NetJoinResponse read(Kryo kryo, Input input, Class<NetJoinResponse> type) {
-      return new NetJoinResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+      return new NetJoinResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
     }
   }
 }

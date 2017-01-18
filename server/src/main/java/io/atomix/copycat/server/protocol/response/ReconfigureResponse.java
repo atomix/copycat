@@ -15,17 +15,28 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.server.cluster.Member;
+
+import java.util.Collection;
+
 /**
  * Server configuration change response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ReconfigureResponse extends ConfigurationResponse {
+public class ReconfigureResponse extends ConfigurationResponse {
+  public ReconfigureResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error, index, term, timestamp, members);
+  }
 
   /**
    * Reconfigure response builder.
    */
-  interface Builder extends ConfigurationResponse.Builder<Builder, ReconfigureResponse> {
+  public static class Builder extends ConfigurationResponse.Builder<ReconfigureResponse.Builder, ReconfigureResponse> {
+    @Override
+    public ReconfigureResponse build() {
+      return new ReconfigureResponse(status, error, index, term, timestamp, members);
+    }
   }
-
 }

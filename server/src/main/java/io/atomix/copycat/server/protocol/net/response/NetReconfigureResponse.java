@@ -19,36 +19,47 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.response.ReconfigureResponse;
 
 import java.util.Collection;
 
 /**
- * Server configuration change response.
+ * TCP reconfigure response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetReconfigureResponse extends NetConfigurationResponse implements ReconfigureResponse {
-  public NetReconfigureResponse(long id, Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
-    super(id, status, error, index, term, timestamp, members);
+public class NetReconfigureResponse extends ReconfigureResponse implements RaftNetResponse {
+  private final long id;
+
+  public NetReconfigureResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error, index, term, timestamp, members);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.RECONFIGURE_RESPONSE;
+    return Types.RECONFIGURE_RESPONSE;
   }
 
   /**
-   * Reconfigure response builder.
+   * TCP reconfigure response builder.
    */
-  public static class Builder extends NetConfigurationResponse.Builder<ReconfigureResponse.Builder, ReconfigureResponse> implements ReconfigureResponse.Builder {
+  public static class Builder extends ReconfigureResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public NetReconfigureResponse build() {
+    public ReconfigureResponse build() {
       return new NetReconfigureResponse(id, status, error, index, term, timestamp, members);
     }
   }
@@ -56,7 +67,7 @@ public class NetReconfigureResponse extends NetConfigurationResponse implements 
   /**
    * Reconfigure response serializer.
    */
-  public static class Serializer extends NetConfigurationResponse.Serializer<NetReconfigureResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetReconfigureResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetReconfigureResponse response) {
       output.writeLong(response.id);
@@ -74,7 +85,7 @@ public class NetReconfigureResponse extends NetConfigurationResponse implements 
 
     @Override
     public NetReconfigureResponse read(Kryo kryo, Input input, Class<NetReconfigureResponse> type) {
-      return new NetReconfigureResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+      return new NetReconfigureResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
     }
   }
 }

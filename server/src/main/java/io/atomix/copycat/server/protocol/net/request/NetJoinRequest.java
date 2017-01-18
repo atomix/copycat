@@ -22,30 +22,36 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.JoinRequest;
 
 /**
- * Server join configuration change request.
- * <p>
- * The join request is the mechanism by which new servers join a cluster. When a server wants to
- * join a cluster, it must submit a join request to the leader. The leader will attempt to commit
- * the configuration change and, if successful, respond to the join request with the updated configuration.
+ * TCP join request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetJoinRequest extends NetConfigurationRequest implements JoinRequest {
+public class NetJoinRequest extends JoinRequest implements RaftNetRequest {
+  private final long id;
+
   public NetJoinRequest(long id, Member member) {
-    super(id, member);
+    super(member);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetRequest.Types.JOIN_REQUEST;
+    return Types.JOIN_REQUEST;
   }
 
   /**
-   * Join request builder.
+   * TCP join request builder.
    */
-  public static class Builder extends NetConfigurationRequest.Builder<JoinRequest.Builder, JoinRequest> implements JoinRequest.Builder {
+  public static class Builder extends JoinRequest.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
@@ -57,7 +63,7 @@ public class NetJoinRequest extends NetConfigurationRequest implements JoinReque
   /**
    * Join request serializer.
    */
-  public static class Serializer extends NetConfigurationRequest.Serializer<NetJoinRequest> {
+  public static class Serializer extends RaftNetRequest.Serializer<NetJoinRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetJoinRequest request) {
       output.writeLong(request.id);

@@ -19,59 +19,44 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.ConfigureResponse;
 
-import java.util.Objects;
-
 /**
- * Configuration installation response.
- * <p>
- * Configuration installation responses are sent in response to configuration installation requests to
- * indicate the simple success of the installation of a configuration. If the response {@link #status()}
- * is {@link Status#OK} then the installation was successful.
+ * TCP configure response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetConfigureResponse extends AbstractNetResponse implements ConfigureResponse, RaftNetResponse {
-  public NetConfigureResponse(long id, Status status, CopycatError error) {
-    super(id, status, error);
+public class NetConfigureResponse extends ConfigureResponse implements RaftNetResponse {
+  private final long id;
+
+  public NetConfigureResponse(long id, ProtocolResponse.Status status, CopycatError error) {
+    super(status, error);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.CONFIGURE_RESPONSE;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetConfigureResponse) {
-      NetConfigureResponse response = (NetConfigureResponse) object;
-      return response.status == status;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+    return Types.CONFIGURE_RESPONSE;
   }
 
   /**
-   * Heartbeat response builder.
+   * TCP configure response builder.
    */
-  public static class Builder extends AbstractNetResponse.Builder<ConfigureResponse.Builder, ConfigureResponse> implements ConfigureResponse.Builder {
+  public static class Builder extends ConfigureResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public NetConfigureResponse build() {
+    public ConfigureResponse build() {
       return new NetConfigureResponse(id, status, error);
     }
   }
@@ -79,7 +64,7 @@ public class NetConfigureResponse extends AbstractNetResponse implements Configu
   /**
    * Configure response serializer.
    */
-  public static class Serializer extends AbstractNetResponse.Serializer<NetConfigureResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetConfigureResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetConfigureResponse response) {
       output.writeLong(response.id);
@@ -93,7 +78,7 @@ public class NetConfigureResponse extends AbstractNetResponse implements Configu
 
     @Override
     public NetConfigureResponse read(Kryo kryo, Input input, Class<NetConfigureResponse> type) {
-      return new NetConfigureResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
+      return new NetConfigureResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
     }
   }
 }

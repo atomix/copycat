@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.net.request.*;
-import io.atomix.copycat.server.protocol.request.RaftProtocolRequest;
 
 import java.util.function.Supplier;
 
@@ -26,7 +24,7 @@ import java.util.function.Supplier;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface RaftNetRequest extends NetRequest, RaftProtocolRequest {
+public interface RaftNetRequest extends NetRequest {
 
   /**
    * Protocol request type.

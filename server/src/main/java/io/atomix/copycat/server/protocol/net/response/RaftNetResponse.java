@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
-import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.net.response.*;
-import io.atomix.copycat.server.protocol.response.RaftProtocolResponse;
 
 import java.util.function.Supplier;
 
@@ -26,7 +24,7 @@ import java.util.function.Supplier;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface RaftNetResponse extends NetResponse, RaftProtocolResponse {
+public interface RaftNetResponse extends NetResponse {
 
   /**
    * Protocol response type.

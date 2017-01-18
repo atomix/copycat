@@ -18,93 +18,45 @@ package io.atomix.copycat.server.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.VoteResponse;
 
-import java.util.Objects;
-
 /**
- * Server vote response.
- * <p>
- * Vote responses are sent by active servers in response to vote requests by candidate to indicate
- * whether the responding server voted for the requesting candidate. This is indicated by the
- * {@link #voted()} field of the response.
+ * TCP vote response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetVoteResponse extends AbstractNetResponse implements VoteResponse, RaftNetResponse {
-  private final long term;
-  private final boolean voted;
+public class NetVoteResponse extends VoteResponse implements RaftNetResponse {
+  private final long id;
 
-  public NetVoteResponse(long id, Status status, CopycatError error, long term, boolean voted) {
-    super(id, status, error);
-    this.term = term;
-    this.voted = voted;
+  public NetVoteResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean voted) {
+    super(status, error, term, voted);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.VOTE_RESPONSE;
-  }
-
-  @Override
-  public long term() {
-    return term;
-  }
-
-  @Override
-  public boolean voted() {
-    return voted;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status, term, voted);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetVoteResponse) {
-      NetVoteResponse response = (NetVoteResponse) object;
-      return response.status == status
-        && response.term == term
-        && response.voted == voted;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, term=%d, voted=%b]", getClass().getSimpleName(), status, term, voted);
+    return Types.VOTE_RESPONSE;
   }
 
   /**
-   * Poll response builder.
+   * TCP vote response builder.
    */
-  public static class Builder extends AbstractNetResponse.Builder<VoteResponse.Builder, VoteResponse> implements VoteResponse.Builder {
-    private long term;
-    private boolean voted;
+  public static class Builder extends VoteResponse.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public Builder withTerm(long term) {
-      this.term = Assert.argNot(term, term < 0, "term cannot be negative");
-      return this;
-    }
-
-    @Override
-    public Builder withVoted(boolean voted) {
-      this.voted = voted;
-      return this;
-    }
-
-    @Override
-    public NetVoteResponse build() {
+    public VoteResponse build() {
       return new NetVoteResponse(id, status, error, term, voted);
     }
   }
@@ -112,7 +64,7 @@ public class NetVoteResponse extends AbstractNetResponse implements VoteResponse
   /**
    * Vote response serializer.
    */
-  public static class Serializer extends AbstractNetResponse.Serializer<NetVoteResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetVoteResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetVoteResponse response) {
       output.writeLong(response.id);
@@ -128,7 +80,7 @@ public class NetVoteResponse extends AbstractNetResponse implements VoteResponse
 
     @Override
     public NetVoteResponse read(Kryo kryo, Input input, Class<NetVoteResponse> type) {
-      return new NetVoteResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean());
+      return new NetVoteResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean());
     }
   }
 }

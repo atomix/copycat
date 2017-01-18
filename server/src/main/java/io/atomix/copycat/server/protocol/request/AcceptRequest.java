@@ -15,7 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.request.AbstractRequest;
 
 /**
  * Accept client request.
@@ -28,26 +30,39 @@ import io.atomix.copycat.protocol.Address;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface AcceptRequest extends RaftProtocolRequest {
+public class AcceptRequest extends AbstractRequest {
+  protected final String client;
+  protected final Address address;
+
+  protected AcceptRequest(String client, Address address) {
+    this.client = Assert.notNull(client, "client");
+    this.address = Assert.notNull(address, "address");
+  }
 
   /**
    * Returns the accepted client ID.
    *
    * @return The accepted client ID.
    */
-  String client();
+  public String client() {
+    return client;
+  }
 
   /**
    * Returns the accept server address.
    *
    * @return The accept server address.
    */
-  Address address();
+  public Address address() {
+    return address;
+  }
 
   /**
    * Register client request builder.
    */
-  interface Builder extends RaftProtocolRequest.Builder<Builder, AcceptRequest> {
+  public static class Builder extends AbstractRequest.Builder<AcceptRequest.Builder, AcceptRequest> {
+    protected String client;
+    protected Address address;
 
     /**
      * Sets the request client.
@@ -55,7 +70,10 @@ public interface AcceptRequest extends RaftProtocolRequest {
      * @param client The request client.
      * @return The request builder.
      */
-    Builder withClient(String client);
+    public Builder withClient(String client) {
+      this.client = Assert.notNull(client, "client");
+      return this;
+    }
 
     /**
      * Sets the request address.
@@ -63,7 +81,14 @@ public interface AcceptRequest extends RaftProtocolRequest {
      * @param address The request address.
      * @return The request builder.
      */
-    Builder withAddress(Address address);
-  }
+    public Builder withAddress(Address address) {
+      this.address = Assert.notNull(address, "address");
+      return this;
+    }
 
+    @Override
+    public AcceptRequest build() {
+      return new AcceptRequest(client, address);
+    }
+  }
 }

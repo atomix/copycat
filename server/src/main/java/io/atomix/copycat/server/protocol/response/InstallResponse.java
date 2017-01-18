@@ -15,6 +15,11 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
+
+import java.util.Objects;
+
 /**
  * Snapshot installation response.
  * <p>
@@ -24,12 +29,37 @@ package io.atomix.copycat.server.protocol.response;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface InstallResponse extends RaftProtocolResponse {
+public class InstallResponse extends AbstractResponse {
+  public InstallResponse(Status status, CopycatError error) {
+    super(status, error);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof InstallResponse) {
+      InstallResponse response = (InstallResponse) object;
+      return response.status == status;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+  }
 
   /**
    * Install response builder.
    */
-  interface Builder extends RaftProtocolResponse.Builder<Builder, InstallResponse> {
+  public static class Builder extends AbstractResponse.Builder<InstallResponse.Builder, InstallResponse> {
+    @Override
+    public InstallResponse build() {
+      return new InstallResponse(status, error);
+    }
   }
-
 }

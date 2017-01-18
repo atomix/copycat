@@ -22,34 +22,40 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.LeaveRequest;
 
 /**
- * Server leave configuration request.
- * <p>
- * The leave request is the mechanism by which servers remove themselves from a cluster. When a server
- * wants to leave a cluster, it must submit a leave request to the leader. The leader will attempt to commit
- * the configuration change and, if successful, respond to the join request with the updated configuration.
+ * TCP leave request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetLeaveRequest extends NetConfigurationRequest implements LeaveRequest {
+public class NetLeaveRequest extends LeaveRequest implements RaftNetRequest {
+  private final long id;
+
   public NetLeaveRequest(long id, Member member) {
-    super(id, member);
+    super(member);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetRequest.Types.LEAVE_REQUEST;
+    return Types.LEAVE_REQUEST;
   }
 
   /**
-   * Leave request builder.
+   * TCP leave request builder.
    */
-  public static class Builder extends NetConfigurationRequest.Builder<LeaveRequest.Builder, LeaveRequest> implements LeaveRequest.Builder {
+  public static class Builder extends LeaveRequest.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public NetLeaveRequest build() {
+    public LeaveRequest build() {
       return new NetLeaveRequest(id, member);
     }
   }
@@ -57,7 +63,7 @@ public class NetLeaveRequest extends NetConfigurationRequest implements LeaveReq
   /**
    * Leave request serializer.
    */
-  public static class Serializer extends NetConfigurationRequest.Serializer<NetLeaveRequest> {
+  public static class Serializer extends RaftNetRequest.Serializer<NetLeaveRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetLeaveRequest request) {
       output.writeLong(request.id);

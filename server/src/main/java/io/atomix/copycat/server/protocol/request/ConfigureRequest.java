@@ -15,9 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.protocol.request.AbstractRequest;
 import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * Configuration installation request.
@@ -29,47 +32,98 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ConfigureRequest extends RaftProtocolRequest {
+public class ConfigureRequest extends AbstractRequest {
+  protected final long term;
+  protected final int leader;
+  protected final long index;
+  protected final long timestamp;
+  protected final Collection<Member> members;
+
+  public ConfigureRequest(long term, int leader, long index, long timestamp, Collection<Member> members) {
+    this.term = Assert.arg(term, term > 0, "term must be positive");
+    this.leader = leader;
+    this.index = Assert.argNot(index, index < 0, "index must be positive");
+    this.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp must be positive");
+    this.members = Assert.notNull(members, "members");
+  }
 
   /**
    * Returns the requesting node's current term.
    *
    * @return The requesting node's current term.
    */
-  long term();
+  public long term() {
+    return term;
+  }
 
   /**
    * Returns the requesting leader address.
    *
    * @return The leader's address.
    */
-  int leader();
+  public int leader() {
+    return leader;
+  }
 
   /**
    * Returns the configuration index.
    *
    * @return The configuration index.
    */
-  long index();
+  public long index() {
+    return index;
+  }
 
   /**
    * Returns the configuration timestamp.
    *
    * @return The configuration timestamp.
    */
-  long timestamp();
+  public long timestamp() {
+    return timestamp;
+  }
 
   /**
    * Returns the configuration members.
    *
    * @return The configuration members.
    */
-  Collection<Member> members();
+  public Collection<Member> members() {
+    return members;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), term, leader, index, members);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof ConfigureRequest) {
+      ConfigureRequest request = (ConfigureRequest) object;
+      return request.term == term
+        && request.leader == leader
+        && request.index == index
+        && request.timestamp == timestamp
+        && request.members.equals(members);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[term=%d, leader=%d, index=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), term, leader, index, timestamp, members);
+  }
 
   /**
    * Heartbeat request builder.
    */
-  interface Builder extends RaftProtocolRequest.Builder<Builder, ConfigureRequest> {
+  public static class Builder extends AbstractRequest.Builder<ConfigureRequest.Builder, ConfigureRequest> {
+    protected long term;
+    protected int leader;
+    protected long index;
+    protected long timestamp;
+    protected Collection<Member> members;
 
     /**
      * Sets the request term.
@@ -78,7 +132,10 @@ public interface ConfigureRequest extends RaftProtocolRequest {
      * @return The append request builder.
      * @throws IllegalArgumentException if the {@code term} is not positive
      */
-    Builder withTerm(long term);
+    public Builder withTerm(long term) {
+      this.term = Assert.arg(term, term > 0, "term must be positive");
+      return this;
+    }
 
     /**
      * Sets the request leader.
@@ -87,7 +144,10 @@ public interface ConfigureRequest extends RaftProtocolRequest {
      * @return The append request builder.
      * @throws IllegalArgumentException if the {@code leader} is not positive
      */
-    Builder withLeader(int leader);
+    public Builder withLeader(int leader) {
+      this.leader = leader;
+      return this;
+    }
 
     /**
      * Sets the request index.
@@ -95,7 +155,10 @@ public interface ConfigureRequest extends RaftProtocolRequest {
      * @param index The request index.
      * @return The request builder.
      */
-    Builder withIndex(long index);
+    public Builder withIndex(long index) {
+      this.index = Assert.argNot(index, index < 0, "index must be positive");
+      return this;
+    }
 
     /**
      * Sets the request timestamp.
@@ -103,7 +166,10 @@ public interface ConfigureRequest extends RaftProtocolRequest {
      * @param timestamp The request timestamp.
      * @return The request builder.
      */
-    Builder withTime(long timestamp);
+    public Builder withTime(long timestamp) {
+      this.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp must be positive");
+      return this;
+    }
 
     /**
      * Sets the request members.
@@ -112,7 +178,14 @@ public interface ConfigureRequest extends RaftProtocolRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code member} is null
      */
-    Builder withMembers(Collection<Member> members);
-  }
+    public Builder withMembers(Collection<Member> members) {
+      this.members = Assert.notNull(members, "members");
+      return this;
+    }
 
+    @Override
+    public ConfigureRequest build() {
+      return new ConfigureRequest(term, leader, index, timestamp, members);
+    }
+  }
 }

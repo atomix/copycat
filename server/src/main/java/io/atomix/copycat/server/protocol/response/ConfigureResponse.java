@@ -15,6 +15,11 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
+
+import java.util.Objects;
+
 /**
  * Configuration installation response.
  * <p>
@@ -24,12 +29,37 @@ package io.atomix.copycat.server.protocol.response;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ConfigureResponse extends RaftProtocolResponse {
+public class ConfigureResponse extends AbstractResponse {
+  public ConfigureResponse(Status status, CopycatError error) {
+    super(status, error);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof ConfigureResponse) {
+      ConfigureResponse response = (ConfigureResponse) object;
+      return response.status == status;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+  }
 
   /**
    * Heartbeat response builder.
    */
-  interface Builder extends RaftProtocolResponse.Builder<Builder, ConfigureResponse> {
+  public static class Builder extends AbstractResponse.Builder<ConfigureResponse.Builder, ConfigureResponse> {
+    @Override
+    public ConfigureResponse build() {
+      return new ConfigureResponse(status, error);
+    }
   }
-
 }

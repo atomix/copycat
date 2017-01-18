@@ -15,10 +15,13 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * Server configuration response.
@@ -27,45 +30,92 @@ import java.util.Collection;
  * change is completed or fails. Note that configuration changes can frequently fail due to the limitation
  * of commitment of configuration changes. No two configuration changes may take place simultaneously. If a
  * configuration change is failed due to a conflict, the response status will be
- * {@link WebSocketResponse.Status#ERROR} but the response {@link #error()} will
+ * {@link Status#ERROR} but the response {@link #error()} will
  * be {@code null}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ConfigurationResponse extends RaftProtocolResponse {
+public abstract class ConfigurationResponse extends AbstractResponse {
+  protected final long index;
+  protected final long term;
+  protected final long timestamp;
+  protected final Collection<Member> members;
+
+  public ConfigurationResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error);
+    this.index = Assert.argNot(index, index < 0, "index cannot be negative");
+    this.term = Assert.argNot(term, term < 0, "term must be positive");
+    this.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp cannot be negative");
+    this.members = Assert.notNull(members, "members");
+  }
 
   /**
    * Returns the response index.
    *
    * @return The response index.
    */
-  long index();
+  public long index() {
+    return index;
+  }
 
   /**
    * Returns the configuration term.
    *
    * @return The configuration term.
    */
-  long term();
+  public long term() {
+    return term;
+  }
 
   /**
    * Returns the response configuration time.
    *
    * @return The response time.
    */
-  long timestamp();
+  public long timestamp() {
+    return timestamp;
+  }
 
   /**
    * Returns the configuration members list.
    *
    * @return The configuration members list.
    */
-  Collection<Member> members();
+  public Collection<Member> members() {
+    return members;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status, index, term, members);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (getClass().isAssignableFrom(object.getClass())) {
+      ConfigurationResponse response = (ConfigurationResponse) object;
+      return response.status == status
+        && response.index == index
+        && response.term == term
+        && response.timestamp == timestamp
+        && response.members.equals(members);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s, index=%d, term=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), status, index, term, timestamp, members);
+  }
 
   /**
    * Configuration response builder.
    */
-  interface Builder<T extends Builder<T, U>, U extends ConfigurationResponse> extends RaftProtocolResponse.Builder<T, U> {
+  public static abstract class Builder<T extends ConfigurationResponse.Builder<T, U>, U extends ConfigurationResponse> extends AbstractResponse.Builder<T, U> {
+    protected long index;
+    protected long term;
+    protected long timestamp;
+    protected Collection<Member> members;
 
     /**
      * Sets the response index.
@@ -74,7 +124,11 @@ public interface ConfigurationResponse extends RaftProtocolResponse {
      * @return The response builder.
      * @throws IllegalArgumentException if {@code index} is negative
      */
-    T withIndex(long index);
+    @SuppressWarnings("unchecked")
+    public T withIndex(long index) {
+      this.index = Assert.argNot(index, index < 0, "index cannot be negative");
+      return (T) this;
+    }
 
     /**
      * Sets the response term.
@@ -83,7 +137,11 @@ public interface ConfigurationResponse extends RaftProtocolResponse {
      * @return The response builder.
      * @throws IllegalArgumentException if {@code term} is negative
      */
-    T withTerm(long term);
+    @SuppressWarnings("unchecked")
+    public T withTerm(long term) {
+      this.term = Assert.argNot(term, term < 0, "term must be positive");
+      return (T) this;
+    }
 
     /**
      * Sets the response time.
@@ -92,7 +150,11 @@ public interface ConfigurationResponse extends RaftProtocolResponse {
      * @return The response builder.
      * @throws IllegalArgumentException if {@code time} is negative
      */
-    T withTime(long time);
+    @SuppressWarnings("unchecked")
+    public T withTime(long time) {
+      this.timestamp = Assert.argNot(time, time <= 0, "timestamp cannot be negative");
+      return (T) this;
+    }
 
     /**
      * Sets the response members.
@@ -101,7 +163,10 @@ public interface ConfigurationResponse extends RaftProtocolResponse {
      * @return The response builder.
      * @throws NullPointerException if {@code members} is null
      */
-    T withMembers(Collection<Member> members);
+    @SuppressWarnings("unchecked")
+    public T withMembers(Collection<Member> members) {
+      this.members = Assert.notNull(members, "members");
+      return (T) this;
+    }
   }
-
 }

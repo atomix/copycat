@@ -15,24 +15,33 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.server.cluster.Member;
+
+import java.util.Collection;
 
 /**
  * Server join configuration change response.
  * <p>
  * Join responses are sent in response to a request to add a server to the cluster configuration. If a
  * configuration change is failed due to a conflict, the response status will be
- * {@link WebSocketResponse.Status#ERROR} but the response {@link #error()} will
+ * {@link Status#ERROR} but the response {@link #error()} will
  * be {@code null}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface JoinResponse extends ConfigurationResponse {
+public class JoinResponse extends ConfigurationResponse {
+  public JoinResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error, index, term, timestamp, members);
+  }
 
   /**
    * Join response builder.
    */
-  interface Builder extends ConfigurationResponse.Builder<Builder, JoinResponse> {
+  public static class Builder extends ConfigurationResponse.Builder<JoinResponse.Builder, JoinResponse> {
+    @Override
+    public JoinResponse build() {
+      return new JoinResponse(status, error, index, term, timestamp, members);
+    }
   }
-
 }

@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
+import io.atomix.copycat.server.cluster.Member;
+
 /**
  * Server leave configuration request.
  * <p>
@@ -24,12 +26,18 @@ package io.atomix.copycat.server.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface LeaveRequest extends ConfigurationRequest {
+public class LeaveRequest extends ConfigurationRequest {
+  public LeaveRequest(Member member) {
+    super(member);
+  }
 
   /**
    * Leave request builder.
    */
-  interface Builder extends ConfigurationRequest.Builder<Builder, LeaveRequest> {
+  public static class Builder extends ConfigurationRequest.Builder<LeaveRequest.Builder, LeaveRequest> {
+    @Override
+    public LeaveRequest build() {
+      return new LeaveRequest(member);
+    }
   }
-
 }

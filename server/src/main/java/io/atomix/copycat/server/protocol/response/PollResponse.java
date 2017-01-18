@@ -15,6 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
+
+import java.util.Objects;
+
 /**
  * Server poll response.
  * <p>
@@ -24,26 +30,61 @@ package io.atomix.copycat.server.protocol.response;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface PollResponse extends RaftProtocolResponse {
+public class PollResponse extends AbstractResponse {
+  protected final long term;
+  protected final boolean accepted;
+
+  public PollResponse(Status status, CopycatError error, long term, boolean accepted) {
+    super(status, error);
+    this.term = Assert.argNot(term, term < 0, "term must be positive");
+    this.accepted = accepted;
+  }
 
   /**
    * Returns the responding node's current term.
    *
    * @return The responding node's current term.
    */
-  long term();
+  public long term() {
+    return term;
+  }
 
   /**
    * Returns a boolean indicating whether the poll was accepted.
    *
    * @return Indicates whether the poll was accepted.
    */
-  boolean accepted();
+  public boolean accepted() {
+    return accepted;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status, term, accepted);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof PollResponse) {
+      PollResponse response = (PollResponse) object;
+      return response.status == status
+        && response.term == term
+        && response.accepted == accepted;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s, term=%d, accepted=%b]", getClass().getSimpleName(), status, term, accepted);
+  }
 
   /**
    * Poll response builder.
    */
-  interface Builder extends RaftProtocolResponse.Builder<Builder, PollResponse> {
+  public static class Builder extends AbstractResponse.Builder<PollResponse.Builder, PollResponse> {
+    protected long term;
+    protected boolean accepted;
 
     /**
      * Sets the response term.
@@ -52,7 +93,10 @@ public interface PollResponse extends RaftProtocolResponse {
      * @return The poll response builder.
      * @throws IllegalArgumentException if {@code term} is not positive
      */
-    Builder withTerm(long term);
+    public Builder withTerm(long term) {
+      this.term = Assert.argNot(term, term < 0, "term must be positive");
+      return this;
+    }
 
     /**
      * Sets whether the poll was granted.
@@ -60,7 +104,17 @@ public interface PollResponse extends RaftProtocolResponse {
      * @param accepted Whether the poll was granted.
      * @return The poll response builder.
      */
-    Builder withAccepted(boolean accepted);
-  }
+    public Builder withAccepted(boolean accepted) {
+      this.accepted = accepted;
+      return this;
+    }
 
+    /**
+     * @throws IllegalStateException if status is OK and {@code term} is not positive
+     */
+    @Override
+    public PollResponse build() {
+      return new PollResponse(status, error, term, accepted);
+    }
+  }
 }

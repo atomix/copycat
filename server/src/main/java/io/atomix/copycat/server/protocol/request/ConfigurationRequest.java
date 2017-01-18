@@ -15,7 +15,11 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.protocol.request.AbstractRequest;
 import io.atomix.copycat.server.cluster.Member;
+
+import java.util.Objects;
 
 /**
  * Configuration change request.
@@ -26,19 +30,45 @@ import io.atomix.copycat.server.cluster.Member;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ConfigurationRequest extends RaftProtocolRequest {
+public abstract class ConfigurationRequest extends AbstractRequest {
+  protected final Member member;
+
+  protected ConfigurationRequest(Member member) {
+    this.member = Assert.notNull(member, "member");
+  }
 
   /**
    * Returns the member to configure.
    *
    * @return The member to configure.
    */
-  Member member();
+  public Member member() {
+    return member;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), member);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (getClass().isAssignableFrom(object.getClass())) {
+      return ((ConfigurationRequest) object).member.equals(member);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[member=%s]", getClass().getSimpleName(), member);
+  }
 
   /**
    * Configuration request builder.
    */
-  interface Builder<T extends Builder<T, U>, U extends ConfigurationRequest> extends RaftProtocolRequest.Builder<T, U> {
+  public static abstract class Builder<T extends ConfigurationRequest.Builder<T, U>, U extends ConfigurationRequest> extends AbstractRequest.Builder<T, U> {
+    protected Member member;
 
     /**
      * Sets the request member.
@@ -48,7 +78,9 @@ public interface ConfigurationRequest extends RaftProtocolRequest {
      * @throws NullPointerException if {@code member} is null
      */
     @SuppressWarnings("unchecked")
-    T withMember(Member member);
+    public T withMember(Member member) {
+      this.member = Assert.notNull(member, "member");
+      return (T) this;
+    }
   }
-
 }

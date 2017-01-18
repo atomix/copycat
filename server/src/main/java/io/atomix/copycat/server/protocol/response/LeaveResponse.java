@@ -15,24 +15,33 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.server.cluster.Member;
+
+import java.util.Collection;
 
 /**
  * Server leave configuration change response.
  * <p>
  * Leave responses are sent in response to a request to add a server to the cluster configuration. If a
  * configuration change is failed due to a conflict, the response status will be
- * {@link WebSocketResponse.Status#ERROR} but the response {@link #error()} will
+ * {@link Status#ERROR} but the response {@link #error()} will
  * be {@code null}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface LeaveResponse extends ConfigurationResponse {
+public class LeaveResponse extends ConfigurationResponse {
+  public LeaveResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error, index, term, timestamp, members);
+  }
 
   /**
    * Leave response builder.
    */
-  interface Builder extends ConfigurationResponse.Builder<Builder, LeaveResponse> {
+  public static class Builder extends ConfigurationResponse.Builder<LeaveResponse.Builder, LeaveResponse> {
+    @Override
+    public LeaveResponse build() {
+      return new LeaveResponse(status, error, index, term, timestamp, members);
+    }
   }
-
 }

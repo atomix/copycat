@@ -18,72 +18,44 @@ package io.atomix.copycat.server.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.Address;
-import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
 import io.atomix.copycat.server.protocol.request.AcceptRequest;
 
 /**
- * Accept client request.
- * <p>
- * Accept requests are sent by followers to the leader to log and replicate the connection of
- * a specific client to a specific server. The {@link #address()} in the accept request indicates
- * the server to which the client is connected. Accept requests will ultimately result in a
- * {@link io.atomix.copycat.server.storage.entry.ConnectEntry} being logged and replicated such
- * that all server state machines receive updates on the relationships between clients and servers.
+ * TCP accept request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAcceptRequest extends AbstractNetRequest implements AcceptRequest, RaftNetRequest {
-  private final String client;
-  private final Address address;
+public class NetAcceptRequest extends AcceptRequest implements RaftNetRequest {
+  private final long id;
 
-  protected NetAcceptRequest(long id, String client, Address address) {
-    super(id);
-    this.client = client;
-    this.address = address;
+  public NetAcceptRequest(long id, String client, Address address) {
+    super(client, address);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetRequest.Types.ACCEPT_REQUEST;
-  }
-
-  @Override
-  public String client() {
-    return client;
-  }
-
-  @Override
-  public Address address() {
-    return address;
+    return Types.ACCEPT_REQUEST;
   }
 
   /**
-   * Register client request builder.
+   * TCP accept request builder.
    */
-  public static class Builder extends AbstractNetRequest.Builder<AcceptRequest.Builder, AcceptRequest> implements AcceptRequest.Builder {
-    private String client;
-    private Address address;
+  public static class Builder extends AcceptRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public Builder withClient(String client) {
-      this.client = Assert.notNull(client, "client");
-      return this;
-    }
-
-    @Override
-    public Builder withAddress(Address address) {
-      this.address = Assert.notNull(address, "address");
-      return this;
-    }
-
-    @Override
-    public NetAcceptRequest build() {
+    public AcceptRequest build() {
       return new NetAcceptRequest(id, client, address);
     }
   }
@@ -91,7 +63,7 @@ public class NetAcceptRequest extends AbstractNetRequest implements AcceptReques
   /**
    * Accept request serializer.
    */
-  public static class Serializer extends AbstractNetRequest.Serializer<NetAcceptRequest> {
+  public static class Serializer extends RaftNetRequest.Serializer<NetAcceptRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetAcceptRequest request) {
       output.writeLong(request.id);

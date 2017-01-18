@@ -19,59 +19,44 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
 
-import java.util.Objects;
-
 /**
- * Snapshot installation response.
- * <p>
- * Install responses are sent once a snapshot installation request has been received and processed.
- * Install responses provide no additional metadata aside from indicating whether or not the request
- * was successful.
+ * TCP install response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetInstallResponse extends AbstractNetResponse implements InstallResponse, RaftNetResponse {
-  public NetInstallResponse(long id, Status status, CopycatError error) {
-    super(id, status, error);
+public class NetInstallResponse extends InstallResponse implements RaftNetResponse {
+  private final long id;
+
+  public NetInstallResponse(long id, ProtocolResponse.Status status, CopycatError error) {
+    super(status, error);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.INSTALL_RESPONSE;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetInstallResponse) {
-      NetInstallResponse response = (NetInstallResponse) object;
-      return response.status == status;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+    return Types.INSTALL_RESPONSE;
   }
 
   /**
-   * Install response builder.
+   * TCP install response builder.
    */
-  public static class Builder extends AbstractNetResponse.Builder<InstallResponse.Builder, InstallResponse> implements InstallResponse.Builder {
+  public static class Builder extends InstallResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public NetInstallResponse build() {
+    public InstallResponse build() {
       return new NetInstallResponse(id, status, error);
     }
   }
@@ -79,7 +64,7 @@ public class NetInstallResponse extends AbstractNetResponse implements InstallRe
   /**
    * Install response serializer.
    */
-  public static class Serializer extends AbstractNetResponse.Serializer<NetInstallResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetInstallResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetInstallResponse response) {
       output.writeLong(response.id);
@@ -93,7 +78,7 @@ public class NetInstallResponse extends AbstractNetResponse implements InstallRe
 
     @Override
     public NetInstallResponse read(Kryo kryo, Input input, Class<NetInstallResponse> type) {
-      return new NetInstallResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
+      return new NetInstallResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
     }
   }
 }

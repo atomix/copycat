@@ -19,42 +19,47 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.response.LeaveResponse;
 
 import java.util.Collection;
 
 /**
- * Server leave configuration change response.
- * <p>
- * Leave responses are sent in response to a request to add a server to the cluster configuration. If a
- * configuration change is failed due to a conflict, the response status will be
- * {@link WebSocketResponse.Status#ERROR} but the response {@link #error()} will
- * be {@code null}.
+ * TCP leave response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetLeaveResponse extends NetConfigurationResponse implements LeaveResponse {
-  public NetLeaveResponse(long id, Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
-    super(id, status, error, index, term, timestamp, members);
+public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse {
+  private final long id;
+
+  public NetLeaveResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+    super(status, error, index, term, timestamp, members);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.LEAVE_RESPONSE;
+    return Types.LEAVE_RESPONSE;
   }
 
   /**
-   * Leave response builder.
+   * TCP leave response builder.
    */
-  public static class Builder extends NetConfigurationResponse.Builder<LeaveResponse.Builder, LeaveResponse> implements LeaveResponse.Builder {
+  public static class Builder extends LeaveResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public NetLeaveResponse build() {
+    public LeaveResponse build() {
       return new NetLeaveResponse(id, status, error, index, term, timestamp, members);
     }
   }
@@ -62,7 +67,7 @@ public class NetLeaveResponse extends NetConfigurationResponse implements LeaveR
   /**
    * Leave response serializer.
    */
-  public static class Serializer extends NetConfigurationResponse.Serializer<NetLeaveResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetLeaveResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetLeaveResponse response) {
       output.writeLong(response.id);
@@ -80,7 +85,7 @@ public class NetLeaveResponse extends NetConfigurationResponse implements LeaveR
 
     @Override
     public NetLeaveResponse read(Kryo kryo, Input input, Class<NetLeaveResponse> type) {
-      return new NetLeaveResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+      return new NetLeaveResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
     }
   }
 }

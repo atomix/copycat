@@ -15,6 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.protocol.request.AbstractRequest;
+
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * Server snapshot installation request.
  * <p>
@@ -27,54 +33,111 @@ package io.atomix.copycat.server.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface InstallRequest extends RaftProtocolRequest {
+public class InstallRequest extends AbstractRequest {
+  protected final long term;
+  protected final int leader;
+  protected final long index;
+  protected final int offset;
+  protected final byte[] data;
+  protected final boolean complete;
+
+  public InstallRequest(long term, int leader, long index, int offset, byte[] data, boolean complete) {
+    this.term = Assert.arg(term, term > 0, "term must be positive");
+    this.leader = leader;
+    this.index = Assert.argNot(index, index < 0, "index must be positive");
+    this.offset = Assert.argNot(offset, offset < 0, "offset must be positive");
+    this.data = Assert.notNull(data, "data");
+    this.complete = complete;
+  }
 
   /**
    * Returns the requesting node's current term.
    *
    * @return The requesting node's current term.
    */
-  long term();
+  public long term() {
+    return term;
+  }
 
   /**
    * Returns the requesting leader address.
    *
    * @return The leader's address.
    */
-  int leader();
+  public int leader() {
+    return leader;
+  }
 
   /**
    * Returns the snapshot index.
    *
    * @return The snapshot index.
    */
-  long index();
+  public long index() {
+    return index;
+  }
 
   /**
    * Returns the offset of the snapshot chunk.
    *
    * @return The offset of the snapshot chunk.
    */
-  int offset();
+  public int offset() {
+    return offset;
+  }
 
   /**
    * Returns the snapshot data.
    *
    * @return The snapshot data.
    */
-  byte[] data();
+  public byte[] data() {
+    return data;
+  }
 
   /**
    * Returns a boolean value indicating whether this is the last chunk of the snapshot.
    *
    * @return Indicates whether this request is the last chunk of the snapshot.
    */
-  boolean complete();
+  public boolean complete() {
+    return complete;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), term, leader, index, offset, complete, data);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof InstallRequest) {
+      InstallRequest request = (InstallRequest) object;
+      return request.term == term
+        && request.leader == leader
+        && request.index == index
+        && request.offset == offset
+        && request.complete == complete
+        && Arrays.equals(request.data, data);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[term=%d, leader=%d, index=%d, offset=%d, data=%s, complete=%b]", getClass().getSimpleName(), term, leader, index, offset, data, complete);
+  }
 
   /**
    * Snapshot request builder.
    */
-  interface Builder extends RaftProtocolRequest.Builder<Builder, InstallRequest> {
+  public static class Builder extends AbstractRequest.Builder<InstallRequest.Builder, InstallRequest> {
+    protected long term;
+    protected int leader;
+    protected long index;
+    protected int offset;
+    protected byte[] data;
+    protected boolean complete;
 
     /**
      * Sets the request term.
@@ -83,7 +146,10 @@ public interface InstallRequest extends RaftProtocolRequest {
      * @return The append request builder.
      * @throws IllegalArgumentException if the {@code term} is not positive
      */
-    Builder withTerm(long term);
+    public Builder withTerm(long term) {
+      this.term = Assert.arg(term, term > 0, "term must be positive");
+      return this;
+    }
 
     /**
      * Sets the request leader.
@@ -92,7 +158,10 @@ public interface InstallRequest extends RaftProtocolRequest {
      * @return The append request builder.
      * @throws IllegalArgumentException if the {@code leader} is not positive
      */
-    Builder withLeader(int leader);
+    public Builder withLeader(int leader) {
+      this.leader = leader;
+      return this;
+    }
 
     /**
      * Sets the request index.
@@ -100,7 +169,10 @@ public interface InstallRequest extends RaftProtocolRequest {
      * @param index The request index.
      * @return The request builder.
      */
-    Builder withIndex(long index);
+    public Builder withIndex(long index) {
+      this.index = Assert.argNot(index, index < 0, "index must be positive");
+      return this;
+    }
 
     /**
      * Sets the request offset.
@@ -108,7 +180,10 @@ public interface InstallRequest extends RaftProtocolRequest {
      * @param offset The request offset.
      * @return The request builder.
      */
-    Builder withOffset(int offset);
+    public Builder withOffset(int offset) {
+      this.offset = Assert.argNot(offset, offset < 0, "offset must be positive");
+      return this;
+    }
 
     /**
      * Sets the request snapshot bytes.
@@ -116,7 +191,10 @@ public interface InstallRequest extends RaftProtocolRequest {
      * @param snapshot The snapshot bytes.
      * @return The request builder.
      */
-    Builder withData(byte[] snapshot);
+    public Builder withData(byte[] snapshot) {
+      this.data = Assert.notNull(snapshot, "data");
+      return this;
+    }
 
     /**
      * Sets whether the request is complete.
@@ -125,7 +203,14 @@ public interface InstallRequest extends RaftProtocolRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code member} is null
      */
-    Builder withComplete(boolean complete);
-  }
+    public Builder withComplete(boolean complete) {
+      this.complete = complete;
+      return this;
+    }
 
+    @Override
+    public InstallRequest build() {
+      return new InstallRequest(term, leader, index, offset, data, complete);
+    }
+  }
 }

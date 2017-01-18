@@ -18,115 +18,45 @@ package io.atomix.copycat.server.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.net.response.AbstractNetResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
-import io.atomix.copycat.server.transport.request.AppendRequest;
-
-import java.util.Objects;
 
 /**
- * Server append entries response.
- * <p>
- * Append entries responses are sent by followers to leaders to indicate whether the handling of
- * an {@link AppendRequest} was successful. Failed append entries
- * requests do not result in {@link WebSocketResponse.Status#ERROR} responses.
- * Instead, followers provide a successful response which indicates whether the append {@link #succeeded()}
- * and provides information regarding the follower's updated log to aid in resolving indexes on the leader.
+ * TCP append response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAppendResponse extends AbstractNetResponse implements AppendResponse, RaftNetResponse {
-  private final long term;
-  private final boolean succeeded;
-  private final long logIndex;
+public class NetAppendResponse extends AppendResponse implements RaftNetResponse {
+  private final long id;
 
-  public NetAppendResponse(long id, Status status, CopycatError error, long term, boolean succeeded, long logIndex) {
-    super(id, status, error);
-    this.term = term;
-    this.succeeded = succeeded;
-    this.logIndex = logIndex;
+  public NetAppendResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean succeeded, long logIndex) {
+    super(status, error, term, succeeded, logIndex);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetResponse.Types.APPEND_RESPONSE;
-  }
-
-  @Override
-  public long term() {
-    return term;
-  }
-
-  @Override
-  public boolean succeeded() {
-    return succeeded;
-  }
-
-  @Override
-  public long logIndex() {
-    return logIndex;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status, term, succeeded, logIndex);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetAppendResponse) {
-      NetAppendResponse response = (NetAppendResponse) object;
-      return response.status == status
-        && response.term == term
-        && response.succeeded == succeeded
-        && response.logIndex == logIndex;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, term=%d, succeeded=%b, logIndex=%d]", getClass().getSimpleName(), status, term, succeeded, logIndex);
+    return Types.APPEND_RESPONSE;
   }
 
   /**
-   * Append response builder.
+   * TCP append response builder.
    */
-  public static class Builder extends AbstractNetResponse.Builder<AppendResponse.Builder, AppendResponse> implements AppendResponse.Builder {
-    private long term;
-    private boolean succeeded;
-    private long logIndex;
+  public static class Builder extends AppendResponse.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public Builder withTerm(long term) {
-      this.term = Assert.argNot(term, term <= 0, "term must be positive");
-      return this;
-    }
-
-    @Override
-    public Builder withSucceeded(boolean succeeded) {
-      this.succeeded = succeeded;
-      return this;
-    }
-
-    @Override
-    public Builder withLogIndex(long index) {
-      this.logIndex = Assert.argNot(index, index < 0, "term must not be negative");
-      return this;
-    }
-
-    /**
-     * @throws IllegalStateException if status is ok and term is not positive or log index is negative
-     */
-    @Override
-    public NetAppendResponse build() {
+    public AppendResponse build() {
       return new NetAppendResponse(id, status, error, term, succeeded, logIndex);
     }
   }
@@ -134,7 +64,7 @@ public class NetAppendResponse extends AbstractNetResponse implements AppendResp
   /**
    * Append response serializer.
    */
-  public static class Serializer extends AbstractNetResponse.Serializer<NetAppendResponse> {
+  public static class Serializer extends RaftNetResponse.Serializer<NetAppendResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetAppendResponse response) {
       output.writeLong(response.id);
@@ -151,7 +81,7 @@ public class NetAppendResponse extends AbstractNetResponse implements AppendResp
 
     @Override
     public NetAppendResponse read(Kryo kryo, Input input, Class<NetAppendResponse> type) {
-      return new NetAppendResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean(), input.readLong());
+      return new NetAppendResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean(), input.readLong());
     }
   }
 }

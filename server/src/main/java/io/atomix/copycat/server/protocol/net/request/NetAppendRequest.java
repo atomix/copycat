@@ -18,175 +18,46 @@ package io.atomix.copycat.server.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
- * Append entries request.
- * <p>
- * Append entries requests are at the core of the replication protocol. Leaders send append requests
- * to followers to replicate and commit log entries, and followers sent append requests to passive members
- * to replicate committed log entries.
+ * TCP append request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAppendRequest extends AbstractNetRequest implements AppendRequest, RaftNetRequest {
-  private final long term;
-  private final int leader;
-  private final long logIndex;
-  private final long logTerm;
-  private final List<Entry> entries;
-  private final long commitIndex;
-  private final long globalIndex;
+public class NetAppendRequest extends AppendRequest implements RaftNetRequest {
+  private final long id;
 
   public NetAppendRequest(long id, long term, int leader, long logIndex, long logTerm, List<Entry> entries, long commitIndex, long globalIndex) {
-    super(id);
-    this.term = term;
-    this.leader = leader;
-    this.logIndex = logIndex;
-    this.logTerm = logTerm;
-    this.entries = entries;
-    this.commitIndex = commitIndex;
-    this.globalIndex = globalIndex;
+    super(term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
   public Type type() {
-    return RaftNetRequest.Types.APPEND_REQUEST;
-  }
-
-  @Override
-  public long term() {
-    return term;
-  }
-
-  @Override
-  public int leader() {
-    return leader;
-  }
-
-  @Override
-  public long logIndex() {
-    return logIndex;
-  }
-
-  @Override
-  public long logTerm() {
-    return logTerm;
-  }
-
-  @Override
-  public List<? extends Entry> entries() {
-    return entries;
-  }
-
-  @Override
-  public long commitIndex() {
-    return commitIndex;
-  }
-
-  @Override
-  public long globalIndex() {
-    return globalIndex;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetAppendRequest) {
-      NetAppendRequest request = (NetAppendRequest) object;
-      return request.term == term
-        && request.leader == leader
-        && request.logIndex == logIndex
-        && request.logTerm == logTerm
-        && request.entries.equals(entries)
-        && request.commitIndex == commitIndex
-        && request.globalIndex == globalIndex;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[term=%d, leader=%s, logIndex=%d, logTerm=%d, entries=[%d], commitIndex=%d, globalIndex=%d]", getClass().getSimpleName(), term, leader, logIndex, logTerm, entries.size(), commitIndex, globalIndex);
+    return Types.APPEND_REQUEST;
   }
 
   /**
-   * Append request builder.
+   * TCP append request builder.
    */
-  public static class Builder extends AbstractNetRequest.Builder<AppendRequest.Builder, AppendRequest> implements AppendRequest.Builder {
-    private long term;
-    private int leader;
-    private long logIndex;
-    private long logTerm;
-    private List<Entry> entries;
-    private long commitIndex = -1;
-    private long globalIndex = -1;
+  public static class Builder extends AppendRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
-    public Builder withTerm(long term) {
-      this.term = Assert.arg(term, term > 0, "term must be positive");
-      return this;
-    }
-
-    @Override
-    public Builder withLeader(int leader) {
-      this.leader = leader;
-      return this;
-    }
-
-    @Override
-    public Builder withLogIndex(long index) {
-      this.logIndex = Assert.argNot(index, index < 0, "log index must be not be negative");
-      return this;
-    }
-
-    @Override
-    public Builder withLogTerm(long term) {
-      this.logTerm = Assert.argNot(term, term < 0, "term must be positive");
-      return this;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public Builder withEntries(List<? extends Entry> entries) {
-      this.entries = (List<Entry>) Assert.notNull(entries, "entries");
-      return this;
-    }
-
-    @Override
-    public Builder addEntry(Entry entry) {
-      this.entries.add(Assert.notNull(entry, "entry"));
-      return this;
-    }
-
-    @Override
-    public Builder withCommitIndex(long index) {
-      this.commitIndex = Assert.argNot(index, index < 0, "commit index must not be negative");
-      return this;
-    }
-
-    @Override
-    public Builder withGlobalIndex(long index) {
-      this.globalIndex = Assert.argNot(index, index < 0, "global index must not be negative");
-      return this;
-    }
-
-    @Override
-    public NetAppendRequest build() {
+    public AppendRequest build() {
       return new NetAppendRequest(id, term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
     }
   }
@@ -194,7 +65,7 @@ public class NetAppendRequest extends AbstractNetRequest implements AppendReques
   /**
    * Append request serializer.
    */
-  public static class Serializer extends AbstractNetRequest.Serializer<NetAppendRequest> {
+  public static class Serializer extends RaftNetRequest.Serializer<NetAppendRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetAppendRequest request) {
       output.writeLong(request.id);

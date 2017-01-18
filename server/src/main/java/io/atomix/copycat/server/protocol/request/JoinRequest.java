@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
+import io.atomix.copycat.server.cluster.Member;
+
 /**
  * Server join configuration change request.
  * <p>
@@ -24,12 +26,18 @@ package io.atomix.copycat.server.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface JoinRequest extends ConfigurationRequest {
+public class JoinRequest extends ConfigurationRequest {
+  public JoinRequest(Member member) {
+    super(member);
+  }
 
   /**
    * Join request builder.
    */
-  interface Builder extends ConfigurationRequest.Builder<Builder, JoinRequest> {
+  public static class Builder extends ConfigurationRequest.Builder<JoinRequest.Builder, JoinRequest> {
+    @Override
+    public JoinRequest build() {
+      return new JoinRequest(member);
+    }
   }
-
 }
