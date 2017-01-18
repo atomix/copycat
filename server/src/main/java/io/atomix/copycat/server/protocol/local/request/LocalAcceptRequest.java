@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.protocol.request;
+package io.atomix.copycat.server.protocol.local.request;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.local.request.AbstractLocalRequest;
+import io.atomix.copycat.server.protocol.request.AcceptRequest;
 
 /**
  * Accept client request.
@@ -28,42 +31,47 @@ import io.atomix.copycat.protocol.Address;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface AcceptRequest extends RaftProtocolRequest {
+public class LocalAcceptRequest extends AbstractLocalRequest implements AcceptRequest {
+  private final String client;
+  private final Address address;
 
-  /**
-   * Returns the accepted client ID.
-   *
-   * @return The accepted client ID.
-   */
-  String client();
+  protected LocalAcceptRequest(String client, Address address) {
+    this.client = client;
+    this.address = address;
+  }
 
-  /**
-   * Returns the accept server address.
-   *
-   * @return The accept server address.
-   */
-  Address address();
+  @Override
+  public String client() {
+    return client;
+  }
+
+  @Override
+  public Address address() {
+    return address;
+  }
 
   /**
    * Register client request builder.
    */
-  interface Builder extends RaftProtocolRequest.Builder<Builder, AcceptRequest> {
+  public static class Builder extends AbstractLocalRequest.Builder<AcceptRequest.Builder, AcceptRequest> implements AcceptRequest.Builder {
+    private String client;
+    private Address address;
 
-    /**
-     * Sets the request client.
-     *
-     * @param client The request client.
-     * @return The request builder.
-     */
-    Builder withClient(String client);
+    @Override
+    public Builder withClient(String client) {
+      this.client = Assert.notNull(client, "client");
+      return this;
+    }
 
-    /**
-     * Sets the request address.
-     *
-     * @param address The request address.
-     * @return The request builder.
-     */
-    Builder withAddress(Address address);
+    @Override
+    public Builder withAddress(Address address) {
+      this.address = Assert.notNull(address, "address");
+      return this;
+    }
+
+    @Override
+    public LocalAcceptRequest build() {
+      return new LocalAcceptRequest(client, address);
+    }
   }
-
 }

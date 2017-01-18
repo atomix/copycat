@@ -18,8 +18,8 @@ package io.atomix.copycat.server.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.net.request.AbstractNetRequest;
 import io.atomix.copycat.server.protocol.request.AcceptRequest;
 
