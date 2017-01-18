@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.request.ProtocolRequest;
 
 import java.util.function.Supplier;
@@ -155,6 +154,12 @@ public interface NetRequest extends ProtocolRequest {
    * @param <T> The builder type.
    */
   interface Builder<T extends Builder<T, U>, U extends NetRequest> extends ProtocolRequest.Builder<T, U> {
+  }
+
+  /**
+   * Request serializer.
+   */
+  abstract class Serializer<T extends NetRequest> extends com.esotericsoftware.kryo.Serializer<T> {
   }
 
 }

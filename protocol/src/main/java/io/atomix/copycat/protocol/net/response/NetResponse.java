@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.protocol.net.response;
 
-import com.esotericsoftware.kryo.Serializer;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 import java.util.function.Supplier;
@@ -167,6 +166,12 @@ public interface NetResponse extends ProtocolResponse {
      * @return The response builder.
      */
     T withId(long id);
+  }
+
+  /**
+   * Response serializer.
+   */
+  abstract class Serializer<T extends NetResponse> extends com.esotericsoftware.kryo.Serializer<T> {
   }
 
 }

@@ -15,10 +15,13 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
 
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * Session keep alive response.
@@ -30,26 +33,63 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface KeepAliveResponse extends SessionResponse {
+public class KeepAliveResponse extends SessionResponse {
+  protected final Address leader;
+  protected final Collection<Address> members;
+
+  protected KeepAliveResponse(Status status, CopycatError error, Address leader, Collection<Address> members) {
+    super(status, error);
+    this.leader = leader;
+    this.members = Assert.notNull(members, "members");
+  }
 
   /**
    * Returns the cluster leader.
    *
    * @return The cluster leader.
    */
-  Address leader();
+  public Address leader() {
+    return leader;
+  }
 
   /**
    * Returns the cluster members.
    *
    * @return The cluster members.
    */
-  Collection<Address> members();
+  public Collection<Address> members() {
+    return members;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status, leader, members);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof KeepAliveResponse) {
+      KeepAliveResponse response = (KeepAliveResponse) object;
+      return response.status == status
+        && ((response.leader == null && leader == null)
+        || (response.leader != null && leader != null && response.leader.equals(leader)))
+        && ((response.members == null && members == null)
+        || (response.members != null && members != null && response.members.equals(members)));
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s, error=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, error, leader, members);
+  }
 
   /**
    * Status response builder.
    */
-  interface Builder extends SessionResponse.Builder<Builder, KeepAliveResponse> {
+  public static class Builder extends SessionResponse.Builder<KeepAliveResponse.Builder, KeepAliveResponse> {
+    protected Address leader;
+    protected Collection<Address> members;
 
     /**
      * Sets the response leader.
@@ -57,7 +97,10 @@ public interface KeepAliveResponse extends SessionResponse {
      * @param leader The response leader.
      * @return The response builder.
      */
-    Builder withLeader(Address leader);
+    public Builder withLeader(Address leader) {
+      this.leader = leader;
+      return this;
+    }
 
     /**
      * Sets the response members.
@@ -66,7 +109,14 @@ public interface KeepAliveResponse extends SessionResponse {
      * @return The response builder.
      * @throws NullPointerException if {@code members} is null
      */
-    Builder withMembers(Collection<Address> members);
-  }
+    public Builder withMembers(Collection<Address> members) {
+      this.members = Assert.notNull(members, "members");
+      return this;
+    }
 
+    @Override
+    public KeepAliveResponse build() {
+      return new KeepAliveResponse(status, error, leader, members);
+    }
+  }
 }

@@ -18,7 +18,7 @@ package io.atomix.copycat.protocol.response;
 import io.atomix.copycat.error.CopycatError;
 
 /**
- * Protocol response.
+ * Local response.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -115,5 +115,4 @@ public interface ProtocolResponse {
      */
     T withError(CopycatError error);
   }
-
 }

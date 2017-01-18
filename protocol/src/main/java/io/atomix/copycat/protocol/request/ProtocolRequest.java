@@ -16,7 +16,7 @@
 package io.atomix.copycat.protocol.request;
 
 /**
- * Protocol request.
+ * Local request.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -27,7 +27,5 @@ public interface ProtocolRequest {
    *
    * @param <T> The builder type.
    */
-  interface Builder<T extends Builder<T, U>, U extends ProtocolRequest> extends io.atomix.catalyst.util.Builder<U> {
-  }
-
+  interface Builder<T extends Builder<T, U>, U extends ProtocolRequest> extends io.atomix.catalyst.util.Builder<U> {}
 }

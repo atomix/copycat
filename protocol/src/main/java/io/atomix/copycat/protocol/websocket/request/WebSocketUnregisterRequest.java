@@ -20,54 +20,48 @@ import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.atomix.copycat.protocol.request.UnregisterRequest;
 
-import java.util.Objects;
-
 /**
- * Session unregister request.
- * <p>
- * The unregister request is sent by a client with an open session to the cluster to explicitly
- * unregister its session. Note that if a client does not send an unregister request, its session will
- * eventually expire. The unregister request simply provides a more orderly method for closing client sessions.
+ * Web socket unregister request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketUnregisterRequest extends WebSocketSessionRequest implements UnregisterRequest {
+public class WebSocketUnregisterRequest extends UnregisterRequest implements WebSocketRequest {
+  private final long id;
+
   @JsonCreator
-  protected WebSocketUnregisterRequest(@JsonProperty("id") long id, @JsonProperty("session") long session) {
-    super(id, session);
+  public WebSocketUnregisterRequest(
+    @JsonProperty("id") long id,
+    @JsonProperty("session") long session) {
+    super(session);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.UNREGISTER_REQUEST;
+    return Types.UNREGISTER_REQUEST;
   }
 
   @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof WebSocketUnregisterRequest) {
-      WebSocketUnregisterRequest request = (WebSocketUnregisterRequest) object;
-      return request.session == session;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d]", getClass().getSimpleName(), session);
+  @JsonGetter("session")
+  public long session() {
+    return super.session();
   }
 
   /**
-   * Unregister request builder.
+   * Web socket unregister request builder.
    */
-  public static class Builder extends WebSocketSessionRequest.Builder<UnregisterRequest.Builder, UnregisterRequest> implements UnregisterRequest.Builder {
+  public static class Builder extends UnregisterRequest.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override

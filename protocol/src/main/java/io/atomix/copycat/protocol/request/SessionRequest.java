@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
+
 /**
  * Base session request.
  * <p>
@@ -23,19 +25,27 @@ package io.atomix.copycat.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface SessionRequest extends ProtocolRequest {
+public abstract class SessionRequest extends AbstractRequest {
+  protected final long session;
+
+  protected SessionRequest(long session) {
+    this.session = Assert.argNot(session, session < 1, "session cannot be less than 1");
+  }
 
   /**
    * Returns the session ID.
    *
    * @return The session ID.
    */
-  long session();
+  public long session() {
+    return session;
+  }
 
   /**
    * Session request builder.
    */
-  interface Builder<T extends Builder<T, U>, U extends SessionRequest> extends ProtocolRequest.Builder<T, U> {
+  public static abstract class Builder<T extends SessionRequest.Builder<T, U>, U extends SessionRequest> extends AbstractRequest.Builder<T, U> {
+    protected long session;
 
     /**
      * Sets the session ID.
@@ -44,7 +54,10 @@ public interface SessionRequest extends ProtocolRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if {@code session} is less than 0
      */
-    T withSession(long session);
+    @SuppressWarnings("unchecked")
+    public T withSession(long session) {
+      this.session = Assert.argNot(session, session < 1, "session cannot be less than 1");
+      return (T) this;
+    }
   }
-
 }

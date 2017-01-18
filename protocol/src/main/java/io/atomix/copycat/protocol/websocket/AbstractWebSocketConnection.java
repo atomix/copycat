@@ -118,12 +118,12 @@ public abstract class AbstractWebSocketConnection<T extends WebSocketBase> imple
   @SuppressWarnings("unchecked")
   private void handleObject(JsonNode json) {
     String type = json.get("type").asText();
-    if (WebSocketRequest.Type.isProtocolRequest(type)) {
-      WebSocketRequest request = textMapper.convertValue(json, WebSocketRequest.Type.valueOf(type).type());
+    if (WebSocketRequest.Types.isProtocolRequest(type)) {
+      WebSocketRequest request = textMapper.convertValue(json, WebSocketRequest.Types.valueOf(type).type());
       logger().debug("Received {}", request);
       onRequest(request);
-    } else if (WebSocketResponse.Type.isProtocolResponse(type)) {
-      WebSocketResponse response = textMapper.convertValue(json, WebSocketResponse.Type.valueOf(type).type());
+    } else if (WebSocketResponse.Types.isProtocolResponse(type)) {
+      WebSocketResponse response = textMapper.convertValue(json, WebSocketResponse.Types.valueOf(type).type());
       logger().debug("Received {}", response);
       CompletableFuture future = futures.get(response.id());
       if (future != null) {

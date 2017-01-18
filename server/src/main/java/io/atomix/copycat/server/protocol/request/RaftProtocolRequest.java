@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
-import io.atomix.copycat.protocol.request.ProtocolRequest;
-
 /**
  * Raft protocol request interface.
  *

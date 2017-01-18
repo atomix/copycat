@@ -18,33 +18,24 @@ package io.atomix.copycat.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.KeepAliveRequest;
-import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
-
-import java.util.Objects;
 
 /**
- * Session keep alive request.
- * <p>
- * Keep alive requests are sent by clients to servers to maintain a session registered via
- * a {@link NetRegisterRequest}. Once a session has been registered, clients are responsible for sending
- * keep alive requests to the cluster at a rate less than the provided {@link WebSocketRegisterResponse#timeout()}.
- * Keep alive requests also server to acknowledge the receipt of responses and events by the client.
- * The {@link #commandSequence()} number indicates the highest command sequence number for which the client
- * has received a response, and the {@link #eventIndex()} number indicates the highest index for which the
- * client has received an event in proper sequence.
+ * TCP keep alive request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetKeepAliveRequest extends NetSessionRequest implements KeepAliveRequest {
-  private final long commandSequence;
-  private final long eventIndex;
+public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest {
+  private final long id;
 
-  protected NetKeepAliveRequest(long id, long session, long commandSequence, long eventIndex) {
-    super(id, session);
-    this.commandSequence = commandSequence;
-    this.eventIndex = eventIndex;
+  public NetKeepAliveRequest(long id, long session, long commandSequence, long eventIndex) {
+    super(session, commandSequence, eventIndex);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -52,58 +43,14 @@ public class NetKeepAliveRequest extends NetSessionRequest implements KeepAliveR
     return Types.KEEP_ALIVE_REQUEST;
   }
 
-  @Override
-  public long commandSequence() {
-    return commandSequence;
-  }
-
-  @Override
-  public long eventIndex() {
-    return eventIndex;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session, commandSequence);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetKeepAliveRequest) {
-      NetKeepAliveRequest request = (NetKeepAliveRequest) object;
-      return request.session == session
-        && request.commandSequence == commandSequence
-        && request.eventIndex == eventIndex;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
-  }
-
   /**
-   * Keep alive request builder.
+   * TCP keep alive request builder.
    */
-  public static class Builder extends NetSessionRequest.Builder<KeepAliveRequest.Builder, KeepAliveRequest> implements KeepAliveRequest.Builder {
-    private long commandSequence;
-    private long eventIndex;
+  public static class Builder extends KeepAliveRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withCommandSequence(long commandSequence) {
-      this.commandSequence = Assert.argNot(commandSequence, commandSequence < 0, "commandSequence cannot be negative");
-      return this;
-    }
-
-    @Override
-    public Builder withEventIndex(long eventIndex) {
-      this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
-      return this;
+      this.id = id;
     }
 
     @Override
@@ -115,7 +62,7 @@ public class NetKeepAliveRequest extends NetSessionRequest implements KeepAliveR
   /**
    * Keep-alive request serializer.
    */
-  public static class Serializer extends NetSessionRequest.Serializer<NetKeepAliveRequest> {
+  public static class Serializer extends NetRequest.Serializer<NetKeepAliveRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetKeepAliveRequest request) {
       output.writeLong(request.id);

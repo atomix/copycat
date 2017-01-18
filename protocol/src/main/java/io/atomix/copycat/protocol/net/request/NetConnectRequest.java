@@ -18,27 +18,24 @@ package io.atomix.copycat.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.ConnectRequest;
 
-import java.util.Objects;
-
 /**
- * Connect client request.
- * <p>
- * Connect requests are sent by clients to specific servers when first establishing a connection.
- * Connections must be associated with a specific {@link #client() client ID} and must be established
- * each time the client switches servers. A client may only be connected to a single server at any
- * given time.
+ * TCP connect request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetConnectRequest extends AbstractNetRequest implements ConnectRequest {
-  private final String client;
+public class NetConnectRequest extends ConnectRequest implements NetRequest {
+  private final long id;
 
-  protected NetConnectRequest(long id, String client) {
-    super(id);
-    this.client = client;
+  public NetConnectRequest(long id, String client) {
+    super(client);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -46,40 +43,14 @@ public class NetConnectRequest extends AbstractNetRequest implements ConnectRequ
     return Types.CONNECT_REQUEST;
   }
 
-  @Override
-  public String client() {
-    return client;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), client);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof NetConnectRequest && ((NetConnectRequest) object).client.equals(client);
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
-  }
-
   /**
-   * Register client request builder.
+   * TCP connect request builder.
    */
-  public static class Builder extends AbstractNetRequest.Builder<ConnectRequest.Builder, ConnectRequest> implements ConnectRequest.Builder {
-    private String client;
+  public static class Builder extends ConnectRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withClient(String client) {
-      this.client = Assert.notNull(client, "client");
-      return this;
+      this.id = id;
     }
 
     @Override
@@ -91,7 +62,7 @@ public class NetConnectRequest extends AbstractNetRequest implements ConnectRequ
   /**
    * Connect request serializer.
    */
-  public static class Serializer extends AbstractNetRequest.Serializer<NetConnectRequest> {
+  public static class Serializer extends NetRequest.Serializer<NetConnectRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetConnectRequest request) {
       output.writeLong(request.id);

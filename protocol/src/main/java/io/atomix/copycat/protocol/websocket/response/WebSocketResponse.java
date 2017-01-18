@@ -15,13 +15,14 @@
  */
 package io.atomix.copycat.protocol.websocket.response;
 
+import com.fasterxml.jackson.annotation.JsonGetter;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
  * Base interface for responses.
  * <p>
- * Each response has a non-null {@link WebSocketResponse.Status} of either {@link WebSocketResponse.Status#OK} or
- * {@link WebSocketResponse.Status#ERROR}. Responses where {@link #status()} is {@link WebSocketResponse.Status#ERROR}
+ * Each response has a non-null {@link Status} of either {@link Status#OK} or
+ * {@link Status#ERROR}. Responses where {@link #status()} is {@link Status#ERROR}
  * may provide an optional {@link #error()} code.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
@@ -29,9 +30,19 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
 public interface WebSocketResponse extends ProtocolResponse {
 
   /**
+   * Protocol request type.
+   */
+  interface Type {
+    /**
+     * Returns the request type class.
+     */
+    Class<? extends WebSocketResponse> type();
+  }
+
+  /**
    * Protocol response type.
    */
-  enum Type {
+  enum Types implements Type {
     CONNECT_RESPONSE(WebSocketConnectResponse.class),
     REGISTER_RESPONSE(WebSocketRegisterResponse.class),
     KEEP_ALIVE_RESPONSE(WebSocketKeepAliveResponse.class),
@@ -42,15 +53,11 @@ public interface WebSocketResponse extends ProtocolResponse {
 
     private final Class<? extends WebSocketResponse> type;
 
-    Type(Class<? extends WebSocketResponse> type) {
+    Types(Class<? extends WebSocketResponse> type) {
       this.type = type;
     }
 
-    /**
-     * Returns the response type class.
-     *
-     * @return The response type class.
-     */
+    @Override
     public Class<? extends WebSocketResponse> type() {
       return type;
     }
@@ -82,6 +89,7 @@ public interface WebSocketResponse extends ProtocolResponse {
    *
    * @return The response ID.
    */
+  @JsonGetter("id")
   long id();
 
   /**
@@ -89,6 +97,7 @@ public interface WebSocketResponse extends ProtocolResponse {
    *
    * @return The protocol response type.
    */
+  @JsonGetter("type")
   Type type();
 
   /**
@@ -106,5 +115,4 @@ public interface WebSocketResponse extends ProtocolResponse {
      */
     T withId(long id);
   }
-
 }

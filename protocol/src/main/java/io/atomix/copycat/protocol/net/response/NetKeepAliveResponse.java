@@ -18,33 +18,28 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.KeepAliveResponse;
-import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
 
 import java.util.Collection;
-import java.util.Objects;
 
 /**
- * Session keep alive response.
- * <p>
- * Session keep alive responses are sent upon the completion of a {@link WebSocketKeepAliveRequest}
- * from a client. Keep alive responses, when successful, provide the current cluster configuration and leader
- * to the client to ensure clients can evolve with the structure of the cluster and make intelligent decisions
- * about connecting to the cluster.
+ * TCP keep alive response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetKeepAliveResponse extends NetSessionResponse implements KeepAliveResponse {
-  private final Address leader;
-  private final Collection<Address> members;
+public class NetKeepAliveResponse extends KeepAliveResponse implements NetResponse {
+  private final long id;
 
-  protected NetKeepAliveResponse(long id, Status status, CopycatError error, Address leader, Collection<Address> members) {
-    super(id, status, error);
-    this.leader = leader;
-    this.members = members;
+  public NetKeepAliveResponse(long id, Status status, CopycatError error, Address leader, Collection<Address> members) {
+    super(status, error, leader, members);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -52,76 +47,16 @@ public class NetKeepAliveResponse extends NetSessionResponse implements KeepAliv
     return Types.KEEP_ALIVE_RESPONSE;
   }
 
-  @Override
-  public Address leader() {
-    return leader;
-  }
-
-  @Override
-  public Collection<Address> members() {
-    return members;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status, leader, members);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetKeepAliveResponse) {
-      NetKeepAliveResponse response = (NetKeepAliveResponse) object;
-      return response.status == status
-        && ((response.leader == null && leader == null)
-        || (response.leader != null && leader != null && response.leader.equals(leader)))
-        && ((response.members == null && members == null)
-        || (response.members != null && members != null && response.members.equals(members)));
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, error=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, error, leader, members);
-  }
-
   /**
-   * Status response builder.
+   * TCP keep alive response builder.
    */
-  public static class Builder extends NetSessionResponse.Builder<KeepAliveResponse.Builder, KeepAliveResponse> implements KeepAliveResponse.Builder {
-    private Address leader;
-    private Collection<Address> members;
+  public static class Builder extends KeepAliveResponse.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
-    /**
-     * Sets the response leader.
-     *
-     * @param leader The response leader.
-     * @return The response builder.
-     */
-    public Builder withLeader(Address leader) {
-      this.leader = leader;
-      return this;
-    }
-
-    /**
-     * Sets the response members.
-     *
-     * @param members The response members.
-     * @return The response builder.
-     * @throws NullPointerException if {@code members} is null
-     */
-    public Builder withMembers(Collection<Address> members) {
-      this.members = Assert.notNull(members, "members");
-      return this;
-    }
-
-    /**
-     * @throws IllegalStateException if status is OK and members is null
-     */
     @Override
     public KeepAliveResponse build() {
       return new NetKeepAliveResponse(id, status, error, leader, members);
@@ -131,7 +66,7 @@ public class NetKeepAliveResponse extends NetSessionResponse implements KeepAliv
   /**
    * Keep-alive response serializer.
    */
-  public static class Serializer extends NetSessionResponse.Serializer<NetKeepAliveResponse> {
+  public static class Serializer extends NetResponse.Serializer<NetKeepAliveResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetKeepAliveResponse response) {
       output.writeLong(response.id);

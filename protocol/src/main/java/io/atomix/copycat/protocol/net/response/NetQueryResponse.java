@@ -20,24 +20,23 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.QueryResponse;
-import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
 
 /**
- * Client query response.
- * <p>
- * Query responses are sent by servers to clients upon the completion of a
- * {@link WebSocketQueryRequest}. Query responses are sent with the
- * {@link #index()} of the state machine at the point at which the query was evaluated.
- * This can be used by the client to ensure it sees state progress monotonically. Note, however, that
- * query responses may not be sent or received in sequential order. If a query response is proxied through
- * another server, responses may be received out of order. Clients should resequence concurrent responses
- * to ensure they're handled in FIFO order.
+ * TCP query response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetQueryResponse extends NetOperationResponse implements QueryResponse {
-  protected NetQueryResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
-    super(id, status, error, index, eventIndex, result);
+public class NetQueryResponse extends QueryResponse implements NetResponse {
+  private final long id;
+
+  public NetQueryResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
+    super(status, error, index, eventIndex, result);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -46,11 +45,13 @@ public class NetQueryResponse extends NetOperationResponse implements QueryRespo
   }
 
   /**
-   * Query response builder.
+   * TCP query response builder.
    */
-  public static class Builder extends NetOperationResponse.Builder<QueryResponse.Builder, QueryResponse> implements QueryResponse.Builder {
+  public static class Builder extends QueryResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
@@ -62,7 +63,7 @@ public class NetQueryResponse extends NetOperationResponse implements QueryRespo
   /**
    * Query response serializer.
    */
-  public static class Serializer extends NetOperationResponse.Serializer<NetQueryResponse> {
+  public static class Serializer extends NetResponse.Serializer<NetQueryResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetQueryResponse response) {
       output.writeLong(response.id);

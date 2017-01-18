@@ -19,40 +19,78 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.websocket.request.WebSocketCommandRequest;
 import io.atomix.copycat.protocol.response.CommandResponse;
 
 /**
- * Client command response.
- * <p>
- * Command responses are sent by servers to clients upon the completion of a
- * {@link WebSocketCommandRequest}. Command responses are sent with the
- * {@link #index()} (or index) of the state machine at the point at which the command was evaluated.
- * This can be used by the client to ensure it sees state progress monotonically. Note, however, that
- * command responses may not be sent or received in sequential order. If a command response has to await
- * the completion of an event, or if the response is proxied through another server, responses may be
- * received out of order. Clients should resequence concurrent responses to ensure they're handled in FIFO order.
+ * Web socket command response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketCommandResponse extends WebSocketOperationResponse implements CommandResponse {
+public class WebSocketCommandResponse extends CommandResponse implements WebSocketResponse {
+  private final long id;
+
   @JsonCreator
-  protected WebSocketCommandResponse(@JsonProperty("id") long id, @JsonProperty("status") Status status, @JsonProperty("error") CopycatError error, @JsonProperty("index") long index, @JsonProperty("eventIndex") long eventIndex, @JsonProperty("result") Object result) {
-    super(id, status, error, index, eventIndex, result);
+  public WebSocketCommandResponse(
+    @JsonProperty("id") long id,
+    @JsonProperty("status") Status status,
+    @JsonProperty("error") CopycatError error,
+    @JsonProperty("index") long index,
+    @JsonProperty("eventIndex") long eventIndex,
+    @JsonProperty("result") Object result) {
+    super(status, error, index, eventIndex, result);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.COMMAND_RESPONSE;
+    return Types.COMMAND_RESPONSE;
+  }
+
+  @Override
+  @JsonGetter("status")
+  public Status status() {
+    return super.status();
+  }
+
+  @Override
+  @JsonGetter("error")
+  public CopycatError error() {
+    return super.error();
+  }
+
+  @Override
+  @JsonGetter("index")
+  public long index() {
+    return super.index();
+  }
+
+  @Override
+  @JsonGetter("eventIndex")
+  public long eventIndex() {
+    return super.eventIndex();
+  }
+
+  @Override
+  @JsonGetter("result")
+  public Object result() {
+    return super.result();
   }
 
   /**
-   * Command response builder.
+   * Web socket command response builder.
    */
-  public static class Builder extends WebSocketOperationResponse.Builder<CommandResponse.Builder, CommandResponse> implements CommandResponse.Builder {
+  public static class Builder extends CommandResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override

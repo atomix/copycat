@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.protocol.response;
 
+import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.websocket.request.WebSocketCommandRequest;
 
 /**
@@ -30,12 +31,18 @@ import io.atomix.copycat.protocol.websocket.request.WebSocketCommandRequest;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface CommandResponse extends OperationResponse {
+public class CommandResponse extends OperationResponse {
+  protected CommandResponse(Status status, CopycatError error, long index, long eventIndex, Object result) {
+    super(status, error, index, eventIndex, result);
+  }
 
   /**
    * Command response builder.
    */
-  interface Builder extends OperationResponse.Builder<Builder, CommandResponse> {
+  public static class Builder extends OperationResponse.Builder<CommandResponse.Builder, CommandResponse> {
+    @Override
+    public CommandResponse build() {
+      return new CommandResponse(status, error, index, eventIndex, result);
+    }
   }
-
 }

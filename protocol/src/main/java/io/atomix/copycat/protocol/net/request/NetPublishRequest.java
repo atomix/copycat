@@ -18,35 +18,27 @@ package io.atomix.copycat.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.session.Event;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
- * Event publish request.
- * <p>
- * Publish requests are used by servers to publish event messages to clients. Event messages are
- * sequenced based on the point in the Raft log at which they were published to the client. The
- * {@link #eventIndex()} indicates the index at which the event was sent, and the {@link #previousIndex()}
- * indicates the index of the prior event messages sent to the client. Clients must ensure that event
- * messages are received in sequence by tracking the last index for which they received an event message
- * and validating {@link #previousIndex()} against that index.
+ * TCP publish request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetPublishRequest extends NetSessionRequest implements PublishRequest {
-  private final long eventIndex;
-  private final long previousIndex;
-  private final List<Event<?>> events;
+public class NetPublishRequest extends PublishRequest implements NetRequest {
+  private final long id;
 
-  protected NetPublishRequest(long id, long session, long eventIndex, long previousIndex, List<Event<?>> events) {
-    super(id, session);
-    this.eventIndex = eventIndex;
-    this.previousIndex = previousIndex;
-    this.events = events;
+  public NetPublishRequest(long id, long session, long eventIndex, long previousIndex, List<Event<?>> events) {
+    super(session, eventIndex, previousIndex, events);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -54,71 +46,14 @@ public class NetPublishRequest extends NetSessionRequest implements PublishReque
     return Types.PUBLISH_REQUEST;
   }
 
-  @Override
-  public long eventIndex() {
-    return eventIndex;
-  }
-
-  @Override
-  public long previousIndex() {
-    return previousIndex;
-  }
-
-  @Override
-  public List<Event<?>> events() {
-    return events;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session, eventIndex, previousIndex, events);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetPublishRequest) {
-      NetPublishRequest request = (NetPublishRequest) object;
-      return request.session == session
-        && request.eventIndex == eventIndex
-        && request.previousIndex == previousIndex
-        && request.events.equals(events);
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d, eventIndex=%d, previousIndex=%d, events=%s]", getClass().getSimpleName(), session, eventIndex, previousIndex, events);
-  }
-
   /**
-   * Publish request builder.
+   * TCP publish request builder.
    */
-  public static class Builder extends NetSessionRequest.Builder<PublishRequest.Builder, PublishRequest> implements PublishRequest.Builder {
-    private long eventIndex;
-    private long previousIndex;
-    private List<Event<?>> events;
+  public static class Builder extends PublishRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withEventIndex(long index) {
-      this.eventIndex = Assert.argNot(index, index < 1, "index cannot be less than 1");
-      return this;
-    }
-
-    @Override
-    public Builder withPreviousIndex(long index) {
-      this.previousIndex = Assert.argNot(index, index < 0, "index cannot be less than 0");
-      return this;
-    }
-
-    @Override
-    public Builder withEvents(List<Event<?>> events) {
-      this.events = events;
-      return this;
+      this.id = id;
     }
 
     @Override
@@ -130,7 +65,7 @@ public class NetPublishRequest extends NetSessionRequest implements PublishReque
   /**
    * Publish request serializer.
    */
-  public static class Serializer extends NetSessionRequest.Serializer<NetPublishRequest> {
+  public static class Serializer extends NetRequest.Serializer<NetPublishRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetPublishRequest request) {
       output.writeLong(request.id);

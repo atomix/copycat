@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import java.util.Objects;
+
 /**
  * Session unregister request.
  * <p>
@@ -24,12 +26,37 @@ package io.atomix.copycat.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface UnregisterRequest extends SessionRequest {
+public class UnregisterRequest extends SessionRequest {
+  protected UnregisterRequest(long session) {
+    super(session);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), session);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof UnregisterRequest) {
+      UnregisterRequest request = (UnregisterRequest) object;
+      return request.session == session;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[session=%d]", getClass().getSimpleName(), session);
+  }
 
   /**
    * Unregister request builder.
    */
-  interface Builder extends SessionRequest.Builder<Builder, UnregisterRequest> {
+  public static class Builder extends SessionRequest.Builder<UnregisterRequest.Builder, UnregisterRequest> {
+    @Override
+    public UnregisterRequest build() {
+      return new UnregisterRequest(session);
+    }
   }
-
 }

@@ -18,98 +18,64 @@ package io.atomix.copycat.protocol.websocket.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
 import io.atomix.copycat.protocol.request.KeepAliveRequest;
 
-import java.util.Objects;
-
 /**
- * Session keep alive request.
- * <p>
- * Keep alive requests are sent by clients to servers to maintain a session registered via
- * a {@link WebSocketRegisterRequest}. Once a session has been registered, clients are responsible for sending
- * keep alive requests to the cluster at a rate less than the provided {@link WebSocketRegisterResponse#timeout()}.
- * Keep alive requests also server to acknowledge the receipt of responses and events by the client.
- * The {@link #commandSequence()} number indicates the highest command sequence number for which the client
- * has received a response, and the {@link #eventIndex()} number indicates the highest index for which the
- * client has received an event in proper sequence.
+ * Web socket keep alive request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketKeepAliveRequest extends WebSocketSessionRequest implements KeepAliveRequest {
-  @JsonProperty("commandSequence")
-  private final long commandSequence;
-  @JsonProperty("eventIndex")
-  private final long eventIndex;
+public class WebSocketKeepAliveRequest extends KeepAliveRequest implements WebSocketRequest {
+  private final long id;
 
   @JsonCreator
-  protected WebSocketKeepAliveRequest(@JsonProperty("id") long id, @JsonProperty("session") long session, @JsonProperty("commandSequence") long commandSequence, @JsonProperty("eventIndex") long eventIndex) {
-    super(id, session);
-    this.commandSequence = commandSequence;
-    this.eventIndex = eventIndex;
+  public WebSocketKeepAliveRequest(
+    @JsonProperty("id") long id,
+    @JsonProperty("session") long session,
+    @JsonProperty("commandSequence") long commandSequence,
+    @JsonProperty("eventIndex") long eventIndex) {
+    super(session, commandSequence, eventIndex);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.KEEP_ALIVE_REQUEST;
+    return Types.KEEP_ALIVE_REQUEST;
+  }
+
+  @Override
+  @JsonGetter("session")
+  public long session() {
+    return super.session();
   }
 
   @Override
   @JsonGetter("commandSequence")
   public long commandSequence() {
-    return commandSequence;
+    return super.commandSequence();
   }
 
   @Override
   @JsonGetter("eventIndex")
   public long eventIndex() {
-    return eventIndex;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session, commandSequence);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof WebSocketKeepAliveRequest) {
-      WebSocketKeepAliveRequest request = (WebSocketKeepAliveRequest) object;
-      return request.session == session
-        && request.commandSequence == commandSequence
-        && request.eventIndex == eventIndex;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
+    return super.eventIndex();
   }
 
   /**
-   * Keep alive request builder.
+   * Web socket keep alive request builder.
    */
-  public static class Builder extends WebSocketSessionRequest.Builder<KeepAliveRequest.Builder, KeepAliveRequest> implements KeepAliveRequest.Builder {
-    private long commandSequence;
-    private long eventIndex;
+  public static class Builder extends KeepAliveRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withCommandSequence(long commandSequence) {
-      this.commandSequence = Assert.argNot(commandSequence, commandSequence < 0, "commandSequence cannot be negative");
-      return this;
-    }
-
-    @Override
-    public Builder withEventIndex(long eventIndex) {
-      this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
-      return this;
+      this.id = id;
     }
 
     @Override

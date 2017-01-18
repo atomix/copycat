@@ -18,34 +18,25 @@ package io.atomix.copycat.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.protocol.request.CommandRequest;
 
-import java.util.Objects;
-
 /**
- * Client command request.
- * <p>
- * Command requests are submitted by clients to the Copycat cluster to commit {@link Command}s to
- * the replicated state machine. Each command request must be associated with a registered
- * {@link #session()} and have a unique {@link #sequence()} number within that session. Commands will
- * be applied in the cluster in the order defined by the provided sequence number. Thus, sequence numbers
- * should never be skipped. In the event of a failure of a command request, the request should be resent
- * with the same sequence number. Commands are guaranteed to be applied in sequence order.
- * <p>
- * Command requests should always be submitted to the server to which the client is connected and will
- * be forwarded to the current cluster leader. In the event that no leader is available, the request
- * will fail and should be resubmitted by the client.
+ * TCP command request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetCommandRequest extends NetOperationRequest implements CommandRequest {
-  private final Command command;
+public class NetCommandRequest extends CommandRequest implements NetRequest {
+  private final long id;
 
-  protected NetCommandRequest(long id, long session, long sequence, Command command) {
-    super(id, session, sequence);
-    this.command = command;
+  public NetCommandRequest(long id, long session, long sequence, Command command) {
+    super(session, sequence, command);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -53,56 +44,16 @@ public class NetCommandRequest extends NetOperationRequest implements CommandReq
     return Types.COMMAND_REQUEST;
   }
 
-  @Override
-  public Command command() {
-    return command;
-  }
-
-  @Override
-  public Command operation() {
-    return command;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, command);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetCommandRequest) {
-      NetCommandRequest request = (NetCommandRequest) object;
-      return request.session == session
-        && request.sequence == sequence
-        && request.command.equals(command);
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d, sequence=%d, command=%s]", getClass().getSimpleName(), session, sequence, command);
-  }
-
   /**
-   * Write request builder.
+   * TCP command request builder.
    */
-  public static class Builder extends NetOperationRequest.Builder<CommandRequest.Builder, CommandRequest> implements CommandRequest.Builder {
-    private Command command;
+  public static class Builder extends CommandRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
-    @Override
-    public Builder withCommand(Command command) {
-      this.command = Assert.notNull(command, "command");
-      return this;
-    }
-
-    /**
-     * @throws IllegalStateException if session or sequence are less than 1, or command is null
-     */
     @Override
     public CommandRequest build() {
       return new NetCommandRequest(id, session, sequence, command);
@@ -112,7 +63,7 @@ public class NetCommandRequest extends NetOperationRequest implements CommandReq
   /**
    * Command request serializer.
    */
-  public static class Serializer extends NetOperationRequest.Serializer<NetCommandRequest> {
+  public static class Serializer extends NetRequest.Serializer<NetCommandRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetCommandRequest request) {
       output.writeLong(request.id);

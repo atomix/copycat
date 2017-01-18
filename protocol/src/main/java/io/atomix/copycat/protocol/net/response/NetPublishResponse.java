@@ -18,29 +18,25 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.PublishResponse;
 
-import java.util.Objects;
-
 /**
- * Event publish response.
- * <p>
- * Publish responses are sent by clients to servers to indicate the last successful index for which
- * an event message was handled in proper sequence. If the client receives an event message out of
- * sequence, it should respond with the index of the last event it received in sequence. If an event
- * message is received in sequence, it should respond with the index of that event. Once a client has
- * responded successfully to an event message, it will be removed from memory on the cluster.
+ * TCP publish response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetPublishResponse extends NetSessionResponse implements PublishResponse {
-  private final long index;
+public class NetPublishResponse extends PublishResponse implements NetResponse {
+  private final long id;
 
-  protected NetPublishResponse(long id, Status status, CopycatError error, long index) {
-    super(id, status, error);
-    this.index = index;
+  public NetPublishResponse(long id, Status status, CopycatError error, long index) {
+    super(status, error, index);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -48,45 +44,14 @@ public class NetPublishResponse extends NetSessionResponse implements PublishRes
     return Types.PUBLISH_RESPONSE;
   }
 
-  @Override
-  public long index() {
-    return index;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetPublishResponse) {
-      NetPublishResponse response = (NetPublishResponse) object;
-      return response.status == status
-        && response.index == index;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, error=%s, index=%d]", getClass().getSimpleName(), status, error, index);
-  }
-
   /**
-   * Publish response builder.
+   * TCP publish response builder.
    */
-  public static class Builder extends NetSessionResponse.Builder<PublishResponse.Builder, PublishResponse> implements PublishResponse.Builder {
-    private long index;
+  public static class Builder extends PublishResponse.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withIndex(long index) {
-      this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
-      return this;
+      this.id = id;
     }
 
     @Override
@@ -98,7 +63,7 @@ public class NetPublishResponse extends NetSessionResponse implements PublishRes
   /**
    * Publish response serializer.
    */
-  public static class Serializer extends NetSessionResponse.Serializer<NetPublishResponse> {
+  public static class Serializer extends NetResponse.Serializer<NetPublishResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetPublishResponse response) {
       output.writeLong(response.id);

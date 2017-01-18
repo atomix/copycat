@@ -18,115 +18,74 @@ package io.atomix.copycat.protocol.websocket.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.session.Event;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
- * Event publish request.
- * <p>
- * Publish requests are used by servers to publish event messages to clients. Event messages are
- * sequenced based on the point in the Raft log at which they were published to the client. The
- * {@link #eventIndex()} indicates the index at which the event was sent, and the {@link #previousIndex()}
- * indicates the index of the prior event messages sent to the client. Clients must ensure that event
- * messages are received in sequence by tracking the last index for which they received an event message
- * and validating {@link #previousIndex()} against that index.
+ * Web socket publish request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketPublishRequest extends WebSocketSessionRequest implements PublishRequest {
-  @JsonProperty("eventIndex")
-  private final long eventIndex;
-  @JsonProperty("previousIndex")
-  private final long previousIndex;
-  @JsonProperty("events")
-  private final List<Event<?>> events;
+public class WebSocketPublishRequest extends PublishRequest implements WebSocketRequest {
+  private final long id;
 
   @JsonCreator
-  protected WebSocketPublishRequest(@JsonProperty("id") long id, @JsonProperty("session") long session, @JsonProperty("eventIndex") long eventIndex, @JsonProperty("previousIndex") long previousIndex, @JsonProperty("events") List<Event<?>> events) {
-    super(id, session);
-    this.eventIndex = eventIndex;
-    this.previousIndex = previousIndex;
-    this.events = events;
+  public WebSocketPublishRequest(
+    @JsonProperty("id") long id,
+    @JsonProperty("session") long session,
+    @JsonProperty("eventIndex") long eventIndex,
+    @JsonProperty("previousIndex") long previousIndex,
+    @JsonProperty("events") List<Event<?>> events) {
+    super(session, eventIndex, previousIndex, events);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.PUBLISH_REQUEST;
+    return Types.PUBLISH_REQUEST;
+  }
+
+  @Override
+  @JsonGetter("session")
+  public long session() {
+    return super.session();
   }
 
   @Override
   @JsonGetter("eventIndex")
   public long eventIndex() {
-    return eventIndex;
+    return super.eventIndex();
   }
 
   @Override
   @JsonGetter("previousIndex")
   public long previousIndex() {
-    return previousIndex;
+    return super.previousIndex();
   }
 
   @Override
   @JsonGetter("events")
   public List<Event<?>> events() {
-    return events;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session, eventIndex, previousIndex, events);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof WebSocketPublishRequest) {
-      WebSocketPublishRequest request = (WebSocketPublishRequest) object;
-      return request.session == session
-        && request.eventIndex == eventIndex
-        && request.previousIndex == previousIndex
-        && request.events.equals(events);
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d, eventIndex=%d, previousIndex=%d, events=%s]", getClass().getSimpleName(), session, eventIndex, previousIndex, events);
+    return super.events();
   }
 
   /**
-   * Publish request builder.
+   * Web socket publish request builder.
    */
-  public static class Builder extends WebSocketSessionRequest.Builder<PublishRequest.Builder, PublishRequest> implements PublishRequest.Builder {
-    private long eventIndex;
-    private long previousIndex;
-    private List<Event<?>> events;
+  public static class Builder extends PublishRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withEventIndex(long index) {
-      this.eventIndex = Assert.argNot(index, index < 1, "index cannot be less than 1");
-      return this;
-    }
-
-    @Override
-    public Builder withPreviousIndex(long index) {
-      this.previousIndex = Assert.argNot(index, index < 0, "index cannot be less than 0");
-      return this;
-    }
-
-    @Override
-    public Builder withEvents(List<Event<?>> events) {
-      this.events = events;
-      return this;
+      this.id = id;
     }
 
     @Override

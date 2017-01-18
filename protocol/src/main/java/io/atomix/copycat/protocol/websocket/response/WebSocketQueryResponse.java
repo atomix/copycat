@@ -19,40 +19,78 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
 import io.atomix.copycat.protocol.response.QueryResponse;
 
 /**
- * Client query response.
- * <p>
- * Query responses are sent by servers to clients upon the completion of a
- * {@link WebSocketQueryRequest}. Query responses are sent with the
- * {@link #index()} of the state machine at the point at which the query was evaluated.
- * This can be used by the client to ensure it sees state progress monotonically. Note, however, that
- * query responses may not be sent or received in sequential order. If a query response is proxied through
- * another server, responses may be received out of order. Clients should resequence concurrent responses
- * to ensure they're handled in FIFO order.
+ * Web socket query response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketQueryResponse extends WebSocketOperationResponse implements QueryResponse {
+public class WebSocketQueryResponse extends QueryResponse implements WebSocketResponse {
+  private final long id;
+
   @JsonCreator
-  protected WebSocketQueryResponse(@JsonProperty("id") long id, @JsonProperty("status") Status status, @JsonProperty("error") CopycatError error, @JsonProperty("index") long index, @JsonProperty("eventIndex") long eventIndex, @JsonProperty("result") Object result) {
-    super(id, status, error, index, eventIndex, result);
+  public WebSocketQueryResponse(
+    @JsonProperty("id") long id,
+    @JsonProperty("status") Status status,
+    @JsonProperty("error") CopycatError error,
+    @JsonProperty("index") long index,
+    @JsonProperty("eventIndex") long eventIndex,
+    @JsonProperty("result") Object result) {
+    super(status, error, index, eventIndex, result);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.QUERY_RESPONSE;
+    return Types.QUERY_RESPONSE;
+  }
+
+  @Override
+  @JsonGetter("status")
+  public Status status() {
+    return super.status();
+  }
+
+  @Override
+  @JsonGetter("error")
+  public CopycatError error() {
+    return super.error();
+  }
+
+  @Override
+  @JsonGetter("index")
+  public long index() {
+    return super.index();
+  }
+
+  @Override
+  @JsonGetter("eventIndex")
+  public long eventIndex() {
+    return super.eventIndex();
+  }
+
+  @Override
+  @JsonGetter("result")
+  public Object result() {
+    return super.result();
   }
 
   /**
-   * Query response builder.
+   * Web socket query response builder.
    */
-  public static class Builder extends WebSocketOperationResponse.Builder<QueryResponse.Builder, QueryResponse> implements QueryResponse.Builder {
+  public static class Builder extends QueryResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override

@@ -18,72 +18,50 @@ package io.atomix.copycat.protocol.websocket.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.ConnectRequest;
 
-import java.util.Objects;
-
 /**
- * Connect client request.
- * <p>
- * Connect requests are sent by clients to specific servers when first establishing a connection.
- * Connections must be associated with a specific {@link #client() client ID} and must be established
- * each time the client switches servers. A client may only be connected to a single server at any
- * given time.
+ * Web socket connect request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketConnectRequest extends AbstractWebSocketRequest implements ConnectRequest {
-  @JsonProperty("client")
-  private final String client;
+public class WebSocketConnectRequest extends ConnectRequest implements WebSocketRequest {
+  private final long id;
 
   @JsonCreator
-  protected WebSocketConnectRequest(@JsonProperty("id") long id, @JsonProperty("client") String client) {
-    super(id);
-    this.client = client;
+  public WebSocketConnectRequest(
+    @JsonProperty("id") long id,
+    @JsonProperty("client") String client) {
+    super(client);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.CONNECT_REQUEST;
+    return Types.CONNECT_REQUEST;
   }
 
   @Override
   @JsonGetter("client")
   public String client() {
-    return client;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), client);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    return object instanceof WebSocketConnectRequest && ((WebSocketConnectRequest) object).client.equals(client);
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
+    return super.client();
   }
 
   /**
-   * Register client request builder.
+   * Web socket connect request builder.
    */
-  public static class Builder extends AbstractWebSocketRequest.Builder<ConnectRequest.Builder, ConnectRequest> implements ConnectRequest.Builder {
-    private String client;
+  public static class Builder extends ConnectRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withClient(String client) {
-      this.client = Assert.notNull(client, "client");
-      return this;
+      this.id = id;
     }
 
     @Override

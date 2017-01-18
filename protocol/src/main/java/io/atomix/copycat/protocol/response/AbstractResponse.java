@@ -13,56 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol.websocket.response;
+package io.atomix.copycat.protocol.response;
 
-import com.fasterxml.jackson.annotation.JsonGetter;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.response.ProtocolResponse;
-
-import java.util.Objects;
 
 /**
- * Base response for all client responses.
+ * Abstract local response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public abstract class AbstractWebSocketResponse implements WebSocketResponse {
-  @JsonProperty("id")
-  protected final long id;
-  @JsonProperty("status")
+public abstract class AbstractResponse implements ProtocolResponse {
   protected final Status status;
-  @JsonProperty("error")
   protected final CopycatError error;
 
-  protected AbstractWebSocketResponse(long id, Status status, CopycatError error) {
-    this.id = id;
-    this.status = status;
+  public AbstractResponse(Status status, CopycatError error) {
+    this.status = Assert.notNull(status, "status");
     this.error = error;
   }
 
   @Override
-  @JsonGetter("id")
-  public long id() {
-    return id;
-  }
-
-  @Override
-  @JsonGetter("status")
   public Status status() {
     return status;
   }
 
   @Override
-  @JsonGetter("error")
   public CopycatError error() {
     return error;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s]", getClass().getCanonicalName(), status);
   }
 
   /**
@@ -72,13 +49,8 @@ public abstract class AbstractWebSocketResponse implements WebSocketResponse {
    * @param <U> The response type.
    */
   protected static abstract class Builder<T extends ProtocolResponse.Builder<T, U>, U extends ProtocolResponse> implements ProtocolResponse.Builder<T, U> {
-    protected long id;
     protected Status status = Status.OK;
     protected CopycatError error;
-
-    public Builder(long id) {
-      this.id = id;
-    }
 
     @Override
     @SuppressWarnings("unchecked")
@@ -92,21 +64,6 @@ public abstract class AbstractWebSocketResponse implements WebSocketResponse {
     public T withError(CopycatError error) {
       this.error = Assert.notNull(error, "error");
       return (T) this;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(id);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      return getClass().isAssignableFrom(object.getClass()) && ((Builder) object).id == id;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[response=%s]", getClass().getCanonicalName(), id);
     }
   }
 }

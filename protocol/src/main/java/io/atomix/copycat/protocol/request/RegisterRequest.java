@@ -15,6 +15,10 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
+
+import java.util.Objects;
+
 /**
  * Register session request.
  * <p>
@@ -26,26 +30,58 @@ package io.atomix.copycat.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface RegisterRequest extends ProtocolRequest {
+public class RegisterRequest extends AbstractRequest {
+  protected final String client;
+  protected final long timeout;
+
+  protected RegisterRequest(String client, long timeout) {
+    this.client = Assert.notNull(client, "client");
+    this.timeout = Assert.arg(timeout, timeout >= -1, "timeout must be -1 or greater");
+  }
 
   /**
    * Returns the client ID.
    *
    * @return The client ID.
    */
-  String client();
+  public String client() {
+    return client;
+  }
 
   /**
    * Returns the client session timeout.
    *
    * @return The client session timeout.
    */
-  long timeout();
+  public long timeout() {
+    return timeout;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), client);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof RegisterRequest) {
+      RegisterRequest request = (RegisterRequest) object;
+      return request.client.equals(client) && request.timeout == timeout;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
+  }
 
   /**
    * Register client request builder.
    */
-  interface Builder extends ProtocolRequest.Builder<Builder, RegisterRequest> {
+  public static class Builder extends AbstractRequest.Builder<RegisterRequest.Builder, RegisterRequest> {
+    protected String client;
+    protected long timeout;
 
     /**
      * Sets the client ID.
@@ -54,7 +90,10 @@ public interface RegisterRequest extends ProtocolRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code client} is null
      */
-    Builder withClient(String client);
+    public Builder withClient(String client) {
+      this.client = Assert.notNull(client, "client");
+      return this;
+    }
 
     /**
      * Sets the client session timeout.
@@ -63,7 +102,14 @@ public interface RegisterRequest extends ProtocolRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if the timeout is not {@code -1} or a positive number
      */
-    Builder withTimeout(long timeout);
-  }
+    public Builder withTimeout(long timeout) {
+      this.timeout = Assert.arg(timeout, timeout >= -1, "timeout must be -1 or greater");
+      return this;
+    }
 
+    @Override
+    public RegisterRequest build() {
+      return new RegisterRequest(client, timeout);
+    }
+  }
 }

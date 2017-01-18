@@ -15,7 +15,10 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
+
+import java.util.Objects;
 
 /**
  * Session keep alive request.
@@ -30,26 +33,61 @@ import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface KeepAliveRequest extends SessionRequest {
+public class KeepAliveRequest extends SessionRequest {
+  protected final long commandSequence;
+  protected final long eventIndex;
+
+  protected KeepAliveRequest(long session, long commandSequence, long eventIndex) {
+    super(session);
+    this.commandSequence = Assert.argNot(commandSequence, commandSequence < 0, "commandSequence cannot be negative");
+    this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
+  }
 
   /**
    * Returns the command sequence number.
    *
    * @return The command sequence number.
    */
-  long commandSequence();
+  public long commandSequence() {
+    return commandSequence;
+  }
 
   /**
    * Returns the event index.
    *
    * @return The event index.
    */
-  long eventIndex();
+  public long eventIndex() {
+    return eventIndex;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), session, commandSequence);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof KeepAliveRequest) {
+      KeepAliveRequest request = (KeepAliveRequest) object;
+      return request.session == session
+        && request.commandSequence == commandSequence
+        && request.eventIndex == eventIndex;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
+  }
 
   /**
    * Keep alive request builder.
    */
-  interface Builder extends SessionRequest.Builder<Builder, KeepAliveRequest> {
+  public static class Builder extends SessionRequest.Builder<KeepAliveRequest.Builder, KeepAliveRequest> {
+    protected long commandSequence;
+    protected long eventIndex;
 
     /**
      * Sets the command sequence number.
@@ -58,7 +96,10 @@ public interface KeepAliveRequest extends SessionRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if {@code commandSequence} is less than 0
      */
-    Builder withCommandSequence(long commandSequence);
+    public Builder withCommandSequence(long commandSequence) {
+      this.commandSequence = Assert.argNot(commandSequence, commandSequence < 0, "commandSequence cannot be negative");
+      return this;
+    }
 
     /**
      * Sets the event index.
@@ -67,7 +108,14 @@ public interface KeepAliveRequest extends SessionRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if {@code eventIndex} is less than 0
      */
-    Builder withEventIndex(long eventIndex);
-  }
+    public Builder withEventIndex(long eventIndex) {
+      this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
+      return this;
+    }
 
+    @Override
+    public KeepAliveRequest build() {
+      return new KeepAliveRequest(session, commandSequence, eventIndex);
+    }
+  }
 }

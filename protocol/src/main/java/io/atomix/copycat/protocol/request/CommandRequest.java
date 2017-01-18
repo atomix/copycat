@@ -15,7 +15,10 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
+
+import java.util.Objects;
 
 /**
  * Client command request.
@@ -33,22 +36,54 @@ import io.atomix.copycat.Command;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface CommandRequest extends OperationRequest {
+public class CommandRequest extends OperationRequest {
+  protected final Command command;
+
+  protected CommandRequest(long session, long sequence, Command command) {
+    super(session, sequence);
+    this.command = Assert.notNull(command, "command");
+  }
 
   /**
    * Returns the command.
    *
    * @return The command.
    */
-  Command command();
+  public Command command() {
+    return command;
+  }
 
   @Override
-  Command operation();
+  public Command operation() {
+    return command;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), session, sequence, command);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof CommandRequest) {
+      CommandRequest request = (CommandRequest) object;
+      return request.session == session
+        && request.sequence == sequence
+        && request.command.equals(command);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[session=%d, sequence=%d, command=%s]", getClass().getSimpleName(), session, sequence, command);
+  }
 
   /**
    * Write request builder.
    */
-  interface Builder extends OperationRequest.Builder<Builder, CommandRequest> {
+  public static class Builder extends OperationRequest.Builder<CommandRequest.Builder, CommandRequest> {
+    protected Command command;
 
     /**
      * Sets the request command.
@@ -57,7 +92,14 @@ public interface CommandRequest extends OperationRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code command} is null
      */
-    Builder withCommand(Command command);
-  }
+    public Builder withCommand(Command command) {
+      this.command = Assert.notNull(command, "command");
+      return this;
+    }
 
+    @Override
+    public CommandRequest build() {
+      return new CommandRequest(session, sequence, command);
+    }
+  }
 }

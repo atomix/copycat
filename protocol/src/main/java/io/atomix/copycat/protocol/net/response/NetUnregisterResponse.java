@@ -20,24 +20,23 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.UnregisterResponse;
-import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
-import io.atomix.copycat.protocol.websocket.request.WebSocketUnregisterRequest;
-
-import java.util.Objects;
 
 /**
- * Session unregister response.
- * <p>
- * Session unregister responses are sent in response to a {@link WebSocketUnregisterRequest}.
- * If the response is successful, that indicates the session was successfully unregistered. For unsuccessful
- * unregister requests, sessions can still be expired by simply haulting {@link WebSocketKeepAliveRequest}s
- * to the cluster.
+ * TCP unregister response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetUnregisterResponse extends NetSessionResponse implements UnregisterResponse {
-  protected NetUnregisterResponse(long id, Status status, CopycatError error) {
-    super(id, status, error);
+public class NetUnregisterResponse extends UnregisterResponse implements NetResponse {
+  private final long id;
+
+  public NetUnregisterResponse(long id, Status status, CopycatError error) {
+    super(status, error);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -45,31 +44,14 @@ public class NetUnregisterResponse extends NetSessionResponse implements Unregis
     return Types.UNREGISTER_RESPONSE;
   }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetUnregisterResponse) {
-      NetUnregisterResponse response = (NetUnregisterResponse) object;
-      return response.status == status;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
-  }
-
   /**
-   * Status response builder.
+   * TCP unregister response builder.
    */
-  public static class Builder extends NetSessionResponse.Builder<UnregisterResponse.Builder, UnregisterResponse> implements UnregisterResponse.Builder {
+  public static class Builder extends UnregisterResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
@@ -81,7 +63,7 @@ public class NetUnregisterResponse extends NetSessionResponse implements Unregis
   /**
    * Unregister response serializer.
    */
-  public static class Serializer extends NetSessionResponse.Serializer<NetUnregisterResponse> {
+  public static class Serializer extends NetResponse.Serializer<NetUnregisterResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetUnregisterResponse response) {
       output.writeLong(response.id);

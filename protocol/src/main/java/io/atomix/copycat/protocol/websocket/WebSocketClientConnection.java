@@ -50,15 +50,13 @@ public class WebSocketClientConnection extends AbstractWebSocketConnection<WebSo
 
   @Override
   protected void onRequest(WebSocketRequest request) {
-    switch (request.type()) {
-      case PUBLISH_REQUEST:
-        publishListener.onRequest((PublishRequest) request, new WebSocketPublishResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketPublishResponse) response);
-            }
-          });
-        break;
+    if (request.type() == WebSocketRequest.Types.PUBLISH_REQUEST) {
+      publishListener.onRequest((PublishRequest) request, new WebSocketPublishResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketPublishResponse) response);
+          }
+        });
     }
   }
 

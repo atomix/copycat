@@ -18,79 +18,65 @@ package io.atomix.copycat.protocol.websocket.response;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.PublishResponse;
 
-import java.util.Objects;
-
 /**
- * Event publish response.
- * <p>
- * Publish responses are sent by clients to servers to indicate the last successful index for which
- * an event message was handled in proper sequence. If the client receives an event message out of
- * sequence, it should respond with the index of the last event it received in sequence. If an event
- * message is received in sequence, it should respond with the index of that event. Once a client has
- * responded successfully to an event message, it will be removed from memory on the cluster.
+ * Web socket publish response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketPublishResponse extends WebSocketSessionResponse implements PublishResponse {
-  @JsonProperty("index")
-  private final long index;
+public class WebSocketPublishResponse extends PublishResponse implements WebSocketResponse {
+  private final long id;
 
   @JsonCreator
-  protected WebSocketPublishResponse(@JsonProperty("id") long id, @JsonProperty("status") Status status, @JsonProperty("error") CopycatError error, @JsonProperty("index") long index) {
-    super(id, status, error);
-    this.index = index;
+  public WebSocketPublishResponse(
+    @JsonProperty("id") long id,
+    @JsonProperty("status") Status status,
+    @JsonProperty("error") CopycatError error,
+    @JsonProperty("index") long index) {
+    super(status, error, index);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.PUBLISH_RESPONSE;
+    return Types.PUBLISH_RESPONSE;
+  }
+
+  @Override
+  @JsonGetter("status")
+  public Status status() {
+    return super.status();
+  }
+
+  @Override
+  @JsonGetter("error")
+  public CopycatError error() {
+    return super.error();
   }
 
   @Override
   @JsonGetter("index")
   public long index() {
-    return index;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof WebSocketPublishResponse) {
-      WebSocketPublishResponse response = (WebSocketPublishResponse) object;
-      return response.status == status
-        && response.index == index;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, error=%s, index=%d]", getClass().getSimpleName(), status, error, index);
+    return super.index();
   }
 
   /**
-   * Publish response builder.
+   * Web socket publish response builder.
    */
-  public static class Builder extends WebSocketSessionResponse.Builder<PublishResponse.Builder, PublishResponse> implements PublishResponse.Builder {
-    private long index;
+  public static class Builder extends PublishResponse.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withIndex(long index) {
-      this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
-      return this;
+      this.id = id;
     }
 
     @Override

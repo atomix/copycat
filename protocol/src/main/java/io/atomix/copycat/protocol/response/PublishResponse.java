@@ -15,6 +15,11 @@
  */
 package io.atomix.copycat.protocol.response;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
+
+import java.util.Objects;
+
 /**
  * Event publish response.
  * <p>
@@ -26,19 +31,48 @@ package io.atomix.copycat.protocol.response;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface PublishResponse extends SessionResponse {
+public class PublishResponse extends SessionResponse {
+  protected final long index;
+
+  protected PublishResponse(Status status, CopycatError error, long index) {
+    super(status, error);
+    this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
+  }
 
   /**
    * Returns the event index.
    *
    * @return The event index.
    */
-  long index();
+  public long index() {
+    return index;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof PublishResponse) {
+      PublishResponse response = (PublishResponse) object;
+      return response.status == status
+        && response.index == index;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s, error=%s, index=%d]", getClass().getSimpleName(), status, error, index);
+  }
 
   /**
    * Publish response builder.
    */
-  interface Builder extends SessionResponse.Builder<Builder, PublishResponse> {
+  public static class Builder extends SessionResponse.Builder<PublishResponse.Builder, PublishResponse> {
+    protected long index;
 
     /**
      * Sets the event index.
@@ -47,7 +81,14 @@ public interface PublishResponse extends SessionResponse {
      * @return The response builder.
      * @throws IllegalArgumentException if {@code index} is less than {@code 1}
      */
-    Builder withIndex(long index);
-  }
+    public Builder withIndex(long index) {
+      this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
+      return this;
+    }
 
+    @Override
+    public PublishResponse build() {
+      return new PublishResponse(status, error, index);
+    }
+  }
 }

@@ -57,55 +57,48 @@ public class WebSocketServerConnection extends AbstractWebSocketConnection<Serve
 
   @Override
   protected void onRequest(WebSocketRequest request) {
-    switch (request.type()) {
-      case CONNECT_REQUEST:
-        connectListener.onRequest((ConnectRequest) request, new WebSocketConnectResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketConnectResponse) response);
-            }
-          });
-        break;
-      case REGISTER_REQUEST:
-        registerListener.onRequest((RegisterRequest) request, new WebSocketRegisterResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketRegisterResponse) response);
-            }
-          });
-        break;
-      case KEEP_ALIVE_REQUEST:
-        keepAliveListener.onRequest((KeepAliveRequest) request, new WebSocketKeepAliveResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketKeepAliveResponse) response);
-            }
-          });
-        break;
-      case UNREGISTER_REQUEST:
-        unregisterListener.onRequest((UnregisterRequest) request, new WebSocketUnregisterResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketUnregisterResponse) response);
-            }
-          });
-        break;
-      case COMMAND_REQUEST:
-        commandListener.onRequest((CommandRequest) request, new WebSocketCommandResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketCommandResponse) response);
-            }
-          });
-        break;
-      case QUERY_REQUEST:
-        queryListener.onRequest((QueryRequest) request, new WebSocketQueryResponse.Builder(request.id()))
-          .whenComplete((response, error) -> {
-            if (error == null) {
-              sendResponse((WebSocketQueryResponse) response);
-            }
-          });
-        break;
+    if (request.type() == WebSocketRequest.Types.CONNECT_REQUEST) {
+      connectListener.onRequest((ConnectRequest) request, new WebSocketConnectResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketConnectResponse) response);
+          }
+        });
+    } else if (request.type() == WebSocketRequest.Types.REGISTER_REQUEST) {
+      registerListener.onRequest((RegisterRequest) request, new WebSocketRegisterResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketRegisterResponse) response);
+          }
+        });
+    } else if (request.type() == WebSocketRequest.Types.KEEP_ALIVE_REQUEST) {
+      keepAliveListener.onRequest((KeepAliveRequest) request, new WebSocketKeepAliveResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketKeepAliveResponse) response);
+          }
+        });
+    } else if (request.type() == WebSocketRequest.Types.UNREGISTER_REQUEST) {
+      unregisterListener.onRequest((UnregisterRequest) request, new WebSocketUnregisterResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketUnregisterResponse) response);
+          }
+        });
+    } else if (request.type() == WebSocketRequest.Types.COMMAND_REQUEST) {
+      commandListener.onRequest((CommandRequest) request, new WebSocketCommandResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketCommandResponse) response);
+          }
+        });
+    } else if (request.type() == WebSocketRequest.Types.QUERY_REQUEST) {
+      queryListener.onRequest((QueryRequest) request, new WebSocketQueryResponse.Builder(request.id()))
+        .whenComplete((response, error) -> {
+          if (error == null) {
+            sendResponse((WebSocketQueryResponse) response);
+          }
+        });
     }
   }
 

@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.protocol.response;
 
+import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
 
 /**
@@ -30,12 +31,18 @@ import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface QueryResponse extends OperationResponse {
+public class QueryResponse extends OperationResponse {
+  protected QueryResponse(Status status, CopycatError error, long index, long eventIndex, Object result) {
+    super(status, error, index, eventIndex, result);
+  }
 
   /**
    * Query response builder.
    */
-  interface Builder extends OperationResponse.Builder<Builder, QueryResponse> {
+  public static class Builder extends OperationResponse.Builder<QueryResponse.Builder, QueryResponse> {
+    @Override
+    public QueryResponse build() {
+      return new QueryResponse(status, error, index, eventIndex, result);
+    }
   }
-
 }

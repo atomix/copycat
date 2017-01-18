@@ -15,10 +15,13 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.request.WebSocketRegisterRequest;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.websocket.request.WebSocketRegisterRequest;
 
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * Session register response.
@@ -31,40 +34,89 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface RegisterResponse extends ProtocolResponse {
+public class RegisterResponse extends AbstractResponse {
+  protected final long session;
+  protected final Address leader;
+  protected final Collection<Address> members;
+  protected final long timeout;
+
+  protected RegisterResponse(Status status, CopycatError error, long session, Address leader, Collection<Address> members, long timeout) {
+    super(status, error);
+    this.session = Assert.argNot(session, session < 1, "session must be positive");
+    this.leader = leader;
+    this.members = Assert.notNull(members, "members");
+    this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
+  }
 
   /**
    * Returns the registered session ID.
    *
    * @return The registered session ID.
    */
-  long session();
+  public long session() {
+    return session;
+  }
 
   /**
    * Returns the cluster leader.
    *
    * @return The cluster leader.
    */
-  Address leader();
+  public Address leader() {
+    return leader;
+  }
 
   /**
    * Returns the cluster members.
    *
    * @return The cluster members.
    */
-  Collection<Address> members();
+  public Collection<Address> members() {
+    return members;
+  }
 
   /**
    * Returns the client session timeout.
    *
    * @return The client session timeout.
    */
-  long timeout();
+  public long timeout() {
+    return timeout;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status, session, leader, members);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof RegisterResponse) {
+      RegisterResponse response = (RegisterResponse) object;
+      return response.status == status
+        && response.session == session
+        && ((response.leader == null && leader == null)
+        || (response.leader != null && leader != null && response.leader.equals(leader)))
+        && ((response.members == null && members == null)
+        || (response.members != null && members != null && response.members.equals(members)))
+        && response.timeout == timeout;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s, session=%d, leader=%s, members=%s]", getClass().getSimpleName(), status, session, leader, members);
+  }
 
   /**
    * Register response builder.
    */
-  interface Builder extends ProtocolResponse.Builder<Builder, RegisterResponse> {
+  public static class Builder extends AbstractResponse.Builder<RegisterResponse.Builder, RegisterResponse> {
+    protected long session;
+    protected Address leader;
+    protected Collection<Address> members;
+    protected long timeout;
 
     /**
      * Sets the response session ID.
@@ -73,7 +125,10 @@ public interface RegisterResponse extends ProtocolResponse {
      * @return The register response builder.
      * @throws IllegalArgumentException if {@code session} is less than 1
      */
-    Builder withSession(long session);
+    public Builder withSession(long session) {
+      this.session = Assert.argNot(session, session < 1, "session must be positive");
+      return this;
+    }
 
     /**
      * Sets the response leader.
@@ -81,7 +136,10 @@ public interface RegisterResponse extends ProtocolResponse {
      * @param leader The response leader.
      * @return The response builder.
      */
-    Builder withLeader(Address leader);
+    public Builder withLeader(Address leader) {
+      this.leader = leader;
+      return this;
+    }
 
     /**
      * Sets the response members.
@@ -90,7 +148,10 @@ public interface RegisterResponse extends ProtocolResponse {
      * @return The response builder.
      * @throws NullPointerException if {@code members} is null
      */
-    Builder withMembers(Collection<Address> members);
+    public Builder withMembers(Collection<Address> members) {
+      this.members = Assert.notNull(members, "members");
+      return this;
+    }
 
     /**
      * Sets the session timeout.
@@ -99,7 +160,14 @@ public interface RegisterResponse extends ProtocolResponse {
      * @return The register response builder.
      * @throws IllegalArgumentException if the session timeout is not positive
      */
-    Builder withTimeout(long timeout);
-  }
+    public Builder withTimeout(long timeout) {
+      this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
+      return this;
+    }
 
+    @Override
+    public RegisterResponse build() {
+      return new RegisterResponse(status, error, session, leader, members, timeout);
+    }
+  }
 }

@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Operation;
 
 /**
@@ -28,26 +29,35 @@ import io.atomix.copycat.Operation;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface OperationRequest extends SessionRequest {
+public abstract class OperationRequest extends SessionRequest {
+  protected final long sequence;
+
+  protected OperationRequest(long session, long sequence) {
+    super(session);
+    this.sequence = Assert.argNot(sequence, sequence < 0, "sequence must be positive");
+  }
 
   /**
    * Returns the request sequence number.
    *
    * @return The request sequence number.
    */
-  long sequence();
+  public long sequence() {
+    return sequence;
+  }
 
   /**
    * Returns the request operation.
    *
    * @return The request operation.
    */
-  Operation operation();
+  public abstract Operation operation();
 
   /**
    * Operation request builder.
    */
-  interface Builder<T extends Builder<T, U>, U extends OperationRequest> extends SessionRequest.Builder<T, U> {
+  public static abstract class Builder<T extends OperationRequest.Builder<T, U>, U extends OperationRequest> extends SessionRequest.Builder<T, U> {
+    protected long sequence;
 
     /**
      * Sets the request sequence number.
@@ -56,7 +66,10 @@ public interface OperationRequest extends SessionRequest {
      * @return The request builder.
      * @throws IllegalArgumentException If the request sequence number is not positive.
      */
-    T withSequence(long sequence);
+    @SuppressWarnings("unchecked")
+    public T withSequence(long sequence) {
+      this.sequence = Assert.argNot(sequence, sequence < 0, "sequence must be positive");
+      return (T) this;
+    }
   }
-
 }

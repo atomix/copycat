@@ -13,14 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol.local.response;
-
-import io.atomix.copycat.protocol.response.ProtocolResponse;
+package io.atomix.copycat.protocol.request;
 
 /**
- * Local response.
+ * Abstract local request.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface LocalResponse extends ProtocolResponse {
+public class AbstractRequest implements ProtocolRequest {
+
+  /**
+   * Abstract request builder.
+   *
+   * @param <T> The builder type.
+   * @param <U> The request type.
+   */
+  protected static abstract class Builder<T extends ProtocolRequest.Builder<T, U>, U extends ProtocolRequest> implements ProtocolRequest.Builder<T, U> {
+  }
+
 }

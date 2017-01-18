@@ -18,102 +18,75 @@ package io.atomix.copycat.protocol.websocket.response;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ConnectResponse;
 
 import java.util.Collection;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
- * Connect client response.
- * <p>
- * Connect responses are sent in response to a client establishing a new connection with a server.
- * Connect responses do not provide any additional metadata aside from whether or not the request
- * succeeded.
+ * Web socket connect response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketConnectResponse extends AbstractWebSocketResponse implements ConnectResponse {
-  @JsonProperty("leader")
-  private final Address leader;
-  @JsonProperty("members")
-  private final Collection<Address> members;
+public class WebSocketConnectResponse extends ConnectResponse implements WebSocketResponse {
+  private final long id;
 
   @JsonCreator
-  protected WebSocketConnectResponse(@JsonProperty("id") long id, @JsonProperty("status") Status status, @JsonProperty("error") CopycatError error, @JsonProperty("leader") String leader, @JsonProperty("members") Collection<String> members) {
-    this(id, status, error, new Address(leader), members.stream().map(Address::new).collect(Collectors.toList()));
-  }
-
-  protected WebSocketConnectResponse(long id, Status status, CopycatError error, Address leader, Collection<Address> members) {
-    super(id, status, error);
-    this.leader = leader;
-    this.members = members;
+  public WebSocketConnectResponse(
+    @JsonProperty("id") long id,
+    @JsonProperty("status") Status status,
+    @JsonProperty("error") CopycatError error,
+    @JsonProperty("leader") Address leader,
+    @JsonProperty("members") Collection<Address> members) {
+    super(status, error, leader, members);
+    this.id = id;
   }
 
   @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
+  }
+
+  @Override
+  @JsonGetter("type")
   public Type type() {
-    return Type.CONNECT_RESPONSE;
+    return Types.CONNECT_RESPONSE;
+  }
+
+  @Override
+  @JsonGetter("status")
+  public Status status() {
+    return super.status();
+  }
+
+  @Override
+  @JsonGetter("error")
+  public CopycatError error() {
+    return super.error();
   }
 
   @Override
   @JsonGetter("leader")
   public Address leader() {
-    return leader;
+    return super.leader();
   }
 
   @Override
   @JsonGetter("members")
   public Collection<Address> members() {
-    return members;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), status, leader, members);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof WebSocketConnectResponse) {
-      WebSocketConnectResponse response = (WebSocketConnectResponse) object;
-      return response.status == status
-        && ((response.leader == null && leader == null)
-        || (response.leader != null && leader != null && response.leader.equals(leader)))
-        && ((response.members == null && members == null)
-        || (response.members != null && members != null && response.members.equals(members)));
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[status=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, leader, members);
+    return super.members();
   }
 
   /**
-   * Connect response builder.
+   * Web socket connect response builder.
    */
-  public static class Builder extends AbstractWebSocketResponse.Builder<ConnectResponse.Builder, ConnectResponse> implements ConnectResponse.Builder {
-    private Address leader;
-    private Collection<Address> members;
+  public static class Builder extends ConnectResponse.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withLeader(Address leader) {
-      this.leader = leader;
-      return this;
-    }
-
-    @Override
-    public Builder withMembers(Collection<Address> members) {
-      this.members = Assert.notNull(members, "members");
-      return this;
+      this.id = id;
     }
 
     @Override

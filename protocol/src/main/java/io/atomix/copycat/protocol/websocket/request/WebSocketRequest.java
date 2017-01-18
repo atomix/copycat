@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.protocol.websocket.request;
 
+import com.fasterxml.jackson.annotation.JsonGetter;
 import io.atomix.copycat.protocol.request.ProtocolRequest;
 
 /**
@@ -27,7 +28,17 @@ public interface WebSocketRequest extends ProtocolRequest {
   /**
    * Protocol request type.
    */
-  enum Type {
+  interface Type {
+    /**
+     * Returns the request type class.
+     */
+    Class<? extends WebSocketRequest> type();
+  }
+
+  /**
+   * Protocol request type.
+   */
+  enum Types implements Type {
     CONNECT_REQUEST(WebSocketConnectRequest.class),
     REGISTER_REQUEST(WebSocketRegisterRequest.class),
     KEEP_ALIVE_REQUEST(WebSocketKeepAliveRequest.class),
@@ -38,15 +49,11 @@ public interface WebSocketRequest extends ProtocolRequest {
 
     private final Class<? extends WebSocketRequest> type;
 
-    Type(Class<? extends WebSocketRequest> type) {
+    Types(Class<? extends WebSocketRequest> type) {
       this.type = type;
     }
 
-    /**
-     * Returns the request type class.
-     *
-     * @return The request type class.
-     */
+    @Override
     public Class<? extends WebSocketRequest> type() {
       return type;
     }
@@ -78,6 +85,7 @@ public interface WebSocketRequest extends ProtocolRequest {
    *
    * @return The request ID.
    */
+  @JsonGetter("id")
   long id();
 
   /**
@@ -85,6 +93,7 @@ public interface WebSocketRequest extends ProtocolRequest {
    *
    * @return The request type.
    */
+  @JsonGetter("type")
   Type type();
 
   /**
@@ -94,5 +103,4 @@ public interface WebSocketRequest extends ProtocolRequest {
    */
   interface Builder<T extends Builder<T, U>, U extends WebSocketRequest> extends ProtocolRequest.Builder<T, U> {
   }
-
 }

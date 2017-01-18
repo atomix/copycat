@@ -18,93 +18,57 @@ package io.atomix.copycat.protocol.websocket.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.request.RegisterRequest;
 
-import java.util.Objects;
-
 /**
- * Register session request.
- * <p>
- * Clients submit register requests to a Copycat cluster to create a new session. Register requests
- * can be submitted to any server in the cluster and will be proxied to the leader. The session will
- * be associated with the provided {@link #client()} ID such that servers can associate client connections
- * with the session. Once the registration is complete, the client must send {@link WebSocketKeepAliveRequest}s to
- * maintain its session with the cluster.
+ * Web socket register request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketRegisterRequest extends AbstractWebSocketRequest implements RegisterRequest {
-  @JsonProperty("client")
-  private final String client;
-  @JsonProperty("timeout")
-  private final long timeout;
+public class WebSocketRegisterRequest extends RegisterRequest implements WebSocketRequest {
+  private final long id;
 
   @JsonCreator
-  protected WebSocketRegisterRequest(@JsonProperty("id") long id, @JsonProperty("client") String client, @JsonProperty("timeout") long timeout) {
-    super(id);
-    this.client = client;
-    this.timeout = timeout;
+  public WebSocketRegisterRequest(
+    @JsonProperty("id") long id,
+    @JsonProperty("client") String client,
+    @JsonProperty("timeout") long timeout) {
+    super(client, timeout);
+    this.id = id;
+  }
+
+  @Override
+  @JsonGetter("id")
+  public long id() {
+    return id;
   }
 
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Type.REGISTER_REQUEST;
+    return Types.REGISTER_REQUEST;
   }
 
   @Override
   @JsonGetter("client")
   public String client() {
-    return client;
+    return super.client();
   }
 
   @Override
   @JsonGetter("timeout")
   public long timeout() {
-    return timeout;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), client);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof WebSocketRegisterRequest) {
-      WebSocketRegisterRequest request = (WebSocketRegisterRequest) object;
-      return request.client.equals(client) && request.timeout == timeout;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
+    return super.timeout();
   }
 
   /**
-   * Register client request builder.
+   * Web socket register request builder.
    */
-  public static class Builder extends AbstractWebSocketRequest.Builder<RegisterRequest.Builder, RegisterRequest> implements RegisterRequest.Builder {
-    private String client;
-    private long timeout;
+  public static class Builder extends RegisterRequest.Builder {
+    private final long id;
 
     public Builder(long id) {
-      super(id);
-    }
-
-    @Override
-    public Builder withClient(String client) {
-      this.client = Assert.notNull(client, "client");
-      return this;
-    }
-
-    @Override
-    public Builder withTimeout(long timeout) {
-      this.timeout = Assert.arg(timeout, timeout >= -1, "timeout must be -1 or greater");
-      return this;
+      this.id = id;
     }
 
     @Override

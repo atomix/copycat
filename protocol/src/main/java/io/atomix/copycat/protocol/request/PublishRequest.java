@@ -18,8 +18,8 @@ package io.atomix.copycat.protocol.request;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.session.Event;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Event publish request.
@@ -33,33 +33,74 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface PublishRequest extends SessionRequest {
+public class PublishRequest extends SessionRequest {
+  protected final long eventIndex;
+  protected final long previousIndex;
+  protected final List<Event<?>> events;
+
+  protected PublishRequest(long session, long eventIndex, long previousIndex, List<Event<?>> events) {
+    super(session);
+    this.eventIndex = Assert.argNot(eventIndex, eventIndex < 1, "eventIndex cannot be less than 1");
+    this.previousIndex = Assert.argNot(previousIndex, previousIndex < 0, "previousIndex cannot be less than 0");
+    this.events = Assert.notNull(events, "events");
+  }
 
   /**
    * Returns the event index.
    *
    * @return The event index.
    */
-  long eventIndex();
+  public long eventIndex() {
+    return eventIndex;
+  }
 
   /**
    * Returns the previous event index.
    *
    * @return The previous event index.
    */
-  long previousIndex();
+  public long previousIndex() {
+    return previousIndex;
+  }
 
   /**
    * Returns the request events.
    *
    * @return The request events.
    */
-  List<Event<?>> events();
+  public List<Event<?>> events() {
+    return events;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), session, eventIndex, previousIndex, events);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof PublishRequest) {
+      PublishRequest request = (PublishRequest) object;
+      return request.session == session
+        && request.eventIndex == eventIndex
+        && request.previousIndex == previousIndex
+        && request.events.equals(events);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[session=%d, eventIndex=%d, previousIndex=%d, events=%s]", getClass().getSimpleName(), session, eventIndex, previousIndex, events);
+  }
 
   /**
    * Publish request builder.
    */
-  interface Builder extends SessionRequest.Builder<Builder, PublishRequest> {
+  public static class Builder extends SessionRequest.Builder<PublishRequest.Builder, PublishRequest> {
+    protected long eventIndex;
+    protected long previousIndex;
+    protected List<Event<?>> events;
 
     /**
      * Sets the event index.
@@ -68,7 +109,10 @@ public interface PublishRequest extends SessionRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if {@code index} is less than 1
      */
-    Builder withEventIndex(long index);
+    public Builder withEventIndex(long index) {
+      this.eventIndex = Assert.argNot(index, index < 1, "index cannot be less than 1");
+      return this;
+    }
 
     /**
      * Sets the previous event index.
@@ -77,16 +121,9 @@ public interface PublishRequest extends SessionRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if {@code index} is less than 1
      */
-    Builder withPreviousIndex(long index);
-
-    /**
-     * Sets the request events.
-     *
-     * @param events The request events.
-     * @return The publish request builder.
-     */
-    default Builder withEvents(Event<?>... events) {
-      return withEvents(Arrays.asList(Assert.notNull(events, "events")));
+    public Builder withPreviousIndex(long index) {
+      this.previousIndex = Assert.argNot(index, index < 0, "index cannot be less than 0");
+      return this;
     }
 
     /**
@@ -95,7 +132,14 @@ public interface PublishRequest extends SessionRequest {
      * @param events The request events.
      * @return The publish request builder.
      */
-    Builder withEvents(List<Event<?>> events);
-  }
+    public Builder withEvents(List<Event<?>> events) {
+      this.events = Assert.notNull(events, "events");
+      return this;
+    }
 
+    @Override
+    public PublishRequest build() {
+      return new PublishRequest(session, eventIndex, previousIndex, events);
+    }
+  }
 }

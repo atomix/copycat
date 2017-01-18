@@ -20,20 +20,22 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.UnregisterRequest;
 
-import java.util.Objects;
-
 /**
- * Session unregister request.
- * <p>
- * The unregister request is sent by a client with an open session to the cluster to explicitly
- * unregister its session. Note that if a client does not send an unregister request, its session will
- * eventually expire. The unregister request simply provides a more orderly method for closing client sessions.
+ * TCP unregister request.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetUnregisterRequest extends NetSessionRequest implements UnregisterRequest {
-  protected NetUnregisterRequest(long id, long session) {
-    super(id, session);
+public class NetUnregisterRequest extends UnregisterRequest implements NetRequest {
+  private final long id;
+
+  public NetUnregisterRequest(long id, long session) {
+    super(session);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -41,31 +43,14 @@ public class NetUnregisterRequest extends NetSessionRequest implements Unregiste
     return Types.UNREGISTER_REQUEST;
   }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(getClass(), session);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof NetUnregisterRequest) {
-      NetUnregisterRequest request = (NetUnregisterRequest) object;
-      return request.session == session;
-    }
-    return false;
-  }
-
-  @Override
-  public String toString() {
-    return String.format("%s[session=%d]", getClass().getSimpleName(), session);
-  }
-
   /**
-   * Unregister request builder.
+   * TCP unregister request builder.
    */
-  public static class Builder extends NetSessionRequest.Builder<UnregisterRequest.Builder, UnregisterRequest> implements UnregisterRequest.Builder {
+  public static class Builder extends UnregisterRequest.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
@@ -77,7 +62,7 @@ public class NetUnregisterRequest extends NetSessionRequest implements Unregiste
   /**
    * Unregister request serializer.
    */
-  public static class Serializer extends NetSessionRequest.Serializer<NetUnregisterRequest> {
+  public static class Serializer extends NetRequest.Serializer<NetUnregisterRequest> {
     @Override
     public void write(Kryo kryo, Output output, NetUnregisterRequest request) {
       output.writeLong(request.id);

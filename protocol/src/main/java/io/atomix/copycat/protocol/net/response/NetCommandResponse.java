@@ -20,24 +20,23 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.CommandResponse;
-import io.atomix.copycat.protocol.websocket.request.WebSocketCommandRequest;
 
 /**
- * Client command response.
- * <p>
- * Command responses are sent by servers to clients upon the completion of a
- * {@link WebSocketCommandRequest}. Command responses are sent with the
- * {@link #index()} (or index) of the state machine at the point at which the command was evaluated.
- * This can be used by the client to ensure it sees state progress monotonically. Note, however, that
- * command responses may not be sent or received in sequential order. If a command response has to await
- * the completion of an event, or if the response is proxied through another server, responses may be
- * received out of order. Clients should resequence concurrent responses to ensure they're handled in FIFO order.
+ * TCP command response.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetCommandResponse extends NetOperationResponse implements CommandResponse {
-  protected NetCommandResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
-    super(id, status, error, index, eventIndex, result);
+public class NetCommandResponse extends CommandResponse implements NetResponse {
+  private final long id;
+
+  public NetCommandResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
+    super(status, error, index, eventIndex, result);
+    this.id = id;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override
@@ -46,11 +45,13 @@ public class NetCommandResponse extends NetOperationResponse implements CommandR
   }
 
   /**
-   * Command response builder.
+   * TCP command response builder.
    */
-  public static class Builder extends NetOperationResponse.Builder<CommandResponse.Builder, CommandResponse> implements CommandResponse.Builder {
+  public static class Builder extends CommandResponse.Builder {
+    private final long id;
+
     public Builder(long id) {
-      super(id);
+      this.id = id;
     }
 
     @Override
@@ -62,7 +63,7 @@ public class NetCommandResponse extends NetOperationResponse implements CommandR
   /**
    * Command response serializer.
    */
-  public static class Serializer extends NetOperationResponse.Serializer<NetCommandResponse> {
+  public static class Serializer extends NetResponse.Serializer<NetCommandResponse> {
     @Override
     public void write(Kryo kryo, Output output, NetCommandResponse response) {
       output.writeLong(response.id);

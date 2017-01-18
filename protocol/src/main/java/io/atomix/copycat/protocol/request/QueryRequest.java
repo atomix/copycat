@@ -15,8 +15,11 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
+
+import java.util.Objects;
 
 /**
  * Client query request.
@@ -37,29 +40,66 @@ import io.atomix.copycat.Query;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface QueryRequest extends OperationRequest {
+public class QueryRequest extends OperationRequest {
+  protected final long index;
+  protected final Query query;
+
+  protected QueryRequest(long session, long sequence, long index, Query query) {
+    super(session, sequence);
+    this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
+    this.query = Assert.notNull(query, "query");
+  }
 
   /**
    * Returns the query index.
    *
    * @return The query index.
    */
-  long index();
+  public long index() {
+    return index;
+  }
 
   /**
    * Returns the query.
    *
    * @return The query.
    */
-  Query query();
+  public Query query() {
+    return query;
+  }
 
   @Override
-  Operation operation();
+  public Operation operation() {
+    return query;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), session, sequence, index, query);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof QueryRequest) {
+      QueryRequest request = (QueryRequest) object;
+      return request.session == session
+        && request.sequence == sequence
+        && request.query.equals(query);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[session=%d, sequence=%d, index=%d, query=%s]", getClass().getSimpleName(), session, sequence, index, query);
+  }
 
   /**
    * Query request builder.
    */
-  interface Builder extends OperationRequest.Builder<Builder, QueryRequest> {
+  public static class Builder extends OperationRequest.Builder<QueryRequest.Builder, QueryRequest> {
+    protected long index;
+    protected Query query;
 
     /**
      * Sets the request index.
@@ -68,7 +108,10 @@ public interface QueryRequest extends OperationRequest {
      * @return The request builder.
      * @throws IllegalArgumentException if {@code index} is less than {@code 0}
      */
-    Builder withIndex(long index);
+    public Builder withIndex(long index) {
+      this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
+      return this;
+    }
 
     /**
      * Sets the request query.
@@ -77,7 +120,14 @@ public interface QueryRequest extends OperationRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code query} is null
      */
-    Builder withQuery(Query query);
-  }
+    public Builder withQuery(Query query) {
+      this.query = Assert.notNull(query, "query");
+      return this;
+    }
 
+    @Override
+    public QueryRequest build() {
+      return new QueryRequest(session, sequence, index, query);
+    }
+  }
 }

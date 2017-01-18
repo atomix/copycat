@@ -15,6 +15,10 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.catalyst.util.Assert;
+
+import java.util.Objects;
+
 /**
  * Connect client request.
  * <p>
@@ -25,19 +29,42 @@ package io.atomix.copycat.protocol.request;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ConnectRequest extends ProtocolRequest {
+public class ConnectRequest extends AbstractRequest {
+  protected final String client;
+
+  protected ConnectRequest(String client) {
+    this.client = Assert.notNull(client, "client");
+  }
 
   /**
    * Returns the connecting client ID.
    *
    * @return The connecting client ID.
    */
-  String client();
+  public String client() {
+    return client;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), client);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof ConnectRequest && ((ConnectRequest) object).client.equals(client);
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
+  }
 
   /**
    * Register client request builder.
    */
-  interface Builder extends ProtocolRequest.Builder<Builder, ConnectRequest> {
+  public static class Builder extends AbstractRequest.Builder<ConnectRequest.Builder, ConnectRequest> {
+    protected String client;
 
     /**
      * Sets the connecting client ID.
@@ -45,7 +72,14 @@ public interface ConnectRequest extends ProtocolRequest {
      * @param client The connecting client ID.
      * @return The connect request builder.
      */
-    Builder withClient(String client);
-  }
+    public Builder withClient(String client) {
+      this.client = Assert.notNull(client, "client");
+      return this;
+    }
 
+    @Override
+    public ConnectRequest build() {
+      return new ConnectRequest(client);
+    }
+  }
 }

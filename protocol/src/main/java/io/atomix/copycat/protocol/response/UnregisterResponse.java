@@ -15,8 +15,11 @@
  */
 package io.atomix.copycat.protocol.response;
 
+import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
 import io.atomix.copycat.protocol.websocket.request.WebSocketUnregisterRequest;
+
+import java.util.Objects;
 
 /**
  * Session unregister response.
@@ -28,12 +31,37 @@ import io.atomix.copycat.protocol.websocket.request.WebSocketUnregisterRequest;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface UnregisterResponse extends SessionResponse {
+public class UnregisterResponse extends SessionResponse {
+  protected UnregisterResponse(Status status, CopycatError error) {
+    super(status, error);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof UnregisterResponse) {
+      UnregisterResponse response = (UnregisterResponse) object;
+      return response.status == status;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+  }
 
   /**
    * Status response builder.
    */
-  interface Builder extends SessionResponse.Builder<Builder, UnregisterResponse> {
+  public static class Builder extends SessionResponse.Builder<UnregisterResponse.Builder, UnregisterResponse> {
+    @Override
+    public UnregisterResponse build() {
+      return new UnregisterResponse(status, error);
+    }
   }
-
 }

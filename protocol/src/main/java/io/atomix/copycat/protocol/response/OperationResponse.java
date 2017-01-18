@@ -15,6 +15,11 @@
  */
 package io.atomix.copycat.protocol.response;
 
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
+
+import java.util.Objects;
+
 /**
  * Base client operation response.
  * <p>
@@ -24,33 +29,75 @@ package io.atomix.copycat.protocol.response;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface OperationResponse extends SessionResponse {
+public abstract class OperationResponse extends SessionResponse {
+  protected final long index;
+  protected final long eventIndex;
+  protected final Object result;
+
+  protected OperationResponse(Status status, CopycatError error, long index, long eventIndex, Object result) {
+    super(status, error);
+    this.index = Assert.argNot(index, index < 0, "index must be positive");
+    this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex must be positive");
+    this.result = result;
+  }
 
   /**
    * Returns the operation index.
    *
    * @return The operation index.
    */
-  long index();
+  public long index() {
+    return index;
+  }
 
   /**
    * Returns the event index.
    *
    * @return The event index.
    */
-  long eventIndex();
+  public long eventIndex() {
+    return eventIndex;
+  }
 
   /**
    * Returns the operation result.
    *
    * @return The operation result.
    */
-  Object result();
+  public Object result() {
+    return result;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getClass(), status, result);
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (getClass().isAssignableFrom(object.getClass())) {
+      OperationResponse response = (OperationResponse) object;
+      return response.status == status
+        && response.index == index
+        && response.eventIndex == eventIndex
+        && ((response.result == null && result == null)
+        || response.result != null && result != null && response.result.equals(result));
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[status=%s, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, index, eventIndex, result);
+  }
 
   /**
    * Operation response builder.
    */
-  interface Builder<T extends Builder<T, U>, U extends OperationResponse> extends SessionResponse.Builder<T, U> {
+  public static abstract class Builder<T extends OperationResponse.Builder<T, U>, U extends OperationResponse> extends SessionResponse.Builder<T, U> {
+    protected long index;
+    protected long eventIndex;
+    protected Object result;
 
     /**
      * Sets the response index.
@@ -59,7 +106,11 @@ public interface OperationResponse extends SessionResponse {
      * @return The response builder.
      * @throws IllegalArgumentException If the response index is not positive.
      */
-    T withIndex(long index);
+    @SuppressWarnings("unchecked")
+    public T withIndex(long index) {
+      this.index = Assert.argNot(index, index < 0, "index must be positive");
+      return (T) this;
+    }
 
     /**
      * Sets the response index.
@@ -68,16 +119,22 @@ public interface OperationResponse extends SessionResponse {
      * @return The response builder.
      * @throws IllegalArgumentException If the response index is not positive.
      */
-    T withEventIndex(long eventIndex);
+    @SuppressWarnings("unchecked")
+    public T withEventIndex(long eventIndex) {
+      this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex must be positive");
+      return (T) this;
+    }
 
     /**
      * Sets the operation response result.
      *
      * @param result The response result.
      * @return The response builder.
-     * @throws NullPointerException if {@code result} is null
      */
-    T withResult(Object result);
+    @SuppressWarnings("unchecked")
+    public T withResult(Object result) {
+      this.result = result;
+      return (T) this;
+    }
   }
-
 }
