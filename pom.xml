@@ -24,6 +24,7 @@
     <logback.version>1.1.2</logback.version>
     <catalyst.version>1.1.2-SNAPSHOT</catalyst.version>
     <vertx.version>3.3.3</vertx.version>
+    <jackson.version>2.7.1</jackson.version>
     <jackson.bson.version>2.7.0</jackson.bson.version>
     <kryo.version>3.0.3</kryo.version>
 
@@ -65,6 +66,7 @@
   </issueManagement>
 
   <modules>
+    <module>common</module>
     <module>protocol</module>
     <module>server</module>
     <module>client</module>
