@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.protocol.request.AbstractRequest;
 import io.atomix.copycat.server.storage.entry.Entry;
 

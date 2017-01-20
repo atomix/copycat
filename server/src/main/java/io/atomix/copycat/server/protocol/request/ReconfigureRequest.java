@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Objects;

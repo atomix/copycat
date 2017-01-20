@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.server.cluster.Member;
