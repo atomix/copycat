@@ -15,14 +15,13 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceManager;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.storage.compaction.Compaction;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Stores a state machine {@link Command}.
@@ -33,13 +32,16 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandEntry extends OperationEntry<CommandEntry> {
-  private Command command;
+  private final Command command;
 
-  public CommandEntry() {
+  public CommandEntry(long timestamp, long session, long sequence, Command command) {
+    super(timestamp, session, sequence);
+    this.command = Assert.notNull(command, "command");
   }
 
-  public CommandEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<CommandEntry> type() {
+    return Type.COMMAND;
   }
 
   @Override
@@ -48,7 +50,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   }
 
   @Override
-  public Operation getOperation() {
+  public Operation operation() {
     return command;
   }
 
@@ -57,37 +59,30 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
    *
    * @return The command.
    */
-  public Command getCommand() {
+  public Command command() {
     return command;
-  }
-
-  /**
-   * Sets the command.
-   *
-   * @param command The command.
-   * @return The command entry.
-   * @throws NullPointerException if {@code command} is null
-   */
-  public CommandEntry setCommand(Command command) {
-    this.command = Assert.notNull(command, "command");
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    serializer.writeObject(command, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    command = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), command);
+    return String.format("%s[session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), session(), sequence(), timestamp(), command);
   }
 
+  /**
+   * Command entry serializer.
+   */
+  public static class Serializer extends OperationEntry.Serializer<CommandEntry> {
+    @Override
+    public void write(Kryo kryo, Output output, CommandEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeLong(entry.session);
+      output.writeLong(entry.sequence);
+      kryo.writeClassAndObject(output, entry.command);
+    }
+
+    @Override
+    public CommandEntry read(Kryo kryo, Input input, Class<CommandEntry> type) {
+      return new CommandEntry(input.readLong(), input.readLong(), input.readLong(), (Command) kryo.readClassAndObject(input));
+    }
+  }
 }

@@ -15,11 +15,10 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceManager;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Stores a client register request.
@@ -33,14 +32,18 @@ import io.atomix.catalyst.util.reference.ReferenceManager;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
-  private String client;
-  private long timeout;
+  private final String client;
+  private final long timeout;
 
-  public RegisterEntry() {
+  public RegisterEntry(long timestamp, String client, long timeout) {
+    super(timestamp);
+    this.client = Assert.notNull(client, "client");
+    this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
   }
 
-  public RegisterEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<RegisterEntry> type() {
+    return Type.REGISTER;
   }
 
   /**
@@ -48,20 +51,8 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
    *
    * @return The entry client ID.
    */
-  public String getClient() {
+  public String client() {
     return client;
-  }
-
-  /**
-   * Sets the entry client ID.
-   *
-   * @param client The entry client ID.
-   * @return The register entry.
-   * @throws NullPointerException if {@code client} is null
-   */
-  public RegisterEntry setClient(String client) {
-    this.client = Assert.notNull(client, "client");
-    return this;
   }
 
   /**
@@ -69,38 +60,29 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
    *
    * @return The session timeout.
    */
-  public long getTimeout() {
+  public long timeout() {
     return timeout;
-  }
-
-  /**
-   * Sets the session timeout.
-   *
-   * @param timeout The session timeout.
-   * @return The register entry.
-   */
-  public RegisterEntry setTimeout(long timeout) {
-    this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeString(client);
-    buffer.writeLong(timeout);
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    client = buffer.readString();
-    timeout = buffer.readLong();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, client=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getTimestamp());
+    return String.format("%s[client=%s, timeout=%d]", getClass().getSimpleName(), client(), timestamp());
   }
 
+  /**
+   * Register entry serializer.
+   */
+  public static class Serializer extends TimestampedEntry.Serializer<RegisterEntry> {
+    @Override
+    public void write(Kryo kryo, Output output, RegisterEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeString(entry.client);
+      output.writeLong(entry.timeout);
+    }
+
+    @Override
+    public RegisterEntry read(Kryo kryo, Input input, Class<RegisterEntry> type) {
+      return new RegisterEntry(input.readLong(), input.readString(), input.readLong());
+    }
+  }
 }

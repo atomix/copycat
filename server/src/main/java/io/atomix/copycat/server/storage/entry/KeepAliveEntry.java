@@ -15,17 +15,16 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.session.Session;
 
 /**
  * Stores a client keep-alive request.
  * <p>
  * The {@code KeepAliveEntry} is logged and replicated to the cluster to indicate that a client
- * has kept its {@link #getSession() session} alive. Each client must periodically submit a
+ * has kept its {@link #session() session} alive. Each client must periodically submit a
  * {@link io.atomix.copycat.protocol.request.KeepAliveRequest} which results in a keep-alive entry
  * being written to the Raft log. When a keep-alive is committed to the internal Raft state machine,
  * the session timeout for the associated {@link Session} will be
@@ -34,14 +33,18 @@ import io.atomix.copycat.session.Session;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
-  private long commandSequence;
-  private long eventIndex;
+  private final long commandSequence;
+  private final long eventIndex;
 
-  public KeepAliveEntry() {
+  public KeepAliveEntry(long timestamp, long session, long commandSequence, long eventIndex) {
+    super(timestamp, session);
+    this.commandSequence = commandSequence;
+    this.eventIndex = eventIndex;
   }
 
-  public KeepAliveEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<KeepAliveEntry> type() {
+    return Type.KEEP_ALIVE;
   }
 
   /**
@@ -49,19 +52,8 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
    *
    * @return The command sequence number.
    */
-  public long getCommandSequence() {
+  public long commandSequence() {
     return commandSequence;
-  }
-
-  /**
-   * Sets the command sequence number.
-   *
-   * @param commandSequence The command sequence number.
-   * @return The keep alive entry.
-   */
-  public KeepAliveEntry setCommandSequence(long commandSequence) {
-    this.commandSequence = commandSequence;
-    return this;
   }
 
   /**
@@ -69,38 +61,30 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
    *
    * @return The event index.
    */
-  public long getEventIndex() {
+  public long eventIndex() {
     return eventIndex;
-  }
-
-  /**
-   * Sets the event index.
-   *
-   * @param eventIndex The event index.
-   * @return The keep alive entry.
-   */
-  public KeepAliveEntry setEventIndex(long eventIndex) {
-    this.eventIndex = eventIndex;
-    return this;
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    commandSequence = buffer.readLong();
-    eventIndex = buffer.readLong();
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeLong(commandSequence);
-    buffer.writeLong(eventIndex);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventIndex=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventIndex(), getTimestamp());
+    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d, timestamp=%d]", getClass().getSimpleName(), session(), commandSequence(), eventIndex(), timestamp());
   }
 
+  /**
+   * Keep alive entry serializer.
+   */
+  public static class Serializer extends SessionEntry.Serializer<KeepAliveEntry> {
+    @Override
+    public void write(Kryo kryo, Output output, KeepAliveEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeLong(entry.session);
+      output.writeLong(entry.commandSequence);
+      output.writeLong(entry.eventIndex);
+    }
+
+    @Override
+    public KeepAliveEntry read(Kryo kryo, Input input, Class<KeepAliveEntry> type) {
+      return new KeepAliveEntry(input.readLong(), input.readLong(), input.readLong(), input.readLong());
+    }
+  }
 }

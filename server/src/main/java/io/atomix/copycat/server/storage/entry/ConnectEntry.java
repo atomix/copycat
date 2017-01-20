@@ -15,31 +15,34 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceManager;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Stores a connection between a client and server.
  * <p>
  * The {@code ConnectEntry} is used to represent the establishment of a connection between a
- * specific {@link #getClient() client} and {@link #getAddress() server}. Storing and replicating
+ * specific {@link #client() client} and {@link #address() server}. Storing and replicating
  * connections allows servers to share a consistent view of the clients connected to each server.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
-  private String client;
-  private Address address;
+  private final String client;
+  private final Address address;
 
-  public ConnectEntry() {
+  public ConnectEntry(long timestamp, String client, Address address) {
+    super(timestamp);
+    this.client = Assert.notNull(client, "client");
+    this.address = Assert.notNull(address, "address");
   }
 
-  public ConnectEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<ConnectEntry> type() {
+    return Type.CONNECT;
   }
 
   /**
@@ -47,20 +50,8 @@ public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
    *
    * @return The entry client ID.
    */
-  public String getClient() {
+  public String client() {
     return client;
-  }
-
-  /**
-   * Sets the entry client ID.
-   *
-   * @param client The entry client ID.
-   * @return The register entry.
-   * @throws NullPointerException if {@code client} is null
-   */
-  public ConnectEntry setClient(String client) {
-    this.client = Assert.notNull(client, "client");
-    return this;
   }
 
   /**
@@ -68,39 +59,29 @@ public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
    *
    * @return The connection address.
    */
-  public Address getAddress() {
+  public Address address() {
     return address;
-  }
-
-  /**
-   * Sets the connection address.
-   *
-   * @param address The connection address.
-   * @return The connect entry.
-   * @throws NullPointerException if {@code address} is {@code null}
-   */
-  public ConnectEntry setAddress(Address address) {
-    this.address = Assert.notNull(address, "address");
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeString(client);
-    serializer.writeObject(address, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    client = buffer.readString();
-    address = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, client=%s, address=%s, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getAddress(), getTimestamp());
+    return String.format("%s[client=%s, address=%s, timestamp=%d]", getClass().getSimpleName(), client(), address(), timestamp());
   }
 
+  /**
+   * Connect entry serializer.
+   */
+  public static class Serializer extends TimestampedEntry.Serializer<ConnectEntry> {
+    @Override
+    public void write(Kryo kryo, Output output, ConnectEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeString(entry.client);
+      kryo.writeObject(output, entry.address);
+    }
+
+    @Override
+    public ConnectEntry read(Kryo kryo, Input input, Class<ConnectEntry> type) {
+      return new ConnectEntry(input.readLong(), input.readString(), kryo.readObject(input, Address.class));
+    }
+  }
 }

@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.storage.util;
 
-import io.atomix.catalyst.buffer.util.BitArray;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.buffer.util.BitArray;
+import io.atomix.copycat.util.Assert;
 
 import java.util.function.Predicate;
 

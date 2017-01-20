@@ -15,81 +15,102 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceCounted;
-import io.atomix.catalyst.util.reference.ReferenceManager;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 /**
  * Stores a state change in a {@link Log}.
- * <p>
- * The {@code Entry} represents a single record in a Copycat {@link Log}. Each entry is stored at
- * a unique {@link #getIndex() index} in the log. Indexes are applied to entries once written to a log.
- * <p>
- * Custom entry implementations should implement serialization and deserialization logic via
- * {@link io.atomix.catalyst.serializer.CatalystSerializable#writeObject(io.atomix.catalyst.buffer.BufferOutput, io.atomix.catalyst.serializer.Serializer)}
- * and {@link io.atomix.catalyst.serializer.CatalystSerializable#readObject(io.atomix.catalyst.buffer.BufferInput, io.atomix.catalyst.serializer.Serializer)}.
- * respectively.
- * <p>
- * Because log entries may remain in memory for an arbitrary amount of time, {@code Entry} objects are
- * recycled by the log using the {@link TypedEntryPool}. The lifecycle of an entry is managed via the
- * {@link ReferenceCounted} interface. Once all references to an entry have been {@link #release() released}
- * the entry will be placed back in the pool.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entry>, CatalystSerializable {
-  private final ReferenceManager<Entry<?>> referenceManager;
-  private final AtomicInteger references = new AtomicInteger();
-  private long index;
-  private long term;
-  private int size = -1;
-
-  protected Entry() {
-    referenceManager = null;
-  }
-
-  protected Entry(ReferenceManager<Entry<?>> referenceManager) {
-    this.referenceManager = referenceManager;
-  }
+public abstract class Entry<T extends Entry<T>> {
 
   /**
-   * Resets the entry state.
+   * Entry type.
    */
-  @SuppressWarnings("unchecked")
-  protected T reset() {
-    this.index = 0;
-    this.size = -1;
-    return (T) this;
+  public static class Type<T extends Entry<T>> {
+    public static final Type<ConnectEntry> CONNECT = new Type<>(0x00, ConnectEntry.class, new ConnectEntry.Serializer());
+    public static final Type<RegisterEntry> REGISTER = new Type<>(0x01, RegisterEntry.class, new RegisterEntry.Serializer());
+    public static final Type<KeepAliveEntry> KEEP_ALIVE = new Type<>(0x02, KeepAliveEntry.class, new KeepAliveEntry.Serializer());
+    public static final Type<UnregisterEntry> UNREGISTER = new Type<>(0x03, UnregisterEntry.class, new UnregisterEntry.Serializer());
+    public static final Type<QueryEntry> QUERY = new Type<>(0x04, QueryEntry.class, new QueryEntry.Serializer());
+    public static final Type<CommandEntry> COMMAND = new Type<>(0x05, CommandEntry.class, new CommandEntry.Serializer());
+    public static final Type<ConfigurationEntry> CONFIGURATION = new Type<>(0x06, ConfigurationEntry.class, new ConfigurationEntry.Serializer());
+    public static final Type<InitializeEntry> INITIALIZE = new Type<>(0x07, InitializeEntry.class, new InitializeEntry.Serializer());
+
+    /**
+     * Returns the entry type for the given ID.
+     *
+     * @param id The entry type ID.
+     * @return The entry type.
+     */
+    public static Type<?> forId(int id) {
+      switch (id) {
+        case 0x00:
+          return CONNECT;
+        case 0x01:
+          return REGISTER;
+        case 0x02:
+          return KEEP_ALIVE;
+        case 0x03:
+          return UNREGISTER;
+        case 0x04:
+          return QUERY;
+        case 0x05:
+          return COMMAND;
+        case 0x06:
+          return CONFIGURATION;
+        case 0x07:
+          return INITIALIZE;
+        default:
+          throw new IllegalArgumentException("invalid entry type ID: " + id);
+      }
+    }
+
+    private final int id;
+    private final Class<T> type;
+    private final Serializer<T> serializer;
+
+    private Type(int id, Class<T> type, Serializer<T> serializer) {
+      this.id = id;
+      this.type = type;
+      this.serializer = serializer;
+    }
+
+    /**
+     * Returns the entry type ID.
+     *
+     * @return The entry type ID.
+     */
+    public int id() {
+      return id;
+    }
+
+    /**
+     * Returns the entry class.
+     *
+     * @return The entry class.
+     */
+    public Class<T> type() {
+      return type;
+    }
+
+    /**
+     * Returns the entry serializer.
+     *
+     * @return The entry serializer.
+     */
+    public Serializer<T> serializer() {
+      return serializer;
+    }
   }
 
   /**
-   * Returns the entry index.
+   * Returns the entry type.
    *
-   * @return The entry index.
+   * @return The entry type.
    */
-  public long getIndex() {
-    return index;
-  }
-
-  /**
-   * Sets the entry index.
-   *
-   * @param index The entry index.
-   * @return The entry.
-   */
-  @SuppressWarnings("unchecked")
-  public T setIndex(long index) {
-    this.index = index;
-    return (T) this;
-  }
+  public abstract Type<T> type();
 
   /**
    * Returns the entry compaction mode.
@@ -101,85 +122,8 @@ public abstract class Entry<T extends Entry<T>> implements ReferenceCounted<Entr
   }
 
   /**
-   * Returns the entry term.
-   *
-   * @return The entry term.
+   * Entry serializer.
    */
-  public long getTerm() {
-    return term;
+  public static abstract class Serializer<T extends Entry> extends com.esotericsoftware.kryo.Serializer<T> {
   }
-
-  /**
-   * Sets the entry term.
-   *
-   * @param term The entry term.
-   * @return The entry.
-   */
-  @SuppressWarnings("unchecked")
-  public T setTerm(long term) {
-    this.term = term;
-    return (T) this;
-  }
-
-  /**
-   * Returns the entry size.
-   *
-   * @return The entry size.
-   * @throws IllegalStateException If the entry has not yet been persisted
-   */
-  public int size() {
-    Assert.stateNot(size == -1, "cannot determine size for non-persisted entry");
-    return size;
-  }
-
-  /**
-   * Sets the entry size.
-   *
-   * @param size The entry size.
-   * @return The entry.
-   */
-  @SuppressWarnings("unchecked")
-  public T setSize(int size) {
-    this.size = size;
-    return (T) this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-  }
-
-  @Override
-  public Entry acquire() {
-    references.incrementAndGet();
-    return this;
-  }
-
-  @Override
-  public boolean release() {
-    int refs = references.decrementAndGet();
-    if (refs == 0) {
-      if (referenceManager != null)
-        referenceManager.release(this);
-      return true;
-    } else if (refs < 0) {
-      references.set(0);
-      throw new IllegalStateException("cannot dereference non-referenced object");
-    }
-    return false;
-  }
-
-  @Override
-  public int references() {
-    return references.get();
-  }
-
-  @Override
-  public void close() {
-    release();
-  }
-
 }

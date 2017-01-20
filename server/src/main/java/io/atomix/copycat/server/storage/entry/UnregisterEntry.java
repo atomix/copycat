@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
@@ -28,19 +27,22 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
  * {@link io.atomix.copycat.protocol.request.UnregisterRequest} from a client or in reaction to a leader
  * expiring a session on the server. When a leader expires a session, the leader must commit an
  * {@code UnregisterEntry} to ensure that the session is expired deterministically across the cluster.
- * The {@link #isExpired()} method indicates whether the entry represents a session being expired by
+ * The {@link #expired()} method indicates whether the entry represents a session being expired by
  * the leader or an explicit request by a client to close its session.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
-  private boolean expired;
+  private final boolean expired;
 
-  public UnregisterEntry() {
+  public UnregisterEntry(long timestamp, long session, boolean expired) {
+    super(timestamp, session);
+    this.expired = expired;
   }
 
-  public UnregisterEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<UnregisterEntry> type() {
+    return Type.UNREGISTER;
   }
 
   @Override
@@ -49,40 +51,33 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   }
 
   /**
-   * Sets whether the session was expired by a leader.
-   *
-   * @param expired Whether the session was expired by a leader.
-   * @return The unregister entry.
-   */
-  public UnregisterEntry setExpired(boolean expired) {
-    this.expired = expired;
-    return this;
-  }
-
-  /**
    * Returns whether the session was expired by a leader.
    *
    * @return Whether the session was expired by a leader.
    */
-  public boolean isExpired() {
+  public boolean expired() {
     return expired;
   }
 
   @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeBoolean(expired);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    expired = buffer.readBoolean();
-  }
-
-  @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, expired=%b, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), isExpired(), getTimestamp());
+    return String.format("%s[session=%d, expired=%b, timestamp=%d]", getClass().getSimpleName(), session(), expired(), timestamp());
   }
 
+  /**
+   * Unregister entry serializer.
+   */
+  public static class Serializer extends SessionEntry.Serializer<UnregisterEntry> {
+    @Override
+    public void write(Kryo kryo, Output output, UnregisterEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeLong(entry.session);
+      output.writeBoolean(entry.expired);
+    }
+
+    @Override
+    public UnregisterEntry read(Kryo kryo, Input input, Class<UnregisterEntry> type) {
+      return new UnregisterEntry(input.readLong(), input.readLong(), input.readBoolean());
+    }
+  }
 }

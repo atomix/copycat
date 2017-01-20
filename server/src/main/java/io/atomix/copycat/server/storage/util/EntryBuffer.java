@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.storage.util;
 
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.entry.Indexed;
 
 /**
  * Log entry buffer.
@@ -23,10 +24,11 @@ import io.atomix.copycat.server.storage.entry.Entry;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class EntryBuffer {
-  private final Entry[] buffer;
+  private final Indexed<?>[] buffer;
 
+  @SuppressWarnings("unchecked")
   public EntryBuffer(int size) {
-    this.buffer = new Entry[size];
+    this.buffer = new Indexed[size];
   }
 
   /**
@@ -35,13 +37,8 @@ public class EntryBuffer {
    * @param entry The entry to append.
    * @return The entry buffer.
    */
-  public EntryBuffer append(Entry entry) {
-    int offset = offset(entry.getIndex());
-    Entry oldEntry = buffer[offset];
-    buffer[offset] = entry.acquire();
-    if (oldEntry != null) {
-      oldEntry.release();
-    }
+  public EntryBuffer append(Indexed<?> entry) {
+    buffer[offset(entry.index())] = entry;
     return this;
   }
 
@@ -53,9 +50,9 @@ public class EntryBuffer {
    * @return The entry or {@code null} if the entry is not present in the index.
    */
   @SuppressWarnings("unchecked")
-  public <T extends Entry> T get(long index) {
-    Entry entry = buffer[offset(index)];
-    return entry != null && entry.getIndex() == index ? (T) entry.acquire() : null;
+  public <T extends Entry<T>> Indexed<T> get(long index) {
+    Indexed<?> entry = buffer[offset(index)];
+    return entry != null && entry.index() == index ? (Indexed<T>) entry : null;
   }
 
   /**

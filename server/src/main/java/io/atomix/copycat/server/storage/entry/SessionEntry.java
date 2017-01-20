@@ -15,36 +15,17 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
-
 /**
  * Base class for session-related entries.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class SessionEntry<T extends SessionEntry<T>> extends TimestampedEntry<T> {
-  private long session;
+  protected final long session;
 
-  protected SessionEntry() {
-  }
-
-  protected SessionEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
-  }
-
-  /**
-   * Sets the session ID.
-   *
-   * @param session The session ID.
-   * @return The session entry.
-   */
-  @SuppressWarnings("unchecked")
-  public T setSession(long session) {
+  protected SessionEntry(long timestamp, long session) {
+    super(timestamp);
     this.session = session;
-    return (T) this;
   }
 
   /**
@@ -52,20 +33,13 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
    *
    * @return The session ID.
    */
-  public long getSession() {
+  public long session() {
     return session;
   }
 
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeLong(session);
+  /**
+   * Session entry serializer.
+   */
+  public static abstract class Serializer<T extends SessionEntry> extends TimestampedEntry.Serializer<T> {
   }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    session = buffer.readLong();
-  }
-
 }

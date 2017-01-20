@@ -16,30 +16,24 @@
 package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.copycat.Operation;
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
 
 /**
  * Stores a state machine operation.
  * <p>
- * Each state machine operation is stored with a client-provided {@link #getSequence() sequence number}.
+ * Each state machine operation is stored with a client-provided {@link #sequence() sequence number}.
  * The sequence number is used by state machines to apply client operations in the order in which they
  * were submitted by the client (FIFO order). Additionally, each operation is written with the leader's
- * {@link #getTimestamp() timestamp} at the time the entry was logged. This gives state machines an
+ * {@link #timestamp() timestamp} at the time the entry was logged. This gives state machines an
  * approximation of time with which to react to the application of operations to the state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class OperationEntry<T extends OperationEntry<T>> extends SessionEntry<T> {
-  private long sequence;
+  protected final long sequence;
 
-  protected OperationEntry() {
-  }
-
-  protected OperationEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  protected OperationEntry(long timestamp, long session, long sequence) {
+    super(timestamp, session);
+    this.sequence = sequence;
   }
 
   /**
@@ -47,39 +41,20 @@ public abstract class OperationEntry<T extends OperationEntry<T>> extends Sessio
    *
    * @return The entry operation.
    */
-  public abstract Operation<T> getOperation();
+  public abstract Operation operation();
 
   /**
    * Returns the operation sequence number.
    *
    * @return The operation sequence number.
    */
-  public long getSequence() {
+  public long sequence() {
     return sequence;
   }
 
   /**
-   * Sets the operation sequence number.
-   *
-   * @param sequence The operation sequence number.
-   * @return The operation entry.
+   * Operation entry serializer.
    */
-  @SuppressWarnings("unchecked")
-  public T setSequence(long sequence) {
-    this.sequence = sequence;
-    return (T) this;
+  public static abstract class Serializer<T extends OperationEntry> extends SessionEntry.Serializer<T> {
   }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeLong(sequence);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    sequence = buffer.readLong();
-  }
-
 }
