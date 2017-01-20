@@ -18,7 +18,7 @@ package io.atomix.copycat.protocol.websocket;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.undercouch.bson4jackson.BsonFactory;
-import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.protocol.ProtocolConnection;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.websocket.request.WebSocketRequest;

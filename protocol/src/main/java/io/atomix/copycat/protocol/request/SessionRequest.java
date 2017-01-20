@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.protocol.request;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Base session request.

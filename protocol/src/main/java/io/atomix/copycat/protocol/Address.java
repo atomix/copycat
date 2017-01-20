@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.protocol;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Network address.

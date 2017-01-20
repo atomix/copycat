@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.protocol;
 
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.transport.Server;
+import io.atomix.copycat.util.concurrent.Listener;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -47,7 +45,7 @@ public interface ProtocolConnection {
    * <p>
    * The provided listener's {@link Consumer#accept(Object)} method will be invoked when the connection is closed. Note
    * that a close event can be triggered via {@link ProtocolConnection#close()} or by the
-   * {@link Client} or {@link Server} that created the connection.
+   * {@link ProtocolClient} or {@link ProtocolServer} that created the connection.
    *
    * @param listener The close listener.
    * @return The connection.

@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.protocol.request;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.session.Event;
 
 import java.util.List;

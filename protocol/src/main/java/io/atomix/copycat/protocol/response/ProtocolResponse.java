@@ -95,7 +95,7 @@ public interface ProtocolResponse {
    * @param <T> The builder type.
    * @param <U> The response type.
    */
-  interface Builder<T extends Builder<T, U>, U extends ProtocolResponse> extends io.atomix.catalyst.util.Builder<U> {
+  interface Builder<T extends Builder<T, U>, U extends ProtocolResponse> extends io.atomix.copycat.util.Builder<U> {
 
     /**
      * Sets the response status.
