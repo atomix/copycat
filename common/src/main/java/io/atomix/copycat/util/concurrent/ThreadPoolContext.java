@@ -66,7 +66,7 @@ public class ThreadPoolContext implements ThreadContext {
     // This code was shamelessly stolededed from Vert.x:
     // https://github.com/eclipse/vert.x/blob/master/src/main/java/io/vertx/core/impl/OrderedExecutorFactory.java
     runner = () -> {
-      ((CatalystThread) Thread.currentThread()).setContext(this);
+      ((CopycatThread) Thread.currentThread()).setContext(this);
       for (;;) {
         final Runnable task;
         synchronized (tasks) {

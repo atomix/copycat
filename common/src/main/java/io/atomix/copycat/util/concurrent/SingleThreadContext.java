@@ -48,13 +48,13 @@ public class SingleThreadContext implements ThreadContext {
   /**
    * Creates a new single thread context.
    * <p>
-   * The provided context name will be passed to {@link CatalystThreadFactory} and used
+   * The provided context name will be passed to {@link CopycatThreadFactory} and used
    * when instantiating the context thread.
    *
    * @param nameFormat The context nameFormat which will be formatted with a thread number.
    */
   public SingleThreadContext(String nameFormat) {
-    this(new CatalystThreadFactory(nameFormat));
+    this(new CopycatThreadFactory(nameFormat));
   }
 
   /**
@@ -62,7 +62,7 @@ public class SingleThreadContext implements ThreadContext {
    *
    * @param factory The thread factory.
    */
-  public SingleThreadContext(CatalystThreadFactory factory) {
+  public SingleThreadContext(CopycatThreadFactory factory) {
     this(new ScheduledThreadPoolExecutor(1, factory));
   }
 
@@ -77,18 +77,18 @@ public class SingleThreadContext implements ThreadContext {
 
   public SingleThreadContext(Thread thread, ScheduledExecutorService executor) {
     this.executor = executor;
-    Assert.state(thread instanceof CatalystThread, "not a Catalyst thread");
-    ((CatalystThread) thread).setContext(this);
+    Assert.state(thread instanceof CopycatThread, "not a Catalyst thread");
+    ((CopycatThread) thread).setContext(this);
   }
 
   /**
    * Gets the thread from a single threaded executor service.
    */
-  protected static CatalystThread getThread(ExecutorService executor) {
-    final AtomicReference<CatalystThread> thread = new AtomicReference<>();
+  protected static CopycatThread getThread(ExecutorService executor) {
+    final AtomicReference<CopycatThread> thread = new AtomicReference<>();
     try {
       executor.submit(() -> {
-        thread.set((CatalystThread) Thread.currentThread());
+        thread.set((CopycatThread) Thread.currentThread());
       }).get();
     } catch (InterruptedException | ExecutionException e) {
       throw new IllegalStateException("failed to initialize thread state", e);

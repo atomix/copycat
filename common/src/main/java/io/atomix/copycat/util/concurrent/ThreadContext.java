@@ -27,13 +27,13 @@ import java.util.function.Supplier;
  * Thread context.
  * <p>
  * The thread context is used by Catalyst to determine the correct thread on which to execute asynchronous callbacks.
- * All threads created within Catalyst must be instances of {@link CatalystThread}. Once
+ * All threads created within Catalyst must be instances of {@link CopycatThread}. Once
  * a thread has been created, the context is stored in the thread object via
- * {@link CatalystThread#setContext(ThreadContext)}. This means there is a one-to-one relationship
+ * {@link CopycatThread#setContext(ThreadContext)}. This means there is a one-to-one relationship
  * between a context and a thread. That is, a context is representative of a thread and provides an interface for firing
  * events on that thread.
  * <p>
- * Components of the framework that provide custom threads should use {@link CatalystThreadFactory}
+ * Components of the framework that provide custom threads should use {@link CopycatThreadFactory}
  * to allocate new threads and provide a custom {@link ThreadContext} implementation.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
@@ -47,7 +47,7 @@ public interface ThreadContext extends AutoCloseable {
    */
   static ThreadContext currentContext() {
     Thread thread = Thread.currentThread();
-    return thread instanceof CatalystThread ? ((CatalystThread) thread).getContext() : null;
+    return thread instanceof CopycatThread ? ((CopycatThread) thread).getContext() : null;
   }
   
   /**

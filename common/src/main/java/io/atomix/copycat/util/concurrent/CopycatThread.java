@@ -18,9 +18,9 @@ package io.atomix.copycat.util.concurrent;
 import java.lang.ref.WeakReference;
 
 /**
- * Catalyst thread.
+ * Copycat thread.
  * <p>
- * The Catalyst thread primarily serves to store a {@link ThreadContext} for the current thread.
+ * The Copycat thread primarily serves to store a {@link ThreadContext} for the current thread.
  * The context is stored in a {@link WeakReference} in order to allow the thread to be garbage collected.
  * <p>
  * There is no {@link ThreadContext} associated with the thread when it is first created.
@@ -28,10 +28,10 @@ import java.lang.ref.WeakReference;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class CatalystThread extends Thread {
+public class CopycatThread extends Thread {
   private WeakReference<ThreadContext> context;
 
-  public CatalystThread(Runnable target, String name) {
+  public CopycatThread(Runnable target, String name) {
     super(target, name);
   }
 

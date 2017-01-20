@@ -15,29 +15,21 @@
  */
 package io.atomix.copycat.util.concurrent;
 
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
-
 /**
- * Named thread factory.
+ * Reference manager. Manages {@link ReferenceCounted} objects.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class CatalystThreadFactory implements ThreadFactory {
-  private final AtomicInteger threadNumber = new AtomicInteger(1);
-  private final String nameFormat;
+public interface ReferenceManager<T> {
 
   /**
-   * Creates a thread factory that names threads according to the {@code nameFormat} by supplying a
-   * single argument to the format representing the thread number.
+   * Releases the given reference.
+   * <p>
+   * This method should be called with a {@link ReferenceCounted} object that contains no
+   * additional references. This allows, for instance, pools to recycle dereferenced objects.
+   *
+   * @param reference The reference to release.
    */
-  public CatalystThreadFactory(String nameFormat) {
-    this.nameFormat = nameFormat;
-  }
-
-  @Override
-  public Thread newThread(Runnable r) {
-    return new CatalystThread(r, String.format(nameFormat, threadNumber.getAndIncrement()));
-  }
+  void release(T reference);
 
 }
