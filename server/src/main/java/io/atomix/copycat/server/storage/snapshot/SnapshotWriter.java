@@ -15,11 +15,14 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.buffer.Bytes;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.BufferOutput;
+import io.atomix.copycat.server.storage.buffer.Bytes;
+import io.atomix.copycat.util.Assert;
+
+import java.io.ByteArrayOutputStream;
 
 /**
  * Writes bytes to a state machine {@link Snapshot}.
@@ -37,9 +40,9 @@ import io.atomix.catalyst.util.Assert;
 public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
   final Buffer buffer;
   private final Snapshot snapshot;
-  private final Serializer serializer;
+  private final Kryo serializer;
 
-  SnapshotWriter(Buffer buffer, Snapshot snapshot, Serializer serializer) {
+  SnapshotWriter(Buffer buffer, Snapshot snapshot, Kryo serializer) {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
     this.serializer = Assert.notNull(serializer, "serializer");
@@ -52,8 +55,11 @@ public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
    * @return The snapshot writer.
    */
   public SnapshotWriter writeObject(Object object) {
-    serializer.writeObject(object, buffer);
-    return this;
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    Output output = new Output(outputStream);
+    serializer.writeClassAndObject(output, object);
+    output.flush();
+    return write(outputStream.toByteArray());
   }
 
   @Override

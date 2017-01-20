@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.util.Assert;
 
 /**
  * In-memory snapshot backed by a {@link HeapBuffer}.

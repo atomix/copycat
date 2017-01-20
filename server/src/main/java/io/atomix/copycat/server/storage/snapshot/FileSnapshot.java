@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.FileBuffer;
+import io.atomix.copycat.util.Assert;
 
 import java.io.IOException;
 import java.nio.file.Files;

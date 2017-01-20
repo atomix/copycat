@@ -15,11 +15,12 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.Bytes;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.BufferInput;
+import io.atomix.copycat.server.storage.buffer.Bytes;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Reads bytes from a state machine {@link Snapshot}.
@@ -37,9 +38,9 @@ import io.atomix.catalyst.util.Assert;
 public class SnapshotReader implements BufferInput<SnapshotReader> {
   private final Buffer buffer;
   private final Snapshot snapshot;
-  private final Serializer serializer;
+  private final Kryo serializer;
 
-  SnapshotReader(Buffer buffer, Snapshot snapshot, Serializer serializer) {
+  SnapshotReader(Buffer buffer, Snapshot snapshot, Kryo serializer) {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
     this.serializer = Assert.notNull(serializer, "serializer");
@@ -67,8 +68,11 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
    * @param <T> The type of the object to read.
    * @return The read object.
    */
+  @SuppressWarnings("unchecked")
   public <T> T readObject() {
-    return serializer.readObject(buffer);
+    byte[] bytes = new byte[(int) buffer.remaining()];
+    buffer.read(bytes);
+    return (T) serializer.readClassAndObject(new Input(bytes));
   }
 
   @Override

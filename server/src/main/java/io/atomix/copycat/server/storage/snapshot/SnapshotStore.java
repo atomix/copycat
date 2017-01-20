@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
+import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.buffer.FileBuffer;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,11 +74,11 @@ public class SnapshotStore implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(SnapshotStore.class);
   private final String name;
   final Storage storage;
-  private final Serializer serializer;
+  private final Kryo serializer;
   private final TreeMap<Long, Snapshot> snapshots = new TreeMap<>();
   private Snapshot currentSnapshot;
 
-  public SnapshotStore(String name, Storage storage, Serializer serializer) {
+  public SnapshotStore(String name, Storage storage, Kryo serializer) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
     this.serializer = Assert.notNull(serializer, "serializer");
@@ -103,7 +103,7 @@ public class SnapshotStore implements AutoCloseable {
    *
    * @return The snapshot store serializer.
    */
-  public Serializer serializer() {
+  public Kryo serializer() {
     return serializer;
   }
 

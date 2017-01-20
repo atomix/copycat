@@ -15,10 +15,10 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.FileBuffer;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Stores information about a {@link Snapshot} of the state machine.
@@ -131,8 +131,9 @@ public final class SnapshotDescriptor implements AutoCloseable {
    * Deletes the descriptor.
    */
   public void delete() {
-    if (buffer instanceof FileBuffer)
+    if (buffer instanceof FileBuffer) {
       ((FileBuffer) buffer).delete();
+    }
   }
 
   /**

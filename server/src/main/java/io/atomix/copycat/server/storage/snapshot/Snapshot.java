@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Manages reading and writing a single snapshot file.
