@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentDescriptor;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

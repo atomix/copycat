@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;

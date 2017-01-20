@@ -15,12 +15,12 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.concurrent.ThreadPoolContext;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.ThreadContext;
+import io.atomix.copycat.util.concurrent.ThreadPoolContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -208,7 +208,7 @@ public class Compactor implements AutoCloseable {
       LOGGER.debug("Executing {} compaction task(s)", tasks.size());
       for (CompactionTask task : tasks) {
         LOGGER.debug("Executing {}", task);
-        ThreadContext taskThread = new ThreadPoolContext(executor, segments.serializer());
+        ThreadContext taskThread = new ThreadPoolContext(executor);
         taskThread.execute(task).whenComplete((result, error) -> {
           LOGGER.debug("{} complete", task);
           if (counter.incrementAndGet() == tasks.size()) {
