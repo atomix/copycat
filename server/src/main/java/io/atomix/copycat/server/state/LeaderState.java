@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.concurrent.ComposableFuture;
-import io.atomix.catalyst.concurrent.Scheduled;
+import io.atomix.copycat.util.concurrent.ComposableFuture;
+import io.atomix.copycat.util.concurrent.Scheduled;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
@@ -220,7 +220,15 @@ final class LeaderState extends ActiveState {
    * Commits the given configuration.
    */
   protected CompletableFuture<Long> configure(Collection<Member> members) {
-    final long index;
+    final ConfigurationEntry entry = new ConfigurationEntry(context.getTerm(), System.currentTimeMillis(), members);
+    final long index = context.getLog().append(entry);
+    LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+
+    // Store the index of the configuration entry in order to prevent other configurations from
+    // being logged and committed concurrently. This is an important safety property of Raft.
+    configuring = index;
+    context.getClusterState().configure(new Configuration(entry.getIndex(), entry.term(), entry.timestamp(), entry.members()));
+
     try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
       entry.setTerm(context.getTerm())
         .setTimestamp(System.currentTimeMillis())
@@ -231,7 +239,7 @@ final class LeaderState extends ActiveState {
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
       configuring = index;
-      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getTerm(), entry.getTimestamp(), entry.getMembers()));
+      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.term(), entry.timestamp(), entry.members()));
     }
 
     return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
@@ -608,7 +616,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -627,8 +635,8 @@ final class LeaderState extends ActiveState {
   private void sequenceBoundedLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
-    if (entry.getSequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, responseBuilder, future));
+    if (entry.sequence() > session.getCommandSequence()) {
+      session.registerSequenceQuery(entry.sequence(), () -> applyQuery(entry, responseBuilder, future));
     } else {
       applyQuery(entry, responseBuilder, future);
     }
@@ -639,7 +647,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> queryLinearizable(QueryEntry entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -678,7 +686,7 @@ final class LeaderState extends ActiveState {
    */
   private void sequenceLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
     if (session == null) {
       future.complete(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -687,8 +695,8 @@ final class LeaderState extends ActiveState {
     } else {
       // If the query's sequence number is greater than the session's current sequence number, queue the request for
       // handling once the state machine is caught up.
-      if (entry.getSequence() > session.getCommandSequence()) {
-        session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, responseBuilder, future));
+      if (entry.sequence() > session.getCommandSequence()) {
+        session.registerSequenceQuery(entry.sequence(), () -> applyQuery(entry, responseBuilder, future));
       } else {
         applyQuery(entry, responseBuilder, future);
       }

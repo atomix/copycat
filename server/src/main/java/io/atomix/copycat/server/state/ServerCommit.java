@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
+import io.atomix.copycat.util.Assert;
 
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,12 +50,12 @@ final class ServerCommit implements Commit<Operation<?>> {
    *
    * @param entry The entry.
    */
-  void reset(OperationEntry<?> entry, ServerSessionContext session, long timestamp) {
+  void reset(OperationEntry entry, ServerSessionContext session, long timestamp) {
     if (references.compareAndSet(0, 1)) {
       this.index = entry.getIndex();
       this.session = session;
       this.instant = Instant.ofEpochMilli(timestamp);
-      this.operation = entry.getOperation();
+      this.operation = entry.operation();
       session.acquire();
       references.set(1);
     } else {

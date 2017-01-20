@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Managed;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.*;
+import io.atomix.copycat.util.Managed;
 
 import java.util.concurrent.CompletableFuture;
 

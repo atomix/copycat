@@ -113,7 +113,7 @@ abstract class ActiveState extends PassiveState {
           // Compare the term of the received entry with the matching entry in the log.
           long term = context.getLog().term(entry.getIndex());
           if (term != 0) {
-            if (entry.getTerm() != term) {
+            if (entry.term() != term) {
               // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
               // If appending to the log fails, apply commits and reply false to the append request.
               LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
@@ -129,7 +129,7 @@ abstract class ActiveState extends PassiveState {
         // If the entry is a connect entry then immediately configure the connection.
         if (entry instanceof ConnectEntry) {
           ConnectEntry connectEntry = (ConnectEntry) entry;
-          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
+          context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.client(), connectEntry.address());
         }
       }
     }

@@ -15,14 +15,10 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.concurrent.Scheduled;
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
@@ -30,6 +26,10 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.net.request.NetReconfigureRequest;
 import io.atomix.copycat.server.protocol.net.response.NetReconfigureResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.Listeners;
+import io.atomix.copycat.util.concurrent.Scheduled;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
@@ -40,7 +40,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class ServerMember implements Member, CatalystSerializable, AutoCloseable {
+public final class ServerMember implements Member, KryoSerializable, AutoCloseable {
   private Member.Type type;
   private Status status = Status.AVAILABLE;
   private Instant updated;
@@ -260,21 +260,21 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
   }
 
   @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeByte(type.ordinal());
-    buffer.writeByte(status.ordinal());
-    buffer.writeLong(updated.toEpochMilli());
-    serializer.writeObject(serverAddress, buffer);
-    serializer.writeObject(clientAddress, buffer);
+  public void write(Kryo kryo, Output output) {
+    output.writeByte(type.ordinal());
+    output.writeByte(status.ordinal());
+    output.writeLong(updated.toEpochMilli());
+    kryo.writeObject(output, serverAddress);
+    kryo.writeObject(output, clientAddress);
   }
 
   @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    type = Member.Type.values()[buffer.readByte()];
-    status = Status.values()[buffer.readByte()];
-    updated = Instant.ofEpochMilli(buffer.readLong());
-    serverAddress = serializer.readObject(buffer);
-    clientAddress = serializer.readObject(buffer);
+  public void read(Kryo kryo, Input input) {
+    type = Member.Type.values()[input.readByte()];
+    status = Status.values()[input.readByte()];
+    updated = Instant.ofEpochMilli(input.readLong());
+    serverAddress = kryo.readObject(input, Address.class);
+    clientAddress = kryo.readObject(input, Address.class);
   }
 
   @Override
@@ -296,5 +296,4 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
   public String toString() {
     return String.format("%s[type=%s, status=%s, serverAddress=%s, clientAddress=%s]", getClass().getSimpleName(), type, status, serverAddress, clientAddress);
   }
-
 }

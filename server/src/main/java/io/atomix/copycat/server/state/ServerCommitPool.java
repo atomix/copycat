@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 import org.slf4j.Logger;

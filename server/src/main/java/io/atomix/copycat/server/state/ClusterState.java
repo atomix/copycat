@@ -15,11 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.concurrent.Scheduled;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
@@ -29,6 +24,11 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.LeaveRequest;
 import io.atomix.copycat.server.protocol.response.LeaveResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Futures;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.Listeners;
+import io.atomix.copycat.util.concurrent.Scheduled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

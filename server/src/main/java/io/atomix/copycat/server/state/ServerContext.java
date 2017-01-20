@@ -15,12 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
+import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.server.CopycatServer;
@@ -34,6 +29,11 @@ import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.Listeners;
+import io.atomix.copycat.util.concurrent.SingleThreadContext;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +59,7 @@ public class ServerContext implements AutoCloseable {
   protected final Supplier<StateMachine> stateMachineFactory;
   protected final ClusterState cluster;
   protected final Storage storage;
-  protected final Serializer serializer;
+  protected final Kryo serializer;
   private MetaStore meta;
   private Log log;
   private SnapshotStore snapshot;
@@ -78,14 +78,14 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Storage storage, Serializer serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Storage storage, Kryo serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
     this.serializer = Assert.notNull(serializer, "serializer");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
     this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
-    this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name), threadContext.serializer().clone());
+    this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name));
 
     // Open the meta store.
     threadContext.execute(() -> this.meta = storage.openMetaStore(name)).join();
@@ -143,7 +143,7 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The server serializer.
    */
-  public Serializer getSerializer() {
+  public Kryo getSerializer() {
     return serializer;
   }
 

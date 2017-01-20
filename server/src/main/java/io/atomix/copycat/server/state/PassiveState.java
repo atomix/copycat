@@ -210,7 +210,7 @@ class PassiveState extends ReserveState {
       // If the entry is a connect entry then immediately configure the connection.
       if (entry instanceof ConnectEntry) {
         ConnectEntry connectEntry = (ConnectEntry) entry;
-        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
+        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.client(), connectEntry.address());
       }
     }
 
@@ -304,7 +304,7 @@ class PassiveState extends ReserveState {
    */
   private void sequenceQuery(QueryEntry entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -321,8 +321,8 @@ class PassiveState extends ReserveState {
   private void sequenceQuery(QueryEntry entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
-    if (entry.getSequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.getSequence(), () -> indexQuery(entry, builder, future));
+    if (entry.sequence() > session.getCommandSequence()) {
+      session.registerSequenceQuery(entry.sequence(), () -> indexQuery(entry, builder, future));
     } else {
       indexQuery(entry, builder, future);
     }
@@ -333,7 +333,7 @@ class PassiveState extends ReserveState {
    */
   private void indexQuery(QueryEntry entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)

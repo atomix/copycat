@@ -16,16 +16,15 @@
 
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.NonBlockingFuture;
-import io.atomix.catalyst.concurrent.Scheduled;
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.error.ApplicationException;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.NonBlockingFuture;
+import io.atomix.copycat.util.concurrent.Scheduled;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,11 +84,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   @Override
   public Logger logger() {
     return executor.logger();
-  }
-
-  @Override
-  public Serializer serializer() {
-    return executor.serializer();
   }
 
   @Override

@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.protocol.request.ProtocolRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
@@ -30,6 +29,7 @@ import io.atomix.copycat.server.protocol.response.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,7 +110,7 @@ abstract class AbstractAppender implements AutoCloseable {
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
-      .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
+      .withLogTerm(prevEntry != null ? prevEntry.term() : 0)
       .withEntries(Collections.EMPTY_LIST)
       .withCommitIndex(context.getCommitIndex())
       .withGlobalIndex(context.getGlobalIndex())
@@ -129,7 +129,7 @@ abstract class AbstractAppender implements AutoCloseable {
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
       .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
-      .withLogTerm(prevEntry != null ? prevEntry.getTerm() : 0)
+      .withLogTerm(prevEntry != null ? prevEntry.term() : 0)
       .withCommitIndex(context.getCommitIndex())
       .withGlobalIndex(context.getGlobalIndex());
 
@@ -160,11 +160,6 @@ abstract class AbstractAppender implements AutoCloseable {
         size += entry.size();
         entries.add(entry);
       }
-    }
-
-    // Release the previous entry back to the entry pool.
-    if (prevEntry != null) {
-      prevEntry.release();
     }
 
     // Add the entries to the request builder and build the request.

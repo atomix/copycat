@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolConnection;
 import io.atomix.copycat.protocol.ProtocolServerConnection;

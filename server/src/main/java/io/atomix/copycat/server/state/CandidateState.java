@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
@@ -24,6 +23,7 @@ import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.VoteResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.util.Quorum;
+import io.atomix.copycat.util.concurrent.Scheduled;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -127,7 +127,7 @@ final class CandidateState extends ActiveState {
 
     final long lastTerm;
     if (lastEntry != null) {
-      lastTerm = lastEntry.getTerm();
+      lastTerm = lastEntry.term();
       lastEntry.close();
     } else {
       lastTerm = 0;
