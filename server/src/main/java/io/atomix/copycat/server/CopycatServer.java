@@ -15,14 +15,10 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.ConfigurationException;
+import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
+import io.atomix.copycat.error.ConfigurationException;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.protocol.ProtocolServer;
@@ -35,6 +31,11 @@ import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Futures;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.SingleThreadContext;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -395,9 +396,9 @@ public class CopycatServer {
    * <p>
    * The thread context is the event loop that this server uses to communicate other Raft servers.
    * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
-   * executed on a single thread via the returned {@link io.atomix.catalyst.concurrent.ThreadContext}.
+   * executed on a single thread via the returned {@link io.atomix.copycat.util.concurrent.ThreadContext}.
    * <p>
-   * The {@link io.atomix.catalyst.concurrent.ThreadContext} can also be used to access the Raft server's internal
+   * The {@link io.atomix.copycat.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
    * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
    * are not thread safe, so to use the context serializer, users should clone it:
    * <pre>
@@ -763,7 +764,7 @@ public class CopycatServer {
    * servers are configured with the {@code io.atomix.catalyst.transport.netty.NettyTransport} transport if it's available on
    * the classpath. Users should provide a {@link Storage} instance to specify how the server stores state changes.
    */
-  public static class Builder implements io.atomix.catalyst.util.Builder<CopycatServer> {
+  public static class Builder implements io.atomix.copycat.util.Builder<CopycatServer> {
     private static final String DEFAULT_NAME = "copycat";
     private static final Duration DEFAULT_ELECTION_TIMEOUT = Duration.ofMillis(750);
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(250);
@@ -954,9 +955,9 @@ public class CopycatServer {
       }
 
       ConnectionManager connections = new ConnectionManager(raftProtocol.createClient());
-      ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name), serializer);
+      ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name));
 
-      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, serializer, stateMachineFactory, connections, threadContext);
+      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, new Kryo(), stateMachineFactory, connections, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout)

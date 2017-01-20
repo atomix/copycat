@@ -15,15 +15,15 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CommandException;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
+import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
 
 import java.lang.reflect.*;
 import java.time.Clock;
@@ -122,16 +122,8 @@ import java.util.function.Function;
  *   }
  *   }
  * </pre>
- * Attempts to {@link Session#publish(String, Object) publish} events during the execution will result in an
+ * Attempts to {@link io.atomix.copycat.server.session.ServerSession#publish(String, Object) publish} events during the execution will result in an
  * {@link IllegalStateException}.
- * <p>
- * As with other operations, state machines should ensure that the publishing of session events is deterministic.
- * Messages published via a {@link Session} will be managed according to the {@link Command.ConsistencyLevel}
- * of the command being executed at the time the event was {@link Session#publish(String, Object) published}. Each command may
- * publish zero or many events. For events published during the execution of a {@link Command.ConsistencyLevel#LINEARIZABLE}
- * command, the state machine executor will transparently await responses from the client(s) before completing the command.
- * For commands with lower consistency levels, command responses will be immediately sent. Session events are always guaranteed
- * to be received by the client in the order in which they were published by the state machine.
  * <p>
  * Even though state machines on multiple servers may appear to publish the same event, Copycat's protocol ensures that only
  * one server ever actually sends the event. Still, it's critical that all state machines publish all events to ensure
@@ -169,7 +161,7 @@ import java.util.function.Function;
  * commit log. Copycat will guarantee that {@link Commit}s are persisted in the underlying
  * {@link io.atomix.copycat.server.storage.Log} as long as is necessary (even after a commit is closed) to
  * ensure all operations are applied to a majority of servers and to guarantee delivery of
- * {@link Session#publish(String, Object) session events} published as a result of specific operations.
+ * {@link io.atomix.copycat.server.session.ServerSession#publish(String, Object) session events} published as a result of specific operations.
  * State machines only need to specify when it's safe to remove each commit from the log.
  * <p>
  * Note that if commits are not properly closed and are instead garbage collected, a warning will be logged.

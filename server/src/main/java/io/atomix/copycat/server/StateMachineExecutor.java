@@ -16,11 +16,11 @@
 
 package io.atomix.copycat.server;
 
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.server.session.Sessions;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
