@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.cluster;
 
-import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.protocol.Address;
 
 import java.time.Instant;
