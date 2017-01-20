@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.storage.system;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
 

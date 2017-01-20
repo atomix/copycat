@@ -15,17 +15,22 @@
  */
 package io.atomix.copycat.server.storage.system;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.FileBuffer;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.util.Collection;
 
 /**
  * Manages persistence of server configurations.
@@ -41,10 +46,10 @@ import java.io.File;
 public class MetaStore implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(MetaStore.class);
   private final Storage storage;
-  private final Serializer serializer;
+  private final Kryo serializer;
   private final Buffer buffer;
 
-  public MetaStore(String name, Storage storage, Serializer serializer) {
+  public MetaStore(String name, Storage storage, Kryo serializer) {
     this.storage = Assert.notNull(storage, "storage");
     this.serializer = Assert.notNull(serializer, "serializer");
     if (storage.level() == StorageLevel.MEMORY) {
@@ -61,7 +66,7 @@ public class MetaStore implements AutoCloseable {
    *
    * @return The metastore serializer.
    */
-  public Serializer serializer() {
+  public Kryo serializer() {
     return serializer;
   }
 
@@ -115,11 +120,19 @@ public class MetaStore implements AutoCloseable {
    */
   public synchronized MetaStore storeConfiguration(Configuration configuration) {
     LOGGER.debug("Store configuration {}", configuration);
-    serializer.writeObject(configuration.members(), buffer.position(12)
+
+    buffer.position(12)
       .writeByte(1)
       .writeLong(configuration.index())
       .writeLong(configuration.term())
-      .writeLong(configuration.time()));
+      .writeLong(configuration.time());
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    Output output = new Output(outputStream);
+    serializer.writeClassAndObject(output, configuration.members());
+    output.flush();
+    byte[] bytes = outputStream.toByteArray();
+    buffer.write(bytes);
     buffer.flush();
     return this;
   }
@@ -129,14 +142,17 @@ public class MetaStore implements AutoCloseable {
    *
    * @return The current cluster configuration.
    */
+  @SuppressWarnings("unchecked")
   public synchronized Configuration loadConfiguration() {
     if (buffer.position(12).readByte() == 1) {
-      return new Configuration(
-        buffer.readLong(),
-        buffer.readLong(),
-        buffer.readLong(),
-        serializer.readObject(buffer)
-      );
+      long index = buffer.readLong();
+      long term = buffer.readLong();
+      long time = buffer.readLong();
+
+      byte[] bytes = new byte[(int) buffer.remaining()];
+      buffer.read(bytes);
+      Collection<Member> members = (Collection<Member>) serializer.readClassAndObject(new Input(bytes));
+      return new Configuration(index, term, time, members);
     }
     return null;
   }
