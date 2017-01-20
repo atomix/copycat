@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage.index;
 
-import io.atomix.catalyst.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.Buffer;
 
 /**
  * Offset index that delegates to other indexes.

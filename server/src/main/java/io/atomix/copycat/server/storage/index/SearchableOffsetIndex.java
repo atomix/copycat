@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.server.storage.index;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.buffer.MappedBuffer;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.FileBuffer;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.server.storage.buffer.MappedBuffer;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Ordered offset index;
