@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.RegisterRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketRegisterRequest extends RegisterRequest implements WebSocketRequest {
+public class WebSocketRegisterRequest extends RegisterRequest implements WebSocketRequest<WebSocketRegisterRequest> {
   private final long id;
 
   @JsonCreator
@@ -46,7 +46,7 @@ public class WebSocketRegisterRequest extends RegisterRequest implements WebSock
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.REGISTER_REQUEST;
+    return Type.REGISTER;
   }
 
   @Override

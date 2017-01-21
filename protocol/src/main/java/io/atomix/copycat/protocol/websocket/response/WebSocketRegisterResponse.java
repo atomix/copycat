@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketRegisterResponse extends RegisterResponse implements WebSocketResponse {
+public class WebSocketRegisterResponse extends RegisterResponse implements WebSocketResponse<WebSocketRegisterResponse> {
   private final long id;
 
   @JsonCreator
@@ -54,7 +54,7 @@ public class WebSocketRegisterResponse extends RegisterResponse implements WebSo
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.REGISTER_RESPONSE;
+    return Type.REGISTER;
   }
 
   @Override

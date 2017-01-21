@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketConnectResponse extends ConnectResponse implements WebSocketResponse {
+public class WebSocketConnectResponse extends ConnectResponse implements WebSocketResponse<WebSocketConnectResponse> {
   private final long id;
 
   @JsonCreator
@@ -52,7 +52,7 @@ public class WebSocketConnectResponse extends ConnectResponse implements WebSock
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.CONNECT_RESPONSE;
+    return Type.CONNECT;
   }
 
   @Override

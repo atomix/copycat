@@ -27,59 +27,71 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface WebSocketResponse extends ProtocolResponse {
+public interface WebSocketResponse<T extends WebSocketResponse<T>> extends ProtocolResponse {
+  String TYPE = "response";
 
   /**
-   * Protocol request type.
+   * Web socket response type.
    */
-  interface Type {
-    /**
-     * Returns the request type class.
-     */
-    Class<? extends WebSocketResponse> type();
-  }
+  class Type<T extends WebSocketResponse<T>> {
+    public static final Type<WebSocketConnectResponse>       CONNECT = new Type<>("connect", WebSocketConnectResponse.class);
+    public static final Type<WebSocketRegisterResponse>     REGISTER = new Type<>("register", WebSocketRegisterResponse.class);
+    public static final Type<WebSocketKeepAliveResponse>  KEEP_ALIVE = new Type<>("keep_alive", WebSocketKeepAliveResponse.class);
+    public static final Type<WebSocketUnregisterResponse> UNREGISTER = new Type<>("unregister", WebSocketUnregisterResponse.class);
+    public static final Type<WebSocketQueryResponse>           QUERY = new Type<>("query", WebSocketQueryResponse.class);
+    public static final Type<WebSocketCommandResponse>       COMMAND = new Type<>("command", WebSocketCommandResponse.class);
+    public static final Type<WebSocketPublishResponse>       PUBLISH = new Type<>("publish", WebSocketPublishResponse.class);
 
-  /**
-   * Protocol response type.
-   */
-  enum Types implements Type {
-    CONNECT_RESPONSE(WebSocketConnectResponse.class),
-    REGISTER_RESPONSE(WebSocketRegisterResponse.class),
-    KEEP_ALIVE_RESPONSE(WebSocketKeepAliveResponse.class),
-    UNREGISTER_RESPONSE(WebSocketUnregisterResponse.class),
-    QUERY_RESPONSE(WebSocketQueryResponse.class),
-    COMMAND_RESPONSE(WebSocketCommandResponse.class),
-    PUBLISH_RESPONSE(WebSocketPublishResponse.class);
+    private final String name;
+    private final Class<T> type;
 
-    private final Class<? extends WebSocketResponse> type;
-
-    Types(Class<? extends WebSocketResponse> type) {
+    public Type(String name, Class<T> type) {
+      this.name = name;
       this.type = type;
     }
 
-    @Override
-    public Class<? extends WebSocketResponse> type() {
+    /**
+     * Returns the response type name.
+     *
+     * @return The response type name.
+     */
+    public String name() {
+      return name;
+    }
+
+    /**
+     * Returns the response type class.
+     *
+     * @return The response type class.
+     */
+    public Class<T> type() {
       return type;
     }
 
     /**
-     * Returns a boolean indicating whether the given type is a protocol response type.
+     * Returns the web socket response type for the given name.
      *
-     * @param type The type to check.
-     * @return Indicates whether the given type is a protocol response type.
+     * @param name The web socket response type name.
+     * @return The web socket response type for the given name.
      */
-    public static boolean isProtocolResponse(String type) {
-      switch (type) {
-        case "CONNECT_RESPONSE":
-        case "REGISTER_RESPONSE":
-        case "KEEP_ALIVE_RESPONSE":
-        case "UNREGISTER_RESPONSE":
-        case "QUERY_RESPONSE":
-        case "COMMAND_RESPONSE":
-        case "PUBLISH_RESPONSE":
-          return true;
+    public static Type<?> forName(String name) {
+      switch (name) {
+        case "connect":
+          return CONNECT;
+        case "register":
+          return REGISTER;
+        case "keep_alive":
+          return KEEP_ALIVE;
+        case "unregister":
+          return UNREGISTER;
+        case "query":
+          return QUERY;
+        case "command":
+          return COMMAND;
+        case "publish":
+          return PUBLISH;
         default:
-          return false;
+          throw new IllegalArgumentException("unknown response type name: " + name);
       }
     }
   }
@@ -91,6 +103,16 @@ public interface WebSocketResponse extends ProtocolResponse {
    */
   @JsonGetter("id")
   long id();
+
+  /**
+   * Returns the response method.
+   *
+   * @return The response method.
+   */
+  @JsonGetter("method")
+  default String method() {
+    return TYPE;
+  }
 
   /**
    * Returns the protocol response type.

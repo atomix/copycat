@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketKeepAliveResponse extends KeepAliveResponse implements WebSocketResponse {
+public class WebSocketKeepAliveResponse extends KeepAliveResponse implements WebSocketResponse<WebSocketKeepAliveResponse> {
   private final long id;
 
   @JsonCreator
@@ -52,7 +52,7 @@ public class WebSocketKeepAliveResponse extends KeepAliveResponse implements Web
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.KEEP_ALIVE_RESPONSE;
+    return Type.KEEP_ALIVE;
   }
 
   @Override

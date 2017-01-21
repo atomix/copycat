@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.request.QueryRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequest {
+public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequest<WebSocketQueryRequest> {
   private final long id;
 
   @JsonCreator
@@ -49,7 +49,7 @@ public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequ
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.QUERY_REQUEST;
+    return Type.QUERY;
   }
 
   @Override

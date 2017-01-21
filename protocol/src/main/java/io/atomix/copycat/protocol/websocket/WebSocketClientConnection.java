@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketClientConnection extends AbstractWebSocketConnection<WebSocket> implements ProtocolClientConnection {
+public class WebSocketClientConnection extends WebSocketConnection<WebSocket> implements ProtocolClientConnection {
   private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketClientConnection.class);
 
   private ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> publishListener;
@@ -50,7 +50,7 @@ public class WebSocketClientConnection extends AbstractWebSocketConnection<WebSo
 
   @Override
   protected void onRequest(WebSocketRequest request) {
-    if (request.type() == WebSocketRequest.Types.PUBLISH_REQUEST) {
+    if (request.type() == WebSocketRequest.Type.PUBLISH) {
       publishListener.onRequest((PublishRequest) request, new WebSocketPublishResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {

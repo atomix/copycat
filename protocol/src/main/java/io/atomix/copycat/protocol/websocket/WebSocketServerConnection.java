@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketServerConnection extends AbstractWebSocketConnection<ServerWebSocket> implements ProtocolServerConnection {
+public class WebSocketServerConnection extends WebSocketConnection<ServerWebSocket> implements ProtocolServerConnection {
   private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketServerConnection.class);
 
   private ProtocolListener<ConnectRequest, ConnectResponse.Builder, ConnectResponse> connectListener;
@@ -57,42 +57,42 @@ public class WebSocketServerConnection extends AbstractWebSocketConnection<Serve
 
   @Override
   protected void onRequest(WebSocketRequest request) {
-    if (request.type() == WebSocketRequest.Types.CONNECT_REQUEST) {
+    if (request.type() == WebSocketRequest.Type.CONNECT) {
       connectListener.onRequest((ConnectRequest) request, new WebSocketConnectResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((WebSocketConnectResponse) response);
           }
         });
-    } else if (request.type() == WebSocketRequest.Types.REGISTER_REQUEST) {
+    } else if (request.type() == WebSocketRequest.Type.REGISTER) {
       registerListener.onRequest((RegisterRequest) request, new WebSocketRegisterResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((WebSocketRegisterResponse) response);
           }
         });
-    } else if (request.type() == WebSocketRequest.Types.KEEP_ALIVE_REQUEST) {
+    } else if (request.type() == WebSocketRequest.Type.KEEP_ALIVE) {
       keepAliveListener.onRequest((KeepAliveRequest) request, new WebSocketKeepAliveResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((WebSocketKeepAliveResponse) response);
           }
         });
-    } else if (request.type() == WebSocketRequest.Types.UNREGISTER_REQUEST) {
+    } else if (request.type() == WebSocketRequest.Type.UNREGISTER) {
       unregisterListener.onRequest((UnregisterRequest) request, new WebSocketUnregisterResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((WebSocketUnregisterResponse) response);
           }
         });
-    } else if (request.type() == WebSocketRequest.Types.COMMAND_REQUEST) {
+    } else if (request.type() == WebSocketRequest.Type.COMMAND) {
       commandListener.onRequest((CommandRequest) request, new WebSocketCommandResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((WebSocketCommandResponse) response);
           }
         });
-    } else if (request.type() == WebSocketRequest.Types.QUERY_REQUEST) {
+    } else if (request.type() == WebSocketRequest.Type.QUERY) {
       queryListener.onRequest((QueryRequest) request, new WebSocketQueryResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {

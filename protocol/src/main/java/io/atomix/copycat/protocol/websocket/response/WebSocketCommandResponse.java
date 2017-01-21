@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.response.CommandResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketCommandResponse extends CommandResponse implements WebSocketResponse {
+public class WebSocketCommandResponse extends CommandResponse implements WebSocketResponse<WebSocketCommandResponse> {
   private final long id;
 
   @JsonCreator
@@ -50,7 +50,7 @@ public class WebSocketCommandResponse extends CommandResponse implements WebSock
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.COMMAND_RESPONSE;
+    return Type.COMMAND;
   }
 
   @Override

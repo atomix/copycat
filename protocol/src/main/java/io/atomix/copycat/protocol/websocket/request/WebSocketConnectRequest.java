@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.ConnectRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketConnectRequest extends ConnectRequest implements WebSocketRequest {
+public class WebSocketConnectRequest extends ConnectRequest implements WebSocketRequest<WebSocketConnectRequest> {
   private final long id;
 
   @JsonCreator
@@ -45,7 +45,7 @@ public class WebSocketConnectRequest extends ConnectRequest implements WebSocket
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.CONNECT_REQUEST;
+    return Type.CONNECT;
   }
 
   @Override

@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.UnregisterRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketUnregisterRequest extends UnregisterRequest implements WebSocketRequest {
+public class WebSocketUnregisterRequest extends UnregisterRequest implements WebSocketRequest<WebSocketUnregisterRequest> {
   private final long id;
 
   @JsonCreator
@@ -45,7 +45,7 @@ public class WebSocketUnregisterRequest extends UnregisterRequest implements Web
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.UNREGISTER_REQUEST;
+    return Type.UNREGISTER;
   }
 
   @Override

@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.response.PublishResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketPublishResponse extends PublishResponse implements WebSocketResponse {
+public class WebSocketPublishResponse extends PublishResponse implements WebSocketResponse<WebSocketPublishResponse> {
   private final long id;
 
   @JsonCreator
@@ -48,7 +48,7 @@ public class WebSocketPublishResponse extends PublishResponse implements WebSock
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.PUBLISH_RESPONSE;
+    return Type.PUBLISH;
   }
 
   @Override

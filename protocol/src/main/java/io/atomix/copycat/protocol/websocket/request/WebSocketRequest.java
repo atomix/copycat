@@ -23,59 +23,71 @@ import io.atomix.copycat.protocol.request.ProtocolRequest;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface WebSocketRequest extends ProtocolRequest {
+public interface WebSocketRequest<T extends WebSocketRequest<T>> extends ProtocolRequest {
+  String TYPE = "request";
 
   /**
-   * Protocol request type.
+   * Web socket request type.
    */
-  interface Type {
-    /**
-     * Returns the request type class.
-     */
-    Class<? extends WebSocketRequest> type();
-  }
+  class Type<T extends WebSocketRequest<T>> {
+    public static final Type<WebSocketConnectRequest>       CONNECT = new Type<>("connect", WebSocketConnectRequest.class);
+    public static final Type<WebSocketRegisterRequest>     REGISTER = new Type<>("register", WebSocketRegisterRequest.class);
+    public static final Type<WebSocketKeepAliveRequest>  KEEP_ALIVE = new Type<>("keep_alive", WebSocketKeepAliveRequest.class);
+    public static final Type<WebSocketUnregisterRequest> UNREGISTER = new Type<>("unregister", WebSocketUnregisterRequest.class);
+    public static final Type<WebSocketQueryRequest>           QUERY = new Type<>("query", WebSocketQueryRequest.class);
+    public static final Type<WebSocketCommandRequest>       COMMAND = new Type<>("command", WebSocketCommandRequest.class);
+    public static final Type<WebSocketPublishRequest>       PUBLISH = new Type<>("publish", WebSocketPublishRequest.class);
 
-  /**
-   * Protocol request type.
-   */
-  enum Types implements Type {
-    CONNECT_REQUEST(WebSocketConnectRequest.class),
-    REGISTER_REQUEST(WebSocketRegisterRequest.class),
-    KEEP_ALIVE_REQUEST(WebSocketKeepAliveRequest.class),
-    UNREGISTER_REQUEST(WebSocketUnregisterRequest.class),
-    QUERY_REQUEST(WebSocketQueryRequest.class),
-    COMMAND_REQUEST(WebSocketCommandRequest.class),
-    PUBLISH_REQUEST(WebSocketPublishRequest.class);
+    private final String name;
+    private final Class<T> type;
 
-    private final Class<? extends WebSocketRequest> type;
-
-    Types(Class<? extends WebSocketRequest> type) {
+    public Type(String name, Class<T> type) {
+      this.name = name;
       this.type = type;
     }
 
-    @Override
-    public Class<? extends WebSocketRequest> type() {
+    /**
+     * Returns the request type name.
+     *
+     * @return The request type name.
+     */
+    public String name() {
+      return name;
+    }
+
+    /**
+     * Returns the request type class.
+     *
+     * @return The request type class.
+     */
+    public Class<T> type() {
       return type;
     }
 
     /**
-     * Returns a boolean indicating whether the given type is a protocol request type.
+     * Returns the web socket request type for the given name.
      *
-     * @param type The type to check.
-     * @return Indicates whether the given type is a protocol request type.
+     * @param name The web socket request type name.
+     * @return The web socket request type for the given name.
      */
-    public static boolean isProtocolRequest(String type) {
-      switch (type) {
-        case "CONNECT_REQUEST":
-        case "REGISTER_REQUEST":
-        case "KEEP_ALIVE_REQUEST":
-        case "UNREGISTER_REQUEST":
-        case "QUERY_REQUEST":
-        case "COMMAND_REQUEST":
-        case "PUBLISH_REQUEST":
-          return true;
+    public static Type<?> forName(String name) {
+      switch (name) {
+        case "connect":
+          return CONNECT;
+        case "register":
+          return REGISTER;
+        case "keep_alive":
+          return KEEP_ALIVE;
+        case "unregister":
+          return UNREGISTER;
+        case "query":
+          return QUERY;
+        case "command":
+          return COMMAND;
+        case "publish":
+          return PUBLISH;
         default:
-          return false;
+          throw new IllegalArgumentException("unknown request type name: " + name);
       }
     }
   }
@@ -87,6 +99,16 @@ public interface WebSocketRequest extends ProtocolRequest {
    */
   @JsonGetter("id")
   long id();
+
+  /**
+   * Returns the request method.
+   *
+   * @return The request method.
+   */
+  @JsonGetter("method")
+  default String method() {
+    return TYPE;
+  }
 
   /**
    * Returns the request type.

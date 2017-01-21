@@ -28,7 +28,7 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketPublishRequest extends PublishRequest implements WebSocketRequest {
+public class WebSocketPublishRequest extends PublishRequest implements WebSocketRequest<WebSocketPublishRequest> {
   private final long id;
 
   @JsonCreator
@@ -51,7 +51,7 @@ public class WebSocketPublishRequest extends PublishRequest implements WebSocket
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.PUBLISH_REQUEST;
+    return Type.PUBLISH;
   }
 
   @Override

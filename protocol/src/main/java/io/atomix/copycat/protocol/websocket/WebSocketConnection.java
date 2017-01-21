@@ -18,11 +18,11 @@ package io.atomix.copycat.protocol.websocket;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.undercouch.bson4jackson.BsonFactory;
-import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.protocol.ProtocolConnection;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.websocket.request.WebSocketRequest;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.util.concurrent.Listener;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.WebSocketBase;
 import io.vertx.core.http.WebSocketFrame;
@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public abstract class AbstractWebSocketConnection<T extends WebSocketBase> implements ProtocolConnection {
+public abstract class WebSocketConnection<T extends WebSocketBase> implements ProtocolConnection {
   protected T socket;
   private final ObjectMapper textMapper = new ObjectMapper();
   private final ObjectMapper binaryMapper = new ObjectMapper(new BsonFactory());
@@ -47,7 +47,7 @@ public abstract class AbstractWebSocketConnection<T extends WebSocketBase> imple
   private Consumer<ProtocolConnection> closeListener;
   private final Map<Long, CompletableFuture> futures = new ConcurrentHashMap<>();
 
-  public AbstractWebSocketConnection(T socket) {
+  public WebSocketConnection(T socket) {
     this.socket = socket;
     socket.frameHandler(this::handleFrame);
     socket.exceptionHandler(this::handleException);
@@ -117,18 +117,38 @@ public abstract class AbstractWebSocketConnection<T extends WebSocketBase> imple
    */
   @SuppressWarnings("unchecked")
   private void handleObject(JsonNode json) {
+    String method = json.get("method").asText();
+    switch (method) {
+      case WebSocketRequest.TYPE:
+        handleRequest(json);
+        break;
+      case WebSocketResponse.TYPE:
+        handleResponse(json);
+        break;
+    }
+  }
+
+  /**
+   * Handles a JSON request.
+   */
+  protected void handleRequest(JsonNode json) {
     String type = json.get("type").asText();
-    if (WebSocketRequest.Types.isProtocolRequest(type)) {
-      WebSocketRequest request = textMapper.convertValue(json, WebSocketRequest.Types.valueOf(type).type());
-      logger().debug("Received {}", request);
-      onRequest(request);
-    } else if (WebSocketResponse.Types.isProtocolResponse(type)) {
-      WebSocketResponse response = textMapper.convertValue(json, WebSocketResponse.Types.valueOf(type).type());
-      logger().debug("Received {}", response);
-      CompletableFuture future = futures.get(response.id());
-      if (future != null) {
-        future.complete(response);
-      }
+    WebSocketRequest request = textMapper.convertValue(json, WebSocketRequest.Type.forName(type).type());
+    logger().debug("Received {}", request);
+    onRequest(request);
+  }
+
+  /**
+   * Handles a JSON response.
+   */
+  @SuppressWarnings("unchecked")
+  protected void handleResponse(JsonNode json) {
+    String type = json.get("type").asText();
+    WebSocketResponse response = textMapper.convertValue(json, WebSocketResponse.Type.forName(type).type());
+    logger().debug("Received {}", response);
+    CompletableFuture future = futures.get(response.id());
+    if (future != null) {
+      future.complete(response);
     }
   }
 

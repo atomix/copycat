@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.KeepAliveRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketKeepAliveRequest extends KeepAliveRequest implements WebSocketRequest {
+public class WebSocketKeepAliveRequest extends KeepAliveRequest implements WebSocketRequest<WebSocketKeepAliveRequest> {
   private final long id;
 
   @JsonCreator
@@ -47,7 +47,7 @@ public class WebSocketKeepAliveRequest extends KeepAliveRequest implements WebSo
   @Override
   @JsonGetter("type")
   public Type type() {
-    return Types.KEEP_ALIVE_REQUEST;
+    return Type.KEEP_ALIVE;
   }
 
   @Override
