@@ -26,7 +26,7 @@ import io.atomix.copycat.server.protocol.request.LeaveRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetLeaveRequest extends LeaveRequest implements RaftNetRequest {
+public class NetLeaveRequest extends LeaveRequest implements RaftNetRequest<NetLeaveRequest> {
   private final long id;
 
   public NetLeaveRequest(long id, Member member) {
@@ -41,7 +41,7 @@ public class NetLeaveRequest extends LeaveRequest implements RaftNetRequest {
 
   @Override
   public Type type() {
-    return Types.LEAVE_REQUEST;
+    return Type.LEAVE;
   }
 
   /**

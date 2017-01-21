@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.RegisterRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetRegisterRequest extends RegisterRequest implements NetRequest {
+public class NetRegisterRequest extends RegisterRequest implements NetRequest<NetRegisterRequest> {
   private final long id;
 
   public NetRegisterRequest(long id, String client, long timeout) {
@@ -40,7 +40,7 @@ public class NetRegisterRequest extends RegisterRequest implements NetRequest {
 
   @Override
   public Type type() {
-    return Types.REGISTER_REQUEST;
+    return Type.REGISTER;
   }
 
   /**

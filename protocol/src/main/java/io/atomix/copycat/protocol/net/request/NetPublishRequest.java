@@ -28,7 +28,7 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetPublishRequest extends PublishRequest implements NetRequest {
+public class NetPublishRequest extends PublishRequest implements NetRequest<NetPublishRequest> {
   private final long id;
 
   public NetPublishRequest(long id, long session, long eventIndex, long previousIndex, List<Event<?>> events) {
@@ -43,7 +43,7 @@ public class NetPublishRequest extends PublishRequest implements NetRequest {
 
   @Override
   public Type type() {
-    return Types.PUBLISH_REQUEST;
+    return Type.PUBLISH;
   }
 
   /**

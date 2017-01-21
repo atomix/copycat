@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetKeepAliveResponse extends KeepAliveResponse implements NetResponse {
+public class NetKeepAliveResponse extends KeepAliveResponse implements NetResponse<NetKeepAliveResponse> {
   private final long id;
 
   public NetKeepAliveResponse(long id, Status status, CopycatError error, Address leader, Collection<Address> members) {
@@ -44,7 +44,7 @@ public class NetKeepAliveResponse extends KeepAliveResponse implements NetRespon
 
   @Override
   public Type type() {
-    return Types.KEEP_ALIVE_RESPONSE;
+    return Type.KEEP_ALIVE;
   }
 
   /**

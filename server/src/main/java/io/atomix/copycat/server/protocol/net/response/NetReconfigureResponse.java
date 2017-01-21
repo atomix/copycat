@@ -30,7 +30,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetReconfigureResponse extends ReconfigureResponse implements RaftNetResponse {
+public class NetReconfigureResponse extends ReconfigureResponse implements RaftNetResponse<NetReconfigureResponse> {
   private final long id;
 
   public NetReconfigureResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
@@ -45,7 +45,7 @@ public class NetReconfigureResponse extends ReconfigureResponse implements RaftN
 
   @Override
   public Type type() {
-    return Types.RECONFIGURE_RESPONSE;
+    return Type.RECONFIGURE;
   }
 
   /**

@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.request.QueryRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetQueryRequest extends QueryRequest implements NetRequest {
+public class NetQueryRequest extends QueryRequest implements NetRequest<NetQueryRequest> {
   private final long id;
 
   public NetQueryRequest(long id, long session, long sequence, long index, Query query) {
@@ -41,7 +41,7 @@ public class NetQueryRequest extends QueryRequest implements NetRequest {
 
   @Override
   public Type type() {
-    return Types.QUERY_REQUEST;
+    return Type.QUERY;
   }
 
   /**

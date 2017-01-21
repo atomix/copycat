@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.response.QueryResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetQueryResponse extends QueryResponse implements NetResponse {
+public class NetQueryResponse extends QueryResponse implements NetResponse<NetQueryResponse> {
   private final long id;
 
   public NetQueryResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
@@ -41,7 +41,7 @@ public class NetQueryResponse extends QueryResponse implements NetResponse {
 
   @Override
   public Type type() {
-    return Types.QUERY_RESPONSE;
+    return Type.QUERY;
   }
 
   /**

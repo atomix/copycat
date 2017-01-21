@@ -50,13 +50,13 @@ public class RaftNetServerConnection extends NetServerConnection implements Raft
 
   @Override
   protected void handleMessage(int id, byte[] bytes) {
-    if (RaftNetRequest.Types.isProtocolRequest(id)) {
-      RaftNetRequest.Type type = RaftNetRequest.Types.forId(id);
-      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
+    if (RaftNetRequest.Type.isProtocolRequest(id)) {
+      NetRequest.Type<?> type = RaftNetRequest.Type.forId(id);
+      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer());
       onRequest(request);
-    } else if (RaftNetResponse.Types.isProtocolResponse(id)) {
-      RaftNetResponse.Type type = RaftNetResponse.Types.forId(id);
-      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
+    } else if (RaftNetResponse.Type.isProtocolResponse(id)) {
+      NetResponse.Type<?> type = RaftNetResponse.Type.forId(id);
+      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer());
       onResponse(response);
     };
   }
@@ -67,63 +67,63 @@ public class RaftNetServerConnection extends NetServerConnection implements Raft
       return true;
     }
 
-    if (request.type() == RaftNetRequest.Types.JOIN_REQUEST) {
+    if (request.type() == RaftNetRequest.Type.JOIN) {
       joinListener.onRequest((JoinRequest) request, new NetJoinResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetJoinResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.LEAVE_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.LEAVE) {
       leaveListener.onRequest((LeaveRequest) request, new NetLeaveResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetLeaveResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.INSTALL_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.INSTALL) {
       installListener.onRequest((InstallRequest) request, new NetInstallResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetInstallResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.CONFIGURE_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.CONFIGURE) {
       configureListener.onRequest((ConfigureRequest) request, new NetConfigureResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetConfigureResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.RECONFIGURE_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.RECONFIGURE) {
       reconfigureListener.onRequest((ReconfigureRequest) request, new NetReconfigureResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetReconfigureResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.ACCEPT_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.ACCEPT) {
       acceptListener.onRequest((AcceptRequest) request, new NetAcceptResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetAcceptResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.POLL_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.POLL) {
       pollListener.onRequest((PollRequest) request, new NetPollResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetPollResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.VOTE_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.VOTE) {
       voteListener.onRequest((VoteRequest) request, new NetVoteResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetVoteResponse) response);
           }
         });
-    } else if (request.type() == RaftNetRequest.Types.APPEND_REQUEST) {
+    } else if (request.type() == RaftNetRequest.Type.APPEND) {
       appendListener.onRequest((AppendRequest) request, new NetAppendResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {

@@ -57,42 +57,42 @@ public class NetServerConnection extends NetConnection implements ProtocolServer
 
   @Override
   protected boolean onRequest(NetRequest request) {
-    if (request.type() == NetRequest.Types.CONNECT_REQUEST) {
+    if (request.type() == NetRequest.Type.CONNECT) {
       connectListener.onRequest((ConnectRequest) request, new NetConnectResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetConnectResponse) response);
           }
         });
-    } else if (request.type() == NetRequest.Types.REGISTER_REQUEST) {
+    } else if (request.type() == NetRequest.Type.REGISTER) {
       registerListener.onRequest((RegisterRequest) request, new NetRegisterResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetRegisterResponse) response);
           }
         });
-    } else if (request.type() == NetRequest.Types.KEEP_ALIVE_REQUEST) {
+    } else if (request.type() == NetRequest.Type.KEEP_ALIVE) {
       keepAliveListener.onRequest((KeepAliveRequest) request, new NetKeepAliveResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetKeepAliveResponse) response);
           }
         });
-    } else if (request.type() == NetRequest.Types.UNREGISTER_REQUEST) {
+    } else if (request.type() == NetRequest.Type.UNREGISTER) {
       unregisterListener.onRequest((UnregisterRequest) request, new NetUnregisterResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetUnregisterResponse) response);
           }
         });
-    } else if (request.type() == NetRequest.Types.QUERY_REQUEST) {
+    } else if (request.type() == NetRequest.Type.QUERY) {
       queryListener.onRequest((QueryRequest) request, new NetQueryResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {
             sendResponse((NetQueryResponse) response);
           }
         });
-    } else if (request.type() == NetRequest.Types.COMMAND_REQUEST) {
+    } else if (request.type() == NetRequest.Type.COMMAND) {
       commandListener.onRequest((CommandRequest) request, new NetCommandResponse.Builder(request.id()))
         .whenComplete((response, error) -> {
           if (error == null) {

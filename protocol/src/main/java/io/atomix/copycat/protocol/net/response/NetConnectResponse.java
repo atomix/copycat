@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetConnectResponse extends ConnectResponse implements NetResponse {
+public class NetConnectResponse extends ConnectResponse implements NetResponse<NetConnectResponse> {
   private final long id;
 
   public NetConnectResponse(long id, Status status, CopycatError error, Address leader, Collection<Address> members) {
@@ -44,7 +44,7 @@ public class NetConnectResponse extends ConnectResponse implements NetResponse {
 
   @Override
   public Type type() {
-    return Types.CONNECT_RESPONSE;
+    return Type.CONNECT;
   }
 
   /**

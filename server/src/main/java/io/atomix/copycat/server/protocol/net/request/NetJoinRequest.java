@@ -26,7 +26,7 @@ import io.atomix.copycat.server.protocol.request.JoinRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetJoinRequest extends JoinRequest implements RaftNetRequest {
+public class NetJoinRequest extends JoinRequest implements RaftNetRequest<NetJoinRequest> {
   private final long id;
 
   public NetJoinRequest(long id, Member member) {
@@ -41,7 +41,7 @@ public class NetJoinRequest extends JoinRequest implements RaftNetRequest {
 
   @Override
   public Type type() {
-    return Types.JOIN_REQUEST;
+    return Type.JOIN;
   }
 
   /**

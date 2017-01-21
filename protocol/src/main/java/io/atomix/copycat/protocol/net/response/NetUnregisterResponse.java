@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.response.UnregisterResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetUnregisterResponse extends UnregisterResponse implements NetResponse {
+public class NetUnregisterResponse extends UnregisterResponse implements NetResponse<NetUnregisterResponse> {
   private final long id;
 
   public NetUnregisterResponse(long id, Status status, CopycatError error) {
@@ -41,7 +41,7 @@ public class NetUnregisterResponse extends UnregisterResponse implements NetResp
 
   @Override
   public Type type() {
-    return Types.UNREGISTER_RESPONSE;
+    return Type.UNREGISTER;
   }
 
   /**

@@ -28,7 +28,7 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAppendRequest extends AppendRequest implements RaftNetRequest {
+public class NetAppendRequest extends AppendRequest implements RaftNetRequest<NetAppendRequest> {
   private final long id;
 
   public NetAppendRequest(long id, long term, int leader, long logIndex, long logTerm, List<Entry> entries, long commitIndex, long globalIndex) {
@@ -43,7 +43,7 @@ public class NetAppendRequest extends AppendRequest implements RaftNetRequest {
 
   @Override
   public Type type() {
-    return Types.APPEND_REQUEST;
+    return Type.APPEND;
   }
 
   /**

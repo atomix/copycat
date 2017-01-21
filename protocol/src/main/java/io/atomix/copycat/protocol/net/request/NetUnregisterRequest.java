@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.UnregisterRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetUnregisterRequest extends UnregisterRequest implements NetRequest {
+public class NetUnregisterRequest extends UnregisterRequest implements NetRequest<NetUnregisterRequest> {
   private final long id;
 
   public NetUnregisterRequest(long id, long session) {
@@ -40,7 +40,7 @@ public class NetUnregisterRequest extends UnregisterRequest implements NetReques
 
   @Override
   public Type type() {
-    return Types.UNREGISTER_REQUEST;
+    return Type.UNREGISTER;
   }
 
   /**

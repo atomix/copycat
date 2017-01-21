@@ -25,7 +25,7 @@ import io.atomix.copycat.server.protocol.request.VoteRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetVoteRequest extends VoteRequest implements RaftNetRequest {
+public class NetVoteRequest extends VoteRequest implements RaftNetRequest<NetVoteRequest> {
   private final long id;
 
   public NetVoteRequest(long id, long term, int candidate, long logIndex, long logTerm) {
@@ -40,7 +40,7 @@ public class NetVoteRequest extends VoteRequest implements RaftNetRequest {
 
   @Override
   public Type type() {
-    return Types.VOTE_REQUEST;
+    return Type.VOTE;
   }
 
   /**

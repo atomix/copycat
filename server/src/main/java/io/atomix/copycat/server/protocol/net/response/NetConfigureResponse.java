@@ -27,7 +27,7 @@ import io.atomix.copycat.server.protocol.response.ConfigureResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetConfigureResponse extends ConfigureResponse implements RaftNetResponse {
+public class NetConfigureResponse extends ConfigureResponse implements RaftNetResponse<NetConfigureResponse> {
   private final long id;
 
   public NetConfigureResponse(long id, ProtocolResponse.Status status, CopycatError error) {
@@ -42,7 +42,7 @@ public class NetConfigureResponse extends ConfigureResponse implements RaftNetRe
 
   @Override
   public Type type() {
-    return Types.CONFIGURE_RESPONSE;
+    return Type.CONFIGURE;
   }
 
   /**

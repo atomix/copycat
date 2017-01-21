@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.request.CommandRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetCommandRequest extends CommandRequest implements NetRequest {
+public class NetCommandRequest extends CommandRequest implements NetRequest<NetCommandRequest> {
   private final long id;
 
   public NetCommandRequest(long id, long session, long sequence, Command command) {
@@ -41,7 +41,7 @@ public class NetCommandRequest extends CommandRequest implements NetRequest {
 
   @Override
   public Type type() {
-    return Types.COMMAND_REQUEST;
+    return Type.COMMAND;
   }
 
   /**

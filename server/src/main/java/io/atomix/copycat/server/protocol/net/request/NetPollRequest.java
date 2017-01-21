@@ -25,7 +25,7 @@ import io.atomix.copycat.server.protocol.request.PollRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetPollRequest extends PollRequest implements RaftNetRequest {
+public class NetPollRequest extends PollRequest implements RaftNetRequest<NetPollRequest> {
   private final long id;
 
   public NetPollRequest(long id, long term, int candidate, long logIndex, long logTerm) {
@@ -40,7 +40,7 @@ public class NetPollRequest extends PollRequest implements RaftNetRequest {
 
   @Override
   public Type type() {
-    return Types.POLL_REQUEST;
+    return Type.POLL;
   }
 
   /**

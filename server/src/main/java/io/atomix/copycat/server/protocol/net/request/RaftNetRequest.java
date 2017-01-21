@@ -15,61 +15,31 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import io.atomix.copycat.protocol.net.request.*;
-
-import java.util.function.Supplier;
+import io.atomix.copycat.protocol.net.request.NetRequest;
 
 /**
  * Raft TCP request.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface RaftNetRequest extends NetRequest {
+public interface RaftNetRequest<T extends RaftNetRequest<T>> extends NetRequest<T> {
 
   /**
-   * Protocol request type.
+   * Raft TCP request type.
    */
-  enum Types implements Type {
-    CONNECT_REQUEST(0x00, NetConnectRequest.class, NetConnectRequest.Serializer::new),
-    REGISTER_REQUEST(0x01, NetRegisterRequest.class, NetRegisterRequest.Serializer::new),
-    KEEP_ALIVE_REQUEST(0x02, NetKeepAliveRequest.class, NetKeepAliveRequest.Serializer::new),
-    UNREGISTER_REQUEST(0x03, NetUnregisterRequest.class, NetUnregisterRequest.Serializer::new),
-    QUERY_REQUEST(0x04, NetQueryRequest.class, NetQueryRequest.Serializer::new),
-    COMMAND_REQUEST(0x05, NetCommandRequest.class, NetCommandRequest.Serializer::new),
-    PUBLISH_REQUEST(0x06, NetPublishRequest.class, NetPublishRequest.Serializer::new),
-    JOIN_REQUEST(0x07, NetJoinRequest.class, NetJoinRequest.Serializer::new),
-    LEAVE_REQUEST(0x08, NetLeaveRequest.class, NetLeaveRequest.Serializer::new),
-    INSTALL_REQUEST(0x09, NetInstallRequest.class, NetInstallRequest.Serializer::new),
-    CONFIGURE_REQUEST(0x0a, NetConfigureRequest.class, NetConfigureRequest.Serializer::new),
-    RECONFIGURE_REQUEST(0x0b, NetReconfigureRequest.class, NetReconfigureRequest.Serializer::new),
-    ACCEPT_REQUEST(0x0c, NetAcceptRequest.class, NetAcceptRequest.Serializer::new),
-    POLL_REQUEST(0x0d, NetPollRequest.class, NetPollRequest.Serializer::new),
-    VOTE_REQUEST(0x0e, NetVoteRequest.class, NetVoteRequest.Serializer::new),
-    APPEND_REQUEST(0x0f, NetAppendRequest.class, NetAppendRequest.Serializer::new);
+  class Type<T extends RaftNetRequest<T>> extends NetRequest.Type<T> {
+    public static final Type<NetJoinRequest>               JOIN = new Type<>(0x07, NetJoinRequest.class, new NetJoinRequest.Serializer());
+    public static final Type<NetLeaveRequest>             LEAVE = new Type<>(0x08, NetLeaveRequest.class, new NetLeaveRequest.Serializer());
+    public static final Type<NetInstallRequest>         INSTALL = new Type<>(0x09, NetInstallRequest.class, new NetInstallRequest.Serializer());
+    public static final Type<NetConfigureRequest>     CONFIGURE = new Type<>(0x0a, NetConfigureRequest.class, new NetConfigureRequest.Serializer());
+    public static final Type<NetReconfigureRequest> RECONFIGURE = new Type<>(0x0b, NetReconfigureRequest.class, new NetReconfigureRequest.Serializer());
+    public static final Type<NetAcceptRequest>           ACCEPT = new Type<>(0x0c, NetAcceptRequest.class, new NetAcceptRequest.Serializer());
+    public static final Type<NetPollRequest>               POLL = new Type<>(0x0d, NetPollRequest.class, new NetPollRequest.Serializer());
+    public static final Type<NetVoteRequest>               VOTE = new Type<>(0x0e, NetVoteRequest.class, new NetVoteRequest.Serializer());
+    public static final Type<NetAppendRequest>           APPEND = new Type<>(0x0f, NetAppendRequest.class, new NetAppendRequest.Serializer());
 
-    private final int id;
-    private final Class<? extends NetRequest> type;
-    private final Supplier<Serializer<?>> serializer;
-
-    Types(int id, Class<? extends NetRequest> type, Supplier<Serializer<?>> serializer) {
-      this.id = id;
-      this.type = type;
-      this.serializer = serializer;
-    }
-
-    @Override
-    public int id() {
-      return id;
-    }
-
-    @Override
-    public Class<? extends NetRequest> type() {
-      return type;
-    }
-
-    @Override
-    public Supplier<Serializer<?>> serializer() {
-      return serializer;
+    protected Type(int id, Class<T> type, Serializer<T> serializer) {
+      super(id, type, serializer);
     }
 
     /**
@@ -108,40 +78,40 @@ public interface RaftNetRequest extends NetRequest {
      * @param id The request type ID.
      * @return The request type.
      */
-    public static Type forId(int id) {
+    public static NetRequest.Type<?> forId(int id) {
       switch (id) {
         case 0x00:
-          return CONNECT_REQUEST;
+          return CONNECT;
         case 0x01:
-          return REGISTER_REQUEST;
+          return REGISTER;
         case 0x02:
-          return KEEP_ALIVE_REQUEST;
+          return KEEP_ALIVE;
         case 0x03:
-          return UNREGISTER_REQUEST;
+          return UNREGISTER;
         case 0x04:
-          return QUERY_REQUEST;
+          return QUERY;
         case 0x05:
-          return COMMAND_REQUEST;
+          return COMMAND;
         case 0x06:
-          return PUBLISH_REQUEST;
+          return PUBLISH;
         case 0x07:
-          return JOIN_REQUEST;
+          return JOIN;
         case 0x08:
-          return LEAVE_REQUEST;
+          return LEAVE;
         case 0x09:
-          return INSTALL_REQUEST;
+          return INSTALL;
         case 0x0a:
-          return CONFIGURE_REQUEST;
+          return CONFIGURE;
         case 0x0b:
-          return RECONFIGURE_REQUEST;
+          return RECONFIGURE;
         case 0x0c:
-          return ACCEPT_REQUEST;
+          return ACCEPT;
         case 0x0d:
-          return POLL_REQUEST;
+          return POLL;
         case 0x0e:
-          return VOTE_REQUEST;
+          return VOTE;
         case 0x0f:
-          return APPEND_REQUEST;
+          return APPEND;
         default:
           throw new IllegalArgumentException("Unknown request type: " + id);
       }

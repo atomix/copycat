@@ -15,61 +15,31 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
-import io.atomix.copycat.protocol.net.response.*;
-
-import java.util.function.Supplier;
+import io.atomix.copycat.protocol.net.response.NetResponse;
 
 /**
  * Raft TCP response.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface RaftNetResponse extends NetResponse {
+public interface RaftNetResponse<T extends RaftNetResponse<T>> extends NetResponse<T> {
 
   /**
-   * Protocol response type.
+   * Raft TCP response type.
    */
-  enum Types implements Type {
-    CONNECT_RESPONSE(0x10, NetConnectResponse.class, NetConnectResponse.Serializer::new),
-    REGISTER_RESPONSE(0x11, NetRegisterResponse.class, NetRegisterResponse.Serializer::new),
-    KEEP_ALIVE_RESPONSE(0x12, NetKeepAliveResponse.class, NetKeepAliveResponse.Serializer::new),
-    UNREGISTER_RESPONSE(0x13, NetUnregisterResponse.class, NetUnregisterResponse.Serializer::new),
-    QUERY_RESPONSE(0x14, NetQueryResponse.class, NetQueryResponse.Serializer::new),
-    COMMAND_RESPONSE(0x15, NetCommandResponse.class, NetCommandResponse.Serializer::new),
-    PUBLISH_RESPONSE(0x16, NetPublishResponse.class, NetPublishResponse.Serializer::new),
-    JOIN_RESPONSE(0x17, NetJoinResponse.class, NetJoinResponse.Serializer::new),
-    LEAVE_RESPONSE(0x18, NetLeaveResponse.class, NetLeaveResponse.Serializer::new),
-    INSTALL_RESPONSE(0x19, NetInstallResponse.class, NetInstallResponse.Serializer::new),
-    CONFIGURE_RESPONSE(0x1a, NetConfigureResponse.class, NetConfigureResponse.Serializer::new),
-    RECONFIGURE_RESPONSE(0x1b, NetReconfigureResponse.class, NetReconfigureResponse.Serializer::new),
-    ACCEPT_RESPONSE(0x1c, NetAcceptResponse.class, NetAcceptResponse.Serializer::new),
-    POLL_RESPONSE(0x1d, NetPollResponse.class, NetPollResponse.Serializer::new),
-    VOTE_RESPONSE(0x1e, NetVoteResponse.class, NetVoteResponse.Serializer::new),
-    APPEND_RESPONSE(0x1f, NetAppendResponse.class, NetAppendResponse.Serializer::new);
+  class Type<T extends RaftNetResponse<T>> extends NetResponse.Type<T> {
+    public static final Type<NetJoinResponse>               JOIN = new Type<>(0x17, NetJoinResponse.class, new NetJoinResponse.Serializer());
+    public static final Type<NetLeaveResponse>             LEAVE = new Type<>(0x18, NetLeaveResponse.class, new NetLeaveResponse.Serializer());
+    public static final Type<NetInstallResponse>         INSTALL = new Type<>(0x19, NetInstallResponse.class, new NetInstallResponse.Serializer());
+    public static final Type<NetConfigureResponse>     CONFIGURE = new Type<>(0x1a, NetConfigureResponse.class, new NetConfigureResponse.Serializer());
+    public static final Type<NetReconfigureResponse> RECONFIGURE = new Type<>(0x1b, NetReconfigureResponse.class, new NetReconfigureResponse.Serializer());
+    public static final Type<NetAcceptResponse>           ACCEPT = new Type<>(0x1c, NetAcceptResponse.class, new NetAcceptResponse.Serializer());
+    public static final Type<NetPollResponse>               POLL = new Type<>(0x1d, NetPollResponse.class, new NetPollResponse.Serializer());
+    public static final Type<NetVoteResponse>               VOTE = new Type<>(0x1e, NetVoteResponse.class, new NetVoteResponse.Serializer());
+    public static final Type<NetAppendResponse>           APPEND = new Type<>(0x1f, NetAppendResponse.class, new NetAppendResponse.Serializer());
 
-    private final int id;
-    private final Class<? extends NetResponse> type;
-    private final Supplier<Serializer<?>> serializer;
-
-    Types(int id, Class<? extends NetResponse> type, Supplier<Serializer<?>> serializer) {
-      this.id = id;
-      this.type = type;
-      this.serializer = serializer;
-    }
-
-    @Override
-    public int id() {
-      return id;
-    }
-
-    @Override
-    public Class<? extends NetResponse> type() {
-      return type;
-    }
-
-    @Override
-    public Supplier<Serializer<?>> serializer() {
-      return serializer;
+    protected Type(int id, Class<T> type, Serializer<T> serializer) {
+      super(id, type, serializer);
     }
 
     /**
@@ -108,40 +78,40 @@ public interface RaftNetResponse extends NetResponse {
      * @param id The response type ID.
      * @return The response type.
      */
-    public static Type forId(int id) {
+    public static NetResponse.Type<?> forId(int id) {
       switch (id) {
         case 0x10:
-          return CONNECT_RESPONSE;
+          return CONNECT;
         case 0x11:
-          return REGISTER_RESPONSE;
+          return REGISTER;
         case 0x12:
-          return KEEP_ALIVE_RESPONSE;
+          return KEEP_ALIVE;
         case 0x13:
-          return UNREGISTER_RESPONSE;
+          return UNREGISTER;
         case 0x14:
-          return QUERY_RESPONSE;
+          return QUERY;
         case 0x15:
-          return COMMAND_RESPONSE;
+          return COMMAND;
         case 0x16:
-          return PUBLISH_RESPONSE;
+          return PUBLISH;
         case 0x17:
-          return JOIN_RESPONSE;
+          return JOIN;
         case 0x18:
-          return LEAVE_RESPONSE;
+          return LEAVE;
         case 0x19:
-          return INSTALL_RESPONSE;
+          return INSTALL;
         case 0x1a:
-          return CONFIGURE_RESPONSE;
+          return CONFIGURE;
         case 0x1b:
-          return RECONFIGURE_RESPONSE;
+          return RECONFIGURE;
         case 0x1c:
-          return ACCEPT_RESPONSE;
+          return ACCEPT;
         case 0x1d:
-          return POLL_RESPONSE;
+          return POLL;
         case 0x1e:
-          return VOTE_RESPONSE;
+          return VOTE;
         case 0x1f:
-          return APPEND_RESPONSE;
+          return APPEND;
         default:
           throw new IllegalArgumentException("Unknown response type: " + id);
       }

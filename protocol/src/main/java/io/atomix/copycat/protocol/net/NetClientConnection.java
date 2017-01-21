@@ -51,7 +51,7 @@ public class NetClientConnection extends NetConnection implements ProtocolClient
 
   @Override
   protected boolean onRequest(NetRequest request) {
-    if (request.type() == NetRequest.Types.PUBLISH_REQUEST) {
+    if (request.type() == NetRequest.Type.PUBLISH) {
       if (publishListener != null) {
         publishListener.onRequest((PublishRequest) request, new NetPublishResponse.Builder(request.id()))
           .whenComplete((response, error) -> {

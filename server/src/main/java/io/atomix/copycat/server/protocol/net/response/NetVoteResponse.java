@@ -27,7 +27,7 @@ import io.atomix.copycat.server.protocol.response.VoteResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetVoteResponse extends VoteResponse implements RaftNetResponse {
+public class NetVoteResponse extends VoteResponse implements RaftNetResponse<NetVoteResponse> {
   private final long id;
 
   public NetVoteResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean voted) {
@@ -42,7 +42,7 @@ public class NetVoteResponse extends VoteResponse implements RaftNetResponse {
 
   @Override
   public Type type() {
-    return Types.VOTE_RESPONSE;
+    return Type.VOTE;
   }
 
   /**

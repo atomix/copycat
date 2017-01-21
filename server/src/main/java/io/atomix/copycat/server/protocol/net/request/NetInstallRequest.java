@@ -25,7 +25,7 @@ import io.atomix.copycat.server.protocol.request.InstallRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetInstallRequest extends InstallRequest implements RaftNetRequest {
+public class NetInstallRequest extends InstallRequest implements RaftNetRequest<NetInstallRequest> {
   private final long id;
 
   public NetInstallRequest(long id, long term, int leader, long index, int offset, byte[] data, boolean complete) {
@@ -40,7 +40,7 @@ public class NetInstallRequest extends InstallRequest implements RaftNetRequest 
 
   @Override
   public Type type() {
-    return Types.INSTALL_REQUEST;
+    return Type.INSTALL;
   }
 
   /**

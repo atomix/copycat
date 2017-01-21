@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.response.PublishResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetPublishResponse extends PublishResponse implements NetResponse {
+public class NetPublishResponse extends PublishResponse implements NetResponse<NetPublishResponse> {
   private final long id;
 
   public NetPublishResponse(long id, Status status, CopycatError error, long index) {
@@ -41,7 +41,7 @@ public class NetPublishResponse extends PublishResponse implements NetResponse {
 
   @Override
   public Type type() {
-    return Types.PUBLISH_RESPONSE;
+    return Type.PUBLISH;
   }
 
   /**

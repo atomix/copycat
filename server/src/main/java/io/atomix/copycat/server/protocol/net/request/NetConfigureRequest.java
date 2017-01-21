@@ -28,7 +28,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetConfigureRequest extends ConfigureRequest implements RaftNetRequest {
+public class NetConfigureRequest extends ConfigureRequest implements RaftNetRequest<NetConfigureRequest> {
   private final long id;
 
   public NetConfigureRequest(long id, long term, int leader, long index, long timestamp, Collection<Member> members) {
@@ -43,7 +43,7 @@ public class NetConfigureRequest extends ConfigureRequest implements RaftNetRequ
 
   @Override
   public Type type() {
-    return Types.CONFIGURE_REQUEST;
+    return Type.CONFIGURE;
   }
 
   /**

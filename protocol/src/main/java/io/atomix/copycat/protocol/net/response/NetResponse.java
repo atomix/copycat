@@ -17,8 +17,6 @@ package io.atomix.copycat.protocol.net.response;
 
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 
-import java.util.function.Supplier;
-
 /**
  * Base interface for responses.
  * <p>
@@ -28,64 +26,54 @@ import java.util.function.Supplier;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface NetResponse extends ProtocolResponse {
+public interface NetResponse<T extends NetResponse<T>> extends ProtocolResponse {
 
   /**
-   * Protocol request type.
+   * TCP response type.
    */
-  interface Type {
-    /**
-     * Returns the request type ID.
-     *
-     * @return The request type ID.
-     */
-    int id();
-
-    /**
-     * Returns the request type class.
-     */
-    Class<? extends NetResponse> type();
-
-    /**
-     * Returns the request type serializer supplier.
-     */
-    Supplier<Serializer<?>> serializer();
-  }
-
-  /**
-   * Protocol response type.
-   */
-  enum Types implements Type {
-    CONNECT_RESPONSE(0x10, NetConnectResponse.class, NetConnectResponse.Serializer::new),
-    REGISTER_RESPONSE(0x11, NetRegisterResponse.class, NetRegisterResponse.Serializer::new),
-    KEEP_ALIVE_RESPONSE(0x12, NetKeepAliveResponse.class, NetKeepAliveResponse.Serializer::new),
-    UNREGISTER_RESPONSE(0x13, NetUnregisterResponse.class, NetUnregisterResponse.Serializer::new),
-    QUERY_RESPONSE(0x14, NetQueryResponse.class, NetQueryResponse.Serializer::new),
-    COMMAND_RESPONSE(0x15, NetCommandResponse.class, NetCommandResponse.Serializer::new),
-    PUBLISH_RESPONSE(0x16, NetPublishResponse.class, NetPublishResponse.Serializer::new);
+  class Type<T extends NetResponse<T>> {
+    public static final Type<NetConnectResponse>       CONNECT = new Type<>(0x10, NetConnectResponse.class, new NetConnectResponse.Serializer());
+    public static final Type<NetRegisterResponse>     REGISTER = new Type<>(0x11, NetRegisterResponse.class, new NetRegisterResponse.Serializer());
+    public static final Type<NetKeepAliveResponse>  KEEP_ALIVE = new Type<>(0x12, NetKeepAliveResponse.class, new NetKeepAliveResponse.Serializer());
+    public static final Type<NetUnregisterResponse> UNREGISTER = new Type<>(0x13, NetUnregisterResponse.class, new NetUnregisterResponse.Serializer());
+    public static final Type<NetQueryResponse>           QUERY = new Type<>(0x14, NetQueryResponse.class, new NetQueryResponse.Serializer());
+    public static final Type<NetCommandResponse>       COMMAND = new Type<>(0x15, NetCommandResponse.class, new NetCommandResponse.Serializer());
+    public static final Type<NetPublishResponse>       PUBLISH = new Type<>(0x16, NetPublishResponse.class, new NetPublishResponse.Serializer());
 
     private final int id;
-    private final Class<? extends NetResponse> type;
-    private final Supplier<Serializer<?>> serializer;
+    private final Class<T> type;
+    private final Serializer<T> serializer;
 
-    Types(int id, Class<? extends NetResponse> type, Supplier<Serializer<?>> serializer) {
+    protected Type(int id, Class<T> type, Serializer<T> serializer) {
       this.id = id;
       this.type = type;
       this.serializer = serializer;
     }
 
-    @Override
+    /**
+     * Returns the response type ID.
+     *
+     * @return The response type ID.
+     */
     public int id() {
       return id;
     }
 
-    @Override
-    public Class<? extends NetResponse> type() {
+    /**
+     * Returns the response class.
+     *
+     * @return The response class.
+     */
+    public Class<T> type() {
       return type;
     }
 
-    @Override
-    public Supplier<Serializer<?>> serializer() {
+    /**
+     * Returns the response type serializer.
+     *
+     * @return The response type serializer.
+     */
+    public Serializer<T> serializer() {
       return serializer;
     }
 
@@ -97,13 +85,13 @@ public interface NetResponse extends ProtocolResponse {
      */
     public static boolean isProtocolResponse(int id) {
       switch (id) {
-        case 0x10:
-        case 0x11:
-        case 0x12:
-        case 0x13:
-        case 0x14:
-        case 0x15:
-        case 0x16:
+        case 0x00:
+        case 0x01:
+        case 0x02:
+        case 0x03:
+        case 0x04:
+        case 0x05:
+        case 0x06:
           return true;
         default:
           return false;
@@ -116,22 +104,22 @@ public interface NetResponse extends ProtocolResponse {
      * @param id The response type ID.
      * @return The response type.
      */
-    public static Type forId(int id) {
+    public static Type<?> forId(int id) {
       switch (id) {
-        case 0x10:
-          return CONNECT_RESPONSE;
-        case 0x11:
-          return REGISTER_RESPONSE;
-        case 0x12:
-          return KEEP_ALIVE_RESPONSE;
-        case 0x13:
-          return UNREGISTER_RESPONSE;
-        case 0x14:
-          return QUERY_RESPONSE;
-        case 0x15:
-          return COMMAND_RESPONSE;
-        case 0x16:
-          return PUBLISH_RESPONSE;
+        case 0x00:
+          return CONNECT;
+        case 0x01:
+          return REGISTER;
+        case 0x02:
+          return KEEP_ALIVE;
+        case 0x03:
+          return UNREGISTER;
+        case 0x04:
+          return QUERY;
+        case 0x05:
+          return COMMAND;
+        case 0x06:
+          return PUBLISH;
         default:
           throw new IllegalArgumentException("Unknown response type: " + id);
       }

@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.ConnectRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetConnectRequest extends ConnectRequest implements NetRequest {
+public class NetConnectRequest extends ConnectRequest implements NetRequest<NetConnectRequest> {
   private final long id;
 
   public NetConnectRequest(long id, String client) {
@@ -40,7 +40,7 @@ public class NetConnectRequest extends ConnectRequest implements NetRequest {
 
   @Override
   public Type type() {
-    return Types.CONNECT_REQUEST;
+    return Type.CONNECT;
   }
 
   /**

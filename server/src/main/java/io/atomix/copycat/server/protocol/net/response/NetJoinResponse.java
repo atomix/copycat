@@ -30,7 +30,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetJoinResponse extends JoinResponse implements RaftNetResponse {
+public class NetJoinResponse extends JoinResponse implements RaftNetResponse<NetJoinResponse> {
   private final long id;
 
   public NetJoinResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
@@ -45,7 +45,7 @@ public class NetJoinResponse extends JoinResponse implements RaftNetResponse {
 
   @Override
   public Type type() {
-    return Types.JOIN_RESPONSE;
+    return Type.JOIN;
   }
 
   /**

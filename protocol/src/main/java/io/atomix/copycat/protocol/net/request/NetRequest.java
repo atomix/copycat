@@ -17,71 +17,59 @@ package io.atomix.copycat.protocol.net.request;
 
 import io.atomix.copycat.protocol.request.ProtocolRequest;
 
-import java.util.function.Supplier;
-
 /**
  * Base interface for requests.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface NetRequest extends ProtocolRequest {
+public interface NetRequest<T extends NetRequest<T>> extends ProtocolRequest {
 
   /**
-   * Protocol request type.
+   * TCP request type.
    */
-  interface Type {
-    /**
-     * Returns the request type ID.
-     *
-     * @return The request type ID.
-     */
-    int id();
-
-    /**
-     * Returns the request type class.
-     */
-    Class<? extends NetRequest> type();
-
-    /**
-     * Returns the request serializer class.
-     */
-    Supplier<Serializer<?>> serializer();
-  }
-
-  /**
-   * Protocol request type.
-   */
-  enum Types implements Type {
-    CONNECT_REQUEST(0x00, NetConnectRequest.class, NetConnectRequest.Serializer::new),
-    REGISTER_REQUEST(0x01, NetRegisterRequest.class, NetRegisterRequest.Serializer::new),
-    KEEP_ALIVE_REQUEST(0x02, NetKeepAliveRequest.class, NetKeepAliveRequest.Serializer::new),
-    UNREGISTER_REQUEST(0x03, NetUnregisterRequest.class, NetUnregisterRequest.Serializer::new),
-    QUERY_REQUEST(0x04, NetQueryRequest.class, NetQueryRequest.Serializer::new),
-    COMMAND_REQUEST(0x05, NetCommandRequest.class, NetCommandRequest.Serializer::new),
-    PUBLISH_REQUEST(0x06, NetPublishRequest.class, NetPublishRequest.Serializer::new);
+  class Type<T extends NetRequest<T>> {
+    public static final Type<NetConnectRequest>       CONNECT = new Type<>(0x00, NetConnectRequest.class, new NetConnectRequest.Serializer());
+    public static final Type<NetRegisterRequest>     REGISTER = new Type<>(0x01, NetRegisterRequest.class, new NetRegisterRequest.Serializer());
+    public static final Type<NetKeepAliveRequest>  KEEP_ALIVE = new Type<>(0x02, NetKeepAliveRequest.class, new NetKeepAliveRequest.Serializer());
+    public static final Type<NetUnregisterRequest> UNREGISTER = new Type<>(0x03, NetUnregisterRequest.class, new NetUnregisterRequest.Serializer());
+    public static final Type<NetQueryRequest>           QUERY = new Type<>(0x04, NetQueryRequest.class, new NetQueryRequest.Serializer());
+    public static final Type<NetCommandRequest>       COMMAND = new Type<>(0x05, NetCommandRequest.class, new NetCommandRequest.Serializer());
+    public static final Type<NetPublishRequest>       PUBLISH = new Type<>(0x06, NetPublishRequest.class, new NetPublishRequest.Serializer());
 
     private final int id;
-    private final Class<? extends NetRequest> type;
-    private final Supplier<Serializer<?>> serializer;
+    private final Class<T> type;
+    private final Serializer<T> serializer;
 
-    Types(int id, Class<? extends NetRequest> type, Supplier<Serializer<?>> serializer) {
+    protected Type(int id, Class<T> type, Serializer<T> serializer) {
       this.id = id;
       this.type = type;
       this.serializer = serializer;
     }
 
-    @Override
+    /**
+     * Returns the request type ID.
+     *
+     * @return The request type ID.
+     */
     public int id() {
       return id;
     }
 
-    @Override
-    public Class<? extends NetRequest> type() {
+    /**
+     * Returns the request class.
+     *
+     * @return The request class.
+     */
+    public Class<T> type() {
       return type;
     }
 
-    @Override
-    public Supplier<Serializer<?>> serializer() {
+    /**
+     * Returns the request type serializer.
+     *
+     * @return The request type serializer.
+     */
+    public Serializer<T> serializer() {
       return serializer;
     }
 
@@ -112,22 +100,22 @@ public interface NetRequest extends ProtocolRequest {
      * @param id The request type ID.
      * @return The request type.
      */
-    public static Type forId(int id) {
+    public static Type<?> forId(int id) {
       switch (id) {
         case 0x00:
-          return CONNECT_REQUEST;
+          return CONNECT;
         case 0x01:
-          return REGISTER_REQUEST;
+          return REGISTER;
         case 0x02:
-          return KEEP_ALIVE_REQUEST;
+          return KEEP_ALIVE;
         case 0x03:
-          return UNREGISTER_REQUEST;
+          return UNREGISTER;
         case 0x04:
-          return QUERY_REQUEST;
+          return QUERY;
         case 0x05:
-          return COMMAND_REQUEST;
+          return COMMAND;
         case 0x06:
-          return PUBLISH_REQUEST;
+          return PUBLISH;
         default:
           throw new IllegalArgumentException("Unknown request type: " + id);
       }

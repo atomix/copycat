@@ -26,7 +26,7 @@ import io.atomix.copycat.protocol.response.CommandResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetCommandResponse extends CommandResponse implements NetResponse {
+public class NetCommandResponse extends CommandResponse implements NetResponse<NetCommandResponse> {
   private final long id;
 
   public NetCommandResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
@@ -41,7 +41,7 @@ public class NetCommandResponse extends CommandResponse implements NetResponse {
 
   @Override
   public Type type() {
-    return Types.COMMAND_RESPONSE;
+    return Type.COMMAND;
   }
 
   /**

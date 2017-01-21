@@ -25,7 +25,7 @@ import io.atomix.copycat.protocol.request.KeepAliveRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest {
+public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest<NetKeepAliveRequest> {
   private final long id;
 
   public NetKeepAliveRequest(long id, long session, long commandSequence, long eventIndex) {
@@ -40,7 +40,7 @@ public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest 
 
   @Override
   public Type type() {
-    return Types.KEEP_ALIVE_REQUEST;
+    return Type.KEEP_ALIVE;
   }
 
   /**

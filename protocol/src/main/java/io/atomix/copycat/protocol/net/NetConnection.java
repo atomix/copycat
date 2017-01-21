@@ -80,13 +80,13 @@ public abstract class NetConnection implements ProtocolConnection {
    * Handles a message.
    */
   protected void handleMessage(int id, byte[] bytes) {
-    if (NetRequest.Types.isProtocolRequest(id)) {
-      NetRequest.Type type = NetRequest.Types.forId(id);
-      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
+    if (NetRequest.Type.isProtocolRequest(id)) {
+      NetRequest.Type<?> type = NetRequest.Type.forId(id);
+      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer());
       onRequest(request);
-    } else if (NetResponse.Types.isProtocolResponse(id)) {
-      NetResponse.Type type = NetResponse.Types.forId(id);
-      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer().get());
+    } else if (NetResponse.Type.isProtocolResponse(id)) {
+      NetResponse.Type<?> type = NetResponse.Type.forId(id);
+      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer());
       onResponse(response);
     }
   }
@@ -116,7 +116,7 @@ public abstract class NetConnection implements ProtocolConnection {
     logger().debug("Sending {}", request);
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     Output output = new Output(os);
-    kryo.writeObject(output, request, request.type().serializer().get());
+    kryo.writeObject(output, request, request.type().serializer());
     byte[] bytes = os.toByteArray();
     Buffer buffer = Buffer.buffer()
       .appendInt(1 + bytes.length)
@@ -133,7 +133,7 @@ public abstract class NetConnection implements ProtocolConnection {
     logger().debug("Sending {}", response);
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     Output output = new Output(os);
-    kryo.writeObject(output, response, response.type().serializer().get());
+    kryo.writeObject(output, response, response.type().serializer());
     byte[] bytes = os.toByteArray();
     Buffer buffer = Buffer.buffer()
       .appendInt(1 + bytes.length)

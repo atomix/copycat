@@ -30,7 +30,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse {
+public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse<NetLeaveResponse> {
   private final long id;
 
   public NetLeaveResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
@@ -45,7 +45,7 @@ public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse {
 
   @Override
   public Type type() {
-    return Types.LEAVE_RESPONSE;
+    return Type.LEAVE;
   }
 
   /**

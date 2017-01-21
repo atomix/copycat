@@ -27,7 +27,7 @@ import io.atomix.copycat.server.protocol.response.AppendResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAppendResponse extends AppendResponse implements RaftNetResponse {
+public class NetAppendResponse extends AppendResponse implements RaftNetResponse<NetAppendResponse> {
   private final long id;
 
   public NetAppendResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean succeeded, long logIndex) {
@@ -42,7 +42,7 @@ public class NetAppendResponse extends AppendResponse implements RaftNetResponse
 
   @Override
   public Type type() {
-    return Types.APPEND_RESPONSE;
+    return Type.APPEND;
   }
 
   /**

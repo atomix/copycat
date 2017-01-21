@@ -26,7 +26,7 @@ import io.atomix.copycat.server.protocol.request.AcceptRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAcceptRequest extends AcceptRequest implements RaftNetRequest {
+public class NetAcceptRequest extends AcceptRequest implements RaftNetRequest<NetAcceptRequest> {
   private final long id;
 
   public NetAcceptRequest(long id, String client, Address address) {
@@ -41,7 +41,7 @@ public class NetAcceptRequest extends AcceptRequest implements RaftNetRequest {
 
   @Override
   public Type type() {
-    return Types.ACCEPT_REQUEST;
+    return Type.ACCEPT;
   }
 
   /**

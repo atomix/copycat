@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetRegisterResponse extends RegisterResponse implements NetResponse {
+public class NetRegisterResponse extends RegisterResponse implements NetResponse<NetRegisterResponse> {
   private final long id;
 
   public NetRegisterResponse(long id, Status status, CopycatError error, long session, Address leader, Collection<Address> members, long timeout) {
@@ -44,7 +44,7 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
 
   @Override
   public Type type() {
-    return Types.REGISTER_RESPONSE;
+    return Type.REGISTER;
   }
 
   /**

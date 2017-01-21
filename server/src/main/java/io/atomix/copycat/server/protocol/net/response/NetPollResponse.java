@@ -27,7 +27,7 @@ import io.atomix.copycat.server.protocol.response.PollResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetPollResponse extends PollResponse implements RaftNetResponse {
+public class NetPollResponse extends PollResponse implements RaftNetResponse<NetPollResponse> {
   private final long id;
 
   public NetPollResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean accepted) {
@@ -42,7 +42,7 @@ public class NetPollResponse extends PollResponse implements RaftNetResponse {
 
   @Override
   public Type type() {
-    return Types.POLL_RESPONSE;
+    return Type.POLL;
   }
 
   /**

@@ -26,7 +26,7 @@ import io.atomix.copycat.server.protocol.request.ReconfigureRequest;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetReconfigureRequest extends ReconfigureRequest implements RaftNetRequest {
+public class NetReconfigureRequest extends ReconfigureRequest implements RaftNetRequest<NetReconfigureRequest> {
   private final long id;
 
   public NetReconfigureRequest(long id, Member member, long index, long term) {
@@ -41,7 +41,7 @@ public class NetReconfigureRequest extends ReconfigureRequest implements RaftNet
 
   @Override
   public Type type() {
-    return Types.RECONFIGURE_REQUEST;
+    return Type.RECONFIGURE;
   }
 
   /**

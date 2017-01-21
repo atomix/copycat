@@ -27,7 +27,7 @@ import io.atomix.copycat.server.protocol.response.AcceptResponse;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class NetAcceptResponse extends AcceptResponse implements RaftNetResponse {
+public class NetAcceptResponse extends AcceptResponse implements RaftNetResponse<NetAcceptResponse> {
   private final long id;
 
   public NetAcceptResponse(long id, ProtocolResponse.Status status, CopycatError error) {
@@ -42,7 +42,7 @@ public class NetAcceptResponse extends AcceptResponse implements RaftNetResponse
 
   @Override
   public Type type() {
-    return Types.ACCEPT_RESPONSE;
+    return Type.ACCEPT;
   }
 
   /**
