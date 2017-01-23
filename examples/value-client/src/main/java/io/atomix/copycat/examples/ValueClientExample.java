@@ -15,12 +15,11 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.RecoveryStrategies;
 import io.atomix.copycat.client.ServerSelectionStrategies;
+import io.atomix.copycat.protocol.Address;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -57,15 +56,10 @@ public class ValueClientExample {
     }
 
     CopycatClient client = CopycatClient.builder()
-      .withTransport(new NettyTransport())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(RecoveryStrategies.RECOVER)
       .withServerSelectionStrategy(ServerSelectionStrategies.LEADER)
       .build();
-
-    client.serializer().register(SetCommand.class, 1);
-    client.serializer().register(GetQuery.class, 2);
-    client.serializer().register(DeleteCommand.class, 3);
 
     client.connect(members).join();
 

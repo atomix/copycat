@@ -15,8 +15,7 @@
  */
 package io.atomix.copycat.examples;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.netty.NettyTransport;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.storage.Storage;
 
@@ -58,7 +57,6 @@ public class ValueStateMachineExample {
 
     CopycatServer server = CopycatServer.builder(address)
       .withStateMachine(ValueStateMachine::new)
-      .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withDirectory(args[0])
         .withMaxSegmentSize(1024 * 1024 * 32)
@@ -66,10 +64,6 @@ public class ValueStateMachineExample {
         .withMajorCompactionInterval(Duration.ofMinutes(15))
         .build())
       .build();
-
-    server.serializer().register(SetCommand.class, 1);
-    server.serializer().register(GetQuery.class, 2);
-    server.serializer().register(DeleteCommand.class, 3);
 
     server.bootstrap(members).join();
 
