@@ -15,18 +15,16 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.SingleThreadContext;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -136,22 +134,6 @@ import java.util.function.Consumer;
  * All events and responses are received in the client's event thread. Because all operation results are received on the same
  * thread, it is critical that clients not block the event thread. If clients need to perform blocking actions on response to
  * an event or response, do so on another thread.
- * <h3>Serialization</h3>
- * All {@link Command commands}, {@link Query queries}, and session {@link #onEvent(String, Consumer) events} must be
- * serializable by the {@link Serializer} associated with the client. Serializable types can be registered at any time.
- * To register a serializable type and serializer, use the {@link Serializer#register(Class) register} methods.
- * <pre>
- *   {@code
- *   client.serializer().register(SetCommand.class, new SetCommandSerializer());
- *   }
- * </pre>
- * By default, all primitives and many collections are supported. Catalyst also provides support for common serialization
- * frameworks like Kryo and Jackson:
- * <pre>
- *   {@code
- *   client.serializer().register(SetCommand.class, new GenericKryoSerializer());
- *   }
- * </pre>
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -300,29 +282,10 @@ public interface CopycatClient {
    * The thread context is the event loop that this client uses to communicate with Copycat servers.
    * Implementations must guarantee that all asynchronous {@link CompletableFuture} callbacks are
    * executed on a single thread via the returned {@link ThreadContext}.
-   * <p>
-   * The {@link ThreadContext} can also be used to access the Copycat client's internal
-   * {@link Serializer serializer} via {@link ThreadContext#serializer()}.
    *
    * @return The client thread context.
    */
   ThreadContext context();
-
-  /**
-   * Returns the client serializer.
-   * <p>
-   * The serializer can be used to manually register serializable types for submitted {@link Command commands} and
-   * {@link Query queries}.
-   * <pre>
-   *   {@code
-   *     client.serializer().register(MyObject.class, 1);
-   *     client.serializer().register(MyOtherObject.class, new MyOtherObjectSerializer(), 2);
-   *   }
-   * </pre>
-   *
-   * @return The client operation serializer.
-   */
-  Serializer serializer();
 
   /**
    * Returns the client session.
@@ -539,11 +502,10 @@ public interface CopycatClient {
    *   }
    * </pre>
    */
-  final class Builder implements io.atomix.catalyst.util.Builder<CopycatClient> {
+  final class Builder implements io.atomix.copycat.util.Builder<CopycatClient> {
     private final Collection<Address> cluster;
     private String clientId = UUID.randomUUID().toString();
     private Protocol protocol;
-    private Serializer serializer;
     private Duration sessionTimeout = Duration.ZERO;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
@@ -577,18 +539,6 @@ public interface CopycatClient {
      */
     public Builder withProtocol(Protocol protocol) {
       this.protocol = Assert.notNull(protocol, "protocol");
-      return this;
-    }
-
-    /**
-     * Sets the client serializer.
-     *
-     * @param serializer The client serializer.
-     * @return The client builder.
-     * @throws NullPointerException if {@code serializer} is null
-     */
-    public Builder withSerializer(Serializer serializer) {
-      this.serializer = Assert.notNull(serializer, "serializer");
       return this;
     }
 
@@ -639,23 +589,14 @@ public interface CopycatClient {
       return this;
     }
 
-    /**
-     * @throws ConfigurationException if transport is not configured and {@code io.atomix.catalyst.transport.netty.NettyTransport}
-     * is not found on the classpath
-     */
     @Override
     public CopycatClient build() {
-      // If no serializer instance was provided, create one.
-      if (serializer == null) {
-        serializer = new Serializer();
-      }
-
       return new DefaultCopycatClient(
         clientId,
         cluster,
         protocol,
-        new SingleThreadContext("copycat-client-io-%d", serializer.clone()),
-        new SingleThreadContext("copycat-client-event-%d", serializer.clone()),
+        new SingleThreadContext("copycat-client-io-%d"),
+        new SingleThreadContext("copycat-client-event-%d"),
         serverSelectionStrategy,
         connectionStrategy,
         recoveryStrategy,

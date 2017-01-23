@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.protocol.Address;
@@ -24,6 +23,7 @@ import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketUnregisterResponse;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.testng.annotations.Test;
 
 import java.time.Duration;

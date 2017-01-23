@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.QueryException;
@@ -27,6 +26,7 @@ import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketQueryResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
 

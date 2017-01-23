@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.client.session;
 
+import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.CommandResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.protocol.websocket.request.WebSocketPublishRequest;

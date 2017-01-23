@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Listener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

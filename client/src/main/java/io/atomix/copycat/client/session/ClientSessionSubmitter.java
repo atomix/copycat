@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Query;
@@ -24,12 +22,17 @@ import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
+import io.atomix.copycat.protocol.request.CommandRequest;
+import io.atomix.copycat.protocol.request.OperationRequest;
+import io.atomix.copycat.protocol.request.QueryRequest;
 import io.atomix.copycat.protocol.response.CommandResponse;
 import io.atomix.copycat.protocol.response.OperationResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.net.ConnectException;
 import java.net.ProtocolException;

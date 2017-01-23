@@ -15,15 +15,15 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.Scheduled;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Scheduled;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.net.ConnectException;
 import java.time.Duration;

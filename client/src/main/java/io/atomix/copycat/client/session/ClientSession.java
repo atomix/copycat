@@ -15,10 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
@@ -28,6 +24,10 @@ import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.protocol.ProtocolClient;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Futures;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;

@@ -15,15 +15,16 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
+import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.PublishResponse;
 import io.atomix.copycat.session.Event;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Futures;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.util.Map;
 import java.util.Set;

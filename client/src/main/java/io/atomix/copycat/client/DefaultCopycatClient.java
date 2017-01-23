@@ -15,12 +15,6 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.catalyst.concurrent.BlockingFuture;
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.session.ClientSession;
@@ -29,6 +23,11 @@ import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.BlockingFuture;
+import io.atomix.copycat.util.concurrent.Futures;
+import io.atomix.copycat.util.concurrent.Listener;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,12 +97,6 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public Listener<State> onStateChange(Consumer<State> callback) {
     return new StateChangeListener(callback);
-  }
-
-  @Override
-  public Serializer serializer() {
-    ThreadContext context = ThreadContext.currentContext();
-    return context != null ? context.serializer() : this.eventContext.serializer();
   }
 
   @Override

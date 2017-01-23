@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.Listener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

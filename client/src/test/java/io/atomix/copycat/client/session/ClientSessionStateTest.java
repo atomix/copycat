@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.concurrent.Listener;
 import org.testng.annotations.Test;
 
 import java.util.UUID;
