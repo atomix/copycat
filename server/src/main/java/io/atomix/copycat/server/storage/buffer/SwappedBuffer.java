@@ -70,6 +70,11 @@ public class SwappedBuffer extends AbstractBuffer {
   }
 
   @Override
+  public Buffer duplicate() {
+    return new SwappedBuffer(root, offset(), capacity(), maxCapacity(), referenceManager);
+  }
+
+  @Override
   public Buffer acquire() {
     root.acquire();
     return this;

@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.error.InternalException;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.server.CopycatServer;
@@ -26,6 +25,7 @@ import io.atomix.copycat.server.protocol.request.InstallRequest;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.ConfigureResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
+import io.atomix.copycat.util.Assert;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -53,7 +53,7 @@ final class LeaderAppender extends AbstractAppender {
     super(leader.context);
     this.leader = Assert.notNull(leader, "leader");
     this.leaderTime = System.currentTimeMillis();
-    this.leaderIndex = context.getLog().nextIndex();
+    this.leaderIndex = context.getLogWriter().nextIndex();
     this.heartbeatTime = leaderTime;
   }
 
@@ -195,7 +195,7 @@ final class LeaderAppender extends AbstractAppender {
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
     else if (member.getMember().type() == Member.Type.ACTIVE && context.getSnapshotStore().currentSnapshot() != null
-      && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
+      && context.getSnapshotStore().currentSnapshot().index() >= member.getLogReader().currentIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (member.canInstall()) {
         sendInstallRequest(member, builder -> buildInstallRequest(member, builder));
@@ -203,7 +203,7 @@ final class LeaderAppender extends AbstractAppender {
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (member.canAppend()) {
-      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, context.getLog().lastIndex()));
+      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, context.getLogWriter().lastIndex()));
     }
   }
 
@@ -212,7 +212,7 @@ final class LeaderAppender extends AbstractAppender {
     // If the member's nextIndex is an entry in the local log then more entries can be sent.
     return member.getMember().type() != Member.Type.RESERVE
       && member.getMember().type() != Member.Type.PASSIVE
-      && member.getNextIndex() <= context.getLog().lastIndex();
+      && member.getLogReader().hasNext();
   }
 
   /**
@@ -294,7 +294,7 @@ final class LeaderAppender extends AbstractAppender {
       .filter(m -> m.getMember().type() != Member.Type.RESERVE && (m.getMember().status() == Member.Status.AVAILABLE || currentTime - m.getMember().updated().toEpochMilli() < context.getGlobalSuspendTimeout().toMillis()))
       .mapToLong(MemberState::getMatchIndex)
       .min()
-      .orElse(context.getLog().lastIndex());
+      .orElse(context.getLogWriter().lastIndex());
     context.setGlobalIndex(globalMatchIndex);
   }
 
@@ -314,7 +314,7 @@ final class LeaderAppender extends AbstractAppender {
     // ensure all commit futures are completed and cleared.
     if (members.isEmpty()) {
       long previousCommitIndex = context.getCommitIndex();
-      long commitIndex = context.getLog().lastIndex();
+      long commitIndex = context.getLogWriter().lastIndex();
       context.setCommitIndex(commitIndex);
       completeCommits(previousCommitIndex, commitIndex);
       return;

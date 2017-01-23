@@ -300,6 +300,13 @@ public interface Buffer extends BytesInput<Buffer>, BufferInput<Buffer>, BytesOu
   Buffer compact();
 
   /**
+   * Returns a duplicate of the buffer.
+   *
+   * @return A duplicate buffer.
+   */
+  Buffer duplicate();
+
+  /**
    * Returns the bytes underlying the buffer.
    * <p>
    * The buffer is a wrapper around {@link Bytes} that handles writing sequences of bytes by tracking positions and

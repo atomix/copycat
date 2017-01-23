@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.serializer.Serializer;
+import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import org.testng.annotations.Test;
 
@@ -34,7 +34,7 @@ public class MemorySnapshotStoreTest extends AbstractSnapshotStoreTest {
     Storage storage = Storage.builder()
       .withStorageLevel(StorageLevel.MEMORY)
       .build();
-    return new SnapshotStore("test", storage, new Serializer());
+    return new SnapshotStore("test", storage, new Kryo());
   }
 
 }

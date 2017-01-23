@@ -15,11 +15,12 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
-import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Segment;
 import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.util.Assert;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -36,7 +37,7 @@ import java.util.List;
  * <p>
  * Segments are selected for minor compaction based on several factors:
  * <ul>
- *   <li>The number of {@link Entry entries} in the segment that have been {@link Segment#release(long) released}</li>
+ *   <li>The number of {@link Entry entries} in the segment that have been {@link Indexed#clean() cleaned}</li>
  *   <li>The number of times the segment has been compacted already</li>
  * </ul>
  * <p>
@@ -87,9 +88,9 @@ public final class MinorCompactionManager implements CompactionManager {
       // Segments that have already been compacted are eligible for compaction. For uncompacted segments, the segment must be full, consist
       // of entries less than the minorIndex, and a later segment with at least one committed entry must exist in the log. This ensures that
       // a non-empty entry always remains at the end of the log.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.firstIndex() <= manager.commitIndex() && !nextSegment.isEmpty())) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.index() <= manager.commitIndex() && !nextSegment.isEmpty())) {
         // Calculate the percentage of entries that have been released in the segment.
-        double compactablePercentage = segment.releaseCount() / (double) segment.count();
+        double compactablePercentage = segment.cleaner().count() / (double) segment.count();
 
         // If the percentage of entries released times the segment version meets the compaction threshold,
         // add the segment to the segments list for compaction.

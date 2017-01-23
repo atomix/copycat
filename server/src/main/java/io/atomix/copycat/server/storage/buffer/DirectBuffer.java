@@ -94,4 +94,8 @@ public class DirectBuffer extends NativeBuffer {
     super(bytes, referenceManager);
   }
 
+  @Override
+  public DirectBuffer duplicate() {
+    return new DirectBuffer((DirectBytes) bytes, offset(), capacity(), maxCapacity());
+  }
 }

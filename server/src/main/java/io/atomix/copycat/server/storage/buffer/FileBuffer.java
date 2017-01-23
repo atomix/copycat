@@ -192,6 +192,22 @@ public class FileBuffer extends AbstractBuffer {
     }
   }
 
+  @Override
+  public FileBuffer duplicate() {
+    FileBytes bytes = (FileBytes) this.bytes;
+    return new FileBuffer(new FileBytes(bytes.file(), bytes.mode(), bytes.size()), offset(), capacity(), maxCapacity());
+  }
+
+  /**
+   * Duplicates the buffer using the given mode.
+   *
+   * @return The mode with which to open the duplicate buffer.
+   */
+  public FileBuffer duplicate(String mode) {
+    FileBytes bytes = (FileBytes) this.bytes;
+    return new FileBuffer(new FileBytes(bytes.file(), mode, bytes.size()), offset(), capacity(), maxCapacity());
+  }
+
   /**
    * Deletes the underlying file.
    */

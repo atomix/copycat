@@ -83,6 +83,7 @@ public class FileBytes extends AbstractBytes {
   }
 
   private final File file;
+  private final String mode;
   private final RandomAccessFile randomAccessFile;
   private long size;
 
@@ -95,6 +96,7 @@ public class FileBytes extends AbstractBytes {
       throw new IllegalArgumentException("size must be positive");
 
     this.file = file;
+    this.mode = mode;
     this.size = size;
     try {
       this.randomAccessFile = new RandomAccessFile(file, mode);
@@ -112,6 +114,15 @@ public class FileBytes extends AbstractBytes {
    */
   public File file() {
     return file;
+  }
+
+  /**
+   * Returns the mode with which the underlying file was opened.
+   *
+   * @return The mode with which the underlying file was opened.
+   */
+  public String mode() {
+    return mode;
   }
 
   @Override

@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
@@ -29,14 +28,14 @@ public abstract class Entry<T extends Entry<T>> {
    * Entry type.
    */
   public static class Type<T extends Entry<T>> {
-    public static final Type<ConnectEntry> CONNECT = new Type<>(0x00, ConnectEntry.class, new ConnectEntry.Serializer());
-    public static final Type<RegisterEntry> REGISTER = new Type<>(0x01, RegisterEntry.class, new RegisterEntry.Serializer());
-    public static final Type<KeepAliveEntry> KEEP_ALIVE = new Type<>(0x02, KeepAliveEntry.class, new KeepAliveEntry.Serializer());
-    public static final Type<UnregisterEntry> UNREGISTER = new Type<>(0x03, UnregisterEntry.class, new UnregisterEntry.Serializer());
-    public static final Type<QueryEntry> QUERY = new Type<>(0x04, QueryEntry.class, new QueryEntry.Serializer());
-    public static final Type<CommandEntry> COMMAND = new Type<>(0x05, CommandEntry.class, new CommandEntry.Serializer());
-    public static final Type<ConfigurationEntry> CONFIGURATION = new Type<>(0x06, ConfigurationEntry.class, new ConfigurationEntry.Serializer());
-    public static final Type<InitializeEntry> INITIALIZE = new Type<>(0x07, InitializeEntry.class, new InitializeEntry.Serializer());
+    public static final Type<ConnectEntry>             CONNECT = new Type<>(0x01, ConnectEntry.class, new ConnectEntry.Serializer());
+    public static final Type<RegisterEntry>           REGISTER = new Type<>(0x02, RegisterEntry.class, new RegisterEntry.Serializer());
+    public static final Type<KeepAliveEntry>        KEEP_ALIVE = new Type<>(0x03, KeepAliveEntry.class, new KeepAliveEntry.Serializer());
+    public static final Type<UnregisterEntry>       UNREGISTER = new Type<>(0x04, UnregisterEntry.class, new UnregisterEntry.Serializer());
+    public static final Type<QueryEntry>                 QUERY = new Type<>(0x05, QueryEntry.class, new QueryEntry.Serializer());
+    public static final Type<CommandEntry>             COMMAND = new Type<>(0x06, CommandEntry.class, new CommandEntry.Serializer());
+    public static final Type<ConfigurationEntry> CONFIGURATION = new Type<>(0x07, ConfigurationEntry.class, new ConfigurationEntry.Serializer());
+    public static final Type<InitializeEntry>       INITIALIZE = new Type<>(0x08, InitializeEntry.class, new InitializeEntry.Serializer());
 
     /**
      * Returns the entry type for the given ID.
@@ -46,21 +45,21 @@ public abstract class Entry<T extends Entry<T>> {
      */
     public static Type<?> forId(int id) {
       switch (id) {
-        case 0x00:
-          return CONNECT;
         case 0x01:
-          return REGISTER;
+          return CONNECT;
         case 0x02:
-          return KEEP_ALIVE;
+          return REGISTER;
         case 0x03:
-          return UNREGISTER;
+          return KEEP_ALIVE;
         case 0x04:
-          return QUERY;
+          return UNREGISTER;
         case 0x05:
-          return COMMAND;
+          return QUERY;
         case 0x06:
-          return CONFIGURATION;
+          return COMMAND;
         case 0x07:
+          return CONFIGURATION;
+        case 0x08:
           return INITIALIZE;
         default:
           throw new IllegalArgumentException("invalid entry type ID: " + id);
@@ -117,7 +116,7 @@ public abstract class Entry<T extends Entry<T>> {
    *
    * @return The entry compaction mode.
    */
-  public Compaction.Mode getCompactionMode() {
+  public Compaction.Mode compaction() {
     return Compaction.Mode.QUORUM;
   }
 

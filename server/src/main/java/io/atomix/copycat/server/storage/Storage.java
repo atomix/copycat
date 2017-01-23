@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,15 +11,15 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.ThreadContext;
+import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.server.storage.snapshot.SnapshotFile;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
+import io.atomix.copycat.util.Assert;
 
 import java.io.File;
 import java.time.Duration;
@@ -27,9 +27,9 @@ import java.time.Duration;
 import static java.lang.Math.max;
 
 /**
- * Immutable log configuration and {@link Log} factory.
+ * Immutable log configuration and {@link io.atomix.copycat.server.storage.Log} factory.
  * <p>
- * This class provides a factory for {@link Log} objects. {@code Storage} objects are immutable and
+ * This class provides a factory for {@link io.atomix.copycat.server.storage.Log} objects. {@code Storage} objects are immutable and
  * can be created only via the {@link Storage.Builder}. To create a new
  * {@code Storage.Builder}, use the static {@link #builder()} factory method:
  * <pre>
@@ -40,12 +40,12 @@ import static java.lang.Math.max;
  *       .build();
  *   }
  * </pre>
- * Users can also configure a number of options related to how {@link Log logs} are constructed and managed.
+ * Users can also configure a number of options related to how {@link io.atomix.copycat.server.storage.Log logs} are constructed and managed.
  * Most notable of the configuration options is the number of {@link #compactionThreads()}, which specifies the
  * number of background threads to use to compact log {@link Segment segments}. The parallelism of the log
  * compaction algorithm will be limited by the number of {@link #compactionThreads()}.
  *
- * @see Log
+ * @see io.atomix.copycat.server.storage.Log
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -122,7 +122,7 @@ public class Storage {
   /**
    * Returns the storage directory.
    * <p>
-   * The storage directory is the directory to which all {@link Log}s write {@link Segment} files. Segment files
+   * The storage directory is the directory to which all {@link io.atomix.copycat.server.storage.Log}s write {@link Segment} files. Segment files
    * for multiple logs may be stored in the storage directory, and files for each log instance will be identified
    * by the {@code name} provided when the log is {@link #openLog(String) opened}.
    *
@@ -146,7 +146,7 @@ public class Storage {
   /**
    * Returns the maximum log segment size.
    * <p>
-   * The maximum segment size dictates the maximum size any {@link Segment} in a {@link Log} may consume
+   * The maximum segment size dictates the maximum size any {@link Segment} in a {@link io.atomix.copycat.server.storage.Log} may consume
    * in bytes.
    *
    * @return The maximum segment size in bytes.
@@ -159,7 +159,7 @@ public class Storage {
    * Returns the maximum number of entries per segment.
    * <p>
    * The maximum entries per segment dictates the maximum number of {@link io.atomix.copycat.server.storage.entry.Entry entries}
-   * that are allowed to be stored in any {@link Segment} in a {@link Log}.
+   * that are allowed to be stored in any {@link Segment} in a {@link io.atomix.copycat.server.storage.Log}.
    *
    * @return The maximum number of entries per segment.
    */
@@ -262,7 +262,7 @@ public class Storage {
    * @return The metastore.
    */
   public MetaStore openMetaStore(String name) {
-    return new MetaStore(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
+    return new MetaStore(name, this, new Kryo());
   }
 
   /**
@@ -288,7 +288,7 @@ public class Storage {
    * @return The snapshot store.
    */
   public SnapshotStore openSnapshotStore(String name) {
-    return new SnapshotStore(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
+    return new SnapshotStore(name, this, new Kryo());
   }
 
   /**
@@ -305,7 +305,7 @@ public class Storage {
   }
 
   /**
-   * Opens a new {@link Log}, recovering the log from disk if it exists.
+   * Opens a new {@link io.atomix.copycat.server.storage.Log}, recovering the log from disk if it exists.
    * <p>
    * When a log is opened, the log will attempt to load {@link Segment}s from the storage {@link #directory()}
    * according to the provided log {@code name}. If segments for the given log name are present on disk, segments
@@ -316,8 +316,8 @@ public class Storage {
    * @param name The log name.
    * @return The opened log.
    */
-  public Log openLog(String name) {
-    return new Log(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
+  public io.atomix.copycat.server.storage.Log openLog(String name) {
+    return new Log(name, this);
   }
 
   /**
@@ -354,7 +354,7 @@ public class Storage {
    *   }
    * </pre>
    */
-  public static class Builder implements io.atomix.catalyst.util.Builder<Storage> {
+  public static class Builder implements io.atomix.copycat.util.Builder<Storage> {
     private final Storage storage = new Storage();
 
     private Builder() {

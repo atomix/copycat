@@ -54,6 +54,11 @@ public class SlicedBuffer extends AbstractBuffer {
   }
 
   @Override
+  public Buffer duplicate() {
+    return new SlicedBuffer(root, bytes, offset(), capacity(), maxCapacity());
+  }
+
+  @Override
   public boolean isFile() {
     return root.isFile();
   }

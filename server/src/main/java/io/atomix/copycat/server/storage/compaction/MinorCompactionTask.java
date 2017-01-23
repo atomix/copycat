@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
-import io.atomix.copycat.server.storage.Segment;
-import io.atomix.copycat.server.storage.SegmentDescriptor;
-import io.atomix.copycat.server.storage.SegmentManager;
+import io.atomix.copycat.server.storage.*;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
@@ -26,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 
 /**
- * Removes {@link io.atomix.copycat.server.storage.Log#release(long) released} entries from an individual
+ * Removes {@link SegmentCleaner#clean(long) released} entries from an individual
  * log {@link Segment} to reclaim disk space.
  * <p>
  * The minor compaction task is a lightweight process that rewrites an individual segment to remove entries for
@@ -77,13 +75,10 @@ public final class MinorCompactionTask implements CompactionTask {
       .withMaxEntries(segment.descriptor().maxEntries())
       .build());
 
-    compactEntries(segment, compactSegment);
+    compactEntries(segment.createReader(true), segment.cleaner(), compactSegment.writer());
 
     // Replace the old segment with the compact segment.
     manager.replaceSegments(Collections.singletonList(segment), compactSegment);
-
-    // Update the new segment with offsets that were released during compaction.
-    mergeReleasedEntries(segment, compactSegment);
 
     // Delete the old segment.
     segment.close();
@@ -92,30 +87,14 @@ public final class MinorCompactionTask implements CompactionTask {
 
   /**
    * Compacts entries from the given segment, rewriting them to the compact segment.
-   *
-   * @param segment The segment to compact.
-   * @param compactSegment The compact segment.
    */
-  private void compactEntries(Segment segment, Segment compactSegment) {
-    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      checkEntry(i, segment, compactSegment);
-    }
-  }
-
-  /**
-   * Compacts the entry at the given index.
-   *
-   * @param index The index at which to compact the entry.
-   * @param segment The segment to compact.
-   * @param compactSegment The segment to which to write the compacted segment.
-   */
-  private void checkEntry(long index, Segment segment, Segment compactSegment) {
-    try (Entry entry = segment.get(index)) {
-      // If an entry was found, only remove the entry from the segment if it's not a tombstone that has been released.
+  private void compactEntries(SegmentReader reader, SegmentCleaner cleaner, SegmentWriter writer) {
+    while (reader.hasNext()) {
+      Indexed<? extends Entry<?>> entry = reader.next();
       if (entry != null) {
-        checkEntry(index, entry, segment, compactSegment);
+        compactEntry(entry, cleaner, writer);
       } else {
-        compactSegment.skip(1);
+        writer.skip(1);
       }
     }
   }
@@ -123,10 +102,10 @@ public final class MinorCompactionTask implements CompactionTask {
   /**
    * Compacts a command entry from a segment.
    */
-  private void checkEntry(long index, Entry entry, Segment segment, Segment compactSegment) {
+  private void compactEntry(Indexed<? extends Entry<?>> entry, SegmentCleaner cleaner, SegmentWriter writer) {
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
     // mode to the entry.
-    Compaction.Mode mode = entry.getCompactionMode();
+    Compaction.Mode mode = entry.entry().compaction();
     if (mode == Compaction.Mode.DEFAULT) {
       mode = defaultCompactionMode;
     }
@@ -137,28 +116,28 @@ public final class MinorCompactionTask implements CompactionTask {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (index <= snapshotIndex && !segment.isLive(index)) {
-          compactEntry(index, segment, compactSegment);
+        if (entry.index() <= snapshotIndex && cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(index, entry, compactSegment);
+          transferEntry(entry, cleaner, writer);
         }
         break;
       // RELEASE and QUORUM entries are compacted if the entry has been released in the segment.
       case RELEASE:
       case QUORUM:
-        if (!segment.isLive(index)) {
-          compactEntry(index, segment, compactSegment);
+        if (cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(index, entry, compactSegment);
+          transferEntry(entry, cleaner, writer);
         }
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index
       // and the entry has been released.
       case FULL:
-        if (index <= compactIndex && !segment.isLive(index)) {
-          compactEntry(index, segment, compactSegment);
+        if (entry.index() <= compactIndex && cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(index, entry, compactSegment);
+          transferEntry(entry, cleaner, writer);
         }
         break;
       // SEQUENTIAL, EXPIRING, and TOMBSTONE entries can only be compacted during major compaction.
@@ -167,7 +146,7 @@ public final class MinorCompactionTask implements CompactionTask {
       case EXPIRING:
       case TOMBSTONE:
       case UNKNOWN:
-        transferEntry(index, entry, compactSegment);
+        transferEntry(entry, cleaner, writer);
         break;
       default:
         break;
@@ -177,32 +156,17 @@ public final class MinorCompactionTask implements CompactionTask {
   /**
    * Compacts an entry from the given segment.
    */
-  private void compactEntry(long index, Segment segment, Segment compactSegment) {
-    compactSegment.skip(1);
-    LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+  private void compactEntry(Indexed<? extends Entry> entry, SegmentWriter writer) {
+    writer.skip(1);
+    LOGGER.debug("Compacted entry {}", entry);
   }
 
   /**
    * Transfers an entry to the given compact segment.
    */
-  private void transferEntry(long index, Entry entry, Segment compactSegment) {
-    compactSegment.append(entry);
-
-    // If the entry was released in the prior segment, mark it as released in the compact segment.
-    if (!segment.isLive(index)) {
-      compactSegment.release(index);
-    }
-  }
-
-  /**
-   * Updates the new compact segment with entries that were released from the given segment during compaction.
-   */
-  private void mergeReleasedEntries(Segment segment, Segment compactSegment) {
-    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      if (!segment.isLive(i)) {
-        compactSegment.release(i);
-      }
-    }
+  @SuppressWarnings("unchecked")
+  private void transferEntry(Indexed<? extends Entry> entry, SegmentCleaner cleaner, SegmentWriter writer) {
+    writer.append(entry);
   }
 
   @Override

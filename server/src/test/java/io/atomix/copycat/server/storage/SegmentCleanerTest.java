@@ -15,24 +15,32 @@
  */
 package io.atomix.copycat.server.storage;
 
-import org.testng.annotations.Factory;
 import org.testng.annotations.Test;
 
+import static org.testng.Assert.*;
+
 /**
- * In-memory log test.
+ * Offset cleaner test.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class MemoryLogTest extends LogTest {
-  @Factory
-  public Object[] createTests() throws Throwable {
-    return testsFor(MemoryLogTest.class);
-  }
+public class SegmentCleanerTest {
 
-  @Override
-  protected StorageLevel storageLevel() {
-    return StorageLevel.MEMORY;
+  /**
+   * Tests the offset predicate.
+   */
+  public void testOffsetPredicate() {
+    SegmentCleaner cleaner = new SegmentCleaner();
+    assertEquals(cleaner.count(), 0);
+    cleaner.clean(10);
+    assertEquals(cleaner.count(), 1);
+    assertTrue(cleaner.isClean(0l));
+    assertFalse(cleaner.isClean(10l));
+    assertTrue(cleaner.isClean(11l));
+    cleaner.clean(2048);
+    assertEquals(cleaner.count(), 2);
+    assertFalse(cleaner.isClean(2048l));
   }
 
 }

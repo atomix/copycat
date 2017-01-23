@@ -46,7 +46,7 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
+  public Compaction.Mode compaction() {
     return Compaction.Mode.TOMBSTONE;
   }
 

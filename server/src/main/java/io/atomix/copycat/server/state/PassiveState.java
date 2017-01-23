@@ -31,6 +31,8 @@ import io.atomix.copycat.server.protocol.request.AppendRequest;
 import io.atomix.copycat.server.protocol.request.InstallRequest;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
@@ -71,7 +73,13 @@ class PassiveState extends ReserveState {
    */
   private void truncateUncommittedEntries() {
     if (type() == CopycatServer.State.PASSIVE) {
-      context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+      final LogWriter writer = context.getLogWriter();
+      try {
+        writer.lock().lock();
+        writer.truncate(context.getCommitIndex());
+      } finally {
+        writer.lock().unlock();
+      }
     }
   }
 
@@ -130,7 +138,7 @@ class PassiveState extends ReserveState {
       return builder.withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(context.getLogWriter().lastIndex())
         .build();
     } else {
       return checkGlobalIndex(request, builder);
@@ -150,7 +158,7 @@ class PassiveState extends ReserveState {
     // if the AppendRequest is rejected.
     long currentGlobalIndex = context.getGlobalIndex();
     long nextGlobalIndex = request.globalIndex();
-    if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && nextGlobalIndex > context.getLog().lastIndex()) {
+    if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && nextGlobalIndex > context.getLogWriter().lastIndex()) {
       context.setGlobalIndex(nextGlobalIndex);
       context.reset();
     }
@@ -167,19 +175,13 @@ class PassiveState extends ReserveState {
    * Checks the previous entry in the append request for consistency.
    */
   protected AppendResponse checkPreviousEntry(AppendRequest request, AppendResponse.Builder builder) {
-    if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
+    final long lastIndex = context.getLogWriter().lastIndex();
+    if (request.logIndex() != 0 && request.logIndex() > lastIndex) {
+      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), lastIndex);
       return builder.withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
-        .build();
-    } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
-      return builder.withStatus(ProtocolResponse.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(context.getLogWriter().lastIndex())
         .build();
     }
     return appendEntries(request, builder);
@@ -192,26 +194,41 @@ class PassiveState extends ReserveState {
     // Get the last entry index or default to the request log index.
     long lastEntryIndex = request.logIndex();
     if (!request.entries().isEmpty()) {
-      lastEntryIndex = request.entries().get(request.entries().size() - 1).getIndex();
+      lastEntryIndex = request.entries().get(request.entries().size() - 1).index();
     }
 
     // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
     long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
 
-    // Append entries to the log starting at the last log index.
-    for (Entry entry : request.entries()) {
-      // If the entry index is greater than the last index and less than the commit index, append the entry.
-      // We perform no additional consistency checks here since passive members may only receive committed entries.
-      if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
-        context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-      }
+    // Get the server log writer.
+    final LogWriter writer = context.getLogWriter();
 
-      // If the entry is a connect entry then immediately configure the connection.
-      if (entry instanceof ConnectEntry) {
-        ConnectEntry connectEntry = (ConnectEntry) entry;
-        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.client(), connectEntry.address());
+    // If the request entries are non-empty, write them to the log.
+    long lastIndex;
+    if (!request.entries().isEmpty()) {
+      try {
+        writer.lock().lock();
+
+        // Append entries to the log starting at the last log index.
+        for (Indexed<? extends Entry> entry : request.entries()) {
+          // If the entry index is less than the commit index, append the entry.
+          if (entry.index() <= commitIndex) {
+            writer.append(entry);
+            LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+          }
+
+          // If the entry is a connect entry then immediately configure the connection.
+          if (entry.entry().type() == Entry.Type.CONNECT) {
+            Indexed<ConnectEntry> connectEntry = (Indexed<ConnectEntry>) entry;
+            context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
+          }
+        }
+        lastIndex = writer.lastIndex();
+      } finally {
+        writer.lock().unlock();
       }
+    } else {
+      lastIndex = writer.lastIndex();
     }
 
     // Update the context commit and global indices.
@@ -224,7 +241,7 @@ class PassiveState extends ReserveState {
     return builder.withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(context.getLog().lastIndex())
+      .withLogIndex(lastIndex)
       .build();
   }
 
@@ -246,18 +263,20 @@ class PassiveState extends ReserveState {
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
-      if (context.getLog().lastIndex() < context.getCommitIndex()) {
+      if (context.getLogWriter().lastIndex() < context.getCommitIndex()) {
         LOGGER.debug("{} - State out of sync, forwarding query to leader");
         return queryForward(request, builder);
       }
 
-      QueryEntry entry = context.getLog().create(QueryEntry.class)
-        .setIndex(request.index())
-        .setTerm(context.getTerm())
-        .setTimestamp(System.currentTimeMillis())
-        .setSession(request.session())
-        .setSequence(request.sequence())
-        .setQuery(request.query());
+      final Indexed<QueryEntry> entry = new Indexed<>(
+        request.index(),
+        context.getTerm(),
+        new QueryEntry(
+          System.currentTimeMillis(),
+          request.session(),
+          request.sequence(),
+          request.query()),
+        0);
 
       return queryLocal(entry, builder);
     } else {
@@ -293,7 +312,7 @@ class PassiveState extends ReserveState {
   /**
    * Performs a local query.
    */
-  protected CompletableFuture<QueryResponse> queryLocal(QueryEntry entry, QueryResponse.Builder builder) {
+  protected CompletableFuture<QueryResponse> queryLocal(Indexed<QueryEntry> entry, QueryResponse.Builder builder) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
     sequenceQuery(entry, builder, future);
     return future;
@@ -302,9 +321,9 @@ class PassiveState extends ReserveState {
   /**
    * Sequences the given query.
    */
-  private void sequenceQuery(QueryEntry entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
+  private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -318,11 +337,11 @@ class PassiveState extends ReserveState {
   /**
    * Sequences the given query.
    */
-  private void sequenceQuery(QueryEntry entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
-    if (entry.sequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.sequence(), () -> indexQuery(entry, builder, future));
+    if (entry.entry().sequence() > session.getCommandSequence()) {
+      session.registerSequenceQuery(entry.entry().sequence(), () -> indexQuery(entry, builder, future));
     } else {
       indexQuery(entry, builder, future);
     }
@@ -331,9 +350,9 @@ class PassiveState extends ReserveState {
   /**
    * Ensures the given query is applied after the appropriate index.
    */
-  private void indexQuery(QueryEntry entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
+  private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -347,11 +366,11 @@ class PassiveState extends ReserveState {
   /**
    * Ensures the given query is applied after the appropriate index.
    */
-  private void indexQuery(QueryEntry entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     // If the query index is greater than the session's last applied index, queue the request for handling once the
     // state machine is caught up.
-    if (entry.getIndex() > session.getLastApplied()) {
-      session.registerIndexQuery(entry.getIndex(), () -> applyQuery(entry, builder, future));
+    if (entry.index() > session.getLastApplied()) {
+      session.registerIndexQuery(entry.index(), () -> applyQuery(entry, builder, future));
     } else {
       applyQuery(entry, builder, future);
     }
@@ -360,12 +379,11 @@ class PassiveState extends ReserveState {
   /**
    * Applies a query to the state machine.
    */
-  protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
+  protected CompletableFuture<QueryResponse> applyQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // indexes will be the last applied index.
     context.getStateMachine().<ServerStateMachine.Result>apply(entry).whenComplete((result, error) -> {
       completeOperation(result, builder, error, future);
-      entry.release();
     });
     return future;
   }

@@ -16,7 +16,7 @@
 package io.atomix.copycat.server.storage.util;
 
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.entry.Indexed;
+import io.atomix.copycat.server.storage.Indexed;
 
 /**
  * Log entry buffer.

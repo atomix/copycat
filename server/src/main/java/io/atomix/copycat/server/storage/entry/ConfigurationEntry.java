@@ -48,7 +48,7 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
+  public Compaction.Mode compaction() {
     return Compaction.Mode.FULL;
   }
 

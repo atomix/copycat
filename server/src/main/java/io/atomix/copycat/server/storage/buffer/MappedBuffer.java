@@ -209,6 +209,11 @@ public class MappedBuffer extends NativeBuffer {
     super(bytes, offset, initialCapacity, maxCapacity);
   }
 
+  @Override
+  public MappedBuffer duplicate() {
+    return new MappedBuffer((MappedBytes) bytes, offset(), capacity(), maxCapacity());
+  }
+
   /**
    * Deletes the underlying file.
    */

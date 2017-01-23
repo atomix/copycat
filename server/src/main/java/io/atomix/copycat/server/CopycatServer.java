@@ -28,7 +28,6 @@ import io.atomix.copycat.server.protocol.RaftProtocol;
 import io.atomix.copycat.server.protocol.RaftProtocolServer;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
-import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.util.Assert;

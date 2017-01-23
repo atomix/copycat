@@ -26,6 +26,8 @@ import io.atomix.copycat.server.protocol.request.InstallRequest;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.ConfigureResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogReader;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -84,15 +86,24 @@ abstract class AbstractAppender implements AutoCloseable {
    * @return The append request.
    */
   protected AppendRequest buildAppendRequest(MemberState member, AppendRequest.Builder builder, long lastIndex) {
-    // If the log is empty then send an empty commit.
-    // If the next index hasn't yet been set then we send an empty commit first.
-    // If the next index is greater than the last index then send an empty commit.
-    // If the member failed to respond to recent communication send an empty commit. This
-    // helps avoid doing expensive work until we can ascertain the member is back up.
-    if (context.getLog().isEmpty() || member.getNextIndex() > lastIndex || member.getFailureCount() > 0) {
-      return buildAppendEmptyRequest(member, builder);
-    } else {
-      return buildAppendEntriesRequest(member, builder, lastIndex);
+    final LogReader reader = member.getLogReader();
+    try {
+      // Lock the entry reader.
+      reader.lock().lock();
+
+      // If the log is empty then send an empty commit.
+      // If the next index hasn't yet been set then we send an empty commit first.
+      // If the next index is greater than the last index then send an empty commit.
+      // If the member failed to respond to recent communication send an empty commit. This
+      // helps avoid doing expensive work until we can ascertain the member is back up.
+      if (!reader.hasNext() || member.getFailureCount() > 0) {
+        return buildAppendEmptyRequest(member, builder);
+      } else {
+        return buildAppendEntriesRequest(member, builder, lastIndex);
+      }
+    } finally {
+      // Unlock the entry reader.
+      reader.lock().unlock();
     }
   }
 
@@ -103,13 +114,22 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   protected AppendRequest buildAppendEmptyRequest(MemberState member, AppendRequest.Builder builder) {
-    Entry prevEntry = getPrevEntry(member);
+    final LogReader reader = member.getLogReader();
+
+    // Acquire the reader lock.
+    reader.lock().lock();
+
+    // Read the previous entry from the reader.
+    Indexed<? extends Entry<?>> prevEntry = reader.entry();
+
+    // Release the reader lock.
+    reader.lock().unlock();
 
     ServerMember leader = context.getLeader();
     return builder
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
-      .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
+      .withLogIndex(prevEntry != null ? prevEntry.index() : 0)
       .withLogTerm(prevEntry != null ? prevEntry.term() : 0)
       .withEntries(Collections.EMPTY_LIST)
       .withCommitIndex(context.getCommitIndex())
@@ -122,22 +142,24 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   protected AppendRequest buildAppendEntriesRequest(MemberState member, AppendRequest.Builder builder, long lastIndex) {
-    Entry prevEntry = getPrevEntry(member);
+    final LogReader reader = member.getLogReader();
 
-    ServerMember leader = context.getLeader();
+    // Acquire the reader lock.
+    reader.lock().lock();
+
+    final Indexed<? extends Entry<?>> prevEntry = reader.entry();
+
+    final ServerMember leader = context.getLeader();
     builder
       .withTerm(context.getTerm())
       .withLeader(leader != null ? leader.id() : 0)
-      .withLogIndex(prevEntry != null ? prevEntry.getIndex() : 0)
+      .withLogIndex(prevEntry != null ? prevEntry.index() : 0)
       .withLogTerm(prevEntry != null ? prevEntry.term() : 0)
       .withCommitIndex(context.getCommitIndex())
       .withGlobalIndex(context.getGlobalIndex());
 
-    // Calculate the starting index of the list of entries.
-    final long index = prevEntry != null ? prevEntry.getIndex() + 1 : context.getLog().firstIndex();
-
     // Build a list of entries to send to the member.
-    List<Entry> entries = new ArrayList<>((int) Math.min(8, lastIndex - index + 1));
+    final List<Indexed<? extends Entry<?>>> entries = new ArrayList<>();
 
     // Build a list of entries up to the MAX_BATCH_SIZE. Note that entries in the log may
     // be null if they've been compacted and the member to which we're sending entries is just
@@ -147,39 +169,21 @@ abstract class AbstractAppender implements AutoCloseable {
     // entry will be sent in a batch of size one
     int size = 0;
 
-    // Iterate through remaining entries in the log up to the last index.
-    for (long i = index; i <= lastIndex; i++) {
-      // Get the entry from the log and append it if it's not null. Entries in the log can be null
-      // if they've been cleaned or compacted from the log. Each entry sent in the append request
-      // has a unique index to handle gaps in the log.
-      Entry entry = context.getLog().get(i);
-      if (entry != null) {
-        if (!entries.isEmpty() && size + entry.size() > MAX_BATCH_SIZE) {
-          break;
-        }
-        size += entry.size();
-        entries.add(entry);
+    // Iterate through the log until the last index or the end of the log is reached.
+    while (reader.hasNext()) {
+      Indexed<? extends Entry<?>> entry = reader.next();
+      entries.add(entry);
+      size += entry.size();
+      if (size >= MAX_BATCH_SIZE) {
+        break;
       }
     }
+
+    // Release the reader lock.
+    reader.lock().unlock();
 
     // Add the entries to the request builder and build the request.
     return builder.withEntries(entries).build();
-  }
-
-  /**
-   * Gets the previous entry.
-   */
-  @SuppressWarnings("unused")
-  protected Entry getPrevEntry(MemberState member) {
-    long prevIndex = Math.min(member.getNextIndex() - 1, context.getLog().lastIndex());
-    while (prevIndex > 0) {
-      Entry entry = context.getLog().get(prevIndex);
-      if (entry != null) {
-        return entry;
-      }
-      prevIndex--;
-    }
-    return null;
   }
 
   /**
@@ -234,7 +238,6 @@ abstract class AbstractAppender implements AutoCloseable {
       }
     });
 
-    updateNextIndex(member, request);
     if (!request.entries().isEmpty() && hasMoreEntries(member)) {
       appendEntries(member);
     }
@@ -352,16 +355,6 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
-   * Updates the next index when the match index is updated.
-   */
-  protected void updateNextIndex(MemberState member, AppendRequest request) {
-    // If the match index was set, update the next index to be greater than the match index if necessary.
-    if (!request.entries().isEmpty()) {
-      member.setNextIndex(request.entries().get(request.entries().size() - 1).getIndex() + 1);
-    }
-  }
-
-  /**
    * Resets the match index when a response fails.
    */
   protected void resetMatchIndex(MemberState member, AppendResponse response) {
@@ -373,12 +366,19 @@ abstract class AbstractAppender implements AutoCloseable {
    * Resets the next index when a response fails.
    */
   protected void resetNextIndex(MemberState member) {
-    if (member.getMatchIndex() != 0) {
-      member.setNextIndex(member.getMatchIndex() + 1);
-    } else {
-      member.setNextIndex(context.getLog().firstIndex());
+    final LogReader reader = member.getLogReader();
+    try {
+      reader.lock().lock();
+
+      if (member.getMatchIndex() != 0) {
+        reader.reset(member.getMatchIndex());
+      } else {
+        reader.reset();
+      }
+      LOGGER.debug("{} - Reset next index for {} to {} + 1", context.getCluster().member().address(), member, member.getMatchIndex());
+    } finally {
+      reader.lock().unlock();
     }
-    LOGGER.debug("{} - Reset next index for {} to {}", context.getCluster().member().address(), member, member.getNextIndex());
   }
 
   /**

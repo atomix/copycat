@@ -21,7 +21,7 @@ import io.atomix.copycat.server.protocol.request.AppendRequest;
 import io.atomix.copycat.server.protocol.request.VoteRequest;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.VoteResponse;
-import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.util.Quorum;
 import io.atomix.copycat.util.concurrent.Scheduled;
 
@@ -122,13 +122,11 @@ final class CandidateState extends ActiveState {
 
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
-    long lastIndex = context.getLog().lastIndex();
-    Entry lastEntry = lastIndex != 0 ? context.getLog().get(lastIndex) : null;
+    final Indexed<?> lastEntry = context.getLogWriter().lastEntry();
 
     final long lastTerm;
     if (lastEntry != null) {
       lastTerm = lastEntry.term();
-      lastEntry.close();
     } else {
       lastTerm = 0;
     }
@@ -143,7 +141,7 @@ final class CandidateState extends ActiveState {
         connection.vote(builder ->
           builder.withTerm(context.getTerm())
             .withCandidate(context.getCluster().member().id())
-            .withLogIndex(lastIndex)
+            .withLogIndex(lastEntry.index())
             .withLogTerm(lastTerm)
             .build())
           .whenCompleteAsync((response, error) -> {

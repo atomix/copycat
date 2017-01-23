@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,15 +11,15 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.buffer.MappedBuffer;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.buffer.Buffer;
+import io.atomix.copycat.server.storage.buffer.FileBuffer;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.server.storage.buffer.MappedBuffer;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Stores information about a {@link Segment} of the log.
@@ -77,7 +77,7 @@ public final class SegmentDescriptor implements AutoCloseable {
     return new Builder(buffer);
   }
 
-  private Buffer buffer;
+  Buffer buffer;
   private final long id;
   private final long index;
   private final long version;

@@ -16,11 +16,8 @@
 package io.atomix.copycat.server.storage.compaction;
 
 import io.atomix.copycat.server.Commit;
-import io.atomix.copycat.server.storage.Segment;
-import io.atomix.copycat.server.storage.SegmentDescriptor;
-import io.atomix.copycat.server.storage.SegmentManager;
+import io.atomix.copycat.server.storage.*;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +39,7 @@ import java.util.List;
  * the major compaction task rewrites groups of segments provided by the {@link MajorCompactionManager}. For each group
  * of segments, a single compact segment will be created with the same {@code version} and starting {@code index} as
  * the first segment in the group. All entries from all segments in the group that haven't been
- * {@link io.atomix.copycat.server.storage.Log#release(long) released} will then be written to the new compact segment.
+ * {@link SegmentCleaner#clean(long) released} will then be written to the new compact segment.
  * Once the rewrite is complete, the compact segment will be locked and the set of old segments deleted.
  * <p>
  * <b>Removing tombstones</b>
@@ -55,8 +52,8 @@ import java.util.List;
  * A significant objective of the major compaction task is to remove tombstones from the log in a manor that ensures
  * failures before, during, or after the compaction task will not result in inconsistencies when state is rebuilt from
  * the log. In order to ensure tombstones are removed only <em>after</em> any prior related entries, the major compaction
- * task simply compacts segments in sequential order from the {@link Segment#firstIndex()} of the first segment to the
- * {@link Segment#lastIndex()} of the last segment. This ensures that if a failure occurs during the compaction process,
+ * task simply compacts segments in sequential order from the first index of the first segment to the
+ * last index of the last segment. This ensures that if a failure occurs during the compaction process,
  * only entries earlier in the log will have been removed, and potential tombstones which erase the state of those entries
  * will remain.
  * <p>
@@ -94,7 +91,7 @@ public final class MajorCompactionTask implements CompactionTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MajorCompactionTask.class);
   private final SegmentManager manager;
   private final List<List<Segment>> groups;
-  private List<List<OffsetPredicate>> predicates;
+  private List<List<SegmentCleaner>> predicates;
   private final long snapshotIndex;
   private final long compactIndex;
   private final Compaction.Mode defaultCompactionMode;
@@ -119,9 +116,9 @@ public final class MajorCompactionTask implements CompactionTask {
   private void copyPredicates() {
     predicates = new ArrayList<>(groups.size());
     for (List<Segment> group : groups) {
-      List<OffsetPredicate> groupPredicates = new ArrayList<>(group.size());
+      List<SegmentCleaner> groupPredicates = new ArrayList<>(group.size());
       for (Segment segment : group) {
-        groupPredicates.add(segment.offsetPredicate().copy());
+        groupPredicates.add(segment.cleaner().copy());
       }
       predicates.add(groupPredicates);
     }
@@ -133,9 +130,8 @@ public final class MajorCompactionTask implements CompactionTask {
   private void compactGroups() {
     for (int i = 0; i < groups.size(); i++) {
       List<Segment> group = groups.get(i);
-      List<OffsetPredicate> groupPredicates = predicates.get(i);
-      Segment segment = compactGroup(group, groupPredicates);
-      mergeReleased(group, groupPredicates, segment);
+      List<SegmentCleaner> groupPredicates = predicates.get(i);
+      compactGroup(group, groupPredicates);
       deleteGroup(group);
     }
   }
@@ -143,7 +139,7 @@ public final class MajorCompactionTask implements CompactionTask {
   /**
    * Compacts a group.
    */
-  private Segment compactGroup(List<Segment> segments, List<OffsetPredicate> predicates) {
+  private Segment compactGroup(List<Segment> segments, List<SegmentCleaner> cleaners) {
     // Get the first segment which contains the first index being compacted. The compact segment will be written
     // as a newer version of the earliest segment being rewritten.
     Segment firstSegment = segments.iterator().next();
@@ -157,7 +153,7 @@ public final class MajorCompactionTask implements CompactionTask {
       .withMaxEntries(segments.stream().mapToInt(s -> s.descriptor().maxEntries()).max().getAsInt())
       .build());
 
-    compactGroup(segments, predicates, compactSegment);
+    compactGroup(segments, cleaners, compactSegment.writer());
 
     // Replace the rewritten segments with the updated segment.
     manager.replaceSegments(segments, compactSegment);
@@ -169,52 +165,45 @@ public final class MajorCompactionTask implements CompactionTask {
    * Compacts segments in a group sequentially.
    *
    * @param segments The segments to compact.
-   * @param compactSegment The compact segment.
+   * @param writer The compact segment writer.
    */
-  private void compactGroup(List<Segment> segments, List<OffsetPredicate> predicates, Segment compactSegment) {
+  private void compactGroup(List<Segment> segments, List<SegmentCleaner> cleaners, SegmentWriter writer) {
     // Iterate through all segments being compacted and write entries to a single compact segment.
     for (int i = 0; i < segments.size(); i++) {
-      compactSegment(segments.get(i), predicates.get(i), compactSegment);
+      compactSegment(segments.get(i).createReader(true), cleaners.get(i), writer);
     }
   }
 
   /**
    * Compacts the given segment.
    *
-   * @param segment The segment to compact.
-   * @param compactSegment The segment to which to write the compacted segment.
+   * @param reader The segment reader for the segment to be compacted.
+   * @param writer The compacted segment writer.
    */
-  private void compactSegment(Segment segment, OffsetPredicate predicate, Segment compactSegment) {
-    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      checkEntry(i, segment, predicate, compactSegment);
-    }
-  }
+  private void compactSegment(SegmentReader reader, SegmentCleaner cleaner, SegmentWriter writer) {
+    long previousIndex = 0;
+    while (reader.hasNext()) {
+      // Read the next entry from the segment.
+      Indexed<? extends Entry<?>> entry = reader.next();
 
-  /**
-   * Compacts the entry at the given index.
-   *
-   * @param index The index at which to compact the entry.
-   * @param segment The segment to compact.
-   * @param compactSegment The segment to which to write the uncompacted segment.
-   */
-  private void checkEntry(long index, Segment segment, OffsetPredicate predicate, Segment compactSegment) {
-    try (Entry entry = segment.get(index)) {
-      // If an entry was found, remove the entry from the segment.
-      if (entry != null) {
-        checkEntry(index, entry, segment, predicate, compactSegment);
-      } else {
-        compactSegment.skip(1);
-      }
+      // Skip entries that have already been compacted from the segment.
+      writer.skip(entry.index() - (previousIndex + 1));
+
+      // Compact the entry.
+      compactEntry(entry, cleaner, writer);
+
+      // Update the previous index.
+      previousIndex = entry.index();
     }
   }
 
   /**
    * Compacts a command entry from a segment.
    */
-  private void checkEntry(long index, Entry entry, Segment segment, OffsetPredicate predicate, Segment compactSegment) {
+  private void compactEntry(Indexed<? extends Entry<?>> entry, SegmentCleaner cleaner, SegmentWriter writer) {
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
     // mode to the entry.
-    Compaction.Mode mode = entry.getCompactionMode();
+    Compaction.Mode mode = entry.entry().compaction();
     if (mode == Compaction.Mode.DEFAULT) {
       mode = defaultCompactionMode;
     }
@@ -225,19 +214,19 @@ public final class MajorCompactionTask implements CompactionTask {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (index <= snapshotIndex && !isLive(index, segment, predicate)) {
-          compactEntry(index, segment, compactSegment);
+        if (entry.index() <= snapshotIndex && cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(entry, compactSegment);
+          transferEntry(entry, writer);
         }
         break;
       // RELEASE and QUORUM entries are compacted if the entry has been released from the segment.
       case RELEASE:
       case QUORUM:
-        if (!isLive(index, segment, predicate)) {
-          compactEntry(index, segment, compactSegment);
+        if (cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(entry, compactSegment);
+          transferEntry(entry, writer);
         }
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index and
@@ -248,19 +237,19 @@ public final class MajorCompactionTask implements CompactionTask {
       case SEQUENTIAL:
       case EXPIRING:
       case TOMBSTONE:
-        if (index <= compactIndex && !isLive(index, segment, predicate)) {
-          compactEntry(index, segment, compactSegment);
+        if (entry.index() <= compactIndex && cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(entry, compactSegment);
+          transferEntry(entry, writer);
         }
         break;
       // UNKNOWN entries are compacted if the index is less than both the snapshot and major
       // compaction indexes and the entry has been released.
       case UNKNOWN:
-        if (index <= snapshotIndex && index <= compactIndex && !isLive(index, segment, predicate)) {
-          compactEntry(index, segment, compactSegment);
+        if (entry.index() <= snapshotIndex && entry.index() <= compactIndex && cleaner.isClean(entry.offset())) {
+          compactEntry(entry, writer);
         } else {
-          transferEntry(entry, compactSegment);
+          transferEntry(entry, writer);
         }
         break;
       default:
@@ -271,45 +260,16 @@ public final class MajorCompactionTask implements CompactionTask {
   /**
    * Compacts an entry from the given segment.
    */
-  private void compactEntry(long index, Segment segment, Segment compactSegment) {
-    compactSegment.skip(1);
-    LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+  private void compactEntry(Indexed<? extends Entry<?>> entry, SegmentWriter writer) {
+    writer.skip(1);
+    LOGGER.debug("Compacted entry {}", entry);
   }
 
   /**
    * Transfers an entry to the given segment.
    */
-  private void transferEntry(Entry entry, Segment compactSegment) {
-    compactSegment.append(entry);
-  }
-
-  /**
-   * Returns a boolean value indicating whether the given index is release.
-   */
-  private boolean isLive(long index, Segment segment, OffsetPredicate predicate) {
-    long offset = segment.offset(index);
-    return offset != -1 && predicate.test(offset);
-  }
-
-  /**
-   * Updates the new compact segment with entries that were released during compaction.
-   */
-  private void mergeReleased(List<Segment> segments, List<OffsetPredicate> predicates, Segment compactSegment) {
-    for (int i = 0; i < segments.size(); i++) {
-      mergeReleasedEntries(segments.get(i), predicates.get(i), compactSegment);
-    }
-  }
-
-  /**
-   * Updates the new compact segment with entries that were released in the given segment during compaction.
-   */
-  private void mergeReleasedEntries(Segment segment, OffsetPredicate predicate, Segment compactSegment) {
-    for (long i = segment.firstIndex(); i <= segment.lastIndex(); i++) {
-      long offset = segment.offset(i);
-      if (offset != -1 && !predicate.test(offset)) {
-        compactSegment.release(i);
-      }
-    }
+  private void transferEntry(Indexed<? extends Entry> entry, SegmentWriter writer) {
+    writer.append(entry);
   }
 
   /**

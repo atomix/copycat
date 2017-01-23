@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.util.concurrent.ComposableFuture;
-import io.atomix.copycat.util.concurrent.Scheduled;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
@@ -28,9 +26,13 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.*;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.session.Session;
+import io.atomix.copycat.util.concurrent.ComposableFuture;
+import io.atomix.copycat.util.concurrent.Scheduled;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -92,12 +94,13 @@ final class LeaderState extends ActiveState {
   private void appendInitialEntries() {
     final long term = context.getTerm();
 
-    // Append a no-op entry to reset session timeouts and commit entries from prior terms.
-    try (InitializeEntry entry = context.getLog().create(InitializeEntry.class)) {
-      entry.setTerm(term)
-        .setTimestamp(appender.time());
-      assert context.getLog().append(entry) == appender.index();
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      Indexed<InitializeEntry> indexed = writer.append(term, new InitializeEntry(appender.time()));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), indexed.index());
+    } finally {
+      writer.unlock();
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
@@ -171,20 +174,20 @@ final class LeaderState extends ActiveState {
 
         // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
         // This will result in state machine expire() methods being called when the entry is applied.
-        final long index;
-        try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-          entry.setTerm(term)
-            .setSession(session.id())
-            .setExpired(true)
-            .setTimestamp(System.currentTimeMillis());
-          index = context.getLog().append(entry);
+        final LogWriter writer = context.getLogWriter();
+        final Indexed<UnregisterEntry> entry;
+        try {
+          writer.lock();
+          entry = writer.append(term, new UnregisterEntry(System.currentTimeMillis(), session.id(), true));
           LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+        } finally {
+          writer.unlock();
         }
 
         // Commit the unregister entry and apply it to the state machine.
-        appender.appendEntries(index).whenComplete((result, error) -> {
+        appender.appendEntries(entry.index()).whenComplete((result, error) -> {
           if (isOpen()) {
-            context.getStateMachine().apply(index);
+            context.getStateMachine().apply(entry.index());
           }
         });
 
@@ -220,29 +223,21 @@ final class LeaderState extends ActiveState {
    * Commits the given configuration.
    */
   protected CompletableFuture<Long> configure(Collection<Member> members) {
-    final ConfigurationEntry entry = new ConfigurationEntry(context.getTerm(), System.currentTimeMillis(), members);
-    final long index = context.getLog().append(entry);
-    LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+    final long term = context.getTerm();
 
-    // Store the index of the configuration entry in order to prevent other configurations from
-    // being logged and committed concurrently. This is an important safety property of Raft.
-    configuring = index;
-    context.getClusterState().configure(new Configuration(entry.getIndex(), entry.term(), entry.timestamp(), entry.members()));
-
-    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setTimestamp(System.currentTimeMillis())
-        .setMembers(members);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
-
-      // Store the index of the configuration entry in order to prevent other configurations from
-      // being logged and committed concurrently. This is an important safety property of Raft.
-      configuring = index;
-      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.term(), entry.timestamp(), entry.members()));
+    final LogWriter writer = context.getLogWriter();
+    final Indexed<ConfigurationEntry> entry;
+    try {
+      writer.lock();
+      entry = writer.append(term, new ConfigurationEntry(System.currentTimeMillis(), members));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
-    return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    context.getClusterState().configure(new Configuration(entry.index(), entry.term(), entry.entry().timestamp(), entry.entry().members()));
+
+    return appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
@@ -466,7 +461,7 @@ final class LeaderState extends ActiveState {
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(context.getLogWriter().lastIndex())
         .build()));
     } else {
       context.setLeader(request.leader()).transition(CopycatServer.State.FOLLOWER);
@@ -528,21 +523,19 @@ final class LeaderState extends ActiveState {
 
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
+    final Indexed<CommandEntry> entry;
 
-    // Create a CommandEntry and append it to the log.
-    try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
-      entry.setTerm(term)
-        .setSession(request.session())
-        .setTimestamp(timestamp)
-        .setSequence(request.sequence())
-        .setCommand(command);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, index);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new CommandEntry(timestamp, request.session(), request.sequence(), command));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
     // Replicate the command to followers.
-    appendCommand(index, responseBuilder, future);
+    appendCommand(entry.index(), responseBuilder, future);
 
     // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
     session.setRequestSequence(request.sequence());
@@ -587,17 +580,20 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(request.index())
-      .setTerm(context.getTerm())
-      .setTimestamp(timestamp)
-      .setSession(request.session())
-      .setSequence(request.sequence())
-      .setQuery(query);
+    Indexed<QueryEntry> entry = new Indexed<>(
+      request.index(),
+      context.getTerm(),
+      new QueryEntry(
+        timestamp,
+        request.session(),
+        request.sequence(),
+        query),
+      0);
 
     Query.ConsistencyLevel consistency = query.consistency();
-    if (consistency == null)
+    if (consistency == null) {
       return queryLinearizable(entry, responseBuilder);
+    }
 
     switch (consistency) {
       case SEQUENTIAL:
@@ -614,9 +610,9 @@ final class LeaderState extends ActiveState {
   /**
    * Submits a query with lease bounded linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry, QueryResponse.Builder responseBuilder) {
+  private CompletableFuture<QueryResponse> queryBoundedLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -632,11 +628,11 @@ final class LeaderState extends ActiveState {
   /**
    * Sequences a bounded linearizable query.
    */
-  private void sequenceBoundedLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void sequenceBoundedLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
-    if (entry.sequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.sequence(), () -> applyQuery(entry, responseBuilder, future));
+    if (entry.entry().sequence() > session.getCommandSequence()) {
+      session.registerSequenceQuery(entry.entry().sequence(), () -> applyQuery(entry, responseBuilder, future));
     } else {
       applyQuery(entry, responseBuilder, future);
     }
@@ -645,9 +641,9 @@ final class LeaderState extends ActiveState {
   /**
    * Submits a query with strict linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> queryLinearizable(QueryEntry entry, QueryResponse.Builder responseBuilder) {
+  private CompletableFuture<QueryResponse> queryLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -663,12 +659,11 @@ final class LeaderState extends ActiveState {
   /**
    * Sends an append request for the given query entry.
    */
-  private void appendLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void appendLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          entry.acquire();
           sequenceLinearizableQuery(entry, responseBuilder, future);
         } else {
           future.complete(logResponse(responseBuilder
@@ -677,16 +672,15 @@ final class LeaderState extends ActiveState {
             .build()));
         }
       }
-      entry.release();
     });
   }
 
   /**
    * Sequences a linearizable query.
    */
-  private void sequenceLinearizableQuery(QueryEntry entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
+  private void sequenceLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.session());
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -695,8 +689,8 @@ final class LeaderState extends ActiveState {
     } else {
       // If the query's sequence number is greater than the session's current sequence number, queue the request for
       // handling once the state machine is caught up.
-      if (entry.sequence() > session.getCommandSequence()) {
-        session.registerSequenceQuery(entry.sequence(), () -> applyQuery(entry, responseBuilder, future));
+      if (entry.entry().sequence() > session.getCommandSequence()) {
+        session.registerSequenceQuery(entry.entry().sequence(), () -> applyQuery(entry, responseBuilder, future));
       } else {
         applyQuery(entry, responseBuilder, future);
       }
@@ -705,8 +699,9 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder responseBuilder) {
+    final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
+    final Indexed<RegisterEntry> entry;
 
     // If the client submitted a session timeout, use the client's timeout, otherwise use the configured
     // default server session timeout.
@@ -720,22 +715,21 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    // The timeout is logged in the RegisterEntry to ensure that all nodes see a consistent timeout for the session.
-    try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setTimestamp(timestamp)
-        .setClient(request.client())
-        .setTimeout(timeout);
-      index = context.getLog().append(entry);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new RegisterEntry(timestamp, request.client(), timeout));
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((sessionId, sessionError) -> {
+          context.getStateMachine().apply(entry.index()).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(responseBuilder
@@ -803,29 +797,30 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder responseBuilder) {
+    final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
+    final Indexed<ConnectEntry> entry;
 
     context.checkThread();
     logRequest(request);
 
-    try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setClient(request.client())
-        .setTimestamp(timestamp)
-        .setAddress(request.address());
-      index = context.getLog().append(entry);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new ConnectEntry(timestamp, request.client(), request.address()));
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
     context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((connectResult, connectError) -> {
+          context.getStateMachine().apply(entry.index()).whenComplete((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
                 future.complete(logResponse(responseBuilder
@@ -864,28 +859,27 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder responseBuilder) {
+    final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
+    final Indexed<KeepAliveEntry> entry;
 
     context.checkThread();
     logRequest(request);
 
-    try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setSession(request.session())
-        .setCommandSequence(request.commandSequence())
-        .setEventIndex(request.eventIndex())
-        .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new KeepAliveEntry(timestamp, request.session(), request.commandSequence(), request.eventIndex()));
+    } finally {
+      writer.unlock();
     }
 
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((sessionResult, sessionError) -> {
+          context.getStateMachine().apply(entry.index()).whenComplete((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(responseBuilder
@@ -932,27 +926,27 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder responseBuilder) {
+    final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
+    final Indexed<UnregisterEntry> entry;
 
     context.checkThread();
     logRequest(request);
 
-    try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setSession(request.session())
-        .setExpired(false)
-        .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new UnregisterEntry(timestamp, request.session(), false));
+    } finally {
+      writer.unlock();
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((unregisterResult, unregisterError) -> {
+          context.getStateMachine().apply(entry.index()).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
                 future.complete(logResponse(responseBuilder

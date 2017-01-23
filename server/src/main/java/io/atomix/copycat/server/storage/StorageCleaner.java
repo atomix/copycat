@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.util.Assert;
 
 import java.io.File;
 import java.io.IOException;

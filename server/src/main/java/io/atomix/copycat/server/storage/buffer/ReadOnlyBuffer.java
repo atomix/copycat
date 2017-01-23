@@ -37,7 +37,6 @@ public class ReadOnlyBuffer extends AbstractBuffer {
     return root.isDirect();
   }
 
-
   @Override
   public boolean isFile() {
     return root.isFile();
@@ -56,6 +55,11 @@ public class ReadOnlyBuffer extends AbstractBuffer {
   @Override
   protected void compact(long from, long to, long length) {
     throw new ReadOnlyBufferException();
+  }
+
+  @Override
+  public Buffer duplicate() {
+    return new ReadOnlyBuffer(root, referenceManager);
   }
 
   @Override

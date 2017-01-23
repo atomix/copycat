@@ -142,4 +142,8 @@ public class HeapBuffer extends AbstractBuffer {
     return this;
   }
 
+  @Override
+  public HeapBuffer duplicate() {
+    return new HeapBuffer(bytes, offset(), capacity(), maxCapacity());
+  }
 }

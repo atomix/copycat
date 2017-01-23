@@ -25,6 +25,8 @@ import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
@@ -62,6 +64,8 @@ public class ServerContext implements AutoCloseable {
   protected final Kryo serializer;
   private MetaStore meta;
   private Log log;
+  private LogReader reader;
+  private LogWriter writer;
   private SnapshotStore snapshot;
   private ServerStateMachine stateMachine;
   protected final ThreadContext stateContext;
@@ -366,7 +370,7 @@ public class ServerContext implements AutoCloseable {
     long previousCommitIndex = this.commitIndex;
     if (commitIndex > previousCommitIndex) {
       this.commitIndex = commitIndex;
-      log.commit(Math.min(commitIndex, log.lastIndex()));
+      writer.commit(Math.min(commitIndex, writer.lastIndex()));
       long configurationIndex = cluster.getConfiguration().index();
       if (configurationIndex > previousCommitIndex && configurationIndex <= commitIndex) {
         cluster.commit();
@@ -447,8 +451,26 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The server log.
    */
-  public Log getLog() {
+  Log getLog() {
     return log;
+  }
+
+  /**
+   * Returns the server log writer.
+   *
+   * @return The log writer.
+   */
+  LogWriter getLogWriter() {
+    return writer;
+  }
+
+  /**
+   * Returns the server log reader.
+   *
+   * @return The log reader.
+   */
+  LogReader getLogReader() {
+    return reader;
   }
 
   /**
@@ -471,6 +493,8 @@ public class ServerContext implements AutoCloseable {
 
     // Open the log.
     log = storage.openLog(name);
+    reader = log.createReader(false);
+    writer = log.createWriter();
 
     // Open the snapshot store.
     snapshot = storage.openSnapshotStore(name);

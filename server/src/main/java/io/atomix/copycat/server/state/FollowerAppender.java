@@ -41,7 +41,7 @@ final class FollowerAppender extends AbstractAppender {
 
   @Override
   protected boolean hasMoreEntries(MemberState member) {
-    return member.getMember().type() == Member.Type.PASSIVE && member.getNextIndex() <= context.getCommitIndex();
+    return member.getMember().type() == Member.Type.PASSIVE && member.getLogReader().hasNext();
   }
 
   @Override
@@ -53,7 +53,7 @@ final class FollowerAppender extends AbstractAppender {
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
     if (context.getSnapshotStore().currentSnapshot() != null
-      && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
+      && context.getSnapshotStore().currentSnapshot().index() >= member.getLogReader().currentIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (member.canInstall()) {
         sendInstallRequest(member, builder -> buildInstallRequest(member, builder));
@@ -61,7 +61,7 @@ final class FollowerAppender extends AbstractAppender {
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (member.canAppend() && hasMoreEntries(member)) {
-      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, Math.min(context.getCommitIndex(), context.getLog().lastIndex())));
+      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, Math.min(context.getCommitIndex(), context.getLogWriter().lastIndex())));
     }
   }
 

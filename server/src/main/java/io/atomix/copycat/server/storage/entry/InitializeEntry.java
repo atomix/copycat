@@ -41,7 +41,7 @@ public class InitializeEntry extends TimestampedEntry<InitializeEntry> {
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
+  public Compaction.Mode compaction() {
     return Compaction.Mode.FULL;
   }
 

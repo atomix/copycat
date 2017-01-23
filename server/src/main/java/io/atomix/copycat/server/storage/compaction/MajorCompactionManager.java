@@ -104,7 +104,7 @@ public final class MajorCompactionManager implements CompactionManager {
       // Segments that have already been compacted are eligible for compaction. For uncompacted segments, the segment must be full, consist
       // of entries less than the minorIndex, and a later segment with at least one committed entry must exist in the log. This ensures that
       // a non-empty entry always remains at the end of the log.
-      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.firstIndex() <= manager.commitIndex() && !nextSegment.isEmpty())) {
+      if (segment.isCompacted() || (segment.isFull() && segment.lastIndex() < compactor.minorIndex() && nextSegment.index() <= manager.commitIndex() && !nextSegment.isEmpty())) {
         segments.add(segment);
       } else {
         break;

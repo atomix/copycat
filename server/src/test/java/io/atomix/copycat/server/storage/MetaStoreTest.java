@@ -15,16 +15,12 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.CatalystSerializable;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.concurrent.Listener;
+import com.esotericsoftware.kryo.Kryo;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
-import io.atomix.copycat.util.ProtocolSerialization;
+import io.atomix.copycat.util.concurrent.Listener;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -61,7 +57,7 @@ public class MetaStoreTest {
     storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new MetaStore("test", storage, new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization(), new StorageSerialization()).register(TestMember.class));
+    return new MetaStore("test", storage, new Kryo());
   }
 
   /**
@@ -139,7 +135,7 @@ public class MetaStoreTest {
   /**
    * Test member.
    */
-  public static class TestMember implements Member, CatalystSerializable {
+  public static class TestMember implements Member {
     private Type type;
     private Address serverAddress;
     private Address clientAddress;
@@ -221,20 +217,6 @@ public class MetaStoreTest {
     @Override
     public CompletableFuture<Void> remove() {
       return null;
-    }
-
-    @Override
-    public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-      buffer.writeByte(type.ordinal());
-      serializer.writeObject(serverAddress, buffer);
-      serializer.writeObject(clientAddress, buffer);
-    }
-
-    @Override
-    public void readObject(BufferInput<?> buffer, Serializer serializer) {
-      type = Type.values()[buffer.readByte()];
-      serverAddress = serializer.readObject(buffer);
-      clientAddress = serializer.readObject(buffer);
     }
 
     @Override

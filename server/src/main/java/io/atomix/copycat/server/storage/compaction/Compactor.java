@@ -105,7 +105,7 @@ public class Compactor implements AutoCloseable {
     this.minorIndex = Math.max(this.minorIndex, index);
     Segment segment = segments.segment(minorIndex);
     if (segment != null) {
-      compactIndex = segment.firstIndex();
+      compactIndex = segment.index();
     }
     return this;
   }

@@ -43,7 +43,7 @@ public abstract class AbstractBuffer implements Buffer {
   private long limit = -1;
   private long mark = -1;
   private final AtomicInteger references = new AtomicInteger();
-  private final ReferenceManager<Buffer> referenceManager;
+  protected final ReferenceManager<Buffer> referenceManager;
   private SwappedBuffer swap;
 
   protected AbstractBuffer(Bytes bytes, ReferenceManager<Buffer> referenceManager) {

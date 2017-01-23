@@ -45,7 +45,7 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
+  public Compaction.Mode compaction() {
     return Compaction.Mode.valueOf(command.compaction().name());
   }
 

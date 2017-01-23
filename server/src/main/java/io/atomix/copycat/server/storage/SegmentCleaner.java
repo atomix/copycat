@@ -13,33 +13,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.server.storage.util;
+package io.atomix.copycat.server.storage;
 
 import io.atomix.copycat.server.storage.buffer.util.BitArray;
 import io.atomix.copycat.util.Assert;
 
-import java.util.function.Predicate;
-
 /**
- * Segment offset liveness predicate.
+ * Segment index cleaner.
  * <p>
  * The offset predicate tracks the liveness of relative offsets within a segment. Liveness is tracked
  * in a {@link BitArray} that is resized to accommodate offsets as necessary. Each bit in the array
  * represents the liveness of a relative offset in the segment. When an offset is
- * {@link #release(long) released} from a segment, the bit at that offset is flipped in the bit array.
- * {@link #test(Long) Testing} the predicate indicates whether an offset is still live in the segment.
+ * {@link #clean(long) released} from a segment, the bit at that offset is flipped in the bit array.
+ * {@link #isClean(long) Testing} the predicate indicates whether an offset is still live in the segment.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class OffsetPredicate implements Predicate<Long>, AutoCloseable {
+public final class SegmentCleaner implements AutoCloseable {
   private final BitArray bits;
 
-  public OffsetPredicate() {
+  public SegmentCleaner() {
     this(BitArray.allocate(1024));
   }
 
-  OffsetPredicate(BitArray bits) {
+  SegmentCleaner(BitArray bits) {
     this.bits = Assert.notNull(bits, "bits");
+  }
+
+  /**
+   * Transfers the given entry to the cleaner.
+   *
+   * @param entry The entry to transfer.
+   */
+  void transfer(long offset, Indexed<?> entry) {
+    entry.cleaner.update(offset, this);
   }
 
   /**
@@ -48,8 +55,7 @@ public final class OffsetPredicate implements Predicate<Long>, AutoCloseable {
    * @param offset The offset to check.
    * @return Indicates whether the given offset is live.
    */
-  @Override
-  public boolean test(Long offset) {
+  public boolean isClean(long offset) {
     return offset != -1 && (bits.size() <= offset || !bits.get(offset));
   }
 
@@ -59,7 +65,7 @@ public final class OffsetPredicate implements Predicate<Long>, AutoCloseable {
    * @param offset The offset to release.
    * @return Indicates whether the offset was newly released.
    */
-  public boolean release(long offset) {
+  public boolean clean(long offset) {
     Assert.argNot(offset < 0, "offset must be positive");
     if (bits.size() <= offset) {
       while (bits.size() <= offset) {
@@ -83,8 +89,8 @@ public final class OffsetPredicate implements Predicate<Long>, AutoCloseable {
    *
    * @return The copied offset predicate.
    */
-  public OffsetPredicate copy() {
-    return new OffsetPredicate(bits.copy());
+  public SegmentCleaner copy() {
+    return new SegmentCleaner(bits.copy());
   }
 
   @Override

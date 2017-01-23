@@ -15,9 +15,10 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
-import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.protocol.request.AbstractRequest;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.util.Assert;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,11 +37,11 @@ public class AppendRequest extends AbstractRequest {
   protected final int leader;
   protected final long logIndex;
   protected final long logTerm;
-  protected final List<Entry> entries;
+  protected final List<Indexed<? extends Entry<?>>> entries;
   protected final long commitIndex;
   protected final long globalIndex;
 
-  public AppendRequest(long term, int leader, long logIndex, long logTerm, List<Entry> entries, long commitIndex, long globalIndex) {
+  public AppendRequest(long term, int leader, long logIndex, long logTerm, List<Indexed<? extends Entry<?>>> entries, long commitIndex, long globalIndex) {
     this.term = Assert.arg(term, term > 0, "term must be positive");
     this.leader = leader;
     this.logIndex = Assert.argNot(logIndex, logIndex < 0, "logIndex must be not be negative");
@@ -91,7 +92,7 @@ public class AppendRequest extends AbstractRequest {
    *
    * @return A list of log entries.
    */
-  public List<Entry> entries() {
+  public List<Indexed<? extends Entry<?>>> entries() {
     return entries;
   }
 
@@ -146,7 +147,7 @@ public class AppendRequest extends AbstractRequest {
     protected int leader;
     protected long logIndex;
     protected long logTerm;
-    protected List<Entry> entries;
+    protected List<Indexed<? extends Entry<?>>> entries;
     protected long commitIndex = -1;
     protected long globalIndex = -1;
 
@@ -206,8 +207,8 @@ public class AppendRequest extends AbstractRequest {
      * @throws NullPointerException if {@code entries} is null
      */
     @SuppressWarnings("unchecked")
-    public Builder withEntries(List<? extends Entry> entries) {
-      this.entries = (List<Entry>) Assert.notNull(entries, "entries");
+    public Builder withEntries(List<Indexed<? extends Entry<?>>> entries) {
+      this.entries = Assert.notNull(entries, "entries");
       return this;
     }
 

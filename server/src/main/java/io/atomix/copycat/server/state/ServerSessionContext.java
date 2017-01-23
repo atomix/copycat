@@ -19,7 +19,12 @@ import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.entry.ConnectEntry;
+import io.atomix.copycat.server.storage.entry.KeepAliveEntry;
+import io.atomix.copycat.server.storage.entry.RegisterEntry;
+import io.atomix.copycat.server.storage.entry.UnregisterEntry;
 import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
@@ -38,7 +43,8 @@ import java.util.function.Consumer;
  */
 class ServerSessionContext implements ServerSession {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
-  private final long id;
+
+  private final Indexed<RegisterEntry> registerEntry;
   private final String client;
   private final Log log;
   private final ServerStateMachineContext context;
@@ -48,15 +54,15 @@ class ServerSessionContext implements ServerSession {
   private ProtocolServerConnection connection;
   private Address address;
   private volatile long references;
-  private long connectIndex;
-  private long keepAliveIndex;
+  private Indexed<ConnectEntry> connectEntry;
+  private Indexed<?> keepAliveEntry;
   private long requestSequence;
   private long commandSequence;
   private long lastApplied;
   private long commandLowWaterMark;
   private long eventIndex;
   private long completeIndex;
-  private long closeIndex;
+  private Indexed<UnregisterEntry> unregisterEntry;
   private long timestamp;
   private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
@@ -68,20 +74,20 @@ class ServerSessionContext implements ServerSession {
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, String client, Log log, ServerStateMachineContext context, long timeout) {
-    this.id = id;
+  ServerSessionContext(Indexed<RegisterEntry> registerEntry, String client, Log log, ServerStateMachineContext context, long timeout) {
+    this.registerEntry = registerEntry;
     this.client = Assert.notNull(client, "client");
     this.log = Assert.notNull(log, "log");
-    this.eventIndex = id;
-    this.completeIndex = id;
-    this.lastApplied = id - 1;
+    this.eventIndex = registerEntry.index();
+    this.completeIndex = registerEntry.index();
+    this.lastApplied = registerEntry.index() - 1;
     this.context = context;
     this.timeout = timeout;
   }
 
   @Override
   public long id() {
-    return id;
+    return registerEntry.index();
   }
 
   /**
@@ -113,7 +119,7 @@ class ServerSessionContext implements ServerSession {
   private void setState(State state) {
     if (this.state != state) {
       this.state = state;
-      LOGGER.debug("{} - State changed: {}", id, state);
+      LOGGER.debug("{} - State changed: {}", registerEntry.index(), state);
       changeListeners.forEach(l -> l.accept(state));
     }
   }
@@ -136,10 +142,10 @@ class ServerSessionContext implements ServerSession {
   void release() {
     long references = --this.references;
     if (!state.active() && references == 0) {
-      context.sessions().unregisterSession(id);
-      log.release(id);
-      if (closeIndex > 0) {
-        log.release(closeIndex);
+      context.sessions().unregisterSession(id());
+      registerEntry.clean();
+      if (unregisterEntry != null) {
+        unregisterEntry.clean();
       }
     }
   }
@@ -183,49 +189,31 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
-   * Returns the current session connect index.
+   * Sets the current session connect entry.
    *
-   * @return The current session connect index.
-   */
-  long getConnectIndex() {
-    return connectIndex;
-  }
-
-  /**
-   * Sets the current session connect index.
-   *
-   * @param connectIndex The current session connect index.
+   * @param connectEntry The current session connect entry.
    * @return The server session.
    */
-  ServerSessionContext setConnectIndex(long connectIndex) {
-    long previousConnectIndex = this.connectIndex;
-    this.connectIndex = connectIndex;
-    if (previousConnectIndex > 0) {
-      log.release(previousConnectIndex);
+  ServerSessionContext setConnectEntry(Indexed<ConnectEntry> connectEntry) {
+    Indexed<ConnectEntry> previousConnectEntry = this.connectEntry;
+    this.connectEntry = connectEntry;
+    if (previousConnectEntry != null) {
+      previousConnectEntry.clean();
     }
     return this;
   }
 
   /**
-   * Returns the current session keep alive index.
+   * Sets the current session keep alive entry.
    *
-   * @return The current session keep alive index.
-   */
-  long getKeepAliveIndex() {
-    return keepAliveIndex;
-  }
-
-  /**
-   * Sets the current session keep alive index.
-   *
-   * @param keepAliveIndex The current session keep alive index.
+   * @param keepAliveEntry The current session keep alive entry.
    * @return The server session.
    */
-  ServerSessionContext setKeepAliveIndex(long keepAliveIndex) {
-    long previousKeepAliveIndex = this.keepAliveIndex;
-    this.keepAliveIndex = keepAliveIndex;
-    if (previousKeepAliveIndex > 0) {
-      log.release(previousKeepAliveIndex);
+  ServerSessionContext setKeepAliveEntry(Indexed<?> keepAliveEntry) {
+    Indexed<?> previousKeepAliveEntry = this.keepAliveEntry;
+    this.keepAliveEntry = keepAliveEntry;
+    if (previousKeepAliveEntry != null) {
+      previousKeepAliveEntry.clean();
     }
     return this;
   }
@@ -604,7 +592,7 @@ class ServerSessionContext implements ServerSession {
         .build())
       .whenComplete((response, error) -> {
         if (error == null) {
-          LOGGER.debug("{} - Received {}", id, response);
+          LOGGER.debug("{} - Received {}", id(), response);
           // If the event was received successfully, clear events up to the event index.
           if (response.status() == ProtocolResponse.Status.OK) {
             clearEvents(response.index());
@@ -646,60 +634,54 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
-   * Expires the session.
+   * Unregistered the session.
    *
-   * @param index The index at which to expire the session.
+   * @param entry The unregister entry.
    */
-  void expire(long index) {
-    setState(State.EXPIRED);
-    cleanState(index);
-  }
-
-  /**
-   * Closes the session.
-   *
-   * @param index The index at which to close the session.
-   */
-  void close(long index) {
-    setState(State.CLOSED);
-    cleanState(index);
+  void unregister(Indexed<UnregisterEntry> entry) {
+    if (entry.entry().expired()) {
+      setState(State.EXPIRED);
+    } else {
+      setState(State.CLOSED);
+    }
+    cleanState(entry);
   }
 
   /**
    * Cleans session entries on close.
    */
-  private void cleanState(long index) {
-    // If the keep alive index is set, release the entry.
-    if (keepAliveIndex > 0) {
-      log.release(keepAliveIndex);
+  private void cleanState(Indexed<UnregisterEntry> entry) {
+    // If the keep alive entry is set, release the entry.
+    if (keepAliveEntry != null) {
+      keepAliveEntry.clean();
     }
 
-    context.sessions().unregisterSession(id);
+    context.sessions().unregisterSession(id());
 
     // If no references to session commands are open, release session-related entries.
     if (references == 0) {
-      log.release(id);
-      log.release(index);
+      registerEntry.clean();
+      entry.clean();
     } else {
-      this.closeIndex = index;
+      this.unregisterEntry = entry;
     }
   }
 
   @Override
   public int hashCode() {
     int hashCode = 23;
-    hashCode = 37 * hashCode + (int) (id ^ (id >>> 32));
+    hashCode = 37 * hashCode + (int) (id() ^ (id() >>> 32));
     return hashCode;
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof Session && ((Session) object).id() == id;
+    return object instanceof Session && ((Session) object).id() == id();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[id=%d]", getClass().getSimpleName(), id);
+    return String.format("%s[id=%d]", getClass().getSimpleName(), id());
   }
 
   /**

@@ -15,15 +15,19 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.util.Assert;
+
+import java.io.Closeable;
 
 /**
  * Cluster member state.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class MemberState {
+final class MemberState implements Closeable {
   private static final int MAX_APPENDS = 2;
   private final ServerMember member;
   private long term;
@@ -32,7 +36,6 @@ final class MemberState {
   private long nextSnapshotIndex;
   private int nextSnapshotOffset;
   private long matchIndex;
-  private long nextIndex;
   private long heartbeatTime;
   private long heartbeatStartTime;
   private int appending;
@@ -40,6 +43,7 @@ final class MemberState {
   private boolean configuring;
   private boolean installing;
   private int failures;
+  private LogReader reader;
   private final TimeBuffer timeBuffer = new TimeBuffer(8);
 
   public MemberState(ServerMember member, ClusterState cluster) {
@@ -53,7 +57,6 @@ final class MemberState {
     nextSnapshotIndex = 0;
     nextSnapshotOffset = 0;
     matchIndex = 0;
-    nextIndex = log.lastIndex() + 1;
     heartbeatTime = 0;
     heartbeatStartTime = 0;
     appending = 0;
@@ -61,6 +64,9 @@ final class MemberState {
     configuring = false;
     installing = false;
     failures = 0;
+    if (member.type() != Member.Type.RESERVE) {
+      reader = log.createReader(member.type() != Member.Type.ACTIVE);
+    }
   }
 
   /**
@@ -70,6 +76,15 @@ final class MemberState {
    */
   public ServerMember getMember() {
     return member;
+  }
+
+  /**
+   * Returns the member log reader.
+   *
+   * @return The member log reader.
+   */
+  LogReader getLogReader() {
+    return reader;
   }
 
   /**
@@ -189,26 +204,6 @@ final class MemberState {
    */
   MemberState setMatchIndex(long matchIndex) {
     this.matchIndex = Assert.argNot(matchIndex, matchIndex < 0, "matchIndex cannot be less than 0");
-    return this;
-  }
-
-  /**
-   * Returns the member's next index.
-   *
-   * @return The member's next index.
-   */
-  long getNextIndex() {
-    return nextIndex;
-  }
-
-  /**
-   * Sets the member's next index.
-   *
-   * @param nextIndex The member's next index.
-   * @return The member state.
-   */
-  MemberState setNextIndex(long nextIndex) {
-    this.nextIndex = Assert.argNot(nextIndex, nextIndex <= 0, "nextIndex cannot be less than or equal to 0");
     return this;
   }
 
@@ -377,6 +372,12 @@ final class MemberState {
   MemberState resetFailureCount() {
     failures = 0;
     return this;
+  }
+
+  @Override
+  public void close() {
+    // TODO: Ensure the member is properly closed
+    reader.close();
   }
 
   @Override

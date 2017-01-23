@@ -19,6 +19,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.List;
@@ -31,7 +32,7 @@ import java.util.List;
 public class NetAppendRequest extends AppendRequest implements RaftNetRequest<NetAppendRequest> {
   private final long id;
 
-  public NetAppendRequest(long id, long term, int leader, long logIndex, long logTerm, List<Entry> entries, long commitIndex, long globalIndex) {
+  public NetAppendRequest(long id, long term, int leader, long logIndex, long logTerm, List<Indexed<? extends Entry<?>>> entries, long commitIndex, long globalIndex) {
     super(term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
     this.id = id;
   }
