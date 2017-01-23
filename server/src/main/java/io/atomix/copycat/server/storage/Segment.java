@@ -186,12 +186,12 @@ public class Segment implements AutoCloseable {
   /**
    * Creates a new segment reader.
    *
-   * @param commitsOnly Whether the reader can read commits only.
+   * @param mode The mode in which to open the segment reader.
    * @return A new segment reader.
    */
-  public SegmentReader createReader(boolean commitsOnly) {
+  public SegmentReader createReader(Reader.Mode mode) {
     checkOpen();
-    return new SegmentReader(this, manager.openSegment(descriptor, "r"), commitsOnly);
+    return new SegmentReader(this, manager.openSegment(descriptor, "r"), mode);
   }
 
   /**

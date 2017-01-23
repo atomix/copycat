@@ -175,6 +175,11 @@ public class SegmentWriter implements Writer {
   }
 
   @Override
+  public Writer skip() {
+    return skip(1);
+  }
+
+  @Override
   public Writer skip(long entries) {
     skip += entries;
     return this;

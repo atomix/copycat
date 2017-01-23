@@ -75,7 +75,7 @@ public final class MinorCompactionTask implements CompactionTask {
       .withMaxEntries(segment.descriptor().maxEntries())
       .build());
 
-    compactEntries(segment.createReader(true), segment.cleaner(), compactSegment.writer());
+    compactEntries(segment.createReader(Reader.Mode.ALL_COMMITS), segment.cleaner(), compactSegment.writer());
 
     // Replace the old segment with the compact segment.
     manager.replaceSegments(Collections.singletonList(segment), compactSegment);
@@ -90,12 +90,7 @@ public final class MinorCompactionTask implements CompactionTask {
    */
   private void compactEntries(SegmentReader reader, SegmentCleaner cleaner, SegmentWriter writer) {
     while (reader.hasNext()) {
-      Indexed<? extends Entry<?>> entry = reader.next();
-      if (entry != null) {
-        compactEntry(entry, cleaner, writer);
-      } else {
-        writer.skip(1);
-      }
+      compactEntry(reader.next(), cleaner, writer);
     }
   }
 
@@ -103,6 +98,12 @@ public final class MinorCompactionTask implements CompactionTask {
    * Compacts a command entry from a segment.
    */
   private void compactEntry(Indexed<? extends Entry<?>> entry, SegmentCleaner cleaner, SegmentWriter writer) {
+    // If the entry has already been compacted, skip it and return.
+    if (entry.isCompacted()) {
+      writer.skip();
+      return;
+    }
+
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
     // mode to the entry.
     Compaction.Mode mode = entry.entry().compaction();

@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.Iterator;
@@ -25,6 +26,129 @@ import java.util.Iterator;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public interface Reader extends Iterator<Indexed<? extends Entry<?>>>, AutoCloseable {
+
+  /**
+   * Reader mode.
+   */
+  enum Mode {
+    /**
+     * Reads all entries in the log, including {@code null} compacted entries.
+     */
+    ALL {
+      @Override
+      boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor) {
+        return true;
+      }
+    },
+
+    /**
+     * Reads all non-null entries in the log.
+     */
+    UNCOMPACTED {
+      @Override
+      boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor) {
+        return !entry.isCompacted();
+      }
+    },
+
+    /**
+     * Reads all live entries in the log.
+     */
+    LIVE {
+      @Override
+      boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor) {
+        if (entry.isCompacted()) {
+          return false;
+        }
+
+        switch (entry.entry().compaction()) {
+          // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
+          case SNAPSHOT:
+            return entry.index() > compactor.snapshotIndex();
+          // RELEASE and QUORUM entries are returned if the minorIndex is less than the entry index or the
+          // entry is still live.
+          case RELEASE:
+          case QUORUM:
+            return entry.index() > compactor.minorIndex() || !entry.isClean();
+          // FULL, SEQUENTIAL, EXPIRING, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
+          // entry index or if the entry is still live.
+          case FULL:
+          case SEQUENTIAL:
+          case EXPIRING:
+          case TOMBSTONE:
+            return entry.index() > compactor.minorIndex() || entry.index() > compactor.majorIndex() || !entry.isClean();
+        }
+        return false;
+      }
+    },
+
+    /**
+     * Reads all committed entries in the log.
+     */
+    ALL_COMMITS {
+      @Override
+      boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor) {
+        return entry.isCommitted();
+      }
+    },
+
+    /**
+     * Reads all non-null committed entries.
+     */
+    UNCOMPACTED_COMMITS {
+      @Override
+      boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor) {
+        return entry.isCommitted() && !entry.isCompacted();
+      }
+    },
+
+    /**
+     * Reads all non-null committed entries that have not been cleaned.
+     */
+    LIVE_COMMITS {
+      @Override
+      boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor) {
+        if (!entry.isCommitted() || entry.isCompacted()) {
+          return false;
+        }
+
+        switch (entry.entry().compaction()) {
+          // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
+          case SNAPSHOT:
+            return entry.index() > compactor.snapshotIndex();
+          // RELEASE and QUORUM entries are returned if the minorIndex is less than the entry index or the
+          // entry is still live.
+          case RELEASE:
+          case QUORUM:
+            return entry.index() > compactor.minorIndex() || !entry.isClean();
+          // FULL, SEQUENTIAL, EXPIRING, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
+          // entry index or if the entry is still live.
+          case FULL:
+          case SEQUENTIAL:
+          case EXPIRING:
+          case TOMBSTONE:
+            return entry.index() > compactor.minorIndex() || entry.index() > compactor.majorIndex() || !entry.isClean();
+        }
+        return false;
+      }
+    };
+
+    /**
+     * Returns a boolean indicating whether the given entry meets the criteria of the read mode.
+     *
+     * @param entry The entry, which may be null if it has been compacted from the log.
+     * @param compactor The log compactor.
+     * @return Indicates whether the given index/entry meets the criteria for reading using the read mode.
+     */
+    abstract boolean isValid(Indexed<? extends Entry<?>> entry, Compactor compactor);
+  }
+
+  /**
+   * Returns the reader mode.
+   *
+   * @return The reader mode.
+   */
+  Mode mode();
 
   /**
    * Acquires a lock on the reader.
@@ -52,7 +176,7 @@ public interface Reader extends Iterator<Indexed<? extends Entry<?>>>, AutoClose
    *
    * @return The last read entry.
    */
-  Indexed<? extends Entry<?>> entry();
+  Indexed<? extends Entry<?>> currentEntry();
 
   /**
    * Returns the next reader index.

@@ -18,7 +18,7 @@ package io.atomix.copycat.server.storage.entry;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
- * Stores a state change in a {@link Log}.
+ * Stores a state change in a {@link io.atomix.copycat.server.storage.Log}.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

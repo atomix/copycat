@@ -120,7 +120,7 @@ abstract class AbstractAppender implements AutoCloseable {
     reader.lock().lock();
 
     // Read the previous entry from the reader.
-    Indexed<? extends Entry<?>> prevEntry = reader.entry();
+    Indexed<? extends Entry<?>> prevEntry = reader.currentEntry();
 
     // Release the reader lock.
     reader.lock().unlock();
@@ -147,7 +147,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // Acquire the reader lock.
     reader.lock().lock();
 
-    final Indexed<? extends Entry<?>> prevEntry = reader.entry();
+    final Indexed<? extends Entry<?>> prevEntry = reader.currentEntry();
 
     final ServerMember leader = context.getLeader();
     builder

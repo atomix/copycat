@@ -23,6 +23,7 @@ import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.Reader;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -59,7 +60,7 @@ final class ServerStateMachine implements AutoCloseable {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.state = Assert.notNull(state, "state");
     this.log = state.getLog();
-    this.reader = log.createReader(true);
+    this.reader = log.createReader(Reader.Mode.ALL_COMMITS);
     this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager(state)), executor);
     init();
   }
@@ -267,7 +268,7 @@ final class ServerStateMachine implements AutoCloseable {
       // If the next index is less than or equal to the given index, read and apply the entry.
       if (reader.nextIndex() <= index) {
         Indexed<? extends Entry<?>> entry = reader.next();
-        if (entry != null) {
+        if (!entry.isCompacted()) {
           apply(entry);
           setLastApplied(entry.index());
         }
@@ -299,7 +300,7 @@ final class ServerStateMachine implements AutoCloseable {
     // simply update the last applied index and return a null result.
     try {
       Indexed<? extends Entry<?>> entry = reader.next();
-      if (entry != null) {
+      if (!entry.isCompacted()) {
         if (entry.index() != index) {
           throw new IllegalStateException("inconsistent index applying entry " + index + ": " + entry);
         }

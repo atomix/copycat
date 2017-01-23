@@ -19,35 +19,28 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.util.concurrent.ReferenceCounted;
-import io.atomix.copycat.util.concurrent.ReferenceManager;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Indexed log entry.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class Indexed<T extends Entry<T>> implements ReferenceCounted<Indexed<T>> {
+public class Indexed<T extends Entry<T>> {
   private final long index;
   private final long term;
   private final T entry;
   private final int size;
-  private final ReferenceManager<Indexed<T>> referenceManager;
   final EntryCleaner cleaner;
-  private final AtomicInteger references = new AtomicInteger();
 
   public Indexed(long index, long term, T entry, int size) {
-    this(index, term, entry, size, reference -> {}, null);
+    this(index, term, entry, size, null);
   }
 
-  public Indexed(long index, long term, T entry, int size, ReferenceManager<Indexed<T>> referenceManager, EntryCleaner cleaner) {
+  public Indexed(long index, long term, T entry, int size, EntryCleaner cleaner) {
     this.index = index;
     this.term = term;
     this.entry = entry;
     this.size = size;
-    this.referenceManager = referenceManager;
     this.cleaner = cleaner;
   }
 
@@ -105,31 +98,6 @@ public class Indexed<T extends Entry<T>> implements ReferenceCounted<Indexed<T>>
     return cleaner != null ? cleaner.offset : -1;
   }
 
-  @Override
-  public Indexed<T> acquire() {
-    references.incrementAndGet();
-    return this;
-  }
-
-  @Override
-  public boolean release() {
-    if (references.decrementAndGet() == 0) {
-      close();
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  public int references() {
-    return references.get();
-  }
-
-  @Override
-  public void close() {
-    referenceManager.release(this);
-  }
-
   /**
    * Cleans the entry from the log.
    */
@@ -139,6 +107,33 @@ public class Indexed<T extends Entry<T>> implements ReferenceCounted<Indexed<T>>
     } else {
       cleaner.clean();
     }
+  }
+
+  /**
+   * Returns a boolean indicating whether the entry has been cleaned from the log.
+   *
+   * @return Indicates whether the entry has been cleaned from the log.
+   */
+  public boolean isClean() {
+    return cleaner != null && cleaner.isClean();
+  }
+
+  /**
+   * Returns a boolean indicating whether the entry has been committed to the log.
+   *
+   * @return Indicates whether the entry has been committed to the log.
+   */
+  public boolean isCommitted() {
+    return entry == null || cleaner != null;
+  }
+
+  /**
+   * Returns a boolean indicating whether the entry has been compacted from the log.
+   *
+   * @return Indicates whether the entry has been compacted from the log.
+   */
+  public boolean isCompacted() {
+    return entry == null;
   }
 
   @Override

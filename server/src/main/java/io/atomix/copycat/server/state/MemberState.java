@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.Reader;
 import io.atomix.copycat.util.Assert;
 
 import java.io.Closeable;
@@ -64,8 +64,13 @@ final class MemberState implements Closeable {
     configuring = false;
     installing = false;
     failures = 0;
-    if (member.type() != Member.Type.RESERVE) {
-      reader = log.createReader(member.type() != Member.Type.ACTIVE);
+    switch (member.type()) {
+      case PASSIVE:
+        reader = log.createReader(Reader.Mode.LIVE_COMMITS);
+        break;
+      case ACTIVE:
+        reader = log.createReader(Reader.Mode.LIVE);
+        break;
     }
   }
 

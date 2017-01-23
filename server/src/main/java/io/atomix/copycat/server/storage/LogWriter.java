@@ -75,6 +75,11 @@ public class LogWriter implements Writer {
   }
 
   @Override
+  public Writer skip() {
+    return currentWriter.skip();
+  }
+
+  @Override
   public Writer skip(long entries) {
     return currentWriter.skip(entries);
   }

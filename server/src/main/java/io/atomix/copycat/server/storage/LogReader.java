@@ -24,13 +24,18 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 public class LogReader implements Reader {
   private final SegmentManager segments;
-  private final boolean commitsOnly;
+  private final Mode mode;
   private Segment currentSegment;
   private SegmentReader currentReader;
 
-  public LogReader(SegmentManager segments, boolean commitsOnly) {
+  public LogReader(SegmentManager segments, Mode mode) {
     this.segments = segments;
-    this.commitsOnly = commitsOnly;
+    this.mode = mode;
+  }
+
+  @Override
+  public Mode mode() {
+    return mode;
   }
 
   @Override
@@ -51,8 +56,8 @@ public class LogReader implements Reader {
   }
 
   @Override
-  public Indexed<? extends Entry<?>> entry() {
-    return currentReader.entry();
+  public Indexed<? extends Entry<?>> currentEntry() {
+    return currentReader.currentEntry();
   }
 
   @Override
@@ -75,7 +80,7 @@ public class LogReader implements Reader {
       currentSegment = segments.previousSegment(currentSegment.index());
       while (currentSegment != null) {
         currentReader.close();
-        currentReader = currentSegment.createReader(commitsOnly);
+        currentReader = currentSegment.createReader(mode);
         if (currentReader.firstIndex() < index) {
           break;
         }
@@ -87,7 +92,7 @@ public class LogReader implements Reader {
   @Override
   public void reset() {
     currentSegment = segments.firstSegment();
-    currentReader = currentSegment.createReader(commitsOnly);
+    currentReader = currentSegment.createReader(mode);
   }
 
   @Override
@@ -96,7 +101,7 @@ public class LogReader implements Reader {
       Segment nextSegment = segments.nextSegment(currentSegment.index());
       if (nextSegment != null) {
         currentSegment = nextSegment;
-        currentReader = currentSegment.createReader(commitsOnly);
+        currentReader = currentSegment.createReader(mode);
       }
     }
     return currentReader.hasNext();

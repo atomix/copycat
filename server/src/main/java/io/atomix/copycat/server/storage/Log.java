@@ -18,7 +18,6 @@ package io.atomix.copycat.server.storage;
 import io.atomix.copycat.server.storage.compaction.Compactor;
 
 import java.io.Closeable;
-import java.util.concurrent.Executors;
 
 /**
  * Log.
@@ -27,12 +26,10 @@ import java.util.concurrent.Executors;
  */
 public class Log implements Closeable {
   private final SegmentManager segments;
-  private final Compactor compactor;
   private volatile boolean open;
 
   public Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.compactor = new Compactor(storage, segments, Executors.newScheduledThreadPool(storage.compactionThreads()));
   }
 
   /**
@@ -41,7 +38,7 @@ public class Log implements Closeable {
    * @return The log compactor.
    */
   public Compactor compactor() {
-    return compactor;
+    return segments.compactor();
   }
 
   /**
@@ -56,11 +53,11 @@ public class Log implements Closeable {
   /**
    * Creates a new log reader.
    *
-   * @param commitsOnly Whether the reader can read commits only.
+   * @param mode The mode in which to open the log reader.
    * @return A new log reader.
    */
-  public LogReader createReader(boolean commitsOnly) {
-    return new LogReader(segments, commitsOnly);
+  public LogReader createReader(Reader.Mode mode) {
+    return new LogReader(segments, mode);
   }
 
   /**

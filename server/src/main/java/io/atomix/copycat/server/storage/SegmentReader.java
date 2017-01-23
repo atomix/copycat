@@ -20,43 +20,35 @@ import com.esotericsoftware.kryo.io.Input;
 import io.atomix.copycat.server.storage.buffer.Buffer;
 import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.entry.Entry;
-import io.atomix.copycat.util.concurrent.ReferenceManager;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.NoSuchElementException;
 
 /**
- * Segment reader.
- * <p>
- * The format of an entry in the log is as follows:
- * <ul>
- *   <li>64-bit index</li>
- *   <li>8-bit boolean indicating whether a term change is contained in the entry</li>
- *   <li>64-bit optional term</li>
- *   <li>32-bit signed entry length, including the entry type ID</li>
- *   <li>8-bit signed entry type ID</li>
- *   <li>n-bit entry bytes</li>
- * </ul>
+ * Log segment reader.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class SegmentReader implements Reader, ReferenceManager<Indexed<?>> {
+public class SegmentReader implements Reader {
   private final Segment segment;
   private final Buffer buffer;
-  private final boolean commitsOnly;
+  private final Mode mode;
   private final HeapBuffer memory = HeapBuffer.allocate();
   private final Kryo serializer = new Kryo();
-  private long firstIndex;
-  private int currentOffset = -1;
-  private long currentIndex;
-  private Indexed<? extends Entry<?>> currentEntry;
-  private long currentTerm;
-  private final Set<Indexed<?>> entries = new HashSet<>();
+  private volatile long firstIndex;
+  private volatile int nextOffset = -1;
+  private volatile Indexed<? extends Entry<?>> currentEntry;
+  private volatile Indexed<? extends Entry<?>> nextEntry;
 
-  public SegmentReader(Segment segment, Buffer buffer, boolean commitsOnly) {
+  public SegmentReader(Segment segment, Buffer buffer, Mode mode) {
     this.segment = segment;
     this.buffer = buffer;
-    this.commitsOnly = commitsOnly;
+    this.mode = mode;
+    readNext();
+  }
+
+  @Override
+  public Mode mode() {
+    return mode;
   }
 
   @Override
@@ -82,31 +74,45 @@ public class SegmentReader implements Reader, ReferenceManager<Indexed<?>> {
 
   @Override
   public long currentIndex() {
-    return currentIndex;
+    return currentEntry != null ? currentEntry.index() : 0;
+  }
+
+  @Override
+  public Indexed<? extends Entry<?>> currentEntry() {
+    return currentEntry;
   }
 
   @Override
   public long nextIndex() {
-    return buffer.readLong(buffer.position());
-  }
-
-  @Override
-  public Indexed<? extends Entry<?>> entry() {
-    return currentEntry;
+    return nextEntry != null ? nextEntry.index() : 0;
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public <T extends Entry<T>> Indexed<T> get(long index) {
-    if (index > segment.manager().commitIndex()) {
-      throw new IllegalStateException("Cannot read uncommitted entries");
+    // If the current entry is set, use it to determine whether to reset the reader.
+    if (currentEntry != null) {
+      // If the index matches the current entry index, return the current entry.
+      if (index == currentEntry.index()) {
+        return (Indexed<T>) currentEntry;
+      }
+
+      // If the index is less than the current entry index, reset the reader.
+      if (index < currentEntry.index()) {
+        reset();
+      }
     }
 
-    reset(index);
+    // If the index matches the next entry index, return the next entry.
+    if (nextEntry != null && index == nextEntry.index()) {
+      return (Indexed<T>) next();
+    }
 
-    // If the current index is equal to the given index, return the current entry.
-    // It's possible that the current entry is null.
-    if (index == currentIndex) {
+    // Seek to the index.
+    seek(index);
+
+    // If the current entry's index matches the given index, return it. Otherwise, return null.
+    if (currentEntry != null && index == currentEntry.index()) {
       return (Indexed<T>) currentEntry;
     }
     return null;
@@ -114,96 +120,128 @@ public class SegmentReader implements Reader, ReferenceManager<Indexed<?>> {
 
   @Override
   public Indexed<? extends Entry<?>> reset(long index) {
-    // If the reset index is the current index, do nothing.
-    if (index == currentIndex) {
-      return entry();
-    }
-
-    // If the given index is less than the current index, reset the buffer.
-    if (index < currentIndex) {
-      reset();
-    }
-
-    // Scan the segment up to the given index.
-    scan(index);
-    return entry();
+    return get(index);
   }
 
   @Override
   public void reset() {
     buffer.clear();
-    currentOffset = -1;
-    currentIndex = 0;
-    currentTerm = 0;
-    firstIndex = buffer.readLong(0);
+    nextOffset = -1;
+    nextEntry = null;
+    readNext();
   }
 
   /**
-   * Scans the segment up to the given index.
-   *
-   * @param index The index to which to scan the segment.
+   * Seeks to the given index.
    */
-  private void scan(long index) {
-    while (nextIndex() <= index) {
-      next();
+  private void seek(long index) {
+    while (hasNext()) {
+      if (nextEntry.index() >= index) {
+        next();
+      } else {
+        break;
+      }
     }
   }
 
   @Override
   public boolean hasNext() {
-    if (commitsOnly) {
-      return nextIndex() < segment.manager().commitIndex();
-    } else {
-      return nextIndex() > 0;
-    }
+    return nextEntry != null;
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public Indexed<? extends Entry<?>> next() {
-    // Read the index from the entry.
-    currentIndex = buffer.readLong();
-
-    // Increment the current offset.
-    currentOffset++;
-
-    // If the first index is not yet set, set it.
-    if (firstIndex == 0) {
-      firstIndex = currentIndex;
+    if (nextEntry == null) {
+      throw new NoSuchElementException();
     }
 
-    // Read the byte indicating whether a term change is stored in this entry and read the term if necessary.
-    if (buffer.readBoolean()) {
-      currentTerm = buffer.readLong();
-    }
+    // Set the current entry to the next entry.
+    currentEntry = nextEntry;
 
-    // Read the 32-bit entry length.
-    final int length = buffer.readInt();
+    // Reset the next entry to null.
+    nextEntry = null;
 
-    // Read the entry bytes from the buffer into memory.
-    buffer.read(memory.clear().limit(length));
+    // Read the next entry in the segment.
+    readNext();
 
-    // Deserialize the entry into memory.
-    final Input input = new Input(memory.array());
-
-    // Read the entry type ID from the input.
-    final int typeId = input.readByte();
-
-    // Look up the entry type.
-    final Entry.Type<?> type = Entry.Type.forId(typeId);
-
-    // Deserialize the entry.
-    final Entry entry = serializer.readObject(input, type.type(), type.serializer());
-
-    // Return the indexed entry. We compute the size by the entry length plus index/term length.
-    currentEntry = new Indexed(currentIndex, currentTerm, entry, length + Long.BYTES + Long.BYTES, this, new EntryCleaner(currentOffset, segment.cleaner()));
-    entries.add(currentEntry);
+    // Return the current entry.
     return currentEntry;
   }
 
-  @Override
-  public void release(Indexed<?> reference) {
-    entries.remove(reference);
+  /**
+   * Reads the next entry in the segment.
+   */
+  @SuppressWarnings("unchecked")
+  private void readNext() {
+    // Reset the next entry.
+    nextEntry = null;
+
+    // Read the index for the next entry.
+    final long index = buffer.mark().readLong();
+
+    // If the index is 0, reset the buffer to the mark and return.
+    if (index == 0) {
+      buffer.reset();
+      return;
+    }
+
+    // Loop through entries in the segment until a valid entry is found.
+    while (index > 0) {
+
+      // If the entry contains a term, read the term.
+      final long term;
+      if (buffer.readBoolean()) {
+        term = buffer.readLong();
+      }
+      // The current entry should always be non-null if no term exists.
+      else {
+        term = currentEntry.term();
+      }
+
+      // If the index is greater than 1 + the previous index, that indicates some entries have
+      // been compacted from the segment. We need to determine whether any skipped entries should
+      // be produced according to the configured read mode.
+      for (long i = currentIndex() + 1; i < index; i++) {
+        // Create the entry with a null value, indicating it has been compacted from the log.
+        Indexed<? extends Entry<?>> entry = new Indexed<>(i, term, null, 0);
+
+        // If the entry is valid according to the current read mode, reset the read buffer
+        // and store the indexed entry as the next entry and return.
+        if (mode.isValid(entry, segment.manager().compactor())) {
+          buffer.reset();
+          nextEntry = entry;
+          return;
+        }
+      }
+
+      // Read the length of the remainder of the entry.
+      int length = buffer.readInt();
+
+      // Read the entry bytes from the buffer into memory.
+      buffer.read(memory.clear().limit(length));
+
+      // Deserialize the entry into memory.
+      final Input input = new Input(memory.array());
+
+      // Read the entry type ID from the input.
+      final int typeId = input.readByte();
+
+      // Look up the entry type.
+      final Entry.Type<?> type = Entry.Type.forId(typeId);
+
+      // Deserialize the entry.
+      final Entry entry = serializer.readObject(input, type.type(), type.serializer());
+
+      // If the index has been committed, create the entry with a cleaner.
+      if (index <= segment.manager().commitIndex()) {
+        nextEntry = new Indexed(index, term, entry, length, new EntryCleaner(++nextOffset, segment.cleaner()));
+      }
+      // Otherwise, the entry cannot be cleaned, but the offset still must be incremented.
+      else {
+        nextEntry = new Indexed(index, term, entry, length);
+        nextOffset++;
+      }
+    }
   }
 
   @Override

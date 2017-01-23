@@ -60,7 +60,14 @@ public interface Writer extends AutoCloseable {
   long nextIndex();
 
   /**
-   * Skips {@code entries} entries in the log.
+   * Skips a single entry.
+   *
+   * @return The writer.
+   */
+  Writer skip();
+
+  /**
+   * Skips {@code entries} entries.
    *
    * @param entries The number of entries to skip.
    * @return The writer.

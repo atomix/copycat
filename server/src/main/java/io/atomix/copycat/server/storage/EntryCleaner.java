@@ -47,6 +47,15 @@ public class EntryCleaner {
     cleaner.clean(offset);
   }
 
+  /**
+   * Returns a boolean indicating whether the entry is clean.
+   *
+   * @return Indicates whether the entry is clean.
+   */
+  boolean isClean() {
+    return cleaner.isClean(offset);
+  }
+
   @Override
   public String toString() {
     return String.format("%s(offset=%d)", getClass().getSimpleName(), offset);

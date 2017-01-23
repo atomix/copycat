@@ -170,7 +170,7 @@ public final class MajorCompactionTask implements CompactionTask {
   private void compactGroup(List<Segment> segments, List<SegmentCleaner> cleaners, SegmentWriter writer) {
     // Iterate through all segments being compacted and write entries to a single compact segment.
     for (int i = 0; i < segments.size(); i++) {
-      compactSegment(segments.get(i).createReader(true), cleaners.get(i), writer);
+      compactSegment(segments.get(i).createReader(Reader.Mode.ALL_COMMITS), cleaners.get(i), writer);
     }
   }
 
@@ -181,26 +181,21 @@ public final class MajorCompactionTask implements CompactionTask {
    * @param writer The compacted segment writer.
    */
   private void compactSegment(SegmentReader reader, SegmentCleaner cleaner, SegmentWriter writer) {
-    long previousIndex = 0;
     while (reader.hasNext()) {
-      // Read the next entry from the segment.
-      Indexed<? extends Entry<?>> entry = reader.next();
-
-      // Skip entries that have already been compacted from the segment.
-      writer.skip(entry.index() - (previousIndex + 1));
-
-      // Compact the entry.
-      compactEntry(entry, cleaner, writer);
-
-      // Update the previous index.
-      previousIndex = entry.index();
+      compactEntry(reader.next(), cleaner, writer);
     }
   }
 
   /**
    * Compacts a command entry from a segment.
    */
-  private void compactEntry(Indexed<? extends Entry<?>> entry, SegmentCleaner cleaner, SegmentWriter writer) {
+  private void compactEntry(Indexed<? extends Entry<?>> entry, SegmentCleaner cleaner, SegmentWriter writer) {// If the entry has already been compacted, skip it.
+    // If the entry has already been compacted, skip it and return.
+    if (entry.isCompacted()) {
+      writer.skip();
+      return;
+    }
+
     // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
     // mode to the entry.
     Compaction.Mode mode = entry.entry().compaction();

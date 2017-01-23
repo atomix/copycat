@@ -19,6 +19,7 @@ import io.atomix.copycat.server.storage.buffer.Buffer;
 import io.atomix.copycat.server.storage.buffer.FileBuffer;
 import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.buffer.MappedBuffer;
+import io.atomix.copycat.server.storage.compaction.Compactor;
 import io.atomix.copycat.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Executors;
 
 /**
  * Manages creation and deletion of {@link Segment}s of the {@link io.atomix.copycat.server.storage.Log}.
@@ -44,6 +46,7 @@ public class SegmentManager implements AutoCloseable {
 
   private final String name;
   private final Storage storage;
+  private final Compactor compactor;
   private final NavigableMap<Long, Segment> segments = new ConcurrentSkipListMap<>();
   private volatile Segment currentSegment;
   private volatile long commitIndex;
@@ -54,7 +57,17 @@ public class SegmentManager implements AutoCloseable {
   public SegmentManager(String name, Storage storage) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
+    this.compactor = new Compactor(storage, this, Executors.newScheduledThreadPool(storage.compactionThreads()));
     open();
+  }
+
+  /**
+   * Returns the log compactor.
+   *
+   * @return The log compactor.
+   */
+  public Compactor compactor() {
+    return compactor;
   }
 
   /**

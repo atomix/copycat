@@ -24,10 +24,7 @@ import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.LogReader;
-import io.atomix.copycat.server.storage.LogWriter;
-import io.atomix.copycat.server.storage.Storage;
+import io.atomix.copycat.server.storage.*;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -493,7 +490,7 @@ public class ServerContext implements AutoCloseable {
 
     // Open the log.
     log = storage.openLog(name);
-    reader = log.createReader(false);
+    reader = log.createReader(Reader.Mode.ALL);
     writer = log.createWriter();
 
     // Open the snapshot store.
