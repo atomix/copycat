@@ -15,18 +15,11 @@
  */
 package io.atomix.copycat.test;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.local.LocalServerRegistry;
-import io.atomix.catalyst.transport.local.LocalTransport;
-import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.client.CopycatClient;
-import io.atomix.copycat.client.DefaultCopycatClient;
-import io.atomix.copycat.client.RecoveryStrategies;
-import io.atomix.copycat.client.RecoveryStrategy;
+import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.ClientSession;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -38,6 +31,7 @@ import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
+import io.atomix.copycat.util.concurrent.Listener;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -66,7 +60,6 @@ import java.util.stream.Collectors;
 @Test
 public class ClusterTest extends ConcurrentTestCase {
   protected volatile int port;
-  protected volatile LocalServerRegistry registry;
   protected volatile List<Member> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
@@ -1188,7 +1181,6 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatServer createServer(Member member) {
     CopycatServer.Builder builder = CopycatServer.builder(member.clientAddress(), member.serverAddress())
       .withType(member.type())
-      .withTransport(new LocalTransport(registry))
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
@@ -1197,7 +1189,6 @@ public class ClusterTest extends ConcurrentTestCase {
       .withStateMachine(TestStateMachine::new);
 
     CopycatServer server = builder.build();
-    server.serializer().disableWhitelist();
     servers.add(server);
     return server;
   }
@@ -1214,11 +1205,9 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatClient createClient(RecoveryStrategy strategy) throws Throwable {
     CopycatClient client = CopycatClient.builder()
-      .withTransport(new LocalTransport(registry))
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(strategy)
       .build();
-    client.serializer().disableWhitelist();
     client.connect(members.stream().map(Member::clientAddress).collect(Collectors.toList())).thenRun(this::resume);
     await(30000);
     clients.add(client);
@@ -1246,7 +1235,6 @@ public class ClusterTest extends ConcurrentTestCase {
 
     members = new ArrayList<>();
     port = 5000;
-    registry = new LocalServerRegistry();
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }
