@@ -13,28 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.protocol.websocket;
+package io.atomix.copycat.protocol.http;
 
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.protocol.ProtocolClient;
 import io.atomix.copycat.protocol.ProtocolServer;
+import io.atomix.copycat.protocol.http.handlers.RequestHandlers;
+import io.atomix.copycat.protocol.websocket.WebSocketClient;
 import io.vertx.core.Vertx;
 
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Web socket protocol.
+ * HTTP protocol.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketProtocol implements Protocol {
+public class HttpProtocol implements Protocol {
   private final Vertx vertx;
 
-  public WebSocketProtocol() {
+  public HttpProtocol() {
     this(Vertx.vertx());
   }
 
-  public WebSocketProtocol(Vertx vertx) {
+  public HttpProtocol(Vertx vertx) {
     this.vertx = vertx;
   }
 
@@ -45,7 +47,7 @@ public class WebSocketProtocol implements Protocol {
 
   @Override
   public ProtocolServer createServer() {
-    return new WebSocketServer(vertx, vertx.createHttpServer());
+    return new HttpServer(vertx, vertx.createHttpServer());
   }
 
   @Override

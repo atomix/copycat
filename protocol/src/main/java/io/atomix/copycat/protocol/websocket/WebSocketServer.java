@@ -16,9 +16,10 @@
 package io.atomix.copycat.protocol.websocket;
 
 import io.atomix.copycat.protocol.Address;
-import io.atomix.copycat.protocol.ProtocolServer;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
-import io.vertx.core.http.HttpServer;
+import io.atomix.copycat.protocol.http.HttpServer;
+import io.atomix.copycat.protocol.http.handlers.RequestHandlers;
+import io.vertx.core.Vertx;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -28,11 +29,9 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class WebSocketServer implements ProtocolServer {
-  private final HttpServer server;
-
-  public WebSocketServer(HttpServer server) {
-    this.server = server;
+public class WebSocketServer extends HttpServer {
+  public WebSocketServer(Vertx vertx, io.vertx.core.http.HttpServer server) {
+    super(vertx, server, RequestHandlers.ALL);
   }
 
   @Override
@@ -42,28 +41,6 @@ public class WebSocketServer implements ProtocolServer {
         listener.accept(new WebSocketServerConnection(socket));
       }
     });
-
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    server.listen(address.port(), address.host(), result -> {
-      if (result.succeeded()) {
-        future.complete(null);
-      } else {
-        future.completeExceptionally(result.cause());
-      }
-    });
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Void> close() {
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    server.close(result -> {
-      if (result.succeeded()) {
-        future.complete(null);
-      } else {
-        future.completeExceptionally(result.cause());
-      }
-    });
-    return future;
+    return super.listen(address, listener);
   }
 }
