@@ -35,7 +35,7 @@ public class SegmentReader implements Reader {
   private final HeapBuffer memory = HeapBuffer.allocate();
   private final Kryo serializer = new Kryo();
   private volatile long firstIndex;
-  private volatile int nextOffset = -1;
+  private volatile int nextOffset = 0;
   private volatile Indexed<? extends Entry<?>> currentEntry;
   private volatile Indexed<? extends Entry<?>> nextEntry;
 
@@ -103,13 +103,14 @@ public class SegmentReader implements Reader {
       }
     }
 
-    // If the index matches the next entry index, return the next entry.
-    if (nextEntry != null && index == nextEntry.index()) {
-      return (Indexed<T>) next();
+    // Seek to the given index.
+    while (hasNext()) {
+      if (nextEntry.index() <= index) {
+        next();
+      } else {
+        break;
+      }
     }
-
-    // Seek to the index.
-    seek(index);
 
     // If the current entry's index matches the given index, return it. Otherwise, return null.
     if (currentEntry != null && index == currentEntry.index()) {
@@ -126,22 +127,10 @@ public class SegmentReader implements Reader {
   @Override
   public void reset() {
     buffer.clear();
-    nextOffset = -1;
+    currentEntry = null;
+    nextOffset = 0;
     nextEntry = null;
     readNext();
-  }
-
-  /**
-   * Seeks to the given index.
-   */
-  private void seek(long index) {
-    while (hasNext()) {
-      if (nextEntry.index() >= index) {
-        next();
-      } else {
-        break;
-      }
-    }
   }
 
   @Override

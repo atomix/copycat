@@ -44,10 +44,12 @@ public class LogTest {
 
     // Append a couple entries.
     Indexed indexed;
+    assertEquals(writer.nextIndex(), 1);
     indexed = writer.append(1, new RegisterEntry(System.currentTimeMillis(), "test", 1000));
     assertEquals(indexed.index(), 1);
     assertEquals(indexed.term(), 1);
 
+    assertEquals(writer.nextIndex(), 2);
     indexed = writer.append(new Indexed<>(2, 1, new UnregisterEntry(System.currentTimeMillis(), 1, false), 0));
     assertEquals(indexed.index(), 2);
     assertEquals(indexed.term(), 1);
@@ -117,6 +119,26 @@ public class LogTest {
     unregister = (Indexed<UnregisterEntry>) reader.next();
     assertEquals(unregister.index(), 2);
     assertEquals(unregister.term(), 1);
+    assertEquals(unregister.entry().session(), 1);
+    assertEquals(reader.currentEntry(), unregister);
+    assertEquals(reader.currentIndex(), 2);
+    assertFalse(reader.hasNext());
+
+    // Truncate the log and write a different entry.
+    writer.truncate(1);
+    assertEquals(writer.nextIndex(), 2);
+    indexed = writer.append(new Indexed<>(2, 2, new UnregisterEntry(System.currentTimeMillis(), 1, false), 0));
+    assertEquals(indexed.index(), 2);
+    assertEquals(indexed.term(), 2);
+
+    // Reset the reader to a specific index and read the last entry again.
+    reader.reset(1);
+
+    assertTrue(reader.hasNext());
+    assertEquals(reader.nextIndex(), 2);
+    unregister = (Indexed<UnregisterEntry>) reader.next();
+    assertEquals(unregister.index(), 2);
+    assertEquals(unregister.term(), 2);
     assertEquals(unregister.entry().session(), 1);
     assertEquals(reader.currentEntry(), unregister);
     assertEquals(reader.currentIndex(), 2);
