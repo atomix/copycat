@@ -333,12 +333,14 @@ final class LeaderAppender extends AbstractAppender {
    * Completes append entries attempts up to the given index.
    */
   private void completeCommits(long previousCommitIndex, long commitIndex) {
-    for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
-      CompletableFuture<Long> future = appendFutures.remove(i);
-      if (future != null) {
-        future.complete(i);
+    context.getThreadContext().executor().execute(() -> {
+      for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
+        CompletableFuture<Long> future = appendFutures.remove(i);
+        if (future != null) {
+          future.complete(i);
+        }
       }
-    }
+    });
   }
 
   /**

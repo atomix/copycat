@@ -1209,6 +1209,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatClient createClient(RecoveryStrategy strategy) throws Throwable {
     CopycatClient client = CopycatClient.builder()
+      .withProtocol(new WebSocketProtocol())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(strategy)
       .build();

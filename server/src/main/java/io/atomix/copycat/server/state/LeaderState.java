@@ -117,7 +117,6 @@ final class LeaderState extends ActiveState {
     // that the commitIndex is not increased until the no-op entry (appender.index()) is committed.
     CompletableFuture<Void> future = new CompletableFuture<>();
     appender.appendEntries(appender.index()).whenComplete((resultIndex, error) -> {
-      context.checkThread();
       if (isOpen()) {
         if (error == null) {
           context.getStateMachine().apply(resultIndex);
@@ -546,7 +545,6 @@ final class LeaderState extends ActiveState {
    */
   private void appendCommand(long index, CommandResponse.Builder responseBuilder, CompletableFuture<CommandResponse> future) {
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
           applyCommand(index, responseBuilder, future);

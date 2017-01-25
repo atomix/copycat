@@ -319,6 +319,9 @@ public class SegmentWriter implements Writer {
     // Increment the entry count.
     entryCount++;
 
+    // Mark the buffer to ensure we can reset it to the current index.
+    buffer.mark();
+
     // Iterate through the entries until the truncate index is reached.
     while (lastIndex < index) {
       // Mark the current buffer position.

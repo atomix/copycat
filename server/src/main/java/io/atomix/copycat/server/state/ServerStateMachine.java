@@ -29,6 +29,7 @@ import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.ComposableFuture;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
@@ -49,6 +50,7 @@ final class ServerStateMachine implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachine.class);
   private final StateMachine stateMachine;
   private final ServerContext state;
+  private final ThreadContext context;
   private final Log log;
   private final LogReader reader;
   private final ServerStateMachineExecutor executor;
@@ -56,12 +58,13 @@ final class ServerStateMachine implements AutoCloseable {
   private long lastCompleted;
   private Snapshot pendingSnapshot;
 
-  ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
+  ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext stateContext, ThreadContext applicationContext) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.state = Assert.notNull(state, "state");
+    this.context = Assert.notNull(stateContext, "stateContext");
     this.log = state.getLog();
     this.reader = log.createReader(1, Reader.Mode.ALL_COMMITS);
-    this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager(state)), executor);
+    this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager(state)), applicationContext);
     init();
   }
 
@@ -263,21 +266,7 @@ final class ServerStateMachine implements AutoCloseable {
     if (!log.isOpen()) {
       return;
     }
-
-    while (reader.hasNext()) {
-      // If the next index is less than or equal to the given index, read and apply the entry.
-      if (reader.nextIndex() <= index) {
-        Indexed<? extends Entry<?>> entry = reader.next();
-        if (!entry.isCompacted()) {
-          apply(entry);
-          setLastApplied(entry.index());
-        }
-      }
-      // If the index has been reached, return.
-      else {
-        return;
-      }
-    }
+    context.executor().execute(() -> applyIndex(index));
   }
 
   /**
@@ -291,9 +280,31 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once the commit has been applied.
    */
   public <T> CompletableFuture<T> apply(long index) {
-    // If entries remain to be applied prior to this entry then synchronously apply them.
-    if (index > lastApplied + 1) {
-      applyAll(index - 1);
+    ComposableFuture<T> future = new ComposableFuture<>();
+    context.executor().execute(() -> this.<T>applyIndex(index).whenComplete(future));
+    return future;
+  }
+
+  /**
+   * Applies the entry at the given index.
+   */
+  private <T> CompletableFuture<T> applyIndex(long index) {
+    context.checkThread();
+
+    // Apply entries prior to this entry.
+    while (reader.hasNext()) {
+      // If the next index is less than or equal to the given index, read and apply the entry.
+      if (reader.nextIndex() < index) {
+        Indexed<? extends Entry<?>> entry = reader.next();
+        if (!entry.isCompacted()) {
+          applyEntry(entry);
+          setLastApplied(entry.index());
+        }
+      }
+      // If the index has been reached, break.
+      else {
+        break;
+      }
     }
 
     // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
@@ -304,7 +315,7 @@ final class ServerStateMachine implements AutoCloseable {
         if (entry.index() != index) {
           throw new IllegalStateException("inconsistent index applying entry " + index + ": " + entry);
         }
-        return apply(entry);
+        return applyEntry(entry);
       } else {
         return CompletableFuture.completedFuture(null);
       }
@@ -322,8 +333,23 @@ final class ServerStateMachine implements AutoCloseable {
    * @param entry The entry to apply.
    * @return A completable future to be completed with the result.
    */
+  public <T> CompletableFuture<T> apply(Indexed<? extends Entry<?>> entry) {
+    ComposableFuture<T> future = new ComposableFuture<>();
+    context.executor().execute(() -> this.<T>applyEntry(entry).whenComplete(future));
+    return future;
+  }
+
+  /**
+   * Applies an entry to the state machine.
+   * <p>
+   * Calls to this method are assumed to expect a result. This means linearizable session events
+   * triggered by the application of the given entry will be awaited before completing the returned future.
+   *
+   * @param entry The entry to apply.
+   * @return A completable future to be completed with the result.
+   */
   @SuppressWarnings("unchecked")
-  public <T> CompletableFuture<T> apply(Indexed<? extends Entry> entry) {
+  private <T> CompletableFuture<T> applyEntry(Indexed<? extends Entry<?>> entry) {
     LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
     if (entry.type() == Entry.Type.QUERY) {
       return (CompletableFuture<T>) applyQuery((Indexed<QueryEntry>) entry);

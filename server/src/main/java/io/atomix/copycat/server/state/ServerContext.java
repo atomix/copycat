@@ -64,6 +64,7 @@ public class ServerContext implements AutoCloseable {
   private SnapshotStore snapshot;
   private ServerStateMachine stateMachine;
   protected final ThreadContext stateContext;
+  protected final ThreadContext applicationContext;
   protected final ConnectionManager connections;
   protected ServerState state = new InactiveState(this);
   private Duration electionTimeout = Duration.ofMillis(500);
@@ -84,6 +85,7 @@ public class ServerContext implements AutoCloseable {
     this.connections = new ConnectionManager(protocol.createClient());
     this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
     this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name));
+    this.applicationContext = new SingleThreadContext(String.format("copycat-server-%s-%s-application", serverAddress, name));
 
     // Open the meta store.
     threadContext.execute(() -> this.meta = storage.openMetaStore(name)).join();
@@ -496,7 +498,7 @@ public class ServerContext implements AutoCloseable {
     }
 
     // Create a new internal server state machine.
-    this.stateMachine = new ServerStateMachine(stateMachine, this, stateContext);
+    this.stateMachine = new ServerStateMachine(stateMachine, this, stateContext, applicationContext);
     return this;
   }
 
