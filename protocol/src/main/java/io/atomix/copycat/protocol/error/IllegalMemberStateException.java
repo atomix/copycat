@@ -13,25 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
- * Indicates that an error occurred while attempting to acheive a quorum for a read-only query.
+ * Indicates that a server received a request for which it was not in the appropriate state to handle.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class QueryException extends OperationException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.QUERY_ERROR;
+public class IllegalMemberStateException extends ProtocolException {
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR;
 
-  public QueryException(String message, Object... args) {
+  public IllegalMemberStateException(String message, Object... args) {
     super(TYPE, message, args);
   }
 
-  public QueryException(Throwable cause, String message, Object... args) {
+  public IllegalMemberStateException(Throwable cause, String message, Object... args) {
     super(TYPE, cause, message, args);
   }
 
-  public QueryException(Throwable cause) {
+  public IllegalMemberStateException(Throwable cause) {
     super(TYPE, cause);
   }
 

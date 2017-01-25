@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.error;
 
+import io.atomix.copycat.protocol.error.*;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
@@ -31,23 +33,23 @@ public class CopycatErrorTest {
    * Tests serializing exceptions.
    */
   public void testSerializeErrors() throws Throwable {
-    CopycatError error;
-    error = CopycatError.forId(new NoLeaderException("test").getType().id());
-    assertEquals(error, CopycatError.Type.NO_LEADER_ERROR);
-    error = CopycatError.forId(new QueryException("test").getType().id());
-    assertEquals(error, CopycatError.Type.QUERY_ERROR);
-    error = CopycatError.forId(new CommandException("test").getType().id());
-    assertEquals(error, CopycatError.Type.COMMAND_ERROR);
-    error = CopycatError.forId(new ApplicationException("test").getType().id());
-    assertEquals(error, CopycatError.Type.APPLICATION_ERROR);
-    error = CopycatError.forId(new IllegalMemberStateException("test").getType().id());
-    assertEquals(error, CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR);
-    error = CopycatError.forId(new UnknownSessionException("test").getType().id());
-    assertEquals(error, CopycatError.Type.UNKNOWN_SESSION_ERROR);
-    error = CopycatError.forId(new InternalException("test").getType().id());
-    assertEquals(error, CopycatError.Type.INTERNAL_ERROR);
-    error = CopycatError.forId(new ConfigurationException("test").getType().id());
-    assertEquals(error, CopycatError.Type.CONFIGURATION_ERROR);
+    ProtocolResponse.Error.Type error;
+    error = ProtocolResponse.Error.Type.forId(new NoLeaderException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.NO_LEADER_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new QueryException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.QUERY_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new CommandException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.COMMAND_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new ApplicationException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.APPLICATION_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new IllegalMemberStateException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new UnknownSessionException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new InternalException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.INTERNAL_ERROR);
+    error = ProtocolResponse.Error.Type.forId(new ConfigurationException("test").getType().id());
+    assertEquals(error, ProtocolResponse.Error.Type.CONFIGURATION_ERROR);
   }
 
 }

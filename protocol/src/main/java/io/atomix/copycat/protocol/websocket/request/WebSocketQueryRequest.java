@@ -47,9 +47,18 @@ public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequ
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.QUERY;
+  }
+
+  /**
+   * Returns the request type name.
+   *
+   * @return The request type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override

@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
@@ -76,7 +75,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(responseBuilder
       .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -88,7 +87,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(responseBuilder
       .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -102,19 +101,28 @@ class ReserveState extends InactiveState {
         logResponse(
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build()));
     } else {
       return forward(connection ->
         connection.command(builder ->
-          builder.withSession(request.session())
+          builder
+            .withSession(request.session())
             .withSequence(request.sequence())
             .withCommand(request.command())
             .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .withIndex(response.index())
+            .withEventIndex(response.eventIndex())
+            .withResult(response.result())
+            .build())
         .exceptionally(error ->
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -130,7 +138,7 @@ class ReserveState extends InactiveState {
         logResponse(
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build()));
     } else {
       return forward(connection ->
@@ -141,10 +149,18 @@ class ReserveState extends InactiveState {
             .withIndex(request.index())
             .withQuery(request.query())
             .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .withIndex(response.index())
+            .withEventIndex(response.eventIndex())
+            .withResult(response.result())
+            .build())
         .exceptionally(error ->
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -158,7 +174,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return forward(connection ->
@@ -167,10 +183,19 @@ class ReserveState extends InactiveState {
             .withClient(request.client())
             .withTimeout(request.timeout())
             .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .withSession(response.session())
+            .withLeader(response.leader())
+            .withMembers(response.members())
+            .withTimeout(response.timeout())
+            .build())
         .exceptionally(error ->
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -182,7 +207,7 @@ class ReserveState extends InactiveState {
     logRequest(request);
     return CompletableFuture.completedFuture(logResponse(responseBuilder
       .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -193,7 +218,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(responseBuilder
       .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
@@ -205,7 +230,7 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return forward(connection ->
@@ -215,10 +240,17 @@ class ReserveState extends InactiveState {
             .withCommandSequence(request.commandSequence())
             .withEventIndex(request.commandSequence())
             .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .withLeader(response.leader())
+            .withMembers(response.members())
+            .build())
         .exceptionally(error ->
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -233,7 +265,7 @@ class ReserveState extends InactiveState {
     if (session == null || session.getConnection() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
         .build()));
     } else {
       CompletableFuture<PublishResponse> future = new CompletableFuture<>();
@@ -252,7 +284,7 @@ class ReserveState extends InactiveState {
               future.complete(logResponse(
                 responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .withError(ProtocolResponse.Error.Type.INTERNAL_ERROR)
                   .build()));
             }
           }
@@ -269,17 +301,23 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return forward(connection -> connection.unregister(builder ->
         builder
           .withSession(request.session())
           .build()))
-        .exceptionally(error -> responseBuilder
-          .withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .build())
+        .exceptionally(error ->
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
+            .build())
         .thenApply(this::logResponse);
     }
   }
@@ -294,16 +332,26 @@ class ReserveState extends InactiveState {
         logResponse(
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build()));
     } else {
       return forward(connection -> connection.join(builder ->
-        builder.withMember(request.member())
+        builder
+          .withMember(request.member())
           .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error())
+            .withIndex(response.index())
+            .withTerm(response.term())
+            .withMembers(response.members())
+            .withTime(response.timestamp())
+            .build())
         .exceptionally(error ->
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -318,7 +366,7 @@ class ReserveState extends InactiveState {
       return CompletableFuture.completedFuture(logResponse(
         responseBuilder
           .withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build()));
     } else {
       return forward(connection -> connection.reconfigure(builder ->
@@ -327,10 +375,19 @@ class ReserveState extends InactiveState {
           .withTerm(request.term())
           .withMember(request.member())
           .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .withIndex(response.index())
+            .withTerm(response.term())
+            .withMembers(response.members())
+            .withTime(response.timestamp())
+            .build())
         .exceptionally(error ->
           responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -344,16 +401,25 @@ class ReserveState extends InactiveState {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
         .build()));
     } else {
       return forward(connection -> connection.leave(builder ->
         builder
           .withMember(request.member())
           .build()))
+        .thenApply(response ->
+          responseBuilder
+            .withStatus(response.status())
+            .withError(response.error().type(), response.error().message())
+            .withIndex(response.index())
+            .withTerm(response.term())
+            .withMembers(response.members())
+            .withTime(response.timestamp())
+            .build())
         .exceptionally(error -> responseBuilder
           .withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build())
         .thenApply(this::logResponse);
     }
@@ -366,7 +432,7 @@ class ReserveState extends InactiveState {
 
     return CompletableFuture.completedFuture(logResponse(responseBuilder
       .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 

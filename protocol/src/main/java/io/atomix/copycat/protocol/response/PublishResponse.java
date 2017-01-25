@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.response;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 
 import java.util.Objects;
 
@@ -34,7 +33,7 @@ import java.util.Objects;
 public class PublishResponse extends SessionResponse {
   protected final long index;
 
-  protected PublishResponse(Status status, CopycatError error, long index) {
+  protected PublishResponse(Status status, ProtocolResponse.Error error, long index) {
     super(status, error);
     this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
   }

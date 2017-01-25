@@ -18,7 +18,7 @@ package io.atomix.copycat.server;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.error.CommandException;
+import io.atomix.copycat.protocol.error.CommandException;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;

@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
@@ -396,7 +395,7 @@ final class ClusterState implements Cluster, AutoCloseable {
               } else if (joinFuture != null) {
                 joinFuture.complete(null);
               }
-            } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
+            } else if (response.error() == null || response.error().type() == ProtocolResponse.Error.Type.CONFIGURATION_ERROR) {
               // If the response error is null, that indicates that no error occurred but the leader was
               // in a state that was incapable of handling the join request. Attempt to join the leader
               // again after an election timeout.
@@ -453,7 +452,7 @@ final class ClusterState implements Cluster, AutoCloseable {
                 cancelJoinTimer();
                 if (joinFuture != null)
                   joinFuture.complete(null);
-              } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
+              } else if (response.error() == null || response.error().type() == ProtocolResponse.Error.Type.CONFIGURATION_ERROR) {
                 joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
               }
             }

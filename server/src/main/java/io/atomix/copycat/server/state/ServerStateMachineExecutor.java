@@ -18,7 +18,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Operation;
-import io.atomix.copycat.error.ApplicationException;
+import io.atomix.copycat.protocol.error.ApplicationException;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.util.Assert;

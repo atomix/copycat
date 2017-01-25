@@ -15,9 +15,8 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -35,7 +34,7 @@ public class ConnectResponse extends AbstractResponse {
   protected final Address leader;
   protected final Collection<Address> members;
 
-  protected ConnectResponse(Status status, CopycatError error, Address leader, Collection<Address> members) {
+  protected ConnectResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
     super(status, error);
     this.leader = leader;
     this.members = Assert.notNull(members, "members");

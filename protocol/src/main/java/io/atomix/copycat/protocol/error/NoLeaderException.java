@@ -13,25 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
- * Indicates that a server received a request for which it was not in the appropriate state to handle.
+ * Indicates that the server that received a request is not the leader and does not know of a leader.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class IllegalMemberStateException extends CopycatException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR;
+public class NoLeaderException extends ProtocolException {
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.NO_LEADER_ERROR;
 
-  public IllegalMemberStateException(String message, Object... args) {
+  public NoLeaderException(String message, Object... args) {
     super(TYPE, message, args);
   }
 
-  public IllegalMemberStateException(Throwable cause, String message, Object... args) {
+  public NoLeaderException(Throwable cause, String message, Object... args) {
     super(TYPE, cause, message, args);
   }
 
-  public IllegalMemberStateException(Throwable cause) {
+  public NoLeaderException(Throwable cause) {
     super(TYPE, cause);
   }
 

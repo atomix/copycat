@@ -18,7 +18,8 @@ package io.atomix.copycat.server.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.net.response.NetResponse;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.VoteResponse;
 
@@ -30,7 +31,7 @@ import io.atomix.copycat.server.protocol.response.VoteResponse;
 public class NetVoteResponse extends VoteResponse implements RaftNetResponse<NetVoteResponse> {
   private final long id;
 
-  public NetVoteResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean voted) {
+  public NetVoteResponse(long id, ProtocolResponse.Status status, ProtocolResponse.Error error, long term, boolean voted) {
     super(status, error, term, voted);
     this.id = id;
   }
@@ -74,18 +75,25 @@ public class NetVoteResponse extends VoteResponse implements RaftNetResponse<Net
     public void write(Kryo kryo, Output output, NetVoteResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
+      if (response.status == Status.OK) {
+        output.writeLong(response.term);
+        output.writeBoolean(response.voted);
       } else {
-        output.writeByte(response.error.id());
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
-      output.writeLong(response.term);
-      output.writeBoolean(response.voted);
     }
 
     @Override
     public NetVoteResponse read(Kryo kryo, Input input, Class<NetVoteResponse> type) {
-      return new NetVoteResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean());
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetVoteResponse(id, status, null, input.readLong(), input.readBoolean());
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetVoteResponse(id, status, error, input.readLong(), input.readBoolean());
+      }
     }
   }
 }

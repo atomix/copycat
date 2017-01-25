@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.error.InternalException;
-import io.atomix.copycat.error.UnknownSessionException;
+import io.atomix.copycat.protocol.error.InternalException;
+import io.atomix.copycat.protocol.error.UnknownSessionException;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.session.SessionListener;

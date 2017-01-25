@@ -18,7 +18,8 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.UnregisterResponse;
 
 /**
@@ -29,7 +30,7 @@ import io.atomix.copycat.protocol.response.UnregisterResponse;
 public class NetUnregisterResponse extends UnregisterResponse implements NetResponse<NetUnregisterResponse> {
   private final long id;
 
-  public NetUnregisterResponse(long id, Status status, CopycatError error) {
+  public NetUnregisterResponse(long id, Status status, ProtocolResponse.Error error) {
     super(status, error);
     this.id = id;
   }
@@ -73,16 +74,22 @@ public class NetUnregisterResponse extends UnregisterResponse implements NetResp
     public void write(Kryo kryo, Output output, NetUnregisterResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
-      } else {
-        output.writeByte(response.error.id());
+      if (response.status == Status.ERROR) {
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
     }
 
     @Override
     public NetUnregisterResponse read(Kryo kryo, Input input, Class<NetUnregisterResponse> type) {
-      return new NetUnregisterResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetUnregisterResponse(id, status, null);
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetUnregisterResponse(id, status, error);
+      }
     }
   }
 }

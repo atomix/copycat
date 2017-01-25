@@ -18,7 +18,7 @@ package io.atomix.copycat.protocol.websocket.response;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.UnregisterResponse;
 
 /**
@@ -33,7 +33,7 @@ public class WebSocketUnregisterResponse extends UnregisterResponse implements W
   public WebSocketUnregisterResponse(
     @JsonProperty("id") long id,
     @JsonProperty("status") Status status,
-    @JsonProperty("error") CopycatError error) {
+    @JsonProperty("error") WebSocketResponse.Error error) {
     super(status, error);
     this.id = id;
   }
@@ -45,9 +45,18 @@ public class WebSocketUnregisterResponse extends UnregisterResponse implements W
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.UNREGISTER;
+  }
+
+  /**
+   * Returns the response type name.
+   *
+   * @return The response type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override
@@ -58,8 +67,8 @@ public class WebSocketUnregisterResponse extends UnregisterResponse implements W
 
   @Override
   @JsonGetter("error")
-  public CopycatError error() {
-    return super.error();
+  public WebSocketResponse.Error error() {
+    return (WebSocketResponse.Error) super.error();
   }
 
   /**
@@ -73,13 +82,20 @@ public class WebSocketUnregisterResponse extends UnregisterResponse implements W
     }
 
     @Override
+    public UnregisterResponse.Builder withError(ProtocolResponse.Error.Type type, String message) {
+      this.error = new WebSocketResponse.Error(type, message);
+      return this;
+    }
+
+    @Override
     public UnregisterResponse copy(UnregisterResponse response) {
-      return new WebSocketUnregisterResponse(id, response.status(), response.error());
+      final WebSocketResponse.Error error = response.error() != null ? new WebSocketResponse.Error(response.error().type(), response.error().message()) : null;
+      return new WebSocketUnregisterResponse(id, response.status(), error);
     }
 
     @Override
     public UnregisterResponse build() {
-      return new WebSocketUnregisterResponse(id, status, error);
+      return new WebSocketUnregisterResponse(id, status, (WebSocketResponse.Error) error);
     }
   }
 }

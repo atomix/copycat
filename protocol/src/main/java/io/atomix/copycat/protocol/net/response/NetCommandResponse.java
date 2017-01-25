@@ -18,8 +18,9 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.CommandResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
  * TCP command response.
@@ -29,7 +30,7 @@ import io.atomix.copycat.protocol.response.CommandResponse;
 public class NetCommandResponse extends CommandResponse implements NetResponse<NetCommandResponse> {
   private final long id;
 
-  public NetCommandResponse(long id, Status status, CopycatError error, long index, long eventIndex, Object result) {
+  public NetCommandResponse(long id, Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
     super(status, error, index, eventIndex, result);
     this.id = id;
   }
@@ -73,10 +74,9 @@ public class NetCommandResponse extends CommandResponse implements NetResponse<N
     public void write(Kryo kryo, Output output, NetCommandResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
-      } else {
-        output.writeByte(response.error.id());
+      if (response.status == Status.ERROR) {
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
       output.writeLong(response.index);
       output.writeLong(response.eventIndex);
@@ -85,7 +85,13 @@ public class NetCommandResponse extends CommandResponse implements NetResponse<N
 
     @Override
     public NetCommandResponse read(Kryo kryo, Input input, Class<NetCommandResponse> type) {
-      return new NetCommandResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), kryo.readClassAndObject(input));
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      NetResponse.Error error = null;
+      if (status == Status.ERROR) {
+        error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+      }
+      return new NetCommandResponse(id, status, error, input.readLong(), input.readLong(), kryo.readClassAndObject(input));
     }
   }
 }

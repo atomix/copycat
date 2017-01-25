@@ -18,7 +18,8 @@ package io.atomix.copycat.server.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.net.response.NetResponse;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 
@@ -30,7 +31,7 @@ import io.atomix.copycat.server.protocol.response.AppendResponse;
 public class NetAppendResponse extends AppendResponse implements RaftNetResponse<NetAppendResponse> {
   private final long id;
 
-  public NetAppendResponse(long id, ProtocolResponse.Status status, CopycatError error, long term, boolean succeeded, long logIndex) {
+  public NetAppendResponse(long id, ProtocolResponse.Status status, ProtocolResponse.Error error, long term, boolean succeeded, long logIndex) {
     super(status, error, term, succeeded, logIndex);
     this.id = id;
   }
@@ -74,19 +75,26 @@ public class NetAppendResponse extends AppendResponse implements RaftNetResponse
     public void write(Kryo kryo, Output output, NetAppendResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
+      if (response.status == Status.OK) {
+        output.writeLong(response.term);
+        output.writeBoolean(response.succeeded);
+        output.writeLong(response.logIndex);
       } else {
-        output.writeByte(response.error.id());
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
-      output.writeLong(response.term);
-      output.writeBoolean(response.succeeded);
-      output.writeLong(response.logIndex);
     }
 
     @Override
     public NetAppendResponse read(Kryo kryo, Input input, Class<NetAppendResponse> type) {
-      return new NetAppendResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readBoolean(), input.readLong());
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetAppendResponse(id, status, null, input.readLong(), input.readBoolean(), input.readLong());
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetAppendResponse(id, status, error, 0, false, 0);
+      }
     }
   }
 }

@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
 
 import java.util.Collection;
@@ -31,7 +31,7 @@ import java.util.Collection;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class JoinResponse extends ConfigurationResponse {
-  public JoinResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+  public JoinResponse(Status status, ProtocolResponse.Error error, long index, long term, long timestamp, Collection<Member> members) {
     super(status, error, index, term, timestamp, members);
   }
 

@@ -13,24 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
  * Base class for operation exceptions {@link CommandException} and {@link QueryException}.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public abstract class OperationException extends CopycatException {
+public abstract class OperationException extends ProtocolException {
 
-  public OperationException(CopycatError.Type type, String message, Object... args) {
+  public OperationException(ProtocolResponse.Error.Type type, String message, Object... args) {
     super(type, message, args);
   }
 
-  public OperationException(CopycatError.Type type, Throwable cause, String message, Object... args) {
+  public OperationException(ProtocolResponse.Error.Type type, Throwable cause, String message, Object... args) {
     super(type, cause, message, args);
   }
 
-  public OperationException(CopycatError.Type type, Throwable cause) {
+  public OperationException(ProtocolResponse.Error.Type type, Throwable cause) {
     super(type, cause);
   }
 

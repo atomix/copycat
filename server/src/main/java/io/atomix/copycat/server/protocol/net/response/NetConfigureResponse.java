@@ -18,7 +18,8 @@ package io.atomix.copycat.server.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.net.response.NetResponse;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.ConfigureResponse;
 
@@ -30,7 +31,7 @@ import io.atomix.copycat.server.protocol.response.ConfigureResponse;
 public class NetConfigureResponse extends ConfigureResponse implements RaftNetResponse<NetConfigureResponse> {
   private final long id;
 
-  public NetConfigureResponse(long id, ProtocolResponse.Status status, CopycatError error) {
+  public NetConfigureResponse(long id, ProtocolResponse.Status status, ProtocolResponse.Error error) {
     super(status, error);
     this.id = id;
   }
@@ -74,16 +75,22 @@ public class NetConfigureResponse extends ConfigureResponse implements RaftNetRe
     public void write(Kryo kryo, Output output, NetConfigureResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
-      } else {
-        output.writeByte(response.error.id());
+      if (response.status == Status.ERROR) {
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
     }
 
     @Override
     public NetConfigureResponse read(Kryo kryo, Input input, Class<NetConfigureResponse> type) {
-      return new NetConfigureResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()));
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetConfigureResponse(id, status, null);
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetConfigureResponse(id, status, error);
+      }
     }
   }
 }

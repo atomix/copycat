@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -37,10 +36,15 @@ public class KeepAliveResponse extends SessionResponse {
   protected final Address leader;
   protected final Collection<Address> members;
 
-  protected KeepAliveResponse(Status status, CopycatError error, Address leader, Collection<Address> members) {
+  protected KeepAliveResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
     super(status, error);
-    this.leader = leader;
-    this.members = Assert.notNull(members, "members");
+    if (status == Status.OK) {
+      this.leader = leader;
+      this.members = Assert.notNull(members, "members");
+    } else {
+      this.leader = null;
+      this.members = null;
+    }
   }
 
   /**
@@ -110,7 +114,7 @@ public class KeepAliveResponse extends SessionResponse {
      * @throws NullPointerException if {@code members} is null
      */
     public Builder withMembers(Collection<Address> members) {
-      this.members = Assert.notNull(members, "members");
+      this.members = members;
       return this;
     }
 

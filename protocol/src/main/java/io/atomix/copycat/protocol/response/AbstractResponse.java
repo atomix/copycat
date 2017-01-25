@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.response;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 
 /**
  * Abstract local response.
@@ -25,9 +24,9 @@ import io.atomix.copycat.error.CopycatError;
  */
 public abstract class AbstractResponse implements ProtocolResponse {
   protected final Status status;
-  protected final CopycatError error;
+  protected final ProtocolResponse.Error error;
 
-  public AbstractResponse(Status status, CopycatError error) {
+  public AbstractResponse(Status status, ProtocolResponse.Error error) {
     this.status = Assert.notNull(status, "status");
     this.error = error;
   }
@@ -38,8 +37,36 @@ public abstract class AbstractResponse implements ProtocolResponse {
   }
 
   @Override
-  public CopycatError error() {
+  public ProtocolResponse.Error error() {
     return error;
+  }
+
+  /**
+   * Abstract response error.
+   */
+  public static class Error implements ProtocolResponse.Error {
+    private final Type type;
+    private final String message;
+
+    public Error(Type type, String message) {
+      this.type = type;
+      this.message = message;
+    }
+
+    @Override
+    public Type type() {
+      return type;
+    }
+
+    @Override
+    public String message() {
+      return message;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s[type=%s, message=%s]", getClass().getSimpleName(), type.name(), message);
+    }
   }
 
   /**
@@ -50,7 +77,7 @@ public abstract class AbstractResponse implements ProtocolResponse {
    */
   protected static abstract class Builder<T extends ProtocolResponse.Builder<T, U>, U extends ProtocolResponse> implements ProtocolResponse.Builder<T, U> {
     protected Status status = Status.OK;
-    protected CopycatError error;
+    protected Error error;
 
     @Override
     @SuppressWarnings("unchecked")
@@ -61,8 +88,8 @@ public abstract class AbstractResponse implements ProtocolResponse {
 
     @Override
     @SuppressWarnings("unchecked")
-    public T withError(CopycatError error) {
-      this.error = Assert.notNull(error, "error");
+    public T withError(Error.Type type, String message) {
+      this.error = new Error(type, message);
       return (T) this;
     }
   }

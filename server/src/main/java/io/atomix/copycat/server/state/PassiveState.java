@@ -16,9 +16,8 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.Query;
-import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.error.CopycatException;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.error.ProtocolException;
 import io.atomix.copycat.protocol.request.ConnectRequest;
 import io.atomix.copycat.protocol.request.QueryRequest;
 import io.atomix.copycat.protocol.response.ConnectResponse;
@@ -84,25 +83,26 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder builder, ProtocolServerConnection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
+        responseBuilder.withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build()));
     } else {
       // Immediately register the session connection and send an accept request to the leader.
       context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
-      return this.forward(c -> c.accept(b ->
+      return forward(c -> c.accept(b ->
         b.withClient(request.client())
           .withAddress(context.getCluster().member().serverAddress())
           .build()))
         .thenApply(acceptResponse ->
-          builder.withStatus(ProtocolResponse.Status.OK)
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.OK)
             .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
             .withMembers(context.getCluster().members().stream()
               .map(Member::clientAddress)
@@ -110,8 +110,9 @@ class PassiveState extends ReserveState {
               .collect(Collectors.toList()))
             .build())
         .exceptionally(error ->
-          builder.withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.NO_LEADER_ERROR)
+          responseBuilder
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
         .thenApply(this::logResponse);
     }
@@ -287,11 +288,11 @@ class PassiveState extends ReserveState {
   /**
    * Forwards the query to the leader.
    */
-  private CompletableFuture<QueryResponse> queryForward(QueryRequest request, QueryResponse.Builder builder) {
+  private CompletableFuture<QueryResponse> queryForward(QueryRequest request, QueryResponse.Builder responseBuilder) {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
+        responseBuilder.withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build()));
     }
 
@@ -302,9 +303,18 @@ class PassiveState extends ReserveState {
         .withIndex(request.index())
         .withQuery(request.query())
         .build()))
+      .thenApply(response ->
+        responseBuilder
+          .withStatus(response.status())
+          .withError(response.error().type(), response.error().message())
+          .withIndex(response.index())
+          .withEventIndex(response.eventIndex())
+          .withResult(response.result())
+          .build())
       .exceptionally(error ->
-        builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
+        responseBuilder
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build())
       .thenApply(this::logResponse);
   }
@@ -327,7 +337,7 @@ class PassiveState extends ReserveState {
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+          .withError(ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR)
           .build()));
     } else {
       sequenceQuery(entry, builder, session, future);
@@ -356,7 +366,7 @@ class PassiveState extends ReserveState {
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+          .withError(ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR)
           .build()));
     } else {
       indexQuery(entry, builder, session, future);
@@ -405,17 +415,17 @@ class PassiveState extends ReserveState {
         future.complete(logResponse(builder.withStatus(ProtocolResponse.Status.OK)
           .withResult(result.result)
           .build()));
-      } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
+      } else if (error instanceof CompletionException && error.getCause() instanceof ProtocolException) {
         future.complete(logResponse(builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(((CopycatException) error.getCause()).getType())
+          .withError(((ProtocolException) error.getCause()).getType())
           .build()));
-      } else if (error instanceof CopycatException) {
+      } else if (error instanceof ProtocolException) {
         future.complete(logResponse(builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(((CopycatException) error).getType())
+          .withError(((ProtocolException) error).getType())
           .build()));
       } else {
         future.complete(logResponse(builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.INTERNAL_ERROR)
+          .withError(ProtocolResponse.Error.Type.INTERNAL_ERROR)
           .build()));
       }
     }
@@ -431,7 +441,7 @@ class PassiveState extends ReserveState {
     if (request.term() < context.getTerm()) {
       return CompletableFuture.completedFuture(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+          .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
           .build()));
     }
 
@@ -454,7 +464,7 @@ class PassiveState extends ReserveState {
       if (request.offset() > 0) {
         return CompletableFuture.completedFuture(logResponse(
           builder.withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+            .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
             .build()));
       }
 
@@ -466,7 +476,7 @@ class PassiveState extends ReserveState {
     if (request.offset() > nextSnapshotOffset) {
       return CompletableFuture.completedFuture(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
+          .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
           .build()));
     }
 

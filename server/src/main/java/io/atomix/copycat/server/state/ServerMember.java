@@ -19,7 +19,6 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
@@ -238,12 +237,12 @@ public final class ServerMember implements Member, KryoSerializable, AutoCloseab
           cancelConfigureTimer();
           cluster.configure(new Configuration(response.index(), response.term(), response.timestamp(), response.members()));
           future.complete(null);
-        } else if (response.error() == null || response.error() == CopycatError.Type.NO_LEADER_ERROR) {
+        } else if (response.error() == null || response.error().type() == ProtocolResponse.Error.Type.NO_LEADER_ERROR) {
           cancelConfigureTimer();
           configureTimeout = cluster.getContext().getThreadContext().schedule(cluster.getContext().getElectionTimeout().multipliedBy(2), () -> configure(type, future));
         } else {
           cancelConfigureTimer();
-          future.completeExceptionally(response.error().createException());
+          future.completeExceptionally(response.error().type().createException(null));
         }
       }
     });

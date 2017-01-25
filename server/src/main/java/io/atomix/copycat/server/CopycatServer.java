@@ -17,7 +17,7 @@ package io.atomix.copycat.server;
 
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.error.ConfigurationException;
+import io.atomix.copycat.protocol.error.ConfigurationException;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.protocol.ProtocolServer;

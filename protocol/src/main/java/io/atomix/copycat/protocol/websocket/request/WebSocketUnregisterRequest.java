@@ -43,9 +43,18 @@ public class WebSocketUnregisterRequest extends UnregisterRequest implements Web
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.UNREGISTER;
+  }
+
+  /**
+   * Returns the request type name.
+   *
+   * @return The request type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override

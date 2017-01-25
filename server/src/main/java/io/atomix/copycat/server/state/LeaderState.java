@@ -17,8 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.error.CopycatException;
+import io.atomix.copycat.protocol.error.ProtocolException;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
@@ -293,7 +292,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -313,6 +312,7 @@ final class LeaderState extends ActiveState {
     if (configuring() || initializing()) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
+        .withError(ReconfigureResponse.Error.Type.CONFIGURATION_ERROR)
         .build()));
     }
 
@@ -321,7 +321,7 @@ final class LeaderState extends ActiveState {
     if (existingMember == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
@@ -331,7 +331,7 @@ final class LeaderState extends ActiveState {
       && (existingMember.type() != request.member().type() || existingMember.status() != request.member().status())) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.CONFIGURATION_ERROR)
+        .withError(PollResponse.Error.Type.CONFIGURATION_ERROR)
         .build()));
     }
 
@@ -362,7 +362,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -413,7 +413,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -478,7 +478,7 @@ final class LeaderState extends ActiveState {
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
@@ -502,7 +502,7 @@ final class LeaderState extends ActiveState {
       if (request.sequence() - session.getRequestSequence() > MAX_REQUEST_QUEUE_SIZE) {
         future.complete(responseBuilder
           .withStatus(ProtocolResponse.Status.ERROR)
-          .withError(CopycatError.Type.COMMAND_ERROR)
+          .withError(PollResponse.Error.Type.COMMAND_ERROR)
           .build());
       }
       // Register the request in the request queue if it's not too far ahead of the current sequence number.
@@ -551,7 +551,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -614,7 +614,7 @@ final class LeaderState extends ActiveState {
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
@@ -645,7 +645,7 @@ final class LeaderState extends ActiveState {
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     }
 
@@ -666,7 +666,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.QUERY_ERROR)
+            .withError(PollResponse.Error.Type.QUERY_ERROR)
             .build()));
         }
       }
@@ -682,7 +682,7 @@ final class LeaderState extends ActiveState {
     if (session == null) {
       future.complete(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
         .build()));
     } else {
       // If the query's sequence number is greater than the session's current sequence number, queue the request for
@@ -739,20 +739,20 @@ final class LeaderState extends ActiveState {
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
-              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((CopycatException) sessionError.getCause()).getType())
+                  .withError(((ProtocolException) sessionError.getCause()).getType())
                   .build()));
-              } else if (sessionError instanceof CopycatException) {
+              } else if (sessionError instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((CopycatException) sessionError).getType())
+                  .withError(((ProtocolException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -761,7 +761,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -824,20 +824,20 @@ final class LeaderState extends ActiveState {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.OK)
                   .build()));
-              } else if (connectError instanceof CompletionException && connectError.getCause() instanceof CopycatException) {
+              } else if (connectError instanceof CompletionException && connectError.getCause() instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((CopycatException) connectError.getCause()).getType())
+                  .withError(((ProtocolException) connectError.getCause()).getType())
                   .build()));
-              } else if (connectError instanceof CopycatException) {
+              } else if (connectError instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((CopycatException) connectError).getType())
+                  .withError(((ProtocolException) connectError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -846,7 +846,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -887,23 +887,23 @@ final class LeaderState extends ActiveState {
                     .map(Member::clientAddress)
                     .filter(m -> m != null)
                     .collect(Collectors.toList())).build()));
-              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
-                  .withError(((CopycatException) sessionError.getCause()).getType())
+                  .withError(((ProtocolException) sessionError.getCause()).getType())
                   .build()));
-              } else if (sessionError instanceof CopycatException) {
+              } else if (sessionError instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
-                  .withError(((CopycatException) sessionError).getType())
+                  .withError(((ProtocolException) sessionError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
                   .withLeader(context.getCluster().member().clientAddress())
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -913,7 +913,7 @@ final class LeaderState extends ActiveState {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
             .withLeader(context.getCluster().member().clientAddress())
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }
@@ -950,20 +950,20 @@ final class LeaderState extends ActiveState {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.OK)
                   .build()));
-              } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof CopycatException) {
+              } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((CopycatException) unregisterError.getCause()).getType())
+                  .withError(((ProtocolException) unregisterError.getCause()).getType())
                   .build()));
-              } else if (unregisterError instanceof CopycatException) {
+              } else if (unregisterError instanceof ProtocolException) {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((CopycatException) unregisterError).getType())
+                  .withError(((ProtocolException) unregisterError).getType())
                   .build()));
               } else {
                 future.complete(logResponse(responseBuilder
                   .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
                   .build()));
               }
               checkSessions();
@@ -972,7 +972,7 @@ final class LeaderState extends ActiveState {
         } else {
           future.complete(logResponse(responseBuilder
             .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
             .build()));
         }
       }

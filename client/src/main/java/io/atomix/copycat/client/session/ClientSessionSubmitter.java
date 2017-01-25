@@ -18,10 +18,9 @@ package io.atomix.copycat.client.session;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.error.CommandException;
-import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
+import io.atomix.copycat.protocol.error.CommandException;
+import io.atomix.copycat.protocol.error.QueryException;
 import io.atomix.copycat.protocol.request.CommandRequest;
 import io.atomix.copycat.protocol.request.OperationRequest;
 import io.atomix.copycat.protocol.request.QueryRequest;
@@ -276,9 +275,9 @@ final class ClientSessionSubmitter {
         state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
         if (response.status() == ProtocolResponse.Status.OK) {
           complete(response);
-        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
-          complete(response.error().createException());
-        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+        } else if (response.error().type() == ProtocolResponse.Error.Type.APPLICATION_ERROR) {
+          complete(response.error().type().createException(response.error().message()));
+        } else if (response.error().type() != ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR) {
           retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
         }
       } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
@@ -358,7 +357,7 @@ final class ClientSessionSubmitter {
         if (response.status() == ProtocolResponse.Status.OK) {
           complete(response);
         } else {
-          complete(response.error().createException());
+          complete(response.error().type().createException(response.error().message()));
         }
       } else {
         fail(error);

@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 
@@ -33,7 +32,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class AcceptResponse extends AbstractResponse {
-  public AcceptResponse(ProtocolResponse.Status status, CopycatError error) {
+  public AcceptResponse(ProtocolResponse.Status status, ProtocolResponse.Error error) {
     super(status, error);
   }
 

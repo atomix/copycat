@@ -18,9 +18,10 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.KeepAliveResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 import java.util.Collection;
 
@@ -32,7 +33,7 @@ import java.util.Collection;
 public class NetKeepAliveResponse extends KeepAliveResponse implements NetResponse<NetKeepAliveResponse> {
   private final long id;
 
-  public NetKeepAliveResponse(long id, Status status, CopycatError error, Address leader, Collection<Address> members) {
+  public NetKeepAliveResponse(long id, Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
     super(status, error, leader, members);
     this.id = id;
   }
@@ -76,19 +77,26 @@ public class NetKeepAliveResponse extends KeepAliveResponse implements NetRespon
     public void write(Kryo kryo, Output output, NetKeepAliveResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
+      if (response.status == Status.OK) {
+        kryo.writeObject(output, response.leader);
+        kryo.writeObject(output, response.members);
       } else {
-        output.writeByte(response.error.id());
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
-      kryo.writeObject(output, response.leader);
-      kryo.writeObject(output, response.members);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public NetKeepAliveResponse read(Kryo kryo, Input input, Class<NetKeepAliveResponse> type) {
-      return new NetKeepAliveResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), kryo.readObject(input, Address.class), kryo.readObject(input, Collection.class));
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetKeepAliveResponse(id, status, null, kryo.readObject(input, Address.class), kryo.readObject(input, Collection.class));
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetKeepAliveResponse(id, status, error, null, null);
+      }
     }
   }
 }

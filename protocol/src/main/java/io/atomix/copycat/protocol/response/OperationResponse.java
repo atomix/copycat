@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.response;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 
 import java.util.Objects;
 
@@ -34,7 +33,7 @@ public abstract class OperationResponse extends SessionResponse {
   protected final long eventIndex;
   protected final Object result;
 
-  protected OperationResponse(Status status, CopycatError error, long index, long eventIndex, Object result) {
+  protected OperationResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
     super(status, error);
     this.index = Assert.argNot(index, index < 0, "index must be positive");
     this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex must be positive");

@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.error.InternalException;
+import io.atomix.copycat.protocol.error.InternalException;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;

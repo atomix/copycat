@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
  * Catch-all exception for unknown Raft protocol errors.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class InternalException extends CopycatException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.INTERNAL_ERROR;
+public class InternalException extends ProtocolException {
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.INTERNAL_ERROR;
 
   public InternalException(String message, Object... args) {
     super(TYPE, message, args);

@@ -13,14 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
- * Provides error constants and exceptions associated with the Raft consensus protocol.
- * <p>
- * Copycat protocol errors are designed to be transported across networks in the most efficient manner possible. Each protocol exception
- * is associated with a 1-byte identifier. Rather than serializing complete {@link java.lang.Exception} objects, the protocol exception is
- * sent using only its identifier and the exception is recreated by the receiving side of a connection.
+ * Indicates that an operation or other request from an unknown session was received.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-package io.atomix.copycat.error;
+public class UnknownSessionException extends ProtocolException {
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR;
+
+  public UnknownSessionException(String message, Object... args) {
+    super(TYPE, message, args);
+  }
+
+  public UnknownSessionException(Throwable cause, String message, Object... args) {
+    super(TYPE, cause, message, args);
+  }
+
+  public UnknownSessionException(Throwable cause) {
+    super(TYPE, cause);
+  }
+
+}

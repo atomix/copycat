@@ -17,7 +17,7 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.error.QueryException;
+import io.atomix.copycat.protocol.error.QueryException;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.protocol.response.CommandResponse;

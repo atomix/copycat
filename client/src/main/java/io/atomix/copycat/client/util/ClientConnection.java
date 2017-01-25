@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
@@ -178,10 +177,10 @@ public class ClientConnection implements ProtocolClientConnection {
     if (open) {
       if (error == null) {
         if (response.status() == WebSocketResponse.Status.OK
-          || response.error() == CopycatError.Type.COMMAND_ERROR
-          || response.error() == CopycatError.Type.QUERY_ERROR
-          || response.error() == CopycatError.Type.APPLICATION_ERROR
-          || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+          || response.error().type() == ProtocolResponse.Error.Type.COMMAND_ERROR
+          || response.error().type() == ProtocolResponse.Error.Type.QUERY_ERROR
+          || response.error().type() == ProtocolResponse.Error.Type.APPLICATION_ERROR
+          || response.error().type() == ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR) {
           future.complete(response);
         } else {
           next().whenComplete((c, e) -> sendRequest(factory, c, e, future));

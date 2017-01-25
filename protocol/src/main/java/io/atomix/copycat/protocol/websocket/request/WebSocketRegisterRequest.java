@@ -44,9 +44,18 @@ public class WebSocketRegisterRequest extends RegisterRequest implements WebSock
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.REGISTER;
+  }
+
+  /**
+   * Returns the request type name.
+   *
+   * @return The request type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override

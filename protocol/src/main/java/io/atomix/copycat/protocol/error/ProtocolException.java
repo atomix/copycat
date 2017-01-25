@@ -13,34 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
  * Base Copycat protocol exception.
  * <p>
  * This is the base exception type for all Copycat protocol exceptions. Protocol exceptions must be
- * associated with a {@link CopycatError.Type} which is used for more efficient serialization.
+ * associated with a {@link ProtocolResponse.Error.Type} which is used for more efficient serialization.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class CopycatException extends RuntimeException {
-  private final CopycatError.Type type;
+public abstract class ProtocolException extends RuntimeException {
+  private final ProtocolResponse.Error.Type type;
 
-  protected CopycatException(CopycatError.Type type, String message, Object... args) {
+  protected ProtocolException(ProtocolResponse.Error.Type type, String message, Object... args) {
     super(String.format(message, args));
     if (type == null)
       throw new NullPointerException("type cannot be null");
     this.type = type;
   }
 
-  protected CopycatException(CopycatError.Type type, Throwable cause, String message, Object... args) {
+  protected ProtocolException(ProtocolResponse.Error.Type type, Throwable cause, String message, Object... args) {
     super(String.format(message, args), cause);
     if (type == null)
       throw new NullPointerException("type cannot be null");
     this.type = type;
   }
 
-  protected CopycatException(CopycatError.Type type, Throwable cause) {
+  protected ProtocolException(ProtocolResponse.Error.Type type, Throwable cause) {
     super(cause);
     if (type == null)
       throw new NullPointerException("type cannot be null");
@@ -52,7 +54,7 @@ public abstract class CopycatException extends RuntimeException {
    *
    * @return The exception type.
    */
-  public CopycatError.Type getType() {
+  public ProtocolResponse.Error.Type getType() {
     return type;
   }
 

@@ -49,9 +49,18 @@ public class WebSocketPublishRequest extends PublishRequest implements WebSocket
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.PUBLISH;
+  }
+
+  /**
+   * Returns the request type name.
+   *
+   * @return The request type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override

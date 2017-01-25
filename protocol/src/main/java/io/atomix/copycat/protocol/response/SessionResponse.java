@@ -15,15 +15,13 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.error.CopycatError;
-
 /**
  * Base session response.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class SessionResponse extends AbstractResponse {
-  protected SessionResponse(Status status, CopycatError error) {
+  protected SessionResponse(Status status, ProtocolResponse.Error error) {
     super(status, error);
   }
 

@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
  * Indicates that an error occurred while committing a write command.
@@ -21,7 +23,7 @@ package io.atomix.copycat.error;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandException extends OperationException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.COMMAND_ERROR;
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.COMMAND_ERROR;
 
   public CommandException(String message, Object... args) {
     super(TYPE, message, args);

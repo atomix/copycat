@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.websocket.request.WebSocketRegisterRequest;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -40,12 +39,19 @@ public class RegisterResponse extends AbstractResponse {
   protected final Collection<Address> members;
   protected final long timeout;
 
-  protected RegisterResponse(Status status, CopycatError error, long session, Address leader, Collection<Address> members, long timeout) {
+  protected RegisterResponse(Status status, ProtocolResponse.Error error, long session, Address leader, Collection<Address> members, long timeout) {
     super(status, error);
-    this.session = Assert.argNot(session, session < 1, "session must be positive");
-    this.leader = leader;
-    this.members = Assert.notNull(members, "members");
-    this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
+    if (status == Status.OK) {
+      this.session = Assert.argNot(session, session < 1, "session must be positive");
+      this.leader = leader;
+      this.members = Assert.notNull(members, "members");
+      this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
+    } else {
+      this.session = 0;
+      this.leader = null;
+      this.members = null;
+      this.timeout = 0;
+    }
   }
 
   /**
@@ -126,7 +132,7 @@ public class RegisterResponse extends AbstractResponse {
      * @throws IllegalArgumentException if {@code session} is less than 1
      */
     public Builder withSession(long session) {
-      this.session = Assert.argNot(session, session < 1, "session must be positive");
+      this.session = session;
       return this;
     }
 
@@ -149,7 +155,7 @@ public class RegisterResponse extends AbstractResponse {
      * @throws NullPointerException if {@code members} is null
      */
     public Builder withMembers(Collection<Address> members) {
-      this.members = Assert.notNull(members, "members");
+      this.members = members;
       return this;
     }
 
@@ -161,7 +167,7 @@ public class RegisterResponse extends AbstractResponse {
      * @throws IllegalArgumentException if the session timeout is not positive
      */
     public Builder withTimeout(long timeout) {
-      this.timeout = Assert.argNot(timeout, timeout <= 0, "timeout must be positive");
+      this.timeout = timeout;
       return this;
     }
 

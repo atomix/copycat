@@ -18,8 +18,9 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.response.AbstractResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.RegisterResponse;
 
 import java.util.Collection;
@@ -32,7 +33,7 @@ import java.util.Collection;
 public class NetRegisterResponse extends RegisterResponse implements NetResponse<NetRegisterResponse> {
   private final long id;
 
-  public NetRegisterResponse(long id, Status status, CopycatError error, long session, Address leader, Collection<Address> members, long timeout) {
+  public NetRegisterResponse(long id, Status status, ProtocolResponse.Error error, long session, Address leader, Collection<Address> members, long timeout) {
     super(status, error, session, leader, members, timeout);
     this.id = id;
   }
@@ -76,21 +77,28 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
     public void write(Kryo kryo, Output output, NetRegisterResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
+      if (response.status == Status.OK) {
+        output.writeLong(response.session);
+        kryo.writeObject(output, response.leader);
+        kryo.writeObject(output, response.members);
+        output.writeLong(response.timeout);
       } else {
-        output.writeByte(response.error.id());
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
-      output.writeLong(response.session);
-      kryo.writeObject(output, response.leader);
-      kryo.writeObject(output, response.members);
-      output.writeLong(response.timeout);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public NetRegisterResponse read(Kryo kryo, Input input, Class<NetRegisterResponse> type) {
-      return new NetRegisterResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), kryo.readObject(input, Address.class), kryo.readObject(input, Collection.class), input.readLong());
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetRegisterResponse(id, status, null, input.readLong(), kryo.readObject(input, Address.class), kryo.readObject(input, Collection.class), input.readLong());
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetRegisterResponse(id, status, error, 0, null, null, 0);
+      }
     }
   }
 }

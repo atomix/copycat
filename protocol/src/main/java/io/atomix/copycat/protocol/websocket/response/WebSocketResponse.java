@@ -15,7 +15,11 @@
  */
 package io.atomix.copycat.protocol.websocket.response;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
@@ -27,6 +31,7 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public interface WebSocketResponse<T extends WebSocketResponse<T>> extends ProtocolResponse {
   String TYPE = "response";
 
@@ -97,6 +102,28 @@ public interface WebSocketResponse<T extends WebSocketResponse<T>> extends Proto
   }
 
   /**
+   * Web socket response error.
+   */
+  class Error extends AbstractResponse.Error {
+    @JsonCreator
+    public Error(@JsonProperty("type") Type type, @JsonProperty("message") String message) {
+      super(type, message);
+    }
+
+    @Override
+    @JsonGetter("type")
+    public Type type() {
+      return super.type();
+    }
+
+    @Override
+    @JsonGetter("message")
+    public String message() {
+      return super.message();
+    }
+  }
+
+  /**
    * Returns the response ID.
    *
    * @return The response ID.
@@ -119,8 +146,11 @@ public interface WebSocketResponse<T extends WebSocketResponse<T>> extends Proto
    *
    * @return The protocol response type.
    */
-  @JsonGetter("type")
   Type type();
+
+  @Override
+  @JsonGetter("error")
+  Error error();
 
   /**
    * Response builder.

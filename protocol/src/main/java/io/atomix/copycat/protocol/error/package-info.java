@@ -13,28 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
 
 /**
- * Indicates that an exception occurred in the user state machine.
+ * Provides error constants and exceptions associated with the Raft consensus protocol.
  * <p>
- * Application exceptions are thrown when an exception occurs within a user-provided state machine.
+ * Copycat protocol errors are designed to be transported across networks in the most efficient manner possible. Each protocol exception
+ * is associated with a 1-byte identifier. Rather than serializing complete {@link java.lang.Exception} objects, the protocol exception is
+ * sent using only its identifier and the exception is recreated by the receiving side of a connection.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ApplicationException extends CopycatException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.APPLICATION_ERROR;
-
-  public ApplicationException(String message, Object... args) {
-    super(TYPE, message, args);
-  }
-
-  public ApplicationException(Throwable cause, String message, Object... args) {
-    super(TYPE, cause, message, args);
-  }
-
-  public ApplicationException(Throwable cause) {
-    super(TYPE, cause);
-  }
-
-}
+package io.atomix.copycat.protocol.error;

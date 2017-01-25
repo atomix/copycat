@@ -15,10 +15,10 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.AbstractResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -41,7 +41,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
   protected final long timestamp;
   protected final Collection<Member> members;
 
-  public ConfigurationResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+  public ConfigurationResponse(Status status, ProtocolResponse.Error error, long index, long term, long timestamp, Collection<Member> members) {
     super(status, error);
     if (status == Status.OK) {
       this.index = Assert.argNot(index, index < 0, "index cannot be negative");

@@ -13,25 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
- * Indicates that an operation or other request from an unknown session was received.
+ * Indicates that an error occurred while attempting to acheive a quorum for a read-only query.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class UnknownSessionException extends CopycatException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.UNKNOWN_SESSION_ERROR;
+public class QueryException extends OperationException {
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.QUERY_ERROR;
 
-  public UnknownSessionException(String message, Object... args) {
+  public QueryException(String message, Object... args) {
     super(TYPE, message, args);
   }
 
-  public UnknownSessionException(Throwable cause, String message, Object... args) {
+  public QueryException(Throwable cause, String message, Object... args) {
     super(TYPE, cause, message, args);
   }
 
-  public UnknownSessionException(Throwable cause) {
+  public QueryException(Throwable cause) {
     super(TYPE, cause);
   }
 

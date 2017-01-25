@@ -17,7 +17,7 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
@@ -142,7 +142,7 @@ final class ClientSessionManager {
               scheduleKeepAlive();
             }
             // If the session is unknown, immediate expire the session.
-            else if (response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+            else if (response.error().type() == ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR) {
               state.setState(Session.State.EXPIRED);
             }
             // If a leader is still set in the address selector, unset the leader and attempt to send another keep-alive.
@@ -241,7 +241,7 @@ final class ClientSessionManager {
               future.complete(null);
             }
             // If the session is unknown, immediate expire the session and complete the close future.
-            else if (response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+            else if (response.error().type() == ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR) {
               state.setState(Session.State.EXPIRED);
               future.complete(null);
             }

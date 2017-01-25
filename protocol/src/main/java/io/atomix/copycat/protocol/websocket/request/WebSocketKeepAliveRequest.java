@@ -45,9 +45,18 @@ public class WebSocketKeepAliveRequest extends KeepAliveRequest implements WebSo
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.KEEP_ALIVE;
+  }
+
+  /**
+   * Returns the request type name.
+   *
+   * @return The request type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override

@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.AbstractResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Objects;
 
@@ -37,7 +37,7 @@ public class AppendResponse extends AbstractResponse {
   protected final boolean succeeded;
   protected final long logIndex;
 
-  public AppendResponse(Status status, CopycatError error, long term, boolean succeeded, long logIndex) {
+  public AppendResponse(Status status, ProtocolResponse.Error error, long term, boolean succeeded, long logIndex) {
     super(status, error);
     this.term = Assert.argNot(term, term <= 0, "term must be positive");
     this.succeeded = succeeded;

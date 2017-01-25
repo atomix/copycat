@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.response;
 
-import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.response.AbstractResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Objects;
 
@@ -34,7 +34,7 @@ public class VoteResponse extends AbstractResponse {
   protected final long term;
   protected final boolean voted;
 
-  public VoteResponse(Status status, CopycatError error, long term, boolean voted) {
+  public VoteResponse(Status status, ProtocolResponse.Error error, long term, boolean voted) {
     super(status, error);
     this.term = Assert.argNot(term, term < 0, "term must be positive");
     this.voted = voted;

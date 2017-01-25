@@ -46,9 +46,18 @@ public class WebSocketCommandRequest extends CommandRequest implements WebSocket
   }
 
   @Override
-  @JsonGetter("type")
   public Type type() {
     return Type.COMMAND;
+  }
+
+  /**
+   * Returns the request type name.
+   *
+   * @return The request type name.
+   */
+  @JsonGetter("type")
+  private String typeName() {
+    return type().name();
   }
 
   @Override

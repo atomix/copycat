@@ -18,7 +18,8 @@ package io.atomix.copycat.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.response.AbstractResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.PublishResponse;
 
 /**
@@ -29,7 +30,7 @@ import io.atomix.copycat.protocol.response.PublishResponse;
 public class NetPublishResponse extends PublishResponse implements NetResponse<NetPublishResponse> {
   private final long id;
 
-  public NetPublishResponse(long id, Status status, CopycatError error, long index) {
+  public NetPublishResponse(long id, Status status, ProtocolResponse.Error error, long index) {
     super(status, error, index);
     this.id = id;
   }
@@ -73,17 +74,23 @@ public class NetPublishResponse extends PublishResponse implements NetResponse<N
     public void write(Kryo kryo, Output output, NetPublishResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
-      } else {
-        output.writeByte(response.error.id());
+      if (response.status == Status.ERROR) {
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
       output.writeLong(response.index);
     }
 
     @Override
     public NetPublishResponse read(Kryo kryo, Input input, Class<NetPublishResponse> type) {
-      return new NetPublishResponse(input.readLong(), Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong());
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetPublishResponse(id, status, null, input.readLong());
+      } else {
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetPublishResponse(id, status, error, input.readLong());
+      }
     }
   }
 }

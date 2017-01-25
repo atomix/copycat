@@ -18,7 +18,8 @@ package io.atomix.copycat.server.protocol.net.response;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.net.response.NetResponse;
+import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.response.ReconfigureResponse;
@@ -33,7 +34,7 @@ import java.util.Collection;
 public class NetReconfigureResponse extends ReconfigureResponse implements RaftNetResponse<NetReconfigureResponse> {
   private final long id;
 
-  public NetReconfigureResponse(long id, ProtocolResponse.Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
+  public NetReconfigureResponse(long id, ProtocolResponse.Status status, ProtocolResponse.Error error, long index, long term, long timestamp, Collection<Member> members) {
     super(status, error, index, term, timestamp, members);
     this.id = id;
   }
@@ -77,17 +78,14 @@ public class NetReconfigureResponse extends ReconfigureResponse implements RaftN
     public void write(Kryo kryo, Output output, NetReconfigureResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
-      if (response.error == null) {
-        output.writeByte(0);
-      } else {
-        output.writeByte(response.error.id());
-      }
-
       if (response.status == Status.OK) {
         output.writeLong(response.index);
         output.writeLong(response.term);
         output.writeLong(response.timestamp);
         kryo.writeClassAndObject(output, response.members);
+      } else {
+        output.writeByte(response.error.type().id());
+        output.writeString(response.error.message());
       }
     }
 
@@ -97,9 +95,10 @@ public class NetReconfigureResponse extends ReconfigureResponse implements RaftN
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {
-        return new NetReconfigureResponse(id, status, CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), (Collection) kryo.readClassAndObject(input));
+        return new NetReconfigureResponse(id, status, null, input.readLong(), input.readLong(), input.readLong(), (Collection) kryo.readClassAndObject(input));
       } else {
-        return new NetReconfigureResponse(id, status, CopycatError.forId(input.readByte()), 0, 0, 0, null);
+        NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
+        return new NetReconfigureResponse(id, status, error, 0, 0, 0, null);
       }
     }
   }

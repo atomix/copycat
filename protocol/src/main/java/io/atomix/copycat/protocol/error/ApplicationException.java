@@ -13,25 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.error;
+package io.atomix.copycat.protocol.error;
+
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 
 /**
- * Indicates that the server that received a request is not the leader and does not know of a leader.
+ * Indicates that an exception occurred in the user state machine.
+ * <p>
+ * Application exceptions are thrown when an exception occurs within a user-provided state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class NoLeaderException extends CopycatException {
-  private static final CopycatError.Type TYPE = CopycatError.Type.NO_LEADER_ERROR;
+public class ApplicationException extends ProtocolException {
+  private static final ProtocolResponse.Error.Type TYPE = ProtocolResponse.Error.Type.APPLICATION_ERROR;
 
-  public NoLeaderException(String message, Object... args) {
+  public ApplicationException(String message, Object... args) {
     super(TYPE, message, args);
   }
 
-  public NoLeaderException(Throwable cause, String message, Object... args) {
+  public ApplicationException(Throwable cause, String message, Object... args) {
     super(TYPE, cause, message, args);
   }
 
-  public NoLeaderException(Throwable cause) {
+  public ApplicationException(Throwable cause) {
     super(TYPE, cause);
   }
 

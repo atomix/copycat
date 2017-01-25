@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.error.UnknownSessionException;
+import io.atomix.copycat.protocol.error.UnknownSessionException;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;

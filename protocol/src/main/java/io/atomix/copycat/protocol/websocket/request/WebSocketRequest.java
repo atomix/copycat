@@ -16,6 +16,7 @@
 package io.atomix.copycat.protocol.websocket.request;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.atomix.copycat.protocol.request.ProtocolRequest;
 
 /**
@@ -23,6 +24,7 @@ import io.atomix.copycat.protocol.request.ProtocolRequest;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public interface WebSocketRequest<T extends WebSocketRequest<T>> extends ProtocolRequest {
   String TYPE = "request";
 
@@ -115,7 +117,6 @@ public interface WebSocketRequest<T extends WebSocketRequest<T>> extends Protoco
    *
    * @return The request type.
    */
-  @JsonGetter("type")
   Type type();
 
   /**
