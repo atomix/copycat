@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.protocol.net;
 
+import com.esotericsoftware.kryo.pool.KryoFactory;
+import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolClient;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
@@ -28,9 +30,11 @@ import java.util.concurrent.CompletableFuture;
  */
 public class NetClient implements ProtocolClient {
   private final io.vertx.core.net.NetClient client;
+  private final KryoPool kryoPool;
 
-  public NetClient(io.vertx.core.net.NetClient client) {
+  public NetClient(io.vertx.core.net.NetClient client, KryoFactory kryoFactory) {
     this.client = client;
+    this.kryoPool = new KryoPool.Builder(kryoFactory).softReferences().build();
   }
 
   @Override
@@ -38,7 +42,7 @@ public class NetClient implements ProtocolClient {
     CompletableFuture<ProtocolClientConnection> future = new CompletableFuture<>();
     client.connect(address.port(), address.host(), result -> {
       if (result.succeeded()) {
-        future.complete(new NetClientConnection(result.result()));
+        future.complete(new NetClientConnection(result.result(), kryoPool));
       } else {
         future.completeExceptionally(result.cause());
       }

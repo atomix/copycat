@@ -141,7 +141,7 @@ final class CandidateState extends ActiveState {
         connection.vote(builder ->
           builder.withTerm(context.getTerm())
             .withCandidate(context.getCluster().member().id())
-            .withLogIndex(lastEntry.index())
+            .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
             .withLogTerm(lastTerm)
             .build())
           .whenCompleteAsync((response, error) -> {

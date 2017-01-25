@@ -132,8 +132,10 @@ public class MetaStore implements AutoCloseable {
     serializer.writeClassAndObject(output, configuration.members());
     output.flush();
     byte[] bytes = outputStream.toByteArray();
-    buffer.write(bytes);
-    buffer.flush();
+
+    buffer.writeInt(bytes.length)
+      .write(bytes)
+      .flush();
     return this;
   }
 
@@ -149,7 +151,7 @@ public class MetaStore implements AutoCloseable {
       long term = buffer.readLong();
       long time = buffer.readLong();
 
-      byte[] bytes = new byte[(int) buffer.remaining()];
+      byte[] bytes = new byte[buffer.readInt()];
       buffer.read(bytes);
       Collection<Member> members = (Collection<Member>) serializer.readClassAndObject(new Input(bytes));
       return new Configuration(index, term, time, members);

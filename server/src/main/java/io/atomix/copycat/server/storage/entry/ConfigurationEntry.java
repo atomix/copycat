@@ -73,13 +73,13 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
     @Override
     public void write(Kryo kryo, Output output, ConfigurationEntry entry) {
       output.writeLong(entry.timestamp);
-      kryo.writeObject(output, entry.members);
+      kryo.writeClassAndObject(output, entry.members);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public ConfigurationEntry read(Kryo kryo, Input input, Class<ConfigurationEntry> type) {
-      return new ConfigurationEntry(input.readLong(), (Collection<Member>) kryo.readObject(input, Collection.class));
+      return new ConfigurationEntry(input.readLong(), (Collection<Member>) kryo.readClassAndObject(input));
     }
   }
 }

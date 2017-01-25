@@ -82,16 +82,25 @@ public class NetJoinResponse extends JoinResponse implements RaftNetResponse<Net
       } else {
         output.writeByte(response.error.id());
       }
-      output.writeLong(response.index);
-      output.writeLong(response.term);
-      output.writeLong(response.timestamp);
-      kryo.writeObject(output, response.members);
+
+      if (response.status == Status.OK) {
+        output.writeLong(response.index);
+        output.writeLong(response.term);
+        output.writeLong(response.timestamp);
+        kryo.writeClassAndObject(output, response.members);
+      }
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public NetJoinResponse read(Kryo kryo, Input input, Class<NetJoinResponse> type) {
-      return new NetJoinResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetJoinResponse(id, status, CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), (Collection) kryo.readClassAndObject(input));
+      } else {
+        return new NetJoinResponse(id, status, CopycatError.forId(input.readByte()), 0, 0, 0, null);
+      }
     }
   }
 }

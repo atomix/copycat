@@ -282,8 +282,6 @@ final class LeaderAppender extends AbstractAppender {
    * Updates the global index.
    */
   private void updateGlobalIndex() {
-    context.checkThread();
-
     // The global index may have increased even if the commit index didn't. Update the global index.
     // The global index is calculated by the minimum matchIndex for *all* servers in the cluster, including
     // passive members. This is critical since passive members still have state machines and thus it's still
@@ -302,8 +300,6 @@ final class LeaderAppender extends AbstractAppender {
    * Checks whether any futures can be completed.
    */
   private void commitEntries() {
-    context.checkThread();
-
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.

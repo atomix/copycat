@@ -15,28 +15,27 @@
  */
 package io.atomix.copycat.server.state;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.protocol.RaftProtocol;
 import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
 import io.atomix.copycat.server.storage.*;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.util.concurrent.Listener;
-import io.atomix.copycat.util.concurrent.Listeners;
-import io.atomix.copycat.util.concurrent.SingleThreadContext;
-import io.atomix.copycat.util.concurrent.ThreadContext;
+import io.atomix.copycat.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -58,7 +57,6 @@ public class ServerContext implements AutoCloseable {
   protected final Supplier<StateMachine> stateMachineFactory;
   protected final ClusterState cluster;
   protected final Storage storage;
-  protected final Kryo serializer;
   private MetaStore meta;
   private Log log;
   private LogReader reader;
@@ -79,12 +77,11 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Storage storage, Kryo serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, RaftProtocol protocol, Storage storage, Supplier<StateMachine> stateMachineFactory, ThreadContext threadContext) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
-    this.serializer = Assert.notNull(serializer, "serializer");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
-    this.connections = Assert.notNull(connections, "connections");
+    this.connections = new ConnectionManager(protocol.createClient());
     this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
     this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name));
 
@@ -137,15 +134,6 @@ public class ServerContext implements AutoCloseable {
    */
   public Storage getStorage() {
     return storage;
-  }
-
-  /**
-   * Returns the server serializer.
-   *
-   * @return The server serializer.
-   */
-  public Kryo getSerializer() {
-    return serializer;
   }
 
   /**
@@ -490,8 +478,8 @@ public class ServerContext implements AutoCloseable {
 
     // Open the log.
     log = storage.openLog(name);
-    reader = log.createReader(Reader.Mode.ALL);
-    writer = log.createWriter();
+    writer = log.writer();
+    reader = log.createReader(1, Reader.Mode.ALL);
 
     // Open the snapshot store.
     snapshot = storage.openSnapshotStore(name);
@@ -532,16 +520,14 @@ public class ServerContext implements AutoCloseable {
    * Handles a connection from a client.
    */
   public void connectClient(ProtocolServerConnection connection) {
-    threadContext.checkThread();
-
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.onRegister((request, builder) -> state.onRegister(request, builder));
-    connection.onConnect((request, builder) -> state.onConnect(request, builder, connection));
-    connection.onKeepAlive((request, builder) -> state.onKeepAlive(request, builder));
-    connection.onUnregister((request, builder) -> state.onUnregister(request, builder));
-    connection.onCommand((request, builder) -> state.onCommand(request, builder));
-    connection.onQuery((request, builder) -> state.onQuery(request, builder));
+    connection.onRegister((request, builder) -> runOnContext(() -> state.onRegister(request, builder)));
+    connection.onConnect((request, builder) -> runOnContext(() -> state.onConnect(request, builder, connection)));
+    connection.onKeepAlive((request, builder) -> runOnContext(() -> state.onKeepAlive(request, builder)));
+    connection.onUnregister((request, builder) -> runOnContext(() -> state.onUnregister(request, builder)));
+    connection.onCommand((request, builder) -> runOnContext(() -> state.onCommand(request, builder)));
+    connection.onQuery((request, builder) -> runOnContext(() -> state.onQuery(request, builder)));
 
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
   }
@@ -550,28 +536,35 @@ public class ServerContext implements AutoCloseable {
    * Handles a connection from another server.
    */
   public void connectServer(RaftProtocolServerConnection connection) {
-    threadContext.checkThread();
-
     // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.onRegister((request, builder) -> state.onRegister(request, builder));
-    connection.onConnect((request, builder) -> state.onConnect(request, builder, connection));
-    connection.onAccept((request, builder) -> state.onAccept(request, builder));
-    connection.onKeepAlive((request, builder) -> state.onKeepAlive(request, builder));
-    connection.onUnregister((request, builder) -> state.onUnregister(request, builder));
-    connection.onConfigure((request, builder) -> state.onConfigure(request, builder));
-    connection.onInstall((request, builder) -> state.onInstall(request, builder));
-    connection.onJoin((request, builder) -> state.onJoin(request, builder));
-    connection.onReconfigure((request, builder) -> state.onReconfigure(request, builder));
-    connection.onLeave((request, builder) -> state.onLeave(request, builder));
-    connection.onAppend((request, builder) -> state.onAppend(request, builder));
-    connection.onPoll((request, builder) -> state.onPoll(request, builder));
-    connection.onVote((request, builder) -> state.onVote(request, builder));
-    connection.onCommand((request, builder) -> state.onCommand(request, builder));
-    connection.onQuery((request, builder) -> state.onQuery(request, builder));
+    connection.onRegister((request, builder) -> runOnContext(() -> state.onRegister(request, builder)));
+    connection.onConnect((request, builder) -> runOnContext(() -> state.onConnect(request, builder, connection)));
+    connection.onAccept((request, builder) -> runOnContext(() -> state.onAccept(request, builder)));
+    connection.onKeepAlive((request, builder) -> runOnContext(() -> state.onKeepAlive(request, builder)));
+    connection.onUnregister((request, builder) -> runOnContext(() -> state.onUnregister(request, builder)));
+    connection.onConfigure((request, builder) -> runOnContext(() -> state.onConfigure(request, builder)));
+    connection.onInstall((request, builder) -> runOnContext(() -> state.onInstall(request, builder)));
+    connection.onJoin((request, builder) -> runOnContext(() -> state.onJoin(request, builder)));
+    connection.onReconfigure((request, builder) -> runOnContext(() -> state.onReconfigure(request, builder)));
+    connection.onLeave((request, builder) -> runOnContext(() -> state.onLeave(request, builder)));
+    connection.onAppend((request, builder) -> runOnContext(() -> state.onAppend(request, builder)));
+    connection.onPoll((request, builder) -> runOnContext(() -> state.onPoll(request, builder)));
+    connection.onVote((request, builder) -> runOnContext(() -> state.onVote(request, builder)));
+    connection.onCommand((request, builder) -> runOnContext(() -> state.onCommand(request, builder)));
+    connection.onQuery((request, builder) -> runOnContext(() -> state.onQuery(request, builder)));
 
     connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+  }
+
+  /**
+   * Runs the given future callback on the server thread.
+   */
+  <T extends ProtocolResponse> CompletableFuture<T> runOnContext(Supplier<CompletableFuture<T>> supplier) {
+    ComposableFuture<T> future = new ComposableFuture<>();
+    threadContext.executor().execute(() -> supplier.get().whenComplete(future));
+    return future;
   }
 
   /**

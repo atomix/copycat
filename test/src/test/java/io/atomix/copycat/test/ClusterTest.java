@@ -20,11 +20,13 @@ import io.atomix.copycat.Query;
 import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.protocol.websocket.WebSocketProtocol;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.protocol.net.RaftNetProtocol;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Storage;
@@ -1181,6 +1183,8 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatServer createServer(Member member) {
     CopycatServer.Builder builder = CopycatServer.builder(member.clientAddress(), member.serverAddress())
       .withType(member.type())
+      .withProtocol(new RaftNetProtocol())
+      .withClientProtocol(new WebSocketProtocol())
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)

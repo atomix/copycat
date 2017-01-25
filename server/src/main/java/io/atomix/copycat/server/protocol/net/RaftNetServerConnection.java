@@ -15,7 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net;
 
+import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.ProtocolListener;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.net.NetServerConnection;
@@ -44,21 +46,26 @@ public class RaftNetServerConnection extends NetServerConnection implements Raft
   private ProtocolListener<VoteRequest, VoteResponse.Builder, VoteResponse> voteListener;
   private ProtocolListener<AppendRequest, AppendResponse.Builder, AppendResponse> appendListener;
 
-  public RaftNetServerConnection(NetSocket socket) {
-    super(socket);
+  public RaftNetServerConnection(NetSocket socket, KryoPool kryoPool) {
+    super(socket, kryoPool);
   }
 
   @Override
   protected void handleMessage(int id, byte[] bytes) {
-    if (RaftNetRequest.Type.isProtocolRequest(id)) {
-      NetRequest.Type<?> type = RaftNetRequest.Type.forId(id);
-      NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer());
-      onRequest(request);
-    } else if (RaftNetResponse.Type.isProtocolResponse(id)) {
-      NetResponse.Type<?> type = RaftNetResponse.Type.forId(id);
-      NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer());
-      onResponse(response);
-    };
+    final Kryo kryo = kryoPool.borrow();
+    try {
+      if (RaftNetRequest.Type.isProtocolRequest(id)) {
+        NetRequest.Type<?> type = RaftNetRequest.Type.forId(id);
+        NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer());
+        onRequest(request);
+      } else if (RaftNetResponse.Type.isProtocolResponse(id)) {
+        NetResponse.Type<?> type = RaftNetResponse.Type.forId(id);
+        NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer());
+        onResponse(response);
+      }
+    } finally {
+      kryoPool.release(kryo);
+    }
   }
 
   @Override

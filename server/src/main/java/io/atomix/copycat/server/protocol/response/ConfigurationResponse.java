@@ -43,10 +43,17 @@ public abstract class ConfigurationResponse extends AbstractResponse {
 
   public ConfigurationResponse(Status status, CopycatError error, long index, long term, long timestamp, Collection<Member> members) {
     super(status, error);
-    this.index = Assert.argNot(index, index < 0, "index cannot be negative");
-    this.term = Assert.argNot(term, term < 0, "term must be positive");
-    this.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp cannot be negative");
-    this.members = Assert.notNull(members, "members");
+    if (status == Status.OK) {
+      this.index = Assert.argNot(index, index < 0, "index cannot be negative");
+      this.term = Assert.argNot(term, term < 0, "term must be positive");
+      this.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp cannot be negative");
+      this.members = Assert.notNull(members, "members");
+    } else {
+      this.index = 0;
+      this.term = 0;
+      this.timestamp = 0;
+      this.members = null;
+    }
   }
 
   /**

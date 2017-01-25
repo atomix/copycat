@@ -66,10 +66,10 @@ final class MemberState implements Closeable {
     failures = 0;
     switch (member.type()) {
       case PASSIVE:
-        reader = log.createReader(Reader.Mode.LIVE_COMMITS);
+        reader = log.createReader(log.writer().lastIndex() + 1, Reader.Mode.LIVE_COMMITS);
         break;
       case ACTIVE:
-        reader = log.createReader(Reader.Mode.LIVE);
+        reader = log.createReader(log.writer().lastIndex() + 1, Reader.Mode.LIVE);
         break;
     }
   }

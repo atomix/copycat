@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.protocol.net;
 
+import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.ProtocolListener;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
@@ -40,8 +41,8 @@ public class NetClientConnection extends NetConnection implements ProtocolClient
   private ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> publishListener;
   protected final AtomicLong id = new AtomicLong();
 
-  public NetClientConnection(NetSocket socket) {
-    super(socket);
+  public NetClientConnection(NetSocket socket, KryoPool kryoPool) {
+    super(socket, kryoPool);
   }
 
   @Override

@@ -146,6 +146,10 @@ public class SegmentReader implements Reader {
 
   @Override
   public boolean hasNext() {
+    // If the next entry is null, check whether a next entry exists.
+    if (nextEntry == null) {
+      readNext();
+    }
     return nextEntry != null;
   }
 
@@ -177,16 +181,15 @@ public class SegmentReader implements Reader {
     nextEntry = null;
 
     // Read the index for the next entry.
-    final long index = buffer.mark().readLong();
-
-    // If the index is 0, reset the buffer to the mark and return.
-    if (index == 0) {
-      buffer.reset();
-      return;
-    }
+    long index = buffer.mark().readLong();
 
     // Loop through entries in the segment until a valid entry is found.
     while (index > 0) {
+
+      // If the first index is not set, set it.
+      if (firstIndex == 0) {
+        firstIndex = index;
+      }
 
       // If the entry contains a term, read the term.
       final long term;
@@ -241,7 +244,19 @@ public class SegmentReader implements Reader {
         nextEntry = new Indexed(index, term, entry, length);
         nextOffset++;
       }
+
+      // If the entry is valid for the current read mode, return.
+      if (mode.isValid(nextEntry, segment.manager().compactor())) {
+        return;
+      }
+      // Otherwise, read the next entry.
+      else {
+        index = buffer.mark().readLong();
+      }
     }
+
+    // If we've made it this far, reset the buffer to the last mark.
+    buffer.reset();
   }
 
   @Override

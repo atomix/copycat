@@ -60,7 +60,7 @@ final class ServerStateMachine implements AutoCloseable {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
     this.state = Assert.notNull(state, "state");
     this.log = state.getLog();
-    this.reader = log.createReader(Reader.Mode.ALL_COMMITS);
+    this.reader = log.createReader(1, Reader.Mode.ALL_COMMITS);
     this.executor = new ServerStateMachineExecutor(new ServerStateMachineContext(state.getConnections(), new ServerSessionManager(state)), executor);
     init();
   }

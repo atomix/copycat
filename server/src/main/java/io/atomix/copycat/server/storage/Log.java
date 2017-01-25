@@ -26,10 +26,12 @@ import java.io.Closeable;
  */
 public class Log implements Closeable {
   private final SegmentManager segments;
+  private final LogWriter writer;
   private volatile boolean open;
 
   public Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
+    this.writer = new LogWriter(segments);
   }
 
   /**
@@ -42,22 +44,23 @@ public class Log implements Closeable {
   }
 
   /**
-   * Creates a new log writer.
+   * Returns the log writer.
    *
-   * @return A new log writer.
+   * @return The log writer.
    */
-  public LogWriter createWriter() {
-    return new LogWriter(segments);
+  public LogWriter writer() {
+    return writer;
   }
 
   /**
    * Creates a new log reader.
    *
+   * @param index The index at which to start the reader.
    * @param mode The mode in which to open the log reader.
    * @return A new log reader.
    */
-  public LogReader createReader(Reader.Mode mode) {
-    return new LogReader(segments, mode);
+  public LogReader createReader(long index, Reader.Mode mode) {
+    return new LogReader(segments, index, mode);
   }
 
   /**

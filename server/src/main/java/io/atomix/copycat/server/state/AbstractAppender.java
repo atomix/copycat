@@ -87,10 +87,10 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected AppendRequest buildAppendRequest(MemberState member, AppendRequest.Builder builder, long lastIndex) {
     final LogReader reader = member.getLogReader();
-    try {
-      // Lock the entry reader.
-      reader.lock().lock();
 
+    // Lock the entry reader.
+    reader.lock();
+    try {
       // If the log is empty then send an empty commit.
       // If the next index hasn't yet been set then we send an empty commit first.
       // If the next index is greater than the last index then send an empty commit.
@@ -103,7 +103,7 @@ abstract class AbstractAppender implements AutoCloseable {
       }
     } finally {
       // Unlock the entry reader.
-      reader.lock().unlock();
+      reader.unlock();
     }
   }
 
@@ -116,14 +116,8 @@ abstract class AbstractAppender implements AutoCloseable {
   protected AppendRequest buildAppendEmptyRequest(MemberState member, AppendRequest.Builder builder) {
     final LogReader reader = member.getLogReader();
 
-    // Acquire the reader lock.
-    reader.lock().lock();
-
     // Read the previous entry from the reader.
     Indexed<? extends Entry<?>> prevEntry = reader.currentEntry();
-
-    // Release the reader lock.
-    reader.lock().unlock();
 
     ServerMember leader = context.getLeader();
     return builder
@@ -143,9 +137,6 @@ abstract class AbstractAppender implements AutoCloseable {
   @SuppressWarnings("unchecked")
   protected AppendRequest buildAppendEntriesRequest(MemberState member, AppendRequest.Builder builder, long lastIndex) {
     final LogReader reader = member.getLogReader();
-
-    // Acquire the reader lock.
-    reader.lock().lock();
 
     final Indexed<? extends Entry<?>> prevEntry = reader.currentEntry();
 
@@ -179,9 +170,6 @@ abstract class AbstractAppender implements AutoCloseable {
       }
     }
 
-    // Release the reader lock.
-    reader.lock().unlock();
-
     // Add the entries to the request builder and build the request.
     return builder.withEntries(entries).build();
   }
@@ -197,8 +185,6 @@ abstract class AbstractAppender implements AutoCloseable {
 
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), prototype, member.getMember().address());
     context.getConnections().getConnection(member.getMember().address()).whenComplete((connection, error) -> {
-      context.checkThread();
-
       if (open) {
         if (error == null) {
           sendAppendRequest(connection, member, prototype);
@@ -219,8 +205,6 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendAppendRequest(RaftProtocolClientConnection connection, MemberState member, AppendRequest request) {
     long timestamp = System.nanoTime();
     connection.append(logRequest(builder -> builder.copy(request), member)).whenComplete((response, error) -> {
-      context.checkThread();
-
       // Complete the append to the member.
       if (!request.entries().isEmpty()) {
         member.completeAppend(System.nanoTime() - timestamp);
@@ -367,9 +351,8 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void resetNextIndex(MemberState member) {
     final LogReader reader = member.getLogReader();
+    reader.lock();
     try {
-      reader.lock().lock();
-
       if (member.getMatchIndex() != 0) {
         reader.reset(member.getMatchIndex());
       } else {
@@ -377,7 +360,7 @@ abstract class AbstractAppender implements AutoCloseable {
       }
       LOGGER.debug("{} - Reset next index for {} to {} + 1", context.getCluster().member().address(), member, member.getMatchIndex());
     } finally {
-      reader.lock().unlock();
+      reader.unlock();
     }
   }
 
@@ -427,8 +410,6 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendConfigureRequest(RaftProtocolClientConnection connection, MemberState member, ConfigureRequest request) {
     LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.configure(logRequest(builder -> builder.copy(request), member)).whenComplete((response, error) -> {
-      context.checkThread();
-
       // Complete the configure to the member.
       member.completeConfigure();
 

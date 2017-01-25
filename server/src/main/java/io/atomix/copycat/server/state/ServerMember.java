@@ -265,7 +265,12 @@ public final class ServerMember implements Member, KryoSerializable, AutoCloseab
     output.writeByte(status.ordinal());
     output.writeLong(updated.toEpochMilli());
     kryo.writeObject(output, serverAddress);
-    kryo.writeObject(output, clientAddress);
+    if (clientAddress != null) {
+      output.writeBoolean(true);
+      kryo.writeObject(output, clientAddress);
+    } else {
+      output.writeBoolean(false);
+    }
   }
 
   @Override
@@ -274,7 +279,9 @@ public final class ServerMember implements Member, KryoSerializable, AutoCloseab
     status = Status.values()[input.readByte()];
     updated = Instant.ofEpochMilli(input.readLong());
     serverAddress = kryo.readObject(input, Address.class);
-    clientAddress = kryo.readObject(input, Address.class);
+    if (input.readBoolean()) {
+      clientAddress = kryo.readObject(input, Address.class);
+    }
   }
 
   @Override

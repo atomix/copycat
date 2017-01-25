@@ -24,23 +24,25 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 public class LogWriter implements Writer {
   private final SegmentManager segments;
-  private Segment currentSegment;
-  private SegmentWriter currentWriter;
+  private volatile Segment currentSegment;
+  private volatile SegmentWriter currentWriter;
 
   public LogWriter(SegmentManager segments) {
     this.segments = segments;
+    this.currentSegment = segments.lastSegment();
+    this.currentWriter = currentSegment.writer();
   }
 
   @Override
   public LogWriter lock() {
     // TODO
-    return null;
+    return this;
   }
 
   @Override
-  public Writer unlock() {
+  public LogWriter unlock() {
     // TODO
-    return null;
+    return this;
   }
 
   @Override

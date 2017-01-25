@@ -75,10 +75,10 @@ class PassiveState extends ReserveState {
     if (type() == CopycatServer.State.PASSIVE) {
       final LogWriter writer = context.getLogWriter();
       try {
-        writer.lock().lock();
+        writer.lock();
         writer.truncate(context.getCommitIndex());
       } finally {
-        writer.lock().unlock();
+        writer.unlock();
       }
     }
   }
@@ -207,7 +207,7 @@ class PassiveState extends ReserveState {
     long lastIndex;
     if (!request.entries().isEmpty()) {
       try {
-        writer.lock().lock();
+        writer.lock();
 
         // Append entries to the log starting at the last log index.
         for (Indexed<? extends Entry> entry : request.entries()) {
@@ -225,7 +225,7 @@ class PassiveState extends ReserveState {
         }
         lastIndex = writer.lastIndex();
       } finally {
-        writer.lock().unlock();
+        writer.unlock();
       }
     } else {
       lastIndex = writer.lastIndex();

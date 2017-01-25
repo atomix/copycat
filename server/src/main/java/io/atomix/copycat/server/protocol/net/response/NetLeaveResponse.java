@@ -82,15 +82,25 @@ public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse<N
       } else {
         output.writeByte(response.error.id());
       }
-      output.writeLong(response.index);
-      output.writeLong(response.term);
-      output.writeLong(response.timestamp);
-      kryo.writeObject(output, response.members);
+
+      if (response.status == Status.OK) {
+        output.writeLong(response.index);
+        output.writeLong(response.term);
+        output.writeLong(response.timestamp);
+        kryo.writeObject(output, response.members);
+      }
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public NetLeaveResponse read(Kryo kryo, Input input, Class<NetLeaveResponse> type) {
-      return new NetLeaveResponse(input.readLong(), ProtocolResponse.Status.forId(input.readByte()), CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+      final long id = input.readLong();
+      final Status status = Status.forId(input.readByte());
+      if (status == Status.OK) {
+        return new NetLeaveResponse(id, status, CopycatError.forId(input.readByte()), input.readLong(), input.readLong(), input.readLong(), (Collection) kryo.readClassAndObject(input));
+      } else {
+        return new NetLeaveResponse(id, status, CopycatError.forId(input.readByte()), 0, 0, 0, null);
+      }
     }
   }
 }

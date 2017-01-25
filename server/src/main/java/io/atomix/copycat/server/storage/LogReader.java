@@ -28,9 +28,23 @@ public class LogReader implements Reader {
   private Segment currentSegment;
   private SegmentReader currentReader;
 
-  public LogReader(SegmentManager segments, Mode mode) {
+  public LogReader(SegmentManager segments, long index, Mode mode) {
     this.segments = segments;
     this.mode = mode;
+    initialize(index);
+  }
+
+  /**
+   * Initializes the reader to the given index.
+   */
+  private void initialize(long index) {
+    currentSegment = segments.segment(index);
+    currentReader = currentSegment.createReader(mode);
+    long nextIndex = nextIndex();
+    while (index > nextIndex && hasNext()) {
+      next();
+      nextIndex = nextIndex();
+    }
   }
 
   @Override
@@ -91,6 +105,7 @@ public class LogReader implements Reader {
 
   @Override
   public void reset() {
+    currentReader.close();
     currentSegment = segments.firstSegment();
     currentReader = currentSegment.createReader(mode);
   }

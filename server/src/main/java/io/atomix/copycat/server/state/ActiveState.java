@@ -102,7 +102,7 @@ abstract class ActiveState extends PassiveState {
 
       try {
         // Acquire the writer lock.
-        writer.lock().lock();
+        writer.lock();
 
         // Iterate through the entries and append them to the log.
         for (Indexed<? extends Entry> entry : request.entries()) {
@@ -119,7 +119,7 @@ abstract class ActiveState extends PassiveState {
         }
       } finally {
         // Release the writer lock.
-        writer.lock().unlock();
+        writer.unlock();
       }
     }
 

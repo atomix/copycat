@@ -79,7 +79,7 @@ public class NetAppendRequest extends AppendRequest implements RaftNetRequest<Ne
       output.writeInt(request.leader);
       output.writeLong(request.logIndex);
       output.writeLong(request.logTerm);
-      kryo.writeObject(output, request.entries);
+      kryo.writeClassAndObject(output, request.entries);
       output.writeLong(request.commitIndex);
       output.writeLong(request.globalIndex);
     }
@@ -87,7 +87,7 @@ public class NetAppendRequest extends AppendRequest implements RaftNetRequest<Ne
     @Override
     @SuppressWarnings("unchecked")
     public NetAppendRequest read(Kryo kryo, Input input, Class<NetAppendRequest> type) {
-      return new NetAppendRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), kryo.readObject(input, List.class), input.readLong(), input.readLong());
+      return new NetAppendRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), (List) kryo.readClassAndObject(input), input.readLong(), input.readLong());
     }
   }
 }

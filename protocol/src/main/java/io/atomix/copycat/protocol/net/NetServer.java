@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.protocol.net;
 
+import com.esotericsoftware.kryo.pool.KryoFactory;
+import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServer;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
@@ -29,15 +31,17 @@ import java.util.function.Consumer;
  */
 public class NetServer implements ProtocolServer {
   private final io.vertx.core.net.NetServer server;
+  private final KryoPool kryoPool;
 
-  public NetServer(io.vertx.core.net.NetServer server) {
+  public NetServer(io.vertx.core.net.NetServer server, KryoFactory kryoFactory) {
     this.server = server;
+    this.kryoPool = new KryoPool.Builder(kryoFactory).softReferences().build();
   }
 
   @Override
   public CompletableFuture<Void> listen(Address address, Consumer<ProtocolServerConnection> listener) {
     server.connectHandler(socket -> {
-      listener.accept(new NetServerConnection(socket));
+      listener.accept(new NetServerConnection(socket, kryoPool));
     });
 
     CompletableFuture<Void> future = new CompletableFuture<>();

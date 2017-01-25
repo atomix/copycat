@@ -22,6 +22,7 @@ import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.ConfigureRequest;
 
 import java.util.Collection;
+import java.util.List;
 
 /**
  * TCP configure request.
@@ -78,13 +79,13 @@ public class NetConfigureRequest extends ConfigureRequest implements RaftNetRequ
       output.writeInt(request.leader);
       output.writeLong(request.index);
       output.writeLong(request.timestamp);
-      kryo.writeObject(output, request.members);
+      kryo.writeClassAndObject(output, request.members);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public NetConfigureRequest read(Kryo kryo, Input input, Class<NetConfigureRequest> type) {
-      return new NetConfigureRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), kryo.readObject(input, Collection.class));
+      return new NetConfigureRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), (List) kryo.readClassAndObject(input));
     }
   }
 }

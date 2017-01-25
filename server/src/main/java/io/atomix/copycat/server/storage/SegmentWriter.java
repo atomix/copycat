@@ -126,7 +126,7 @@ public class SegmentWriter implements Writer {
 
   @Override
   public long lastIndex() {
-    return lastEntry.index();
+    return lastEntry != null ? lastEntry.index() : segment.index() - 1;
   }
 
   @Override
@@ -136,7 +136,11 @@ public class SegmentWriter implements Writer {
 
   @Override
   public long nextIndex() {
-    return lastEntry.index() + skip + 1;
+    if (lastEntry != null) {
+      return lastEntry.index() + skip + 1;
+    } else {
+      return segment.index();
+    }
   }
 
   /**
@@ -236,19 +240,26 @@ public class SegmentWriter implements Writer {
     }
 
     // Mark the length position and skip the length bytes.
-    memory.mark().skip(Integer.BYTES);
+    final long lengthPosition = memory.position();
+    memory.skip(Integer.BYTES);
 
     // Write the entry type ID.
     memory.writeByte(entry.type().id());
 
     // Serialize the entry into the buffer.
     Output output = new Output(memory.array());
-    serializer.writeObject(output, entry);
+    final int entryPosition = (int) memory.position();
+    output.setPosition(entryPosition);
+    serializer.writeObject(output, entry, entry.type().serializer());
+    output.flush();
 
-    // Reset the buffer to the previous mark and write the length.
-    final long position = memory.position();
-    int length = (int) (position - memory.position()) + Integer.BYTES;
-    memory.reset().writeInt(length);
+    // Compute the length of the entry by subtracting the entry start position from the end position
+    // and adding the entry type ID byte.
+    final int length = output.position() - entryPosition + Byte.BYTES;
+    memory.writeInt(lengthPosition, length);
+
+    // Write the in-memory entry buffer to the segment.
+    buffer.write(memory.position(output.position()).flip());
 
     // Increment the entry count.
     entryCount++;

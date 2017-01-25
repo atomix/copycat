@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.ConfigurationException;
@@ -26,7 +25,6 @@ import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.RaftProtocol;
 import io.atomix.copycat.server.protocol.RaftProtocolServer;
-import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -53,7 +51,7 @@ import java.util.function.Supplier;
  * <p>
  * To create a new server, use the server {@link CopycatServer.Builder}. Servers require
  * cluster membership information in order to perform communication. Each server must be provided a local {@link Address}
- * to which to bind the internal {@link io.atomix.catalyst.transport.Server} and a set of addresses for other members in
+ * to which to bind the internal {@link io.atomix.copycat.server.protocol.RaftProtocolServer} and a set of addresses for other members in
  * the cluster.
  * <h2>State machines</h2>
  * Underlying each server is a {@link StateMachine}. The state machine is responsible for maintaining the state with
@@ -89,7 +87,7 @@ import java.util.function.Supplier;
  * }
  * </pre>
  * <h2>Storage</h2>
- * As {@link Command}s are received by the server, they're written to the Raft {@link Log} and replicated to other members
+ * As {@link Command}s are received by the server, they're written to the Raft {@link io.atomix.copycat.server.storage.Log} and replicated to other members
  * of the cluster. By default, the log is stored on disk, but users can override the default {@link Storage} configuration
  * via {@link CopycatServer.Builder#withStorage(Storage)}. Most notably, to configure the storage module to store entries in
  * memory instead of disk, configure the {@link StorageLevel}.
@@ -309,7 +307,7 @@ public class CopycatServer {
    * Returns the server name.
    * <p>
    * The server name is provided to the server via the {@link Builder#withName(String) builder configuration}.
-   * The name is used internally to manage the server's on-disk state. {@link Log Log},
+   * The name is used internally to manage the server's on-disk state. {@link io.atomix.copycat.server.storage.Log Log},
    * {@link io.atomix.copycat.server.storage.snapshot.SnapshotStore snapshot},
    * and {@link io.atomix.copycat.server.storage.system.MetaStore configuration} files stored on disk use
    * the server name as the prefix.
@@ -396,16 +394,6 @@ public class CopycatServer {
    * The thread context is the event loop that this server uses to communicate other Raft servers.
    * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
    * executed on a single thread via the returned {@link io.atomix.copycat.util.concurrent.ThreadContext}.
-   * <p>
-   * The {@link io.atomix.copycat.util.concurrent.ThreadContext} can also be used to access the Raft server's internal
-   * {@link io.atomix.catalyst.serializer.Serializer serializer} via {@link ThreadContext#serializer()}. Catalyst serializers
-   * are not thread safe, so to use the context serializer, users should clone it:
-   * <pre>
-   *   {@code
-   *   Serializer serializer = server.threadContext().serializer().clone();
-   *   Buffer buffer = serializer.writeObject(myObject).flip();
-   *   }
-   * </pre>
    *
    * @return The server thread context.
    */
@@ -953,10 +941,9 @@ public class CopycatServer {
         storage = new Storage();
       }
 
-      ConnectionManager connections = new ConnectionManager(raftProtocol.createClient());
-      ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name));
+      final ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name));
 
-      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, new Kryo(), stateMachineFactory, connections, threadContext);
+      final ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, raftProtocol, storage, stateMachineFactory, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout)

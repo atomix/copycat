@@ -15,9 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.net;
 
+import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.server.protocol.RaftProtocol;
 import io.atomix.copycat.server.protocol.RaftProtocolClient;
 import io.atomix.copycat.server.protocol.RaftProtocolServer;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.entry.*;
 import io.vertx.core.Vertx;
 
 import java.util.concurrent.CompletableFuture;
@@ -38,14 +41,30 @@ public class RaftNetProtocol implements RaftProtocol {
     this.vertx = vertx;
   }
 
+  /**
+   * Creates a new Kryo serializer.
+   */
+  private static Kryo createKryo() {
+    Kryo kryo = new Kryo();
+    kryo.register(Indexed.class, new Indexed.Serializer());
+    kryo.register(InitializeEntry.class, new InitializeEntry.Serializer());
+    kryo.register(ConnectEntry.class, new ConnectEntry.Serializer());
+    kryo.register(RegisterEntry.class, new RegisterEntry.Serializer());
+    kryo.register(KeepAliveEntry.class, new KeepAliveEntry.Serializer());
+    kryo.register(UnregisterEntry.class, new UnregisterEntry.Serializer());
+    kryo.register(CommandEntry.class, new CommandEntry.Serializer());
+    kryo.register(QueryEntry.class, new QueryEntry.Serializer());
+    return kryo;
+  }
+
   @Override
   public RaftProtocolServer createServer() {
-    return new RaftNetServer(vertx.createNetServer());
+    return new RaftNetServer(vertx.createNetServer(), RaftNetProtocol::createKryo);
   }
 
   @Override
   public RaftProtocolClient createClient() {
-    return new RaftNetClient(vertx.createNetClient());
+    return new RaftNetClient(vertx.createNetClient(), RaftNetProtocol::createKryo);
   }
 
   @Override
