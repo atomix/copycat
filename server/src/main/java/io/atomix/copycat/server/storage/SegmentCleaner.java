@@ -46,7 +46,9 @@ public final class SegmentCleaner implements AutoCloseable {
    * @param entry The entry to transfer.
    */
   void transfer(long offset, Indexed<?> entry) {
-    entry.cleaner.update(offset, this);
+    if (entry.cleaner != null) {
+      entry.cleaner.update(offset, this);
+    }
   }
 
   /**

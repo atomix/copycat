@@ -56,11 +56,6 @@ public class LogWriter implements Writer {
   }
 
   @Override
-  public <T extends Entry<T>> Indexed<T> append(Indexed<T> entry) {
-    return null;
-  }
-
-  @Override
   public long nextIndex() {
     return currentWriter.nextIndex();
   }
@@ -84,6 +79,15 @@ public class LogWriter implements Writer {
   @Override
   public Writer skip(long entries) {
     return currentWriter.skip(entries);
+  }
+
+  @Override
+  public <T extends Entry<T>> Indexed<T> append(Indexed<T> entry) {
+    if (currentWriter.isFull()) {
+      currentSegment = segments.nextSegment();
+      currentWriter = currentSegment.writer();
+    }
+    return currentWriter.append(entry);
   }
 
   @Override

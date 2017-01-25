@@ -19,9 +19,7 @@ import io.atomix.copycat.server.storage.entry.RegisterEntry;
 import io.atomix.copycat.server.storage.entry.UnregisterEntry;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.*;
 
 /**
  * Log test.
@@ -50,7 +48,7 @@ public class LogTest {
     assertEquals(indexed.index(), 1);
     assertEquals(indexed.term(), 1);
 
-    indexed = writer.append(1, new UnregisterEntry(System.currentTimeMillis(), 1, false));
+    indexed = writer.append(new Indexed<>(2, 1, new UnregisterEntry(System.currentTimeMillis(), 1, false), 0));
     assertEquals(indexed.index(), 2);
     assertEquals(indexed.term(), 1);
 
