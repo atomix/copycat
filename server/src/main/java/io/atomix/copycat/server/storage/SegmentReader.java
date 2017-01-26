@@ -166,9 +166,6 @@ public class SegmentReader implements Reader {
    */
   @SuppressWarnings("unchecked")
   private void readNext() {
-    // Reset the next entry.
-    nextEntry = null;
-
     // Read the index for the next entry.
     long index = buffer.mark().readLong();
 

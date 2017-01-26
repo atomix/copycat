@@ -60,7 +60,7 @@ public abstract class WebSocketConnection<T extends WebSocketBase> implements Pr
    * Handles a web socket frame.
    */
   private void handleFrame(WebSocketFrame frame) {
-    // Only handle binary frames for now.
+    // Only handle final frames for now.
     if (frame.isFinal()) {
       if (frame.isBinary()) {
         handleBinary(frame.binaryData().getBytes());

@@ -27,7 +27,7 @@ import java.io.Closeable;
 public class Log implements Closeable {
   private final SegmentManager segments;
   private final LogWriter writer;
-  private volatile boolean open;
+  private volatile boolean open = true;
 
   public Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
