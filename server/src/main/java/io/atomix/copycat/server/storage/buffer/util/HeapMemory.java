@@ -129,72 +129,72 @@ public class HeapMemory implements Memory {
 
   @Override
   public byte getByte(long offset) {
-    return NativeMemory.UNSAFE.getByte(array, address(offset));
+    return NativeMemory.UNSAFE.getByteVolatile(array, address(offset));
   }
 
   @Override
   public char getChar(long offset) {
-    return NativeMemory.UNSAFE.getChar(array, address(offset));
+    return NativeMemory.UNSAFE.getCharVolatile(array, address(offset));
   }
 
   @Override
   public short getShort(long offset) {
-    return NativeMemory.UNSAFE.getShort(array, address(offset));
+    return NativeMemory.UNSAFE.getShortVolatile(array, address(offset));
   }
 
   @Override
   public int getInt(long offset) {
-    return NativeMemory.UNSAFE.getInt(array, address(offset));
+    return NativeMemory.UNSAFE.getIntVolatile(array, address(offset));
   }
 
   @Override
   public long getLong(long offset) {
-    return NativeMemory.UNSAFE.getLong(array, address(offset));
+    return NativeMemory.UNSAFE.getLongVolatile(array, address(offset));
   }
 
   @Override
   public float getFloat(long offset) {
-    return NativeMemory.UNSAFE.getFloat(array, address(offset));
+    return NativeMemory.UNSAFE.getFloatVolatile(array, address(offset));
   }
 
   @Override
   public double getDouble(long offset) {
-    return NativeMemory.UNSAFE.getDouble(array, address(offset));
+    return NativeMemory.UNSAFE.getDoubleVolatile(array, address(offset));
   }
 
   @Override
   public void putByte(long offset, byte b) {
-    NativeMemory.UNSAFE.putByte(array, address(offset), b);
+    NativeMemory.UNSAFE.putByteVolatile(array, address(offset), b);
   }
 
   @Override
   public void putChar(long offset, char c) {
-    NativeMemory.UNSAFE.putChar(array, address(offset), c);
+    NativeMemory.UNSAFE.putCharVolatile(array, address(offset), c);
   }
 
   @Override
   public void putShort(long offset, short s) {
-    NativeMemory.UNSAFE.putShort(array, address(offset), s);
+    NativeMemory.UNSAFE.putShortVolatile(array, address(offset), s);
   }
 
   @Override
   public void putInt(long offset, int i) {
-    NativeMemory.UNSAFE.putInt(array, address(offset), i);
+    NativeMemory.UNSAFE.putIntVolatile(array, address(offset), i);
   }
 
   @Override
   public void putLong(long offset, long l) {
-    NativeMemory.UNSAFE.putLong(array, address(offset), l);
+    NativeMemory.UNSAFE.putLongVolatile(array, address(offset), l);
   }
 
   @Override
   public void putFloat(long offset, float f) {
-    NativeMemory.UNSAFE.putFloat(array, address(offset), f);
+    NativeMemory.UNSAFE.putFloatVolatile(array, address(offset), f);
   }
 
   @Override
   public void putDouble(long offset, double d) {
-    NativeMemory.UNSAFE.putDouble(array, address(offset), d);
+    NativeMemory.UNSAFE.putDoubleVolatile(array, address(offset), d);
   }
 
   @Override

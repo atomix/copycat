@@ -17,6 +17,8 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.copycat.server.storage.entry.Entry;
 
+import java.util.concurrent.locks.Lock;
+
 /**
  * Log reader.
  *
@@ -24,12 +26,14 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 public class LogReader implements Reader {
   private final SegmentManager segments;
+  private final Lock lock;
   private final Mode mode;
   private Segment currentSegment;
   private SegmentReader currentReader;
 
-  public LogReader(SegmentManager segments, long index, Mode mode) {
+  public LogReader(SegmentManager segments, Lock lock, long index, Mode mode) {
     this.segments = segments;
+    this.lock = lock;
     this.mode = mode;
     initialize(index);
   }
@@ -52,15 +56,23 @@ public class LogReader implements Reader {
     return mode;
   }
 
-  @Override
+  /**
+   * Locks the reader.
+   *
+   * @return The log reader.
+   */
   public Reader lock() {
-    // TODO
+    lock.lock();
     return this;
   }
 
-  @Override
+  /**
+   * Unlocks the reader.
+   *
+   * @return The log reader.
+   */
   public Reader unlock() {
-    // TODO
+    lock.unlock();
     return this;
   }
 

@@ -17,6 +17,8 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.copycat.server.storage.entry.Entry;
 
+import java.util.concurrent.locks.Lock;
+
 /**
  * Log writer.
  *
@@ -24,24 +26,34 @@ import io.atomix.copycat.server.storage.entry.Entry;
  */
 public class LogWriter implements Writer {
   private final SegmentManager segments;
+  private final Lock lock;
   private volatile Segment currentSegment;
   private volatile SegmentWriter currentWriter;
 
-  public LogWriter(SegmentManager segments) {
+  public LogWriter(SegmentManager segments, Lock lock) {
     this.segments = segments;
+    this.lock = lock;
     this.currentSegment = segments.lastSegment();
     this.currentWriter = currentSegment.writer();
   }
 
-  @Override
+  /**
+   * Locks the writer.
+   *
+   * @return The log writer.
+   */
   public LogWriter lock() {
-    // TODO
+    lock.lock();
     return this;
   }
 
-  @Override
+  /**
+   * Unlocks the writer.
+   *
+   * @return The log writer.
+   */
   public LogWriter unlock() {
-    // TODO
+    lock.unlock();
     return this;
   }
 

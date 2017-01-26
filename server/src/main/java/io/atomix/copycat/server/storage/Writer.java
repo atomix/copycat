@@ -25,20 +25,6 @@ import io.atomix.copycat.server.storage.entry.Entry;
 public interface Writer extends AutoCloseable {
 
   /**
-   * Acquires the writer lock.
-   *
-   * @return The writer.
-   */
-  Writer lock();
-
-  /**
-   * Releases the writer lock.
-   *
-   * @return The writer.
-   */
-  Writer unlock();
-
-  /**
    * Returns the last written index.
    *
    * @return The last written index.

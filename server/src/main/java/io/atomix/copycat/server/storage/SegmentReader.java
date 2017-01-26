@@ -51,18 +51,6 @@ public class SegmentReader implements Reader {
     return mode;
   }
 
-  @Override
-  public Reader lock() {
-    // TODO
-    return this;
-  }
-
-  @Override
-  public Reader unlock() {
-    // TODO
-    return this;
-  }
-
   /**
    * Returns the first index in the segment.
    *
@@ -169,6 +157,8 @@ public class SegmentReader implements Reader {
     // Read the index for the next entry.
     long index = buffer.mark().readLong();
 
+    long term = currentEntry != null ? currentEntry.term() : 0;
+
     // Loop through entries in the segment until a valid entry is found.
     while (index > 0) {
 
@@ -177,14 +167,21 @@ public class SegmentReader implements Reader {
         firstIndex = index;
       }
 
+      // If the reader is configured to only read commits, stop reading and return once the
+      // reader reaches uncommitted entries.
+      switch (mode) {
+        case ALL_COMMITS:
+        case LIVE_COMMITS:
+        case UNCOMPACTED_COMMITS:
+          if (index > segment.manager().commitIndex()) {
+            buffer.reset();
+            return;
+          }
+      }
+
       // If the entry contains a term, read the term.
-      final long term;
       if (buffer.readBoolean()) {
         term = buffer.readLong();
-      }
-      // The current entry should always be non-null if no term exists.
-      else {
-        term = currentEntry.term();
       }
 
       // If the index is greater than 1 + the previous index, that indicates some entries have
@@ -222,17 +219,19 @@ public class SegmentReader implements Reader {
       final Entry entry = serializer.readObject(input, type.type(), type.serializer());
 
       // If the index has been committed, create the entry with a cleaner.
+      final Indexed<? extends Entry<?>> indexed;
       if (index <= segment.manager().commitIndex()) {
-        nextEntry = new Indexed(index, term, entry, length, new EntryCleaner(++nextOffset, segment.cleaner()));
+        indexed = new Indexed(index, term, entry, length, new EntryCleaner(++nextOffset, segment.cleaner()));
       }
       // Otherwise, the entry cannot be cleaned, but the offset still must be incremented.
       else {
-        nextEntry = new Indexed(index, term, entry, length);
+        indexed = new Indexed(index, term, entry, length);
         nextOffset++;
       }
 
       // If the entry is valid for the current read mode, return.
-      if (mode.isValid(nextEntry, segment.manager().compactor())) {
+      if (mode.isValid(indexed, segment.manager().compactor())) {
+        nextEntry = indexed;
         return;
       }
       // Otherwise, read the next entry.

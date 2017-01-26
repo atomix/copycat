@@ -113,18 +113,6 @@ public class SegmentWriter implements Writer {
   }
 
   @Override
-  public Writer lock() {
-    // TODO
-    return this;
-  }
-
-  @Override
-  public Writer unlock() {
-    // TODO
-    return this;
-  }
-
-  @Override
   public long lastIndex() {
     return lastEntry != null ? lastEntry.index() : segment.index() - 1;
   }

@@ -147,20 +147,6 @@ public interface Reader extends Iterator<Indexed<? extends Entry<?>>>, AutoClose
   Mode mode();
 
   /**
-   * Acquires a lock on the reader.
-   *
-   * @return The locked reader.
-   */
-  Reader lock();
-
-  /**
-   * Releases a lock on the reader.
-   *
-   * @return The unlocked reader.
-   */
-  Reader unlock();
-
-  /**
    * Returns the current reader index.
    *
    * @return The current reader index.

@@ -18,6 +18,8 @@ package io.atomix.copycat.server.storage;
 import io.atomix.copycat.server.storage.compaction.Compactor;
 
 import java.io.Closeable;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Log.
@@ -27,11 +29,12 @@ import java.io.Closeable;
 public class Log implements Closeable {
   private final SegmentManager segments;
   private final LogWriter writer;
+  private final ReadWriteLock lock = new ReentrantReadWriteLock();
   private volatile boolean open = true;
 
   public Log(String name, Storage storage) {
     this.segments = new SegmentManager(name, storage);
-    this.writer = new LogWriter(segments);
+    this.writer = new LogWriter(segments, lock.writeLock());
   }
 
   /**
@@ -60,7 +63,7 @@ public class Log implements Closeable {
    * @return A new log reader.
    */
   public LogReader createReader(long index, Reader.Mode mode) {
-    return new LogReader(segments, index, mode);
+    return new LogReader(segments, lock.readLock(), index, mode);
   }
 
   /**
