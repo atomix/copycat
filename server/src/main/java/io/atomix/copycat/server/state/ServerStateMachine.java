@@ -24,6 +24,7 @@ import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.LogReader;
 import io.atomix.copycat.server.storage.Reader;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
@@ -381,7 +382,7 @@ final class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> applyConfiguration(Indexed<ConfigurationEntry> entry) {
     // Clean the configuration entry from the log. The entry will be retained until it has been stored
     // on all servers.
-    entry.clean();
+    entry.compact(Compaction.Mode.SEQUENTIAL);
     return CompletableFuture.completedFuture(null);
   }
 
@@ -528,12 +529,12 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the server session is null, the session either never existed or already expired.
     if (session == null) {
-      entry.clean();
+      entry.compact(Compaction.Mode.QUORUM);
       future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.entry().session()));
     }
     // If the session is in an inactive state, return an UnknownSessionException.
     else if (!session.state().active()) {
-      entry.clean();
+      entry.compact(Compaction.Mode.QUORUM);
       future = Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.entry().session()));
     }
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
@@ -644,12 +645,12 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the server session is null, the session either never existed or already expired.
     if (session == null) {
-      entry.clean();
+      entry.compact(Compaction.Mode.QUORUM);
       future = Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.entry().session()));
     }
     // If the session is not in an active state, return an UnknownSessionException.
     else if (!session.state().active()) {
-      entry.clean();
+      entry.compact(Compaction.Mode.QUORUM);
       future = Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.entry().session()));
     }
     // If the session exists, don't allow it to expire even if its expiration has passed since we still
@@ -744,14 +745,14 @@ final class ServerStateMachine implements AutoCloseable {
     // have a session. We ensure that session register/unregister entries are not compacted from the log
     // until all associated commands have been cleaned.
     if (session == null) {
-      entry.clean();
+      entry.compact(Compaction.Mode.QUORUM);
       return Futures.exceptionalFuture(new UnknownSessionException("unknown session: " + entry.entry().session()));
     }
     // If the session is not in an active state, return an UnknownSessionException. Sessions are retained in the
     // session registry until all prior commands have been released by the state machine, but new commands can
     // only be applied for sessions in an active state.
     else if (!session.state().active()) {
-      entry.clean();
+      entry.compact(Compaction.Mode.QUORUM);
       return Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.entry().session()));
     }
     // If the command's sequence number is less than the next session sequence number then that indicates that
@@ -943,7 +944,7 @@ final class ServerStateMachine implements AutoCloseable {
     for (ServerSessionContext session : executor.context().sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
-    entry.clean();
+    entry.compact(Compaction.Mode.SEQUENTIAL);
     return Futures.completedFutureAsync(entry.index(), ThreadContext.currentContextOrThrow().executor());
   }
 

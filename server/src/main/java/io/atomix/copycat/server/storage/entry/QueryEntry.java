@@ -27,7 +27,7 @@ import io.atomix.copycat.util.Assert;
  * <p>
  * The {@code QueryEntry} is a special entry that is typically not ever written to the Raft log.
  * Query entries are simply used to represent the context within which a query is applied to the
- * state machine. Query entry {@link #sequence() sequence} numbers and {@link #getIndex() indexes}
+ * state machine. Query entry {@link #sequence() sequence} numbers and indexes
  * are used to sequence queries as they're applied to the user state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>

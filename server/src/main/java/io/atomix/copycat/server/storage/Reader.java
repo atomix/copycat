@@ -61,22 +61,20 @@ public interface Reader extends Iterator<Indexed<? extends Entry<?>>>, AutoClose
           return false;
         }
 
-        switch (entry.entry().compaction()) {
+        switch (entry.compaction()) {
           // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
           case SNAPSHOT:
             return entry.index() > compactor.snapshotIndex();
           // RELEASE and QUORUM entries are returned if the minorIndex is less than the entry index or the
           // entry is still live.
-          case RELEASE:
           case QUORUM:
-            return entry.index() > compactor.minorIndex() || !entry.isClean();
-          // FULL, SEQUENTIAL, EXPIRING, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
+            return entry.index() > compactor.minorIndex();
+          // SEQUENTIAL entries are returned if the minorIndex or majorIndex is less than the
           // entry index or if the entry is still live.
-          case FULL:
           case SEQUENTIAL:
-          case EXPIRING:
-          case TOMBSTONE:
-            return entry.index() > compactor.minorIndex() || entry.index() > compactor.majorIndex() || !entry.isClean();
+            return entry.index() > compactor.minorIndex() || entry.index() > compactor.majorIndex();
+          case NONE:
+            return true;
         }
         return false;
       }
@@ -112,22 +110,20 @@ public interface Reader extends Iterator<Indexed<? extends Entry<?>>>, AutoClose
           return false;
         }
 
-        switch (entry.entry().compaction()) {
+        switch (entry.compaction()) {
           // SNAPSHOT entries are returned if the snapshotIndex is less than the entry index.
           case SNAPSHOT:
             return entry.index() > compactor.snapshotIndex();
-          // RELEASE and QUORUM entries are returned if the minorIndex is less than the entry index or the
+          // QUORUM entries are returned if the minorIndex is less than the entry index or the
           // entry is still live.
-          case RELEASE:
           case QUORUM:
-            return entry.index() > compactor.minorIndex() || !entry.isClean();
-          // FULL, SEQUENTIAL, EXPIRING, and TOMBSTONE entries are returned if the minorIndex or majorIndex is less than the
+            return entry.index() > compactor.minorIndex();
+          // SEQUENTIAL entries are returned if the minorIndex or majorIndex is less than the
           // entry index or if the entry is still live.
-          case FULL:
           case SEQUENTIAL:
-          case EXPIRING:
-          case TOMBSTONE:
-            return entry.index() > compactor.minorIndex() || entry.index() > compactor.majorIndex() || !entry.isClean();
+            return entry.index() > compactor.minorIndex() || entry.index() > compactor.majorIndex();
+          case NONE:
+            return true;
         }
         return false;
       }

@@ -52,7 +52,7 @@ public final class MajorCompactionManager implements CompactionManager {
   @Override
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<List<Segment>> groups = getCompactableGroups(storage, segments);
-    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, compactor.snapshotIndex(), compactor.majorIndex(), compactor.getDefaultCompactionMode())) : Collections.emptyList();
+    return !groups.isEmpty() ? Collections.singletonList(new MajorCompactionTask(segments, groups, compactor.snapshotIndex(), compactor.majorIndex())) : Collections.emptyList();
   }
 
   /**

@@ -18,7 +18,6 @@ package io.atomix.copycat.server.storage.entry;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
  * Stores a client session close.
@@ -43,11 +42,6 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   @Override
   public Type<UnregisterEntry> type() {
     return Type.UNREGISTER;
-  }
-
-  @Override
-  public Compaction.Mode compaction() {
-    return Compaction.Mode.TOMBSTONE;
   }
 
   /**

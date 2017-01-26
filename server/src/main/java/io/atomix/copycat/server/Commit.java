@@ -20,7 +20,6 @@ import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.session.Session;
-import io.atomix.copycat.util.concurrent.ReferenceCounted;
 
 import java.time.Instant;
 
@@ -45,7 +44,7 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Commit<T extends Operation> extends ReferenceCounted<Commit<T>> {
+public interface Commit<T extends Operation> {
 
   /**
    * Returns the commit index.
@@ -138,47 +137,133 @@ public interface Commit<T extends Operation> extends ReferenceCounted<Commit<T>>
   }
 
   /**
-   * Acquires a reference to the commit.
-   * <p>
-   * Initially, all open commits have a single reference. Acquiring new references to a commit will
-   * increase the commit's {@link #references() reference count} which is used to determine when it's
-   * safe to recycle the {@link Commit} object and compact the underlying entry from the log. Acquired
-   * references must be {@link #release() released} once the commit is no longer needed to free up
-   * memory and disk space.
+   * Marks the commit for compaction from the Raft log.
    *
-   * @return The referenced commit.
+   * @param mode The compaction mode with which to compact the commit.
    */
-  @Override
-  Commit<T> acquire();
+  void compact(CompactionMode mode);
 
   /**
-   * Releases a reference to the commit.
+   * Closes the commit.
    * <p>
-   * If releasing the commit results in the {@link #references() reference count} decreasing to
-   * {@code 0} then the commit will be released back to a pool and the log entry underlying the commit
-   * may be compacted from the log. Once all references to the commit have been released it should
-   * no longer be accessed.
-   *
-   * @return Indicates whether all references to the commit have been released.
+   * When a {@link Command} commit is closed, it will not be compacted from the log.
    */
-  @Override
-  boolean release();
-
-  /**
-   * Returns the number of open references to the commit.
-   *
-   * @return The number of open references to the commit.
-   */
-  @Override
-  int references();
-
-  /**
-   * Closes the commit, releasing all references.
-   * <p>
-   * Closing a commit will make it immediately available for compaction from the replicated log.
-   * Once the commit is closed, it may be recycled and should no longer be accessed by the closer.
-   */
-  @Override
   void close();
 
+  /**
+   * Constants for specifying command compaction modes.
+   * <p>
+   * Compaction modes dictate how each command is removed from a Copycat server's internal logs. As commands
+   * are submitted to the cluster, written to disk, and replicated, the replicated log can grow unbounded.
+   * Command compaction modes allow servers to determine when it's safe to remove a command from the log.
+   * Ultimately, it is the responsibility of the state machine and the command applied to it to indicate when
+   * the command may be removed from the log. Typically, commands should not be removed from the log until
+   * they either no longer contribute to the state machine's state or some other mechanism ensures that the
+   * command's state will not be loss, such as is the case with snapshotting.
+   * <p>
+   * Commands to a Copycat state machine typically come in one of two flavors; commands are either compacted from
+   * the log via snapshotting or log cleaning. Log cleaning is the process of removing commands from the log when
+   * they no longer contribute to the state machine's state. Commands compacted via log cleaning are represented
+   * by the {@link #QUORUM}, {@link #FULL}, {@link #SEQUENTIAL}, and {@link #TOMBSTONE} compaction modes. These types
+   * of commands are removed from the log in a manor consistent with the configured compaction mode.
+   * <p>
+   * Alternatively, the simpler mode of compaction is snapshotting. Snapshotted commands are indicated by the
+   * {@link #SNAPSHOT} compaction mode. When a server takes a snapshot of a state machine, all commands applied
+   * to the state machine up to the logical time at which the snapshot was taken may be removed from the log.
+   * <p>
+   * It's important to note that command compaction modes only take effect once a command applied to a state
+   * machine has been released for compaction. State machines effectively manage commands applied to a state machine
+   * like memory. It's always the responsibility of a state machine to indicate when a command can be safely
+   * compacted according to its compaction mode by releasing the command back to the server's storage layer for
+   * compaction. See the state machine documentation for more info.
+   *
+   * @see #compact(CompactionMode)
+   *
+   * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+   */
+  enum CompactionMode {
+
+    /**
+     * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
+     * snapshots. Snapshot commands will be stored in the Raft log only until a snapshot of the state machine state has
+     * been written to disk, at which time they'll be removed from the log.
+     * <p>
+     * While commands with the {@code SNAPSHOT} compaction mode may be removed once a snapshot of the state machine state
+     * has been taken, it's still safe for {@code SNAPSHOT} commands to trigger state machine events. In the event that
+     * a command triggers an event to a client, servers will ensure that the command is maintained in the log until
+     * all associated events have been received by clients. That is, commands will never be replaced by a snapshot prior to
+     * events being received by clients. In the event of a failure and replay of the log, the state machine will always
+     * see commands for which events have not been acknowledged.
+     */
+    SNAPSHOT,
+
+    /**
+     * The {@code RELEASE} compaction mode retains the command in the log until it has been stored on a majority
+     * of servers in the cluster and has been released by the state machine.
+     * <p>
+     * This compaction mode typically represents normal writes to a state machine. Once a {@code RELEASE} command
+     * has been applied on a majority of state machines and have been released from memory, the command may be
+     * safely removed from the log. It is the state machine's responsibility to indicate when it's safe for a
+     * {@code RELEASE} command to be removed from the log by explicitly releasing the command once it no longer
+     * contributes to the state machine's state. For instance, when one write overwrites the state that resulted
+     * from a previous write, the previous write can be safely released and removed from the log during compaction.
+     */
+    RELEASE,
+
+    /**
+     * The {@code QUORUM} compaction mode retains the command in the log until it has been stored on a majority
+     * of servers in the cluster and has been applied to the state machine.
+     * <p>
+     * This compaction mode typically represents normal writes to a state machine. Once a {@code QUORUM} command
+     * has been applied on a majority of state machines and have been released from memory, the command may be
+     * safely removed from the log. It is the state machine's responsibility to indicate when it's safe for a
+     * {@code QUORUM} command to be removed from the log by explicitly releasing the command once it no longer
+     * contributes to the state machine's state. For instance, when one write overwrites the state that resulted
+     * from a previous write, the previous write can be safely released and removed from the log during compaction.
+     */
+    QUORUM,
+
+    /**
+     * The sequential compaction mode retains the command in the log until it has been stored and applied on
+     * all servers and until all prior commands have been compacted from the log.
+     * <p>
+     * The {@code SEQUENTIAL} compaction mode adds to the <em>full replication</em> requirement of the {@code FULL}
+     * compaction mode to also require that commands be removed from the log <em>in sequential order</em>. Typically,
+     * this compaction mode is used for so called <em>tombstone</em> commands. Sequential ordering is critical in
+     * the handling of tombstones since they essentially represent the absence of state. A tombstone cannot be safely
+     * removed from the log until all prior related entries have been removed. Compacting tombstones sequentially ensures
+     * that any prior related commands will have been compacted from the log prior to the tombstone being removed.
+     */
+    SEQUENTIAL,
+
+    /**
+     * The expiring compaction mode is an alias for the {@link #SEQUENTIAL} compaction mode that is specifically intended
+     * for expiring commands like TTLs and other time-based operations. Expiring commands will be retained in the log until
+     * stored and applied on all servers and will only be removed from the log once all prior released entries have been
+     * removed.
+     * <p>
+     * The {@code EXPIRING} compaction mode adds to the <em>full replication</em> requirement of the {@code FULL}
+     * compaction mode to also require that commands be removed from the log <em>in sequential order</em>. Typically,
+     * this compaction mode is used for so called <em>tombstone</em> commands. Sequential ordering is critical in
+     * the handling of tombstones since they essentially represent the absence of state. A tombstone cannot be safely
+     * removed from the log until all prior related entries have been removed. Compacting tombstones sequentially ensures
+     * that any prior related commands will have been compacted from the log prior to the tombstone being removed.
+     */
+    EXPIRING,
+
+    /**
+     * The tombstone compaction mode is an alias for the {@link #SEQUENTIAL} compaction mode that is specifically intended
+     * for tombstone commands. Tombstones will be retained in the log until stored and applied on all servers, and tombstones
+     * will only be removed from the log once all prior released entries have been removed.
+     * <p>
+     * The {@code TOMBSTONE} compaction mode adds to the <em>full replication</em> requirement of the {@code FULL}
+     * compaction mode to also require that commands be removed from the log <em>in sequential order</em>. Typically,
+     * this compaction mode is used for so called <em>tombstone</em> commands. Sequential ordering is critical in
+     * the handling of tombstones since they essentially represent the absence of state. A tombstone cannot be safely
+     * removed from the log until all prior related entries have been removed. Compacting tombstones sequentially ensures
+     * that any prior related commands will have been compacted from the log prior to the tombstone being removed.
+     */
+    TOMBSTONE,
+
+  }
 }

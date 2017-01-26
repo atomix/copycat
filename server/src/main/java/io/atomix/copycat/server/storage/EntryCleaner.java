@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.copycat.server.storage.compaction.Compaction;
+
 /**
  * Entry cleaner.
  *
@@ -42,18 +44,20 @@ public class EntryCleaner {
 
   /**
    * Cleans the entry.
+   *
+   * @param mode The compaction mode with which to compact the entry.
    */
-  public synchronized void clean() {
-    cleaner.clean(offset);
+  public synchronized void clean(Compaction.Mode mode) {
+    cleaner.set(offset, mode);
   }
 
   /**
-   * Returns a boolean indicating whether the entry is clean.
+   * Returns the compaction mode for the entry.
    *
-   * @return Indicates whether the entry is clean.
+   * @return The compaction mode for the entry.
    */
-  boolean isClean() {
-    return cleaner.isClean(offset);
+  Compaction.Mode mode() {
+    return cleaner.get(offset);
   }
 
   @Override

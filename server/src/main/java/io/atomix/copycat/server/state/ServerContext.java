@@ -19,14 +19,12 @@ import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.RaftProtocol;
 import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
 import io.atomix.copycat.server.storage.*;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import io.atomix.copycat.util.Assert;
@@ -488,14 +486,6 @@ public class ServerContext implements AutoCloseable {
 
     // Create a new user state machine.
     StateMachine stateMachine = stateMachineFactory.get();
-
-    // Configure the log compaction mode. If the state machine supports snapshotting, the default
-    // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
-    if (stateMachine instanceof Snapshottable) {
-      log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
-    } else {
-      log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
-    }
 
     // Create a new internal server state machine.
     this.stateMachine = new ServerStateMachine(stateMachine, this, stateContext, applicationContext);

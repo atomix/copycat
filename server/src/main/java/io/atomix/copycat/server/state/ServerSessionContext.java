@@ -21,8 +21,8 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
-import io.atomix.copycat.server.storage.entry.KeepAliveEntry;
 import io.atomix.copycat.server.storage.entry.RegisterEntry;
 import io.atomix.copycat.server.storage.entry.UnregisterEntry;
 import io.atomix.copycat.session.Event;
@@ -143,9 +143,9 @@ class ServerSessionContext implements ServerSession {
     long references = --this.references;
     if (!state.active() && references == 0) {
       context.sessions().unregisterSession(id());
-      registerEntry.clean();
+      registerEntry.compact(Compaction.Mode.QUORUM);
       if (unregisterEntry != null) {
-        unregisterEntry.clean();
+        unregisterEntry.compact(Compaction.Mode.SEQUENTIAL);
       }
     }
   }
@@ -198,7 +198,7 @@ class ServerSessionContext implements ServerSession {
     Indexed<ConnectEntry> previousConnectEntry = this.connectEntry;
     this.connectEntry = connectEntry;
     if (previousConnectEntry != null) {
-      previousConnectEntry.clean();
+      previousConnectEntry.compact(Compaction.Mode.QUORUM);
     }
     return this;
   }
@@ -213,7 +213,7 @@ class ServerSessionContext implements ServerSession {
     Indexed<?> previousKeepAliveEntry = this.keepAliveEntry;
     this.keepAliveEntry = keepAliveEntry;
     if (previousKeepAliveEntry != null) {
-      previousKeepAliveEntry.clean();
+      previousKeepAliveEntry.compact(Compaction.Mode.QUORUM);
     }
     return this;
   }
@@ -653,15 +653,15 @@ class ServerSessionContext implements ServerSession {
   private void cleanState(Indexed<UnregisterEntry> entry) {
     // If the keep alive entry is set, release the entry.
     if (keepAliveEntry != null) {
-      keepAliveEntry.clean();
+      keepAliveEntry.compact(Compaction.Mode.QUORUM);
     }
 
     context.sessions().unregisterSession(id());
 
     // If no references to session commands are open, release session-related entries.
     if (references == 0) {
-      registerEntry.clean();
-      entry.clean();
+      registerEntry.compact(Compaction.Mode.QUORUM);
+      entry.compact(Compaction.Mode.SEQUENTIAL);
     } else {
       this.unregisterEntry = entry;
     }

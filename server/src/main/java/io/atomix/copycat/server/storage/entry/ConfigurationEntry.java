@@ -19,7 +19,6 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
@@ -45,11 +44,6 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
   @Override
   public Type<ConfigurationEntry> type() {
     return Type.CONFIGURATION;
-  }
-
-  @Override
-  public Compaction.Mode compaction() {
-    return Compaction.Mode.FULL;
   }
 
   /**

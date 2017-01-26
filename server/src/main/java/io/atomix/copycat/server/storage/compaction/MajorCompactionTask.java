@@ -39,7 +39,7 @@ import java.util.List;
  * the major compaction task rewrites groups of segments provided by the {@link MajorCompactionManager}. For each group
  * of segments, a single compact segment will be created with the same {@code version} and starting {@code index} as
  * the first segment in the group. All entries from all segments in the group that haven't been
- * {@link SegmentCleaner#clean(long) released} will then be written to the new compact segment.
+ * {@link SegmentCleaner#set(long, Compaction.Mode) released} will then be written to the new compact segment.
  * Once the rewrite is complete, the compact segment will be locked and the set of old segments deleted.
  * <p>
  * <b>Removing tombstones</b>
@@ -94,14 +94,12 @@ public final class MajorCompactionTask implements CompactionTask {
   private List<List<SegmentCleaner>> predicates;
   private final long snapshotIndex;
   private final long compactIndex;
-  private final Compaction.Mode defaultCompactionMode;
 
-  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups, long snapshotIndex, long compactIndex, Compaction.Mode defaultCompactionMode) {
+  MajorCompactionTask(SegmentManager manager, List<List<Segment>> groups, long snapshotIndex, long compactIndex) {
     this.manager = Assert.notNull(manager, "manager");
     this.groups = Assert.notNull(groups, "segments");
     this.snapshotIndex = snapshotIndex;
     this.compactIndex = compactIndex;
-    this.defaultCompactionMode = Assert.notNull(defaultCompactionMode, "defaultCompactionMode");
   }
 
   @Override
@@ -196,58 +194,35 @@ public final class MajorCompactionTask implements CompactionTask {
       return;
     }
 
-    // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
-    // mode to the entry.
-    Compaction.Mode mode = entry.entry().compaction();
-    if (mode == Compaction.Mode.DEFAULT) {
-      mode = defaultCompactionMode;
-    }
-
     // According to the entry's compaction mode, either append the entry to the compact segment
     // or skip the entry in the compact segment (removing it from the resulting segment).
-    switch (mode) {
+    switch (entry.compaction()) {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (entry.index() <= snapshotIndex && cleaner.isClean(entry.offset())) {
+        if (entry.index() <= snapshotIndex) {
           compactEntry(entry, writer);
         } else {
           transferEntry(entry, writer);
         }
         break;
       // RELEASE and QUORUM entries are compacted if the entry has been released from the segment.
-      case RELEASE:
       case QUORUM:
-        if (cleaner.isClean(entry.offset())) {
-          compactEntry(entry, writer);
-        } else {
-          transferEntry(entry, writer);
-        }
+        compactEntry(entry, writer);
         break;
       // FULL entries are compacted if the major compact index is greater than the entry index and
       // the entry has been released.
       // SEQUENTIAL, EXPIRING, and TOMBSTONE entries are compacted if the major compact index is greater than the
       // entry index and the entry has been released.
-      case FULL:
       case SEQUENTIAL:
-      case EXPIRING:
-      case TOMBSTONE:
-        if (entry.index() <= compactIndex && cleaner.isClean(entry.offset())) {
-          compactEntry(entry, writer);
-        } else {
-          transferEntry(entry, writer);
-        }
-        break;
-      // UNKNOWN entries are compacted if the index is less than both the snapshot and major
-      // compaction indexes and the entry has been released.
-      case UNKNOWN:
-        if (entry.index() <= snapshotIndex && entry.index() <= compactIndex && cleaner.isClean(entry.offset())) {
+        if (entry.index() <= compactIndex) {
           compactEntry(entry, writer);
         } else {
           transferEntry(entry, writer);
         }
         break;
       default:
+        transferEntry(entry, writer);
         break;
     }
   }

@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.storage.compaction;
 
+import io.atomix.copycat.server.storage.Indexed;
+
 /**
  * Log compaction type identifier.
  * <p>
@@ -35,7 +37,7 @@ public enum Compaction {
    * Represents a minor compaction.
    * <p>
    * Minor compaction is the more efficient of the compaction processes which removes
-   * {@link io.atomix.copycat.server.storage.Log#release(long) cleaned} non-tombstone entries from individual
+   * {@link Indexed#compact(Mode) cleaned} non-tombstone entries from individual
    * {@link io.atomix.copycat.server.storage.Segment}s. See the {@link MinorCompactionTask} for more information.
    */
   MINOR {
@@ -49,8 +51,8 @@ public enum Compaction {
    * Represents a major compaction.
    * <p>
    * Major compaction is the more heavyweight process of removing all
-   * {@link io.atomix.copycat.server.storage.Log#release(long) cleaned} entries that have been
-   * {@link io.atomix.copycat.server.storage.Log#commit(long) committed} to the log and combining segment
+   * {@link Indexed#compact(Mode) cleaned} entries that have been
+   * {@link io.atomix.copycat.server.storage.LogWriter#commit(long) committed} to the log and combining segment
    * files wherever possible. See the {@link MajorCompactionTask} for more information.
    */
   MAJOR {
@@ -75,16 +77,24 @@ public enum Compaction {
   public enum Mode {
 
     /**
-     * The {@code DEFAULT} compaction mode is a special compaction mode which indicates that the configured
-     * default compaction mode should be applied to the command.
+     * The {@code NONE} compaction mode indicates that an entry is not marked for compaction.
      */
-    DEFAULT,
+    NONE(0),
 
     /**
-     * The {@code UNKNOWN} compaction mode is a special compaction mode which retains entries beyond the
-     * snapshot index, requires that entries be stored on all servers, and removes entries from the log sequentially.
+     * The {@code QUORUM} compaction mode retains the command in the log until it has been stored and applied
+     * on a majority of servers in the cluster. Once the commit has been applied to the state machine and
+     * released, it may be removed during minor or major compaction.
      */
-    UNKNOWN,
+    QUORUM(1),
+
+    /**
+     * The {@code SEQUENTIAL} compaction mode retains the command in the log until it has been stored and
+     * applied on all servers in the cluster. Once the commit has been applied to a state machine and closed,
+     * it may be removed from the log <em>only during major compaction</em> to ensure that all prior completed
+     * commits are removed first.
+     */
+    SEQUENTIAL(2),
 
     /**
      * The {@code SNAPSHOT} compaction mode indicates commands for which resulting state is stored in state machine
@@ -93,52 +103,34 @@ public enum Compaction {
      * trigger state machine events. Commands that result in the publishing of events will be persisted in the log until
      * related events have been received by all clients even if a snapshot of the state machine has since been stored.
      */
-    SNAPSHOT,
+    SNAPSHOT(3);
+
+    public final long mask;
+
+    Mode(long mask) {
+      this.mask = mask;
+    }
 
     /**
-     * The {@code RELEASE} compaction mode retains the command in the log until it has been stored and applied
-     * on a majority of servers in the cluster and is released.
+     * Returns the compaction mode with the given bitmask.
+     *
+     * @param mask The bitmask for which to return the compaction mode.
+     * @return The compaction mode with the given bitmask.
      */
-    RELEASE,
-
-    /**
-     * The {@code QUORUM} compaction mode retains the command in the log until it has been stored and applied
-     * on a majority of servers in the cluster. Once the commit has been applied to the state machine and
-     * released, it may be removed during minor or major compaction.
-     */
-    QUORUM,
-
-    /**
-     * The {@code FULL} compaction mode retains the command in the log until it has been stored and applied
-     * on all servers in the cluster. Once the commit has been applied to a state machine and closed it may
-     * be removed from the log during minor or major compaction.
-     */
-    FULL,
-
-    /**
-     * The {@code SEQUENTIAL} compaction mode retains the command in the log until it has been stored and
-     * applied on all servers in the cluster. Once the commit has been applied to a state machine and closed,
-     * it may be removed from the log <em>only during major compaction</em> to ensure that all prior completed
-     * commits are removed first.
-     */
-    SEQUENTIAL,
-
-    /**
-     * The {@code EXPIRING} compaction mode is an alias of the {@link #SEQUENTIAL} mode. Expiring entries are
-     * retained in the log until stored and applied on all servers. Once the commit has been applied to a state
-     * machine and closed, it may be removed from the log <em>only during major compaction</em> to ensure that
-     * all prior completed commits are removed first.
-     */
-    EXPIRING,
-
-    /**
-     * The {@code TOMBSTONE} compaction mode is an alias of the {@link #SEQUENTIAL} mode. Tombstone entries are
-     * retained in the log until stored and applied on all servers. Once the commit has been applied to a state
-     * machine and closed, it may be removed from the log <em>only during major compaction</em> to ensure that
-     * all prior completed commits are removed first.
-     */
-    TOMBSTONE,
-
+    public static Mode valueOf(int mask) {
+      switch (mask) {
+        case 0:
+          return NONE;
+        case 1:
+          return QUORUM;
+        case 2:
+          return SEQUENTIAL;
+        case 3:
+          return SNAPSHOT;
+        default:
+          throw new IllegalArgumentException("unknown snapshot mode: " + mask);
+      }
+    }
   }
 
 }

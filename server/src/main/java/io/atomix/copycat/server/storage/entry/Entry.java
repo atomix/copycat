@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.server.storage.compaction.Compaction;
-
 /**
  * Stores a state change in a {@link io.atomix.copycat.server.storage.Log}.
  *
@@ -110,15 +108,6 @@ public abstract class Entry<T extends Entry<T>> {
    * @return The entry type.
    */
   public abstract Type<T> type();
-
-  /**
-   * Returns the entry compaction mode.
-   *
-   * @return The entry compaction mode.
-   */
-  public Compaction.Mode compaction() {
-    return Compaction.Mode.QUORUM;
-  }
 
   /**
    * Entry serializer.

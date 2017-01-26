@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,13 @@
  */
 package io.atomix.copycat.server.storage;
 
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
 
 /**
- * Offset cleaner test.
+ * Segment cleaner test.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -28,19 +29,20 @@ import static org.testng.Assert.*;
 public class SegmentCleanerTest {
 
   /**
-   * Tests the offset predicate.
+   * Tests the segment cleaner.
    */
-  public void testOffsetPredicate() {
+  public void testCleaner() throws Exception {
     SegmentCleaner cleaner = new SegmentCleaner();
-    assertEquals(cleaner.count(), 0);
-    cleaner.clean(10);
-    assertEquals(cleaner.count(), 1);
-    assertTrue(cleaner.isClean(0l));
-    assertFalse(cleaner.isClean(10l));
-    assertTrue(cleaner.isClean(11l));
-    cleaner.clean(2048);
-    assertEquals(cleaner.count(), 2);
-    assertFalse(cleaner.isClean(2048l));
+
+    // 111001
+    cleaner.set(0, Compaction.Mode.QUORUM); // 01
+    cleaner.set(1, Compaction.Mode.SEQUENTIAL); // 10
+    cleaner.set(3, Compaction.Mode.SNAPSHOT); // 11
+
+    assertEquals(cleaner.get(0), Compaction.Mode.QUORUM); // 01
+    assertEquals(cleaner.get(1), Compaction.Mode.SEQUENTIAL); // 10
+    assertEquals(cleaner.get(2), Compaction.Mode.NONE);
+    assertEquals(cleaner.get(3), Compaction.Mode.SNAPSHOT); // 11
   }
 
 }

@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 
 /**
- * Removes {@link SegmentCleaner#clean(long) released} entries from an individual
+ * Removes {@link SegmentCleaner#set(long, Compaction.Mode) released} entries from an individual
  * log {@link Segment} to reclaim disk space.
  * <p>
  * The minor compaction task is a lightweight process that rewrites an individual segment to remove entries for
@@ -46,15 +46,11 @@ public final class MinorCompactionTask implements CompactionTask {
   private final SegmentManager manager;
   private final Segment segment;
   private final long snapshotIndex;
-  private final long compactIndex;
-  private final Compaction.Mode defaultCompactionMode;
 
-  MinorCompactionTask(SegmentManager manager, Segment segment, long snapshotIndex, long compactIndex, Compaction.Mode defaultCompactionMode) {
+  MinorCompactionTask(SegmentManager manager, Segment segment, long snapshotIndex) {
     this.manager = Assert.notNull(manager, "manager");
     this.segment = Assert.notNull(segment, "segment");
     this.snapshotIndex = snapshotIndex;
-    this.compactIndex = compactIndex;
-    this.defaultCompactionMode = Assert.notNull(defaultCompactionMode, "defaultCompactionMode");
   }
 
   @Override
@@ -104,52 +100,24 @@ public final class MinorCompactionTask implements CompactionTask {
       return;
     }
 
-    // Get the entry compaction mode. If the compaction mode is DEFAULT apply the default compaction
-    // mode to the entry.
-    Compaction.Mode mode = entry.entry().compaction();
-    if (mode == Compaction.Mode.DEFAULT) {
-      mode = defaultCompactionMode;
-    }
-
     // According to the entry's compaction mode, either append the entry to the compact segment
     // or skip the entry in the compact segment (removing it from the resulting segment).
-    switch (mode) {
+    switch (entry.compaction()) {
       // SNAPSHOT entries are compacted if a snapshot has been taken at an index greater than the
       // entry's index.
       case SNAPSHOT:
-        if (entry.index() <= snapshotIndex && cleaner.isClean(entry.offset())) {
+        if (entry.index() <= snapshotIndex) {
           compactEntry(entry, writer);
         } else {
           transferEntry(entry, cleaner, writer);
         }
         break;
-      // RELEASE and QUORUM entries are compacted if the entry has been released in the segment.
-      case RELEASE:
+      // QUORUM entries are compacted if the entry has been released in the segment.
       case QUORUM:
-        if (cleaner.isClean(entry.offset())) {
-          compactEntry(entry, writer);
-        } else {
-          transferEntry(entry, cleaner, writer);
-        }
-        break;
-      // FULL entries are compacted if the major compact index is greater than the entry index
-      // and the entry has been released.
-      case FULL:
-        if (entry.index() <= compactIndex && cleaner.isClean(entry.offset())) {
-          compactEntry(entry, writer);
-        } else {
-          transferEntry(entry, cleaner, writer);
-        }
-        break;
-      // SEQUENTIAL, EXPIRING, and TOMBSTONE entries can only be compacted during major compaction.
-      // UNKNOWN entries can only be compacted during major compaction.
-      case SEQUENTIAL:
-      case EXPIRING:
-      case TOMBSTONE:
-      case UNKNOWN:
-        transferEntry(entry, cleaner, writer);
+        compactEntry(entry, writer);
         break;
       default:
+        transferEntry(entry, cleaner, writer);
         break;
     }
   }

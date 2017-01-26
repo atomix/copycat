@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,29 +15,27 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.copycat.server.storage.buffer.util.BitArray;
+import io.atomix.copycat.server.storage.buffer.HeapBytes;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.util.Assert;
 
 /**
- * Segment index cleaner.
- * <p>
- * The offset predicate tracks the liveness of relative offsets within a segment. Liveness is tracked
- * in a {@link BitArray} that is resized to accommodate offsets as necessary. Each bit in the array
- * represents the liveness of a relative offset in the segment. When an offset is
- * {@link #clean(long) released} from a segment, the bit at that offset is flipped in the bit array.
- * {@link #isClean(long) Testing} the predicate indicates whether an offset is still live in the segment.
+ * Segment cleaner.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class SegmentCleaner implements AutoCloseable {
-  private final BitArray bits;
+public class SegmentCleaner {
+  private final HeapBytes bytes;
+  private long size;
+  private long count;
 
   public SegmentCleaner() {
-    this(BitArray.allocate(1024));
+    this(HeapBytes.allocate(1024));
   }
 
-  SegmentCleaner(BitArray bits) {
-    this.bits = Assert.notNull(bits, "bits");
+  public SegmentCleaner(HeapBytes bytes) {
+    this.bytes = bytes;
+    this.size = bytes.size() * 4; // Four entries per byte
   }
 
   /**
@@ -52,29 +50,66 @@ public final class SegmentCleaner implements AutoCloseable {
   }
 
   /**
-   * Returns a boolean value indicating whether an offset is live.
+   * Returns the compaction mode for the given offset.
    *
    * @param offset The offset to check.
-   * @return Indicates whether the given offset is live.
+   * @return The compaction mode for the given offset.
    */
-  public boolean isClean(long offset) {
-    return offset != -1 && (bits.size() <= offset || !bits.get(offset));
+  public Compaction.Mode get(long offset) {
+    if (offset > size) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    final long mode = (bytes.readLong(position(offset)) >> index(offset)) & 3l;
+    return Compaction.Mode.valueOf((int) mode);
   }
 
   /**
    * Releases an offset from the segment.
    *
    * @param offset The offset to release.
+   * @param mode The compaction mode with which to compact the entry at the given offset.
    * @return Indicates whether the offset was newly released.
    */
-  public boolean clean(long offset) {
+  public boolean set(long offset, Compaction.Mode mode) {
     Assert.argNot(offset < 0, "offset must be positive");
-    if (bits.size() <= offset) {
-      while (bits.size() <= offset) {
-        bits.resize(bits.size() * 2);
+    if (size <= offset) {
+      while (size <= offset) {
+        resize(size * 2);
       }
     }
-    return bits.set(offset);
+
+    if (get(offset) == Compaction.Mode.NONE) {
+      final long position = position(offset);
+      bytes.writeLong(position, bytes.readLong(position) | (mode.mask << index(offset)));
+      count++;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns the position of the long that stores the bits for the given offset.
+   */
+  private long position(long offset) {
+    return (offset / 32) * 8;
+  }
+
+  /**
+   * Returns the index of the bit for the given offset.
+   */
+  private long index(long offset) {
+    return offset * 2 % 64;
+  }
+
+  /**
+   * Resizes the cleaner bit array to the given size.
+   *
+   * @param size The size to which to resize the bit array.
+   */
+  private void resize(long size) {
+    bytes.resize(Math.max(size / 4 + 8, 8));
+    this.size = size;
   }
 
   /**
@@ -83,7 +118,7 @@ public final class SegmentCleaner implements AutoCloseable {
    * @return The number of offsets released from the segment.
    */
   public long count() {
-    return bits.count();
+    return count;
   }
 
   /**
@@ -92,12 +127,11 @@ public final class SegmentCleaner implements AutoCloseable {
    * @return The copied offset predicate.
    */
   public SegmentCleaner copy() {
-    return new SegmentCleaner(bits.copy());
+    return new SegmentCleaner(bytes.copy());
   }
 
   @Override
-  public void close() {
-    bits.close();
+  public String toString() {
+    return String.format("%s[size=%d, count=%d]", getClass().getSimpleName(), size, count);
   }
-
 }

@@ -37,7 +37,7 @@ import java.util.List;
  * <p>
  * Segments are selected for minor compaction based on several factors:
  * <ul>
- *   <li>The number of {@link Entry entries} in the segment that have been {@link Indexed#clean() cleaned}</li>
+ *   <li>The number of {@link Entry entries} in the segment that have been {@link Indexed#compact(Compaction.Mode) cleaned}</li>
  *   <li>The number of times the segment has been compacted already</li>
  * </ul>
  * <p>
@@ -68,7 +68,7 @@ public final class MinorCompactionManager implements CompactionManager {
   public List<CompactionTask> buildTasks(Storage storage, SegmentManager segments) {
     List<CompactionTask> tasks = new ArrayList<>(segments.segments().size());
     for (Segment segment : getCompactableSegments(storage, segments)) {
-      tasks.add(new MinorCompactionTask(segments, segment, compactor.snapshotIndex(), compactor.majorIndex(), compactor.getDefaultCompactionMode()));
+      tasks.add(new MinorCompactionTask(segments, segment, compactor.snapshotIndex()));
     }
     return tasks;
   }

@@ -19,11 +19,11 @@ import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 import io.atomix.copycat.util.Assert;
 
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Server commit.
@@ -34,7 +34,7 @@ final class ServerCommit<T extends Operation<T>> implements Commit<T> {
   private final Indexed<? extends OperationEntry<?>> entry;
   private final ServerSessionContext session;
   private final long timestamp;
-  private final AtomicInteger references = new AtomicInteger();
+  private boolean open = true;
 
   public ServerCommit(Indexed<? extends OperationEntry<?>> entry, ServerSessionContext session, long timestamp) {
     this.entry = entry;
@@ -46,7 +46,7 @@ final class ServerCommit<T extends Operation<T>> implements Commit<T> {
    * Checks whether the commit is open and throws an exception if not.
    */
   private void checkOpen() {
-    Assert.state(references.get() > 0, "commit not open");
+    Assert.state(open, "commit not open");
   }
 
   @Override
@@ -82,51 +82,38 @@ final class ServerCommit<T extends Operation<T>> implements Commit<T> {
   }
 
   @Override
-  public Commit<T> acquire() {
-    references.incrementAndGet();
-    return this;
-  }
+  public void compact(CompactionMode mode) {
+    // Force close the commit on compact.
+    close();
 
-  @Override
-  public boolean release() {
-    if (references.decrementAndGet() == 0) {
-      cleanup();
-      return true;
+    // Compact the entry from the log.
+    switch (mode) {
+      case RELEASE:
+      case QUORUM:
+        entry.compact(Compaction.Mode.QUORUM);
+        break;
+      case SEQUENTIAL:
+      case EXPIRING:
+      case TOMBSTONE:
+        entry.compact(Compaction.Mode.SEQUENTIAL);
+        break;
+      case SNAPSHOT:
+        entry.compact(Compaction.Mode.SNAPSHOT);
+        break;
     }
-    return false;
-  }
 
-  @Override
-  public int references() {
-    return references.get();
-  }
-
-  @Override
-  public void close() {
-    if (references.get() > 0) {
-      references.set(0);
-      cleanup();
-    }
-  }
-
-  /**
-   * Cleans up the commit.
-   */
-  private void cleanup() {
-    // Clean the entry from the log.
-    entry.clean();
-
-    // Release a reference to the session.
+    // Release the reference to the commit in the parent session.
     session.release();
   }
 
   @Override
+  public void close() {
+    open = false;
+  }
+
+  @Override
   public String toString() {
-    if (references() > 0) {
-      return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
-    } else {
-      return String.format("%s[index=unknown]", getClass().getSimpleName());
-    }
+    return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
   }
 
 }

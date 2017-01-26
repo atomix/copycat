@@ -20,7 +20,6 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.util.Assert;
 
 /**
@@ -42,11 +41,6 @@ public class CommandEntry extends OperationEntry<CommandEntry> {
   @Override
   public Type<CommandEntry> type() {
     return Type.COMMAND;
-  }
-
-  @Override
-  public Compaction.Mode compaction() {
-    return Compaction.Mode.valueOf(command.compaction().name());
   }
 
   @Override

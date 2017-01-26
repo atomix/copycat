@@ -18,6 +18,7 @@ package io.atomix.copycat.server.storage;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
@@ -100,22 +101,15 @@ public class Indexed<T extends Entry<T>> {
 
   /**
    * Cleans the entry from the log.
+   *
+   * @param mode The compaction mode with which to compact the entry from the log.
    */
-  public void clean() {
+  public void compact(Compaction.Mode mode) {
     if (cleaner == null) {
       throw new IllegalStateException("Cannot clean entry");
     } else {
-      cleaner.clean();
+      cleaner.clean(mode);
     }
-  }
-
-  /**
-   * Returns a boolean indicating whether the entry has been cleaned from the log.
-   *
-   * @return Indicates whether the entry has been cleaned from the log.
-   */
-  public boolean isClean() {
-    return cleaner != null && cleaner.isClean();
   }
 
   /**
@@ -125,6 +119,15 @@ public class Indexed<T extends Entry<T>> {
    */
   public boolean isCommitted() {
     return entry == null || cleaner != null;
+  }
+
+  /**
+   * Returns the entry compaction mode.
+   *
+   * @return The entry compaction mode.
+   */
+  public Compaction.Mode compaction() {
+    return cleaner != null ? cleaner.mode() : Compaction.Mode.NONE;
   }
 
   /**
