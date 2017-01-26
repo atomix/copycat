@@ -56,9 +56,4 @@ public class HttpCommand implements HttpOperation, Command<Object> {
   public String body() {
     return body;
   }
-
-  @Override
-  public CompactionMode compaction() {
-    return null;
-  }
 }

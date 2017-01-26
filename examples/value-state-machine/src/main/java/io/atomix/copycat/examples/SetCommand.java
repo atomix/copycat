@@ -35,10 +35,4 @@ public class SetCommand implements Command<Object> {
   public Object value() {
     return value;
   }
-
-  @Override
-  public CompactionMode compaction() {
-    return CompactionMode.QUORUM;
-  }
-
 }
