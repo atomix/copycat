@@ -80,7 +80,7 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
       if (response.status == Status.OK) {
         output.writeLong(response.session);
         kryo.writeObject(output, response.leader);
-        kryo.writeObject(output, response.members);
+        kryo.writeClassAndObject(output, response.members);
         output.writeLong(response.timeout);
       } else {
         output.writeByte(response.error.type().id());
@@ -94,7 +94,7 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {
-        return new NetRegisterResponse(id, status, null, input.readLong(), kryo.readObject(input, Address.class), kryo.readObject(input, Collection.class), input.readLong());
+        return new NetRegisterResponse(id, status, null, input.readLong(), kryo.readObject(input, Address.class), (Collection) kryo.readClassAndObject(input), input.readLong());
       } else {
         NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
         return new NetRegisterResponse(id, status, error, 0, null, null, 0);

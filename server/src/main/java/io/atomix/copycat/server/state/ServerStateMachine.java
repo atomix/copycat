@@ -267,7 +267,16 @@ final class ServerStateMachine implements AutoCloseable {
     if (!log.isOpen()) {
       return;
     }
-    context.executor().execute(() -> applyIndex(index));
+
+    // Only apply valid indices.
+    if (index > 0) {
+      context.executor().execute(() -> {
+        // Don't attempt to apply indices that have already been applied.
+        if (index > lastApplied) {
+          applyIndex(index);
+        }
+      });
+    }
   }
 
   /**
@@ -292,36 +301,42 @@ final class ServerStateMachine implements AutoCloseable {
   private <T> CompletableFuture<T> applyIndex(long index) {
     context.checkThread();
 
-    // Apply entries prior to this entry.
-    while (reader.hasNext()) {
-      // If the next index is less than or equal to the given index, read and apply the entry.
-      if (reader.nextIndex() < index) {
+    reader.lock();
+
+    try {
+      // Apply entries prior to this entry.
+      while (reader.hasNext()) {
+        // If the next index is less than or equal to the given index, read and apply the entry.
+        if (reader.nextIndex() < index) {
+          Indexed<? extends Entry<?>> entry = reader.next();
+          if (!entry.isCompacted()) {
+            applyEntry(entry);
+            setLastApplied(entry.index());
+          }
+        }
+        // If the index has been reached, break.
+        else {
+          break;
+        }
+      }
+
+      // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
+      // simply update the last applied index and return a null result.
+      try {
         Indexed<? extends Entry<?>> entry = reader.next();
         if (!entry.isCompacted()) {
-          applyEntry(entry);
-          setLastApplied(entry.index());
+          if (entry.index() != index) {
+            throw new IllegalStateException("inconsistent index applying entry " + index + ": " + entry);
+          }
+          return applyEntry(entry);
+        } else {
+          return CompletableFuture.completedFuture(null);
         }
-      }
-      // If the index has been reached, break.
-      else {
-        break;
-      }
-    }
-
-    // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
-    // simply update the last applied index and return a null result.
-    try {
-      Indexed<? extends Entry<?>> entry = reader.next();
-      if (!entry.isCompacted()) {
-        if (entry.index() != index) {
-          throw new IllegalStateException("inconsistent index applying entry " + index + ": " + entry);
-        }
-        return applyEntry(entry);
-      } else {
-        return CompletableFuture.completedFuture(null);
+      } finally {
+        setLastApplied(index);
       }
     } finally {
-      setLastApplied(index);
+      reader.unlock();
     }
   }
 

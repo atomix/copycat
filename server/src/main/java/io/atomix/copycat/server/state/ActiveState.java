@@ -93,6 +93,15 @@ abstract class ActiveState extends PassiveState {
   @Override
   @SuppressWarnings("unchecked")
   protected AppendResponse appendEntries(AppendRequest request, AppendResponse.Builder responseBuilder) {
+    // Get the last entry index or default to the request log index.
+    long lastEntryIndex = request.logIndex();
+    if (!request.entries().isEmpty()) {
+      lastEntryIndex = request.entries().get(request.entries().size() - 1).index();
+    }
+
+    // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
+    final long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
+
     // If the log contains entries after the request's previous log index
     // then remove those entries to be replaced by the request entries.
     if (!request.entries().isEmpty()) {
@@ -124,7 +133,7 @@ abstract class ActiveState extends PassiveState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    context.setCommitIndex(request.commitIndex());
+    context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
 
     // Apply commits to the local state machine.

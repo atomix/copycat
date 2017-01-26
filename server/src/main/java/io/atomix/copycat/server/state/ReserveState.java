@@ -114,7 +114,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .withIndex(response.index())
             .withEventIndex(response.eventIndex())
             .withResult(response.result())
@@ -152,7 +152,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .withIndex(response.index())
             .withEventIndex(response.eventIndex())
             .withResult(response.result())
@@ -186,7 +186,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .withSession(response.session())
             .withLeader(response.leader())
             .withMembers(response.members())
@@ -243,7 +243,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .withLeader(response.leader())
             .withMembers(response.members())
             .build())
@@ -311,7 +311,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .build())
         .exceptionally(error ->
           responseBuilder
@@ -378,7 +378,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .withIndex(response.index())
             .withTerm(response.term())
             .withMembers(response.members())
@@ -411,7 +411,7 @@ class ReserveState extends InactiveState {
         .thenApply(response ->
           responseBuilder
             .withStatus(response.status())
-            .withError(response.error().type(), response.error().message())
+            .withError(response.error())
             .withIndex(response.index())
             .withTerm(response.term())
             .withMembers(response.members())

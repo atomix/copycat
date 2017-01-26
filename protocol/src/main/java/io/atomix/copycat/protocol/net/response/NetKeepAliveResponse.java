@@ -79,7 +79,7 @@ public class NetKeepAliveResponse extends KeepAliveResponse implements NetRespon
       output.writeByte(response.status.id());
       if (response.status == Status.OK) {
         kryo.writeObject(output, response.leader);
-        kryo.writeObject(output, response.members);
+        kryo.writeClassAndObject(output, response.members);
       } else {
         output.writeByte(response.error.type().id());
         output.writeString(response.error.message());
@@ -92,7 +92,7 @@ public class NetKeepAliveResponse extends KeepAliveResponse implements NetRespon
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {
-        return new NetKeepAliveResponse(id, status, null, kryo.readObject(input, Address.class), kryo.readObject(input, Collection.class));
+        return new NetKeepAliveResponse(id, status, null, kryo.readObject(input, Address.class), (Collection) kryo.readClassAndObject(input));
       } else {
         NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
         return new NetKeepAliveResponse(id, status, error, null, null);

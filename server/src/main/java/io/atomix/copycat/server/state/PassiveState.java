@@ -306,7 +306,7 @@ class PassiveState extends ReserveState {
       .thenApply(response ->
         responseBuilder
           .withStatus(response.status())
-          .withError(response.error().type(), response.error().message())
+          .withError(response.error())
           .withIndex(response.index())
           .withEventIndex(response.eventIndex())
           .withResult(response.result())

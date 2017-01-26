@@ -388,8 +388,6 @@ abstract class AbstractAppender implements AutoCloseable {
     ConfigureRequest prototype = factory.build(new ConfigureRequest.Builder());
 
     context.getConnections().getConnection(member.getMember().serverAddress()).whenComplete((connection, error) -> {
-      context.checkThread();
-
       if (open) {
         if (error == null) {
           sendConfigureRequest(connection, member, prototype);
