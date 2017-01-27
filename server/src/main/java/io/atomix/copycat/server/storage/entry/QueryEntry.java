@@ -18,12 +18,9 @@ package io.atomix.copycat.server.storage.entry;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
-import io.atomix.copycat.util.Assert;
 
 /**
- * Represents a state machine {@link Query}.
+ * Represents a state machine query.
  * <p>
  * The {@code QueryEntry} is a special entry that is typically not ever written to the Raft log.
  * Query entries are simply used to represent the context within which a query is applied to the
@@ -33,11 +30,9 @@ import io.atomix.copycat.util.Assert;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class QueryEntry extends OperationEntry<QueryEntry> {
-  private final Query query;
 
-  public QueryEntry(long timestamp, long session, long sequence, Query query) {
-    super(timestamp, session, sequence);
-    this.query = Assert.notNull(query, "query");
+  public QueryEntry(long timestamp, long session, long sequence, byte[] bytes) {
+    super(timestamp, session, sequence, bytes);
   }
 
   @Override
@@ -46,22 +41,8 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
   }
 
   @Override
-  public Operation operation() {
-    return query;
-  }
-
-  /**
-   * Returns the query.
-   *
-   * @return The query.
-   */
-  public Query query() {
-    return query;
-  }
-
-  @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), session(), sequence(), timestamp(), query);
+    return String.format("%s[session=%d, sequence=%d, timestamp=%d, query=byte[%d]]", getClass().getSimpleName(), session(), sequence(), timestamp(), bytes.length);
   }
 
   /**
@@ -73,12 +54,13 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
       output.writeLong(entry.timestamp);
       output.writeLong(entry.session);
       output.writeLong(entry.sequence);
-      kryo.writeClassAndObject(output, entry.query);
+      output.writeInt(entry.bytes.length);
+      output.write(entry.bytes);
     }
 
     @Override
     public QueryEntry read(Kryo kryo, Input input, Class<QueryEntry> type) {
-      return new QueryEntry(input.readLong(), input.readLong(), input.readLong(), (Query) kryo.readClassAndObject(input));
+      return new QueryEntry(input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()));
     }
   }
 }

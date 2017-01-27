@@ -172,7 +172,7 @@ final class FollowerState extends ActiveState {
                 }
               }
             }
-          }, context.getThreadContext().executor());
+          }, context.getThreadContext());
       });
     }
   }

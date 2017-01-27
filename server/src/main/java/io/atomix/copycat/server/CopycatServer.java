@@ -15,12 +15,10 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
-import io.atomix.copycat.protocol.error.ConfigurationException;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.protocol.ProtocolServer;
+import io.atomix.copycat.protocol.error.ConfigurationException;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.RaftProtocol;
@@ -55,7 +53,7 @@ import java.util.function.Supplier;
  * the cluster.
  * <h2>State machines</h2>
  * Underlying each server is a {@link StateMachine}. The state machine is responsible for maintaining the state with
- * relation to {@link Command}s and {@link Query}s submitted to the server by a client. State machines are provided
+ * relation to commands and queries submitted to the server by a client. State machines are provided
  * in a factory to allow servers to transition between stateful and stateless states.
  * <pre>
  *   {@code
@@ -67,7 +65,7 @@ import java.util.function.Supplier;
  *     .build();
  *   }
  * </pre>
- * Server state machines are responsible for registering {@link Command}s which can be submitted to the cluster. Raft
+ * Server state machines are responsible for registering commands which can be submitted to the cluster. Raft
  * relies upon determinism to ensure consistency throughout the cluster, so <em>it is imperative that each server in
  * a cluster have the same state machine with the same commands.</em> State machines are provided to the server as
  * a {@link Supplier factory} to allow servers to {@link Member#promote(Member.Type) transition} between stateful
@@ -87,7 +85,7 @@ import java.util.function.Supplier;
  * }
  * </pre>
  * <h2>Storage</h2>
- * As {@link Command}s are received by the server, they're written to the Raft {@link io.atomix.copycat.server.storage.Log} and replicated to other members
+ * As commands are received by the server, they're written to the Raft {@link io.atomix.copycat.server.storage.Log} and replicated to other members
  * of the cluster. By default, the log is stored on disk, but users can override the default {@link Storage} configuration
  * via {@link CopycatServer.Builder#withStorage(Storage)}. Most notably, to configure the storage module to store entries in
  * memory instead of disk, configure the {@link StorageLevel}.
@@ -389,19 +387,6 @@ public class CopycatServer {
   }
 
   /**
-   * Returns the server execution context.
-   * <p>
-   * The thread context is the event loop that this server uses to communicate other Raft servers.
-   * Implementations must guarantee that all asynchronous {@link java.util.concurrent.CompletableFuture} callbacks are
-   * executed on a single thread via the returned {@link io.atomix.copycat.util.concurrent.ThreadContext}.
-   *
-   * @return The server thread context.
-   */
-  public ThreadContext context() {
-    return context.getThreadContext();
-  }
-
-  /**
    * Bootstraps a single-node cluster.
    * <p>
    * Bootstrapping a single-node cluster results in the server forming a new cluster to which additional servers
@@ -613,7 +598,7 @@ public class CopycatServer {
    */
   private CompletableFuture<Void> listen() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       raftServer.listen(cluster().member().serverAddress(), context::connectServer).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
           // If the client address is different than the server address, start a separate client server.
@@ -654,7 +639,7 @@ public class CopycatServer {
       return Futures.exceptionalFuture(new IllegalStateException("context not open"));
 
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       started = false;
       if (clientServer != null) {
         clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
@@ -666,8 +651,8 @@ public class CopycatServer {
             } else {
               future.complete(null);
             }
-          }, context.getThreadContext().executor());
-        }, context.getThreadContext().executor());
+          }, context.getThreadContext());
+        }, context.getThreadContext());
       } else {
         raftServer.close().whenCompleteAsync((internalResult, internalError) -> {
           if (internalError != null) {
@@ -675,7 +660,7 @@ public class CopycatServer {
           } else {
             future.complete(null);
           }
-        }, context.getThreadContext().executor());
+        }, context.getThreadContext());
       }
 
       context.transition(CopycatServer.State.INACTIVE);

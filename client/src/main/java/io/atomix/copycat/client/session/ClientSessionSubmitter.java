@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.NoOpCommand;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.error.CommandException;
 import io.atomix.copycat.protocol.error.QueryException;
@@ -71,40 +69,38 @@ final class ClientSessionSubmitter {
    * Submits a command to the cluster.
    *
    * @param command The command to submit.
-   * @param <T> The command result type.
    * @return A completable future to be completed once the command has been submitted.
    */
-  public <T> CompletableFuture<T> submit(Command<T> command) {
-    CompletableFuture<T> future = new CompletableFuture<>();
-    context.executor().execute(() -> submitCommand(command, future));
+  public CompletableFuture<byte[]> submitCommand(byte[] command) {
+    CompletableFuture<byte[]> future = new CompletableFuture<>();
+    context.execute(() -> submitCommand(command, future));
     return future;
   }
 
   /**
    * Submits a command to the cluster.
    */
-  private <T> void submitCommand(Command<T> command, CompletableFuture<T> future) {
-    submit(new CommandAttempt<>(sequencer.nextRequest(), state.getSessionId(), state.nextCommandRequest(), command, future));
+  private void submitCommand(byte[] command, CompletableFuture<byte[]> future) {
+    submit(new CommandAttempt(sequencer.nextRequest(), state.getSessionId(), state.nextCommandRequest(), command, future));
   }
 
   /**
    * Submits a query to the cluster.
    *
    * @param query The query to submit.
-   * @param <T> The query result type.
    * @return A completable future to be completed once the query has been submitted.
    */
-  public <T> CompletableFuture<T> submit(Query<T> query) {
-    CompletableFuture<T> future = new CompletableFuture<>();
-    context.executor().execute(() -> submitQuery(query, future));
+  public CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency) {
+    CompletableFuture<byte[]> future = new CompletableFuture<>();
+    context.execute(() -> submitQuery(query, consistency, future));
     return future;
   }
 
   /**
    * Submits a query to the cluster.
    */
-  private <T> void submitQuery(Query<T> query, CompletableFuture<T> future) {
-    submit(new QueryAttempt<>(sequencer.nextRequest(), state.getSessionId(), state.getCommandRequest(), state.getResponseIndex(), query, future));
+  private void submitQuery(byte[] query, ConsistencyLevel consistency, CompletableFuture<byte[]> future) {
+    submit(new QueryAttempt(sequencer.nextRequest(), state.getSessionId(), state.getCommandRequest(), state.getResponseIndex(), query, consistency, future));
   }
 
   /**
@@ -112,7 +108,7 @@ final class ClientSessionSubmitter {
    *
    * @param attempt The attempt to submit.
    */
-  private <T extends OperationRequest, U extends OperationResponse, V> void submit(OperationAttempt<T, U, V> attempt) {
+  private <T extends OperationRequest, U extends OperationResponse> void submit(OperationAttempt<T, U> attempt) {
     if (state.getState() == Session.State.CLOSED || state.getState() == Session.State.EXPIRED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
@@ -136,12 +132,12 @@ final class ClientSessionSubmitter {
   /**
    * Operation attempt.
    */
-  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse, V> implements BiConsumer<U, Throwable> {
+  private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse> implements BiConsumer<U, Throwable> {
     protected final long id;
     protected final int attempt;
-    protected final CompletableFuture<V> future;
+    protected final CompletableFuture<byte[]> future;
 
-    protected OperationAttempt(long id, int attempt, CompletableFuture<V> future) {
+    protected OperationAttempt(long id, int attempt, CompletableFuture<byte[]> future) {
       this.id = id;
       this.attempt = attempt;
       this.future = future;
@@ -152,7 +148,7 @@ final class ClientSessionSubmitter {
      *
      * @return The next instance of the attempt.
      */
-    protected abstract OperationAttempt<T, U, V> next();
+    protected abstract OperationAttempt<T, U> next();
 
     /**
      * Returns a new instance of the default exception for the operation.
@@ -215,7 +211,7 @@ final class ClientSessionSubmitter {
      * Immediately retries the attempt.
      */
     public void retry() {
-      context.executor().execute(() -> submit(next()));
+      context.execute(() -> submit(next()));
     }
 
     /**
@@ -231,19 +227,19 @@ final class ClientSessionSubmitter {
   /**
    * Command operation attempt.
    */
-  private final class CommandAttempt<T> extends OperationAttempt<CommandRequest, CommandResponse, T> {
+  private final class CommandAttempt extends OperationAttempt<CommandRequest, CommandResponse> {
     private final long session;
     private final long sequence;
-    private final Command<T> command;
+    private final byte[] command;
 
-    public CommandAttempt(long id, long session, long sequence, Command<T> command, CompletableFuture<T> future) {
+    public CommandAttempt(long id, long session, long sequence, byte[] command, CompletableFuture<byte[]> future) {
       super(id, 1, future);
       this.session = session;
       this.sequence = sequence;
       this.command = command;
     }
 
-    public CommandAttempt(long id, int attempt, long session, long sequence, Command<T> command, CompletableFuture<T> future) {
+    public CommandAttempt(long id, int attempt, long session, long sequence, byte[] command, CompletableFuture<byte[]> future) {
       super(id, attempt, future);
       this.session = session;
       this.sequence = sequence;
@@ -260,8 +256,8 @@ final class ClientSessionSubmitter {
     }
 
     @Override
-    protected OperationAttempt<CommandRequest, CommandResponse, T> next() {
-      return new CommandAttempt<>(id, this.attempt + 1, session, sequence, command, future);
+    protected OperationAttempt<CommandRequest, CommandResponse> next() {
+      return new CommandAttempt(id, this.attempt + 1, session, sequence, command, future);
     }
 
     @Override
@@ -291,7 +287,7 @@ final class ClientSessionSubmitter {
     @SuppressWarnings("unchecked")
     public void fail(Throwable t) {
       super.fail(t);
-      context.executor().execute(() -> submit(new CommandAttempt<>(id, this.attempt + 1, session, sequence, (Command) new NoOpCommand(), (CompletableFuture) future)));
+      context.execute(() -> submit(new CommandAttempt(id, this.attempt + 1, session, sequence, null, future)));
     }
 
     @Override
@@ -300,7 +296,7 @@ final class ClientSessionSubmitter {
       sequence(response, () -> {
         state.setCommandResponse(sequence);
         state.setResponseIndex(response.index());
-        future.complete((T) response.result());
+        future.complete(response.result());
       });
     }
   }
@@ -308,26 +304,29 @@ final class ClientSessionSubmitter {
   /**
    * Query operation attempt.
    */
-  private final class QueryAttempt<T> extends OperationAttempt<QueryRequest, QueryResponse, T> {
+  private final class QueryAttempt extends OperationAttempt<QueryRequest, QueryResponse> {
     private final long session;
     private final long sequence;
     private final long index;
-    private final Query<T> query;
+    private final byte[] query;
+    private final ConsistencyLevel consistency;
 
-    public QueryAttempt(long id, long sessionId, long sequence, long index, Query<T> query, CompletableFuture<T> future) {
+    public QueryAttempt(long id, long sessionId, long sequence, long index, byte[] query, ConsistencyLevel consistency, CompletableFuture<byte[]> future) {
       super(id, 1, future);
       this.session = sessionId;
       this.sequence = sequence;
       this.index = index;
       this.query = query;
+      this.consistency = consistency;
     }
 
-    public QueryAttempt(long id, int attempt, long sessionId, long sequence, long index, Query<T> query, CompletableFuture<T> future) {
+    public QueryAttempt(long id, int attempt, long sessionId, long sequence, long index, byte[] query, ConsistencyLevel consistency, CompletableFuture<byte[]> future) {
       super(id, attempt, future);
       this.session = sessionId;
       this.sequence = sequence;
       this.index = index;
       this.query = query;
+      this.consistency = consistency;
     }
 
     @Override
@@ -337,12 +336,13 @@ final class ClientSessionSubmitter {
           .withSequence(sequence)
           .withIndex(index)
           .withQuery(query)
+          .withConsistency(consistency)
           .build());
     }
 
     @Override
-    protected OperationAttempt<QueryRequest, QueryResponse, T> next() {
-      return new QueryAttempt<>(id, this.attempt + 1, session, sequence, index, query, future);
+    protected OperationAttempt<QueryRequest, QueryResponse> next() {
+      return new QueryAttempt(id, this.attempt + 1, session, sequence, index, query, consistency, future);
     }
 
     @Override
@@ -369,7 +369,7 @@ final class ClientSessionSubmitter {
     protected void complete(QueryResponse response) {
       sequence(response, () -> {
         state.setResponseIndex(response.index());
-        future.complete((T) response.result());
+        future.complete(response.result());
       });
     }
   }

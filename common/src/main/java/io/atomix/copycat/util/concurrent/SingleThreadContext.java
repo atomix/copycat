@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Single threaded context.
@@ -117,8 +118,21 @@ public class SingleThreadContext implements ThreadContext {
   }
 
   @Override
-  public Executor executor() {
-    return wrappedExecutor;
+  public void execute(Runnable callback) {
+    executor.execute(callback);
+  }
+
+  @Override
+  public <T> CompletableFuture<T> execute(Supplier<T> callback) {
+    CompletableFuture<T> future = new CompletableFuture<>();
+    executor.execute(() -> {
+      try {
+        future.complete(callback.get());
+      } catch (Throwable t) {
+        future.completeExceptionally(t);
+      }
+    });
+    return future;
   }
 
   @Override

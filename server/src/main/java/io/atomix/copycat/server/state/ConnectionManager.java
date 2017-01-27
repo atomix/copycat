@@ -31,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 public final class ConnectionManager {
   private final RaftProtocolClient client;
   private final Map<Address, RaftProtocolClientConnection> connections = new HashMap<>();
+  private final Map<Address, CompletableFuture<RaftProtocolClientConnection>> futures = new HashMap<>();
 
   public ConnectionManager(RaftProtocolClient client) {
     this.client = client;
@@ -42,9 +43,17 @@ public final class ConnectionManager {
    * @param address The member for which to get the connection.
    * @return A completable future to be called once the connection is received.
    */
-  public CompletableFuture<RaftProtocolClientConnection> getConnection(Address address) {
+  public synchronized CompletableFuture<RaftProtocolClientConnection> getConnection(Address address) {
     RaftProtocolClientConnection connection = connections.get(address);
-    return connection == null ? createConnection(address) : CompletableFuture.completedFuture(connection);
+    if (connection == null) {
+      CompletableFuture<RaftProtocolClientConnection> future = futures.get(address);
+      if (future == null) {
+        future = createConnection(address);
+        futures.put(address, future);
+      }
+      return future;
+    }
+    return CompletableFuture.completedFuture(connection);
   }
 
   /**
@@ -52,7 +61,7 @@ public final class ConnectionManager {
    *
    * @param address The address for which to reset the connection.
    */
-  public void resetConnection(Address address) {
+  public synchronized void resetConnection(Address address) {
     RaftProtocolClientConnection connection = connections.remove(address);
     if (connection != null) {
       connection.close();
@@ -65,7 +74,7 @@ public final class ConnectionManager {
    * @param address The member for which to create the connection.
    * @return A completable future to be called once the connection has been created.
    */
-  private CompletableFuture<RaftProtocolClientConnection> createConnection(Address address) {
+  private synchronized CompletableFuture<RaftProtocolClientConnection> createConnection(Address address) {
     return client.connect(address).thenApply(connection -> {
       connection.closeListener(c -> {
         if (connections.get(address) == c) {
@@ -82,14 +91,12 @@ public final class ConnectionManager {
    *
    * @return A completable future to be completed once the connection manager is closed.
    */
-  public CompletableFuture<Void> close() {
+  public synchronized CompletableFuture<Void> close() {
     CompletableFuture[] futures = new CompletableFuture[connections.size()];
-
     int i = 0;
     for (RaftProtocolClientConnection connection : connections.values()) {
       futures[i++] = connection.close();
     }
-
     return CompletableFuture.allOf(futures);
   }
 

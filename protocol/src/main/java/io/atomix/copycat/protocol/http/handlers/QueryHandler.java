@@ -15,7 +15,9 @@
  */
 package io.atomix.copycat.protocol.http.handlers;
 
-import io.atomix.copycat.Query;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.undercouch.bson4jackson.BsonFactory;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.http.HttpQuery;
 import io.atomix.copycat.protocol.http.HttpServerConnection;
 import io.atomix.copycat.protocol.request.QueryRequest;
@@ -25,6 +27,7 @@ import io.vertx.core.json.Json;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,6 +47,8 @@ public class QueryHandler extends RequestHandler {
       return new QueryHandler(connection);
     }
   }
+
+  private final ObjectMapper mapper = new ObjectMapper(new BsonFactory());
 
   public QueryHandler(HttpServerConnection connection) {
     super(connection);
@@ -69,10 +74,19 @@ public class QueryHandler extends RequestHandler {
       headers.put(entry.getKey(), entry.getValue());
     }
 
-    HttpQuery command = new HttpQuery(path, headers, context.getBodyAsString(), consistency != null ? Query.ConsistencyLevel.valueOf(consistency.toUpperCase()) : Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    final HttpQuery query = new HttpQuery(path, headers, context.getBodyAsString());
+    final byte[] bytes;
+    try {
+      bytes = mapper.writeValueAsBytes(query);
+    } catch (IOException e) {
+      fail(context, e, 400);
+      return;
+    }
+
     connection.onQuery(new QueryRequest.Builder()
       .withSession(sessionId)
-      .withQuery(command)
+      .withQuery(bytes)
+      .withConsistency(consistency != null ? ConsistencyLevel.valueOf(consistency.toUpperCase()) : ConsistencyLevel.LINEARIZABLE_LEASE)
       .build(), new QueryResponse.Builder())
       .whenComplete((response, error) -> {
         if (error == null) {

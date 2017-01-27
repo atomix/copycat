@@ -15,37 +15,17 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
-
 /**
  * Test state machine.
  */
 public class TestStateMachine extends StateMachine {
-  /**
-   * Test command.
-   */
-  public static class TestCommand implements Command<String> {
-    public String value;
-
-    public TestCommand(String value) {
-      this.value = value;
-    }
+  @Override
+  public byte[] applyCommand(Commit commit) {
+    return new byte[0];
   }
 
   @Override
-  protected void configure(StateMachineExecutor executor) {
-    executor.register(TestCommand.class, this::command);
+  public byte[] applyQuery(Commit commit) {
+    return new byte[0];
   }
-
-  private String command(Commit<TestCommand> commit) {
-    return commit.operation().value;
-  }
-
-  /**
-   * Test query.
-   */
-  public static class TestQuery implements Query<String> {
-  }
-
 }

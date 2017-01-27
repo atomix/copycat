@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.copycat.Operation;
+import io.atomix.copycat.util.Assert;
 
 /**
  * Stores a state machine operation.
@@ -30,18 +30,22 @@ import io.atomix.copycat.Operation;
  */
 public abstract class OperationEntry<T extends OperationEntry<T>> extends SessionEntry<T> {
   protected final long sequence;
+  protected final byte[] bytes;
 
-  protected OperationEntry(long timestamp, long session, long sequence) {
+  protected OperationEntry(long timestamp, long session, long sequence, byte[] bytes) {
     super(timestamp, session);
     this.sequence = sequence;
+    this.bytes = Assert.notNull(bytes, "bytes");
   }
 
   /**
-   * Returns the entry operation.
+   * Returns the entry operation bytes.
    *
-   * @return The entry operation.
+   * @return The entry operation bytes.
    */
-  public abstract Operation operation();
+  public byte[] bytes() {
+    return bytes;
+  }
 
   /**
    * Returns the operation sequence number.

@@ -16,8 +16,8 @@
 package io.atomix.copycat.protocol.request;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.Command;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -37,30 +37,14 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandRequest extends OperationRequest {
-  protected final Command command;
 
-  protected CommandRequest(long session, long sequence, Command command) {
-    super(session, sequence);
-    this.command = Assert.notNull(command, "command");
-  }
-
-  /**
-   * Returns the command.
-   *
-   * @return The command.
-   */
-  public Command command() {
-    return command;
-  }
-
-  @Override
-  public Command operation() {
-    return command;
+  protected CommandRequest(long session, long sequence, byte[] bytes) {
+    super(session, sequence, bytes);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, command);
+    return Objects.hash(getClass(), session, sequence, bytes);
   }
 
   @Override
@@ -69,42 +53,42 @@ public class CommandRequest extends OperationRequest {
       CommandRequest request = (CommandRequest) object;
       return request.session == session
         && request.sequence == sequence
-        && request.command.equals(command);
+        && Arrays.equals(request.bytes, bytes);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, command=%s]", getClass().getSimpleName(), session, sequence, command);
+    return String.format("%s[session=%d, sequence=%d, command=byte[%s]]", getClass().getSimpleName(), session, sequence, bytes.length);
   }
 
   /**
    * Write request builder.
    */
   public static class Builder extends OperationRequest.Builder<CommandRequest.Builder, CommandRequest> {
-    protected Command command;
+    protected byte[] bytes;
 
     /**
      * Sets the request command.
      *
-     * @param command The request command.
+     * @param bytes The request command bytes.
      * @return The request builder.
      * @throws NullPointerException if {@code command} is null
      */
-    public Builder withCommand(Command command) {
-      this.command = Assert.notNull(command, "command");
+    public Builder withCommand(byte[] bytes) {
+      this.bytes = Assert.notNull(bytes, "bytes");
       return this;
     }
 
     @Override
     public CommandRequest copy(CommandRequest request) {
-      return new CommandRequest(request.session, request.sequence, request.command);
+      return new CommandRequest(request.session, request.sequence, request.bytes);
     }
 
     @Override
     public CommandRequest build() {
-      return new CommandRequest(session, sequence, command);
+      return new CommandRequest(session, sequence, bytes);
     }
   }
 }

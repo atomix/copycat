@@ -123,7 +123,7 @@ abstract class ActiveState extends PassiveState {
           // If the entry is a connect entry then immediately configure the connection.
           if (entry.entry().type() == Entry.Type.CONNECT) {
             Indexed<ConnectEntry> connectEntry = (Indexed<ConnectEntry>) entry;
-            context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
+            context.getStateMachine().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
           }
         }
       } finally {

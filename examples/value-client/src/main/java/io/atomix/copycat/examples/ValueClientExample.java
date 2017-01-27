@@ -93,7 +93,7 @@ public class ValueClientExample {
    * Recursively sets state machine values.
    */
   private static void recursiveSet(CopycatClient client, AtomicInteger counter) {
-    client.submit(new SetCommand(UUID.randomUUID().toString())).thenRun(() -> {
+    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenRun(() -> {
       counter.incrementAndGet();
       recursiveSet(client, counter);
     });

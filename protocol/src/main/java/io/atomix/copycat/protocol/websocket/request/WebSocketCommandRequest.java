@@ -18,7 +18,6 @@ package io.atomix.copycat.protocol.websocket.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.protocol.request.CommandRequest;
 
 /**
@@ -34,8 +33,8 @@ public class WebSocketCommandRequest extends CommandRequest implements WebSocket
     @JsonProperty("id") long id,
     @JsonProperty("session") long session,
     @JsonProperty("sequence") long sequence,
-    @JsonProperty("command") Command command) {
-    super(session, sequence, command);
+    @JsonProperty("command") byte[] bytes) {
+    super(session, sequence, bytes);
     this.id = id;
   }
 
@@ -74,8 +73,8 @@ public class WebSocketCommandRequest extends CommandRequest implements WebSocket
 
   @Override
   @JsonGetter("command")
-  public Command command() {
-    return super.command();
+  public byte[] bytes() {
+    return super.bytes();
   }
 
   /**
@@ -90,12 +89,12 @@ public class WebSocketCommandRequest extends CommandRequest implements WebSocket
 
     @Override
     public CommandRequest copy(CommandRequest request) {
-      return new WebSocketCommandRequest(id, request.session(), request.sequence(), request.command());
+      return new WebSocketCommandRequest(id, request.session(), request.sequence(), request.bytes());
     }
 
     @Override
     public CommandRequest build() {
-      return new WebSocketCommandRequest(id, session, sequence, command);
+      return new WebSocketCommandRequest(id, session, sequence, bytes);
     }
   }
 }

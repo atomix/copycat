@@ -521,7 +521,7 @@ public class ServerContext implements AutoCloseable {
     connection.onCommand((request, builder) -> runOnContext(() -> state.onCommand(request, builder)));
     connection.onQuery((request, builder) -> runOnContext(() -> state.onQuery(request, builder)));
 
-    connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+    connection.closeListener(stateMachine.context().sessions()::unregisterConnection);
   }
 
   /**
@@ -547,7 +547,7 @@ public class ServerContext implements AutoCloseable {
     connection.onCommand((request, builder) -> runOnContext(() -> state.onCommand(request, builder)));
     connection.onQuery((request, builder) -> runOnContext(() -> state.onQuery(request, builder)));
 
-    connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+    connection.closeListener(stateMachine.context().sessions()::unregisterConnection);
   }
 
   /**
@@ -555,7 +555,7 @@ public class ServerContext implements AutoCloseable {
    */
   <T extends ProtocolResponse> CompletableFuture<T> runOnContext(Supplier<CompletableFuture<T>> supplier) {
     ComposableFuture<T> future = new ComposableFuture<>();
-    threadContext.executor().execute(() -> supplier.get().whenComplete(future));
+    threadContext.execute(() -> supplier.get().whenComplete(future));
     return future;
   }
 

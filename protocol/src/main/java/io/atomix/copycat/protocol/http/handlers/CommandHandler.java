@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.protocol.http.handlers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.undercouch.bson4jackson.BsonFactory;
 import io.atomix.copycat.protocol.http.HttpCommand;
 import io.atomix.copycat.protocol.http.HttpServerConnection;
 import io.atomix.copycat.protocol.request.CommandRequest;
@@ -24,6 +26,7 @@ import io.vertx.core.json.Json;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,6 +46,8 @@ public class CommandHandler extends RequestHandler {
       return new CommandHandler(connection);
     }
   }
+
+  private final ObjectMapper mapper = new ObjectMapper(new BsonFactory());
 
   public CommandHandler(HttpServerConnection connection) {
     super(connection);
@@ -97,10 +102,18 @@ public class CommandHandler extends RequestHandler {
         break;
     }
 
-    HttpCommand command = new HttpCommand(path, context.request().method().name(), headers, context.getBodyAsString());
+    final HttpCommand command = new HttpCommand(path, context.request().method().name(), headers, context.getBodyAsString());
+    final byte[] bytes;
+    try {
+      bytes = mapper.writeValueAsBytes(command);
+    } catch (IOException e) {
+      fail(context, e, 400);
+      return;
+    }
+
     connection.onCommand(new CommandRequest.Builder()
       .withSession(sessionId)
-      .withCommand(command)
+      .withCommand(bytes)
       .build(), new CommandResponse.Builder())
       .whenComplete((response, error) -> {
         if (error == null) {

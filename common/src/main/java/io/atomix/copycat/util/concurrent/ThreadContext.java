@@ -38,7 +38,7 @@ import java.util.function.Supplier;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface ThreadContext extends AutoCloseable {
+public interface ThreadContext extends Executor, AutoCloseable {
 
   /**
    * Returns the current thread context.
@@ -83,13 +83,6 @@ public interface ThreadContext extends AutoCloseable {
   Logger logger();
 
   /**
-   * Returns the underlying executor.
-   *
-   * @return The underlying executor.
-   */
-  Executor executor();
-
-  /**
    * Returns a boolean indicating whether the context state is blocked.
    *
    * @return Indicates whether the context state is blocked.
@@ -107,23 +100,11 @@ public interface ThreadContext extends AutoCloseable {
   void unblock();
 
   /**
-   * Executes a callback on the context.
+   * Executes the given callback on the context.
    *
-   * @param callback The callback to execute.
-   * @return A completable future to be completed once the callback has been executed.
+   * @param callback The callback to execute on the context.
    */
-  default CompletableFuture<Void> execute(Runnable callback) {
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    executor().execute(() -> {
-      try {
-        callback.run();
-        future.complete(null);
-      } catch (Throwable t) {
-        future.completeExceptionally(t);
-      }
-    });
-    return future;
-  }
+  void execute(Runnable callback);
 
   /**
    * Executes a callback on the context.
@@ -132,17 +113,7 @@ public interface ThreadContext extends AutoCloseable {
    * @param <T> The callback result type.
    * @return A completable future to be completed with the callback result.
    */
-  default <T> CompletableFuture<T> execute(Supplier<T> callback) {
-    CompletableFuture<T> future = new CompletableFuture<>();
-    executor().execute(() -> {
-      try {
-        future.complete(callback.get());
-      } catch (Throwable t) {
-        future.completeExceptionally(t);
-      }
-    });
-    return future;
-  }
+  <T> CompletableFuture<T> execute(Supplier<T> callback);
 
   /**
    * Schedules a runnable on the context.

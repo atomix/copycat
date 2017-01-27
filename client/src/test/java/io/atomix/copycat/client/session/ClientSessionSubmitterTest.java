@@ -15,11 +15,10 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
-import io.atomix.copycat.protocol.error.QueryException;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
+import io.atomix.copycat.protocol.error.QueryException;
 import io.atomix.copycat.protocol.response.CommandResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
@@ -32,7 +31,6 @@ import org.testng.annotations.Test;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 import static org.mockito.Mockito.*;
 import static org.testng.Assert.*;
@@ -55,19 +53,21 @@ public class ClientSessionSubmitterTest {
       .thenReturn(CompletableFuture.completedFuture(new WebSocketCommandResponse.Builder(1)
         .withStatus(WebSocketResponse.Status.OK)
         .withIndex(10)
-        .withResult("Hello world!")
+        .withResult("Hello world!".getBytes())
         .build()));
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
-    Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
-    assertEquals(submitter.submit(new TestCommand()).get(), "Hello world!");
+    assertEquals(submitter.submitCommand(new byte[0]).get(), "Hello world!".getBytes());
     assertEquals(state.getCommandRequest(), 1);
     assertEquals(state.getCommandResponse(), 1);
     assertEquals(state.getResponseIndex(), 10);
@@ -90,19 +90,21 @@ public class ClientSessionSubmitterTest {
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
-    Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
-    CompletableFuture<String> result1 = submitter.submit(new TestCommand());
-    CompletableFuture<String> result2 = submitter.submit(new TestCommand());
+    CompletableFuture<byte[]> result1 = submitter.submitCommand(new byte[0]);
+    CompletableFuture<byte[]> result2 = submitter.submitCommand(new byte[0]);
 
     future2.complete(new WebSocketCommandResponse.Builder(2)
       .withStatus(WebSocketResponse.Status.OK)
       .withIndex(10)
-      .withResult("Hello world again!")
+      .withResult("Hello world again!".getBytes())
       .build());
 
     assertEquals(state.getCommandRequest(), 2);
@@ -115,13 +117,13 @@ public class ClientSessionSubmitterTest {
     future1.complete(new WebSocketCommandResponse.Builder(3)
       .withStatus(WebSocketResponse.Status.OK)
       .withIndex(9)
-      .withResult("Hello world!")
+      .withResult("Hello world!".getBytes())
       .build());
 
     assertTrue(result1.isDone());
-    assertEquals(result1.get(), "Hello world!");
+    assertEquals(result1.get(), "Hello world!".getBytes());
     assertTrue(result2.isDone());
-    assertEquals(result2.get(), "Hello world again!");
+    assertEquals(result2.get(), "Hello world again!".getBytes());
 
     assertEquals(state.getCommandRequest(), 2);
     assertEquals(state.getCommandResponse(), 2);
@@ -138,19 +140,21 @@ public class ClientSessionSubmitterTest {
       .thenReturn(CompletableFuture.completedFuture(new WebSocketQueryResponse.Builder(1)
         .withStatus(WebSocketResponse.Status.OK)
         .withIndex(10)
-        .withResult("Hello world!")
+        .withResult("Hello world!".getBytes())
         .build()));
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
-    Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
-    assertEquals(submitter.submit(new TestQuery()).get(), "Hello world!");
+    assertEquals(submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE).get(), "Hello world!".getBytes());
     assertEquals(state.getResponseIndex(), 10);
   }
 
@@ -171,19 +175,21 @@ public class ClientSessionSubmitterTest {
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
-    Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
-    CompletableFuture<String> result1 = submitter.submit(new TestQuery());
-    CompletableFuture<String> result2 = submitter.submit(new TestQuery());
+    CompletableFuture<byte[]> result1 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
+    CompletableFuture<byte[]> result2 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
 
     future2.complete(new WebSocketQueryResponse.Builder(1)
       .withStatus(WebSocketResponse.Status.OK)
       .withIndex(10)
-      .withResult("Hello world again!")
+      .withResult("Hello world again!".getBytes())
       .build());
 
     assertEquals(state.getResponseIndex(), 1);
@@ -194,13 +200,13 @@ public class ClientSessionSubmitterTest {
     future1.complete(new WebSocketQueryResponse.Builder(2)
       .withStatus(WebSocketResponse.Status.OK)
       .withIndex(9)
-      .withResult("Hello world!")
+      .withResult("Hello world!".getBytes())
       .build());
 
     assertTrue(result1.isDone());
-    assertEquals(result1.get(), "Hello world!");
+    assertEquals(result1.get(), "Hello world!".getBytes());
     assertTrue(result2.isDone());
-    assertEquals(result2.get(), "Hello world again!");
+    assertEquals(result2.get(), "Hello world again!".getBytes());
 
     assertEquals(state.getResponseIndex(), 10);
   }
@@ -222,14 +228,16 @@ public class ClientSessionSubmitterTest {
       .setSessionId(1)
       .setState(Session.State.OPEN);
 
-    Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
-    CompletableFuture<String> result1 = submitter.submit(new TestQuery());
-    CompletableFuture<String> result2 = submitter.submit(new TestQuery());
+    CompletableFuture<byte[]> result1 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
+    CompletableFuture<byte[]> result2 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
 
     assertEquals(state.getResponseIndex(), 1);
 
@@ -240,36 +248,13 @@ public class ClientSessionSubmitterTest {
     future2.complete(new WebSocketQueryResponse.Builder(1)
         .withStatus(WebSocketResponse.Status.OK)
         .withIndex(10)
-        .withResult("Hello world!")
+        .withResult("Hello world!".getBytes())
         .build());
 
     assertTrue(result1.isCompletedExceptionally());
     assertTrue(result2.isDone());
-    assertEquals(result2.get(), "Hello world!");
+    assertEquals(result2.get(), "Hello world!".getBytes());
 
     assertEquals(state.getResponseIndex(), 10);
   }
-
-  /**
-   * Test command.
-   */
-  private static class TestCommand implements Command<String> {
-  }
-
-  /**
-   * Test query.
-   */
-  private static class TestQuery implements Query<String> {
-  }
-
-  /**
-   * Mock executor.
-   */
-  private static class MockExecutor implements Executor {
-    @Override
-    public void execute(Runnable command) {
-      command.run();
-    }
-  }
-
 }

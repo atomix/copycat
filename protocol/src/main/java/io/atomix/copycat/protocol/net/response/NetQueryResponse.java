@@ -30,7 +30,7 @@ import io.atomix.copycat.protocol.response.QueryResponse;
 public class NetQueryResponse extends QueryResponse implements NetResponse<NetQueryResponse> {
   private final long id;
 
-  public NetQueryResponse(long id, Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
+  public NetQueryResponse(long id, Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error, index, eventIndex, result);
     this.id = id;
   }
@@ -80,7 +80,8 @@ public class NetQueryResponse extends QueryResponse implements NetResponse<NetQu
       }
       output.writeLong(response.index);
       output.writeLong(response.eventIndex);
-      kryo.writeClassAndObject(output, response.result);
+      output.writeInt(response.result.length);
+      output.write(response.result);
     }
 
     @Override
@@ -91,7 +92,7 @@ public class NetQueryResponse extends QueryResponse implements NetResponse<NetQu
       if (status == Status.ERROR) {
         error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
       }
-      return new NetQueryResponse(id, status, error, input.readLong(), input.readLong(), kryo.readClassAndObject(input));
+      return new NetQueryResponse(id, status, error, input.readLong(), input.readLong(), input.readBytes(input.readInt()));
     }
   }
 }

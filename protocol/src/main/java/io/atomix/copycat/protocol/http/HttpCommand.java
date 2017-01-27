@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.protocol.http;
 
-import io.atomix.copycat.Command;
-
 import java.util.Map;
 
 /**
@@ -24,7 +22,7 @@ import java.util.Map;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class HttpCommand implements HttpOperation, Command<Object> {
+public class HttpCommand implements HttpOperation {
   private final String path;
   private final String method;
   private final Map<String, String> headers;

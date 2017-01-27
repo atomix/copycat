@@ -109,7 +109,7 @@ class ReserveState extends InactiveState {
           builder
             .withSession(request.session())
             .withSequence(request.sequence())
-            .withCommand(request.command())
+            .withCommand(request.bytes())
             .build()))
         .thenApply(response ->
           responseBuilder
@@ -147,7 +147,8 @@ class ReserveState extends InactiveState {
             .withSession(request.session())
             .withSequence(request.sequence())
             .withIndex(request.index())
-            .withQuery(request.query())
+            .withQuery(request.bytes())
+            .withConsistency(request.consistency())
             .build()))
         .thenApply(response ->
           responseBuilder
@@ -261,7 +262,7 @@ class ReserveState extends InactiveState {
     context.checkThread();
     logRequest(request);
 
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(request.session());
     if (session == null || session.getConnection() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)

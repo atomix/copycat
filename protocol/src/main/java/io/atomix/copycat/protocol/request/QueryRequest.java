@@ -15,16 +15,16 @@
  */
 package io.atomix.copycat.protocol.request;
 
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
  * Client query request.
  * <p>
- * Query requests are submitted by clients to the Copycat cluster to commit {@link Query}s to
+ * Query requests are submitted by clients to the Copycat cluster to commit queries to
  * the replicated state machine. Each query request must be associated with a registered
  * {@link #session()} and have a unique {@link #sequence()} number within that session. Queries will
  * be applied in the cluster in the order defined by the provided sequence number. Thus, sequence numbers
@@ -32,9 +32,9 @@ import java.util.Objects;
  * with the same sequence number. Queries are guaranteed to be applied in sequence order.
  * <p>
  * Query requests should always be submitted to the server to which the client is connected. The provided
- * query's {@link Query#consistency() consistency level} will be used to determine how the query should be
+ * query's {@link ConsistencyLevel consistency level} will be used to determine how the query should be
  * handled. If the query is received by a follower, it may be evaluated on that node if the consistency level
- * is {@link Query.ConsistencyLevel#SEQUENTIAL},
+ * is {@link ConsistencyLevel#SEQUENTIAL},
  * otherwise it will be forwarded to the cluster leader. Queries are always guaranteed to see state progress
  * monotonically within a single {@link #session()} even when switching servers.
  *
@@ -42,12 +42,12 @@ import java.util.Objects;
  */
 public class QueryRequest extends OperationRequest {
   protected final long index;
-  protected final Query query;
+  protected final ConsistencyLevel consistency;
 
-  protected QueryRequest(long session, long sequence, long index, Query query) {
-    super(session, sequence);
+  protected QueryRequest(long session, long sequence, long index, byte[] bytes, ConsistencyLevel consistency) {
+    super(session, sequence, bytes);
     this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
-    this.query = Assert.notNull(query, "query");
+    this.consistency = Assert.notNull(consistency, "consistency");
   }
 
   /**
@@ -60,22 +60,17 @@ public class QueryRequest extends OperationRequest {
   }
 
   /**
-   * Returns the query.
+   * Returns the query consistency level.
    *
-   * @return The query.
+   * @return The query consistency level.
    */
-  public Query query() {
-    return query;
-  }
-
-  @Override
-  public Operation operation() {
-    return query;
+  public ConsistencyLevel consistency() {
+    return consistency;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, index, query);
+    return Objects.hash(getClass(), session, sequence, index, bytes);
   }
 
   @Override
@@ -84,14 +79,14 @@ public class QueryRequest extends OperationRequest {
       QueryRequest request = (QueryRequest) object;
       return request.session == session
         && request.sequence == sequence
-        && request.query.equals(query);
+        && Arrays.equals(request.bytes, bytes);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, index=%d, query=%s]", getClass().getSimpleName(), session, sequence, index, query);
+    return String.format("%s[session=%d, sequence=%d, index=%d, query=byte[%d]]", getClass().getSimpleName(), session, sequence, index, bytes.length);
   }
 
   /**
@@ -99,7 +94,8 @@ public class QueryRequest extends OperationRequest {
    */
   public static class Builder extends OperationRequest.Builder<QueryRequest.Builder, QueryRequest> {
     protected long index;
-    protected Query query;
+    protected byte[] bytes;
+    protected ConsistencyLevel consistency = ConsistencyLevel.LINEARIZABLE;
 
     /**
      * Sets the request index.
@@ -116,23 +112,35 @@ public class QueryRequest extends OperationRequest {
     /**
      * Sets the request query.
      *
-     * @param query The request query.
+     * @param bytes The request query bytes.
      * @return The request builder.
-     * @throws NullPointerException if {@code query} is null
+     * @throws NullPointerException if {@code bytes} is null
      */
-    public Builder withQuery(Query query) {
-      this.query = Assert.notNull(query, "query");
+    public Builder withQuery(byte[] bytes) {
+      this.bytes = Assert.notNull(bytes, "bytes");
+      return this;
+    }
+
+    /**
+     * Sets the query consistency level.
+     *
+     * @param consistency The query consistency level.
+     * @return The request builder.
+     * @throws NullPointerException if {@code consistency} is null
+     */
+    public Builder withConsistency(ConsistencyLevel consistency) {
+      this.consistency = Assert.notNull(consistency, "consistency");
       return this;
     }
 
     @Override
     public QueryRequest copy(QueryRequest request) {
-      return new QueryRequest(request.session, request.sequence, request.index, request.query);
+      return new QueryRequest(request.session, request.sequence, request.index, request.bytes, request.consistency);
     }
 
     @Override
     public QueryRequest build() {
-      return new QueryRequest(session, sequence, index, query);
+      return new QueryRequest(session, sequence, index, bytes, consistency);
     }
   }
 }

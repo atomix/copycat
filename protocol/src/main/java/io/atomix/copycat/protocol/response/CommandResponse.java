@@ -31,7 +31,7 @@ import io.atomix.copycat.protocol.websocket.request.WebSocketCommandRequest;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandResponse extends OperationResponse {
-  protected CommandResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
+  protected CommandResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error, index, eventIndex, result);
   }
 

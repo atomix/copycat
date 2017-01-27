@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
@@ -88,50 +86,31 @@ public class ClientSession implements Session {
   }
 
   /**
-   * Submits an operation to the session.
-   *
-   * @param operation The operation to submit.
-   * @param <T> The operation result type.
-   * @return A completable future to be completed with the operation result.
-   */
-  public <T> CompletableFuture<T> submit(Operation<T> operation) {
-    if (operation instanceof Query) {
-      return submit((Query<T>) operation);
-    } else if (operation instanceof Command) {
-      return submit((Command<T>) operation);
-    } else {
-      throw new UnsupportedOperationException("unknown operation type: " + operation.getClass());
-    }
-  }
-
-  /**
    * Submits a command to the session.
    *
    * @param command The command to submit.
-   * @param <T> The command result type.
    * @return A completable future to be completed with the command result.
    */
-  public <T> CompletableFuture<T> submit(Command<T> command) {
+  public CompletableFuture<byte[]> submitCommand(byte[] command) {
     State state = state();
     if (state == State.CLOSED || state == State.EXPIRED) {
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
     }
-    return submitter.submit(command);
+    return submitter.submitCommand(command);
   }
 
   /**
    * Submits a query to the session.
    *
    * @param query The query to submit.
-   * @param <T> The query result type.
    * @return A completable future to be completed with the query result.
    */
-  public <T> CompletableFuture<T> submit(Query<T> query) {
+  public CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency) {
     State state = state();
     if (state == State.CLOSED || state == State.EXPIRED) {
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
     }
-    return submitter.submit(query);
+    return submitter.submitQuery(query, consistency);
   }
 
   /**

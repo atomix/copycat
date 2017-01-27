@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.protocol.http;
 
-import io.atomix.copycat.Query;
 import io.vertx.core.http.HttpMethod;
 
 import java.util.Map;
@@ -25,17 +24,15 @@ import java.util.Map;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class HttpQuery implements HttpOperation, Query<Object> {
+public class HttpQuery implements HttpOperation {
   private final String path;
   private final Map<String, String> headers;
   private final String body;
-  private final ConsistencyLevel consistency;
 
-  public HttpQuery(String path, Map<String, String> headers, String body, ConsistencyLevel consistency) {
+  public HttpQuery(String path, Map<String, String> headers, String body) {
     this.path = path;
     this.headers = headers;
     this.body = body;
-    this.consistency = consistency;
   }
 
   @Override
@@ -56,10 +53,5 @@ public class HttpQuery implements HttpOperation, Query<Object> {
   @Override
   public String body() {
     return body;
-  }
-
-  @Override
-  public ConsistencyLevel consistency() {
-    return consistency;
   }
 }

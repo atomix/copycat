@@ -17,6 +17,7 @@ package io.atomix.copycat.protocol.response;
 
 import io.atomix.copycat.util.Assert;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -31,9 +32,9 @@ import java.util.Objects;
 public abstract class OperationResponse extends SessionResponse {
   protected final long index;
   protected final long eventIndex;
-  protected final Object result;
+  protected final byte[] result;
 
-  protected OperationResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
+  protected OperationResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error);
     this.index = Assert.argNot(index, index < 0, "index must be positive");
     this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex must be positive");
@@ -63,7 +64,7 @@ public abstract class OperationResponse extends SessionResponse {
    *
    * @return The operation result.
    */
-  public Object result() {
+  public byte[] result() {
     return result;
   }
 
@@ -80,14 +81,15 @@ public abstract class OperationResponse extends SessionResponse {
         && response.index == index
         && response.eventIndex == eventIndex
         && ((response.result == null && result == null)
-        || response.result != null && result != null && response.result.equals(result));
+        || response.result != null && result != null
+        && Arrays.equals(response.result, result));
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, index, eventIndex, result);
+    return String.format("%s[status=%s, index=%d, eventIndex=%d, result=byte[%d]]", getClass().getSimpleName(), status, index, eventIndex, result.length);
   }
 
   /**
@@ -96,7 +98,7 @@ public abstract class OperationResponse extends SessionResponse {
   public static abstract class Builder<T extends OperationResponse.Builder<T, U>, U extends OperationResponse> extends SessionResponse.Builder<T, U> {
     protected long index;
     protected long eventIndex;
-    protected Object result;
+    protected byte[] result;
 
     /**
      * Sets the response index.
@@ -131,7 +133,7 @@ public abstract class OperationResponse extends SessionResponse {
      * @return The response builder.
      */
     @SuppressWarnings("unchecked")
-    public T withResult(Object result) {
+    public T withResult(byte[] result) {
       this.result = result;
       return (T) this;
     }

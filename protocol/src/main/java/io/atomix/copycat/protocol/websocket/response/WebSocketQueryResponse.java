@@ -36,7 +36,7 @@ public class WebSocketQueryResponse extends QueryResponse implements WebSocketRe
     @JsonProperty("error") WebSocketResponse.Error error,
     @JsonProperty("index") long index,
     @JsonProperty("eventIndex") long eventIndex,
-    @JsonProperty("result") Object result) {
+    @JsonProperty("result") byte[] result) {
     super(status, error, index, eventIndex, result);
     this.id = id;
   }
@@ -88,7 +88,7 @@ public class WebSocketQueryResponse extends QueryResponse implements WebSocketRe
 
   @Override
   @JsonGetter("result")
-  public Object result() {
+  public byte[] result() {
     return super.result();
   }
 

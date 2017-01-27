@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.session;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 

@@ -58,7 +58,7 @@ final class ClientSessionManager {
    */
   public CompletableFuture<Void> open() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.executor().execute(() -> register(new RegisterAttempt(1, future)));
+    context.execute(() -> register(new RegisterAttempt(1, future)));
     return future;
   }
 
@@ -69,7 +69,7 @@ final class ClientSessionManager {
    */
   public CompletableFuture<Void> expire() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.executor().execute(() -> {
+    context.execute(() -> {
       if (keepAlive != null)
         keepAlive.cancel();
       state.setState(Session.State.EXPIRED);
@@ -194,7 +194,7 @@ final class ClientSessionManager {
       return CompletableFuture.completedFuture(null);
 
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.executor().execute(() -> {
+    context.execute(() -> {
       if (keepAlive != null)
         keepAlive.cancel();
       unregister(future);
@@ -282,7 +282,7 @@ final class ClientSessionManager {
       if (keepAlive != null)
         keepAlive.cancel();
       state.setState(Session.State.CLOSED);
-    }, context.executor());
+    }, context);
   }
 
   @Override

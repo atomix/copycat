@@ -15,9 +15,7 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.session.Session;
@@ -35,9 +33,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Provides an interface for submitting {@link Command commands} and {@link Query} queries to the Copycat cluster.
+ * Provides an interface for submitting commands and query queries to the Copycat cluster.
  * <p>
- * Copycat clients are responsible for connecting to the cluster and submitting {@link Command commands} and {@link Query queries}
+ * Copycat clients are responsible for connecting to the cluster and submitting commands and queries
  * that operate on the cluster's replicated state machine. Copycat clients interact with one or more nodes in a Copycat cluster
  * through a session. When the client is {@link #connect() connected}, the client will attempt to communicate with one of the known member
  * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
@@ -52,8 +50,8 @@ import java.util.function.Consumer;
  * at the time that the session is registered. This ensures that clients cannot be misconfigured with a keep-alive interval
  * greater than the cluster's session timeout.
  * <p>
- * Clients communicate with the distributed state machine by submitting {@link Command commands} and {@link Query queries} to
- * the cluster through the {@link #submit(Command)} and {@link #submit(Query)} methods respectively:
+ * Clients communicate with the distributed state machine by submitting commands and queries to
+ * the cluster through the {@link #submitCommand(byte[])} and {@link #submitQuery(byte[])} methods respectively:
  * <pre>
  *   {@code
  *   client.submit(new PutCommand("foo", "Hello world!")).thenAccept(result -> {
@@ -66,15 +64,15 @@ import java.util.function.Consumer;
  * <p>
  * <h3>Sessions</h3>
  * <p>
- * Sessions work to provide linearizable semantics for client {@link Command commands}. When a command is submitted to the cluster,
+ * Sessions work to provide linearizable semantics for client commands. When a command is submitted to the cluster,
  * the command will be forwarded to the leader where it will be logged and replicated. Once the command is stored on a majority
  * of servers, the leader will apply it to its state machine and respond.
  * <p>
- * Sessions also allow {@link Query queries} (read-only requests) submitted by the client to optionally be executed on follower
- * nodes. When a query is submitted to the cluster, the query's {@link Query#consistency()} will be used to determine how the
+ * Sessions also allow queries (read-only requests) submitted by the client to optionally be executed on follower
+ * nodes. When a query is submitted to the cluster, the query's {@link ConsistencyLevel} will be used to determine how the
  * query is handled. For queries with stronger consistency levels, they will be forwarded to the cluster's leader. For weaker
  * consistency queries, they may be executed on follower nodes according to the consistency level constraints. See the
- * {@link Query.ConsistencyLevel} documentation for more info.
+ * {@link ConsistencyLevel} documentation for more info.
  * <p>
  * Throughout the lifetime of a client, the client may operate on the cluster via multiple sessions according to the configured
  * {@link RecoveryStrategy}. In the event that the client's session expires, the client may register a new session and continue
@@ -174,10 +172,10 @@ public interface CopycatClient {
     /**
      * Indicates that the client is connected and its session is open.
      * <p>
-     * The {@code CONNECTED} state indicates that the client is healthy and operating normally. {@link Command commands}
-     * and {@link Query queries} submitted and completed while the client is in this state are guaranteed to adhere to
+     * The {@code CONNECTED} state indicates that the client is healthy and operating normally. commands
+     * and queries submitted and completed while the client is in this state are guaranteed to adhere to
      * consistency guarantees.
-     * {@link Query.ConsistencyLevel levels}.
+     * {@link ConsistencyLevel levels}.
      */
     CONNECTED,
 
@@ -300,29 +298,6 @@ public interface CopycatClient {
   Session session();
 
   /**
-   * Submits an operation to the Copycat cluster.
-   * <p>
-   * This method is provided for convenience. The submitted {@link Operation} must be an instance
-   * of {@link Command} or {@link Query}.
-   *
-   * @param operation The operation to submit.
-   * @param <T> The operation result type.
-   * @return A completable future to be completed with the operation result.
-   * @throws IllegalArgumentException If the {@link Operation} is not an instance of {@link Command} or {@link Query}.
-   * @throws NullPointerException if {@code operation} is null
-   */
-  default <T> CompletableFuture<T> submit(Operation<T> operation) {
-    Assert.notNull(operation, "operation");
-    if (operation instanceof Command) {
-      return submit((Command<T>) operation);
-    } else if (operation instanceof Query) {
-      return submit((Query<T>) operation);
-    } else {
-      throw new IllegalArgumentException("unknown operation type");
-    }
-  }
-
-  /**
    * Submits a command to the Copycat cluster.
    * <p>
    * Commands are used to alter state machine state. All commands will be forwarded to the current cluster leader.
@@ -338,19 +313,18 @@ public interface CopycatClient {
    * in that order.
    *
    * @param command The command to submit.
-   * @param <T> The command result type.
    * @return A completable future to be completed with the command result. The future is guaranteed to be completed after all
-   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
+   * command or query submission futures that preceded it. The future will always be completed on the
    * @throws NullPointerException if {@code command} is null
    */
-  <T> CompletableFuture<T> submit(Command<T> command);
+  CompletableFuture<byte[]> submitCommand(byte[] command);
 
   /**
    * Submits a query to the Copycat cluster.
    * <p>
    * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
-   * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
-   * and {@link Query.ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
+   * query's {@link ConsistencyLevel}. For {@link ConsistencyLevel#LINEARIZABLE}
+   * and {@link ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
    * to the cluster leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
    * by applying queries to an internal server state machine.
    * <p>
@@ -358,12 +332,32 @@ public interface CopycatClient {
    * will be completed with the state machine output.
    *
    * @param query The query to submit.
-   * @param <T> The query result type.
    * @return A completable future to be completed with the query result. The future is guaranteed to be completed after all
-   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
+   * command or query submission futures that preceded it. The future will always be completed on the
    * @throws NullPointerException if {@code query} is null
    */
-  <T> CompletableFuture<T> submit(Query<T> query);
+  default CompletableFuture<byte[]> submitQuery(byte[] query) {
+    return submitQuery(query, ConsistencyLevel.LINEARIZABLE);
+  }
+
+  /**
+   * Submits a query to the Copycat cluster.
+   * <p>
+   * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
+   * query's {@link ConsistencyLevel}. For {@link ConsistencyLevel#LINEARIZABLE}
+   * and {@link ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
+   * to the cluster leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
+   * by applying queries to an internal server state machine.
+   * <p>
+   * Once the query has been applied to a server state machine, the returned {@link CompletableFuture}
+   * will be completed with the state machine output.
+   *
+   * @param query The query to submit.
+   * @return A completable future to be completed with the query result. The future is guaranteed to be completed after all
+   * command or query submission futures that preceded it. The future will always be completed on the
+   * @throws NullPointerException if {@code query} is null
+   */
+  CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency);
 
   /**
    * Registers a void event listener.

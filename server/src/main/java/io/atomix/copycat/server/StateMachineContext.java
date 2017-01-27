@@ -16,9 +16,8 @@
 
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
 import io.atomix.copycat.server.session.Sessions;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.time.Clock;
 
@@ -31,13 +30,13 @@ import java.time.Clock;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface StateMachineContext {
+public interface StateMachineContext extends ThreadContext {
 
   /**
    * Returns the current state machine index.
    * <p>
-   * The state index is indicative of the index of the current {@link Command}
-   * being applied to the server state machine. If a {@link Query} is being applied,
+   * The state index is indicative of the index of the current command
+   * being applied to the server state machine. If a query is being applied,
    * the index of the last command applied will be used.
    *
    * @return The current state machine index.
@@ -58,4 +57,20 @@ public interface StateMachineContext {
    */
   Sessions sessions();
 
+  @Override
+  default boolean isBlocked() {
+    return false;
+  }
+
+  @Override
+  default void block() {
+  }
+
+  @Override
+  default void unblock() {
+  }
+
+  @Override
+  default void close() {
+  }
 }

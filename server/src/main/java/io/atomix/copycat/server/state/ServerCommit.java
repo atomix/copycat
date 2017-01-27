@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Indexed;
@@ -30,7 +29,7 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class ServerCommit<T extends Operation<T>> implements Commit<T> {
+final class ServerCommit<T extends java.io.Serializable> implements Commit {
   private final Indexed<? extends OperationEntry<?>> entry;
   private final ServerSessionContext session;
   private final long timestamp;
@@ -68,17 +67,8 @@ final class ServerCommit<T extends Operation<T>> implements Commit<T> {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public Class type() {
-    checkOpen();
-    return entry.entry().operation().getClass();
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public T operation() {
-    checkOpen();
-    return (T) entry.entry().operation();
+  public byte[] bytes() {
+    return entry.entry().bytes();
   }
 
   @Override
@@ -113,7 +103,7 @@ final class ServerCommit<T extends Operation<T>> implements Commit<T> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
+    return String.format("%s[index=%d, session=%s, time=%s, operation=byte[%d]]", getClass().getSimpleName(), index(), session(), time(), bytes().length);
   }
 
 }

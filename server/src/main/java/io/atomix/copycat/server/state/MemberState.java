@@ -19,6 +19,7 @@ import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.LogReader;
 import io.atomix.copycat.server.storage.Reader;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.io.Closeable;
 
@@ -30,24 +31,26 @@ import java.io.Closeable;
 final class MemberState implements Closeable {
   private static final int MAX_APPENDS = 2;
   private final ServerMember member;
+  final ThreadContext context;
   private long term;
   private long configIndex;
   private long snapshotIndex;
   private long nextSnapshotIndex;
   private int nextSnapshotOffset;
-  private long matchIndex;
-  private long heartbeatTime;
-  private long heartbeatStartTime;
+  private volatile long matchIndex;
+  private volatile long heartbeatTime;
+  private volatile long heartbeatStartTime;
   private int appending;
   private long appendTime;
   private boolean configuring;
   private boolean installing;
-  private int failures;
+  private volatile int failures;
   private LogReader reader;
   private final TimeBuffer timeBuffer = new TimeBuffer(8);
 
-  public MemberState(ServerMember member, ClusterState cluster) {
+  public MemberState(ServerMember member, ClusterState cluster, ThreadContext context) {
     this.member = Assert.notNull(member, "member").setCluster(cluster);
+    this.context = Assert.notNull(context, "context");
   }
 
   /**

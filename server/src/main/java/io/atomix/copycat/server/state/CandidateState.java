@@ -168,7 +168,7 @@ final class CandidateState extends ActiveState {
                 }
               }
             }
-          }, context.getThreadContext().executor());
+          }, context.getThreadContext());
       });
     }
   }

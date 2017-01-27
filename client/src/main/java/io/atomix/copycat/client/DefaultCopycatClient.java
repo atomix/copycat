@@ -15,8 +15,7 @@
  */
 package io.atomix.copycat.client;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.protocol.Address;
@@ -181,40 +180,40 @@ public class DefaultCopycatClient implements CopycatClient {
         } else {
           openFuture.completeExceptionally(error);
         }
-      }, eventContext.executor());
+      }, eventContext);
     }
     return openFuture;
   }
 
   @Override
-  public <T> CompletableFuture<T> submit(Command<T> command) {
+  public CompletableFuture<byte[]> submitCommand(byte[] command) {
     ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
 
-    BlockingFuture<T> future = new BlockingFuture<>();
-    session.submit(command).whenComplete((result, error) -> {
+    BlockingFuture<byte[]> future = new BlockingFuture<>();
+    session.submitCommand(command).whenComplete((result, error) -> {
       if (eventContext.isBlocked()) {
         future.accept(result, error);
       } else {
-        eventContext.executor().execute(() -> future.accept(result, error));
+        eventContext.execute(() -> future.accept(result, error));
       }
     });
     return future;
   }
 
   @Override
-  public <T> CompletableFuture<T> submit(Query<T> query) {
+  public CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency) {
     ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
 
-    BlockingFuture<T> future = new BlockingFuture<>();
-    session.submit(query).whenComplete((result, error) -> {
+    BlockingFuture<byte[]> future = new BlockingFuture<>();
+    session.submitQuery(query, consistency).whenComplete((result, error) -> {
       if (eventContext.isBlocked()) {
         future.accept(result, error);
       } else {
-        eventContext.executor().execute(() -> future.accept(result, error));
+        eventContext.execute(() -> future.accept(result, error));
       }
     });
     return future;
@@ -247,8 +246,8 @@ public class DefaultCopycatClient implements CopycatClient {
             recoverFuture.completeExceptionally(registerError);
           }
           this.recoverFuture = null;
-        }, eventContext.executor());
-      }, eventContext.executor());
+        }, eventContext);
+      }, eventContext);
     }
     return recoverFuture;
   }
@@ -273,7 +272,7 @@ public class DefaultCopycatClient implements CopycatClient {
             closeFuture.completeExceptionally(error);
           }
         });
-      }, eventContext.executor());
+      }, eventContext);
     }
     return closeFuture;
   }
@@ -329,7 +328,7 @@ public class DefaultCopycatClient implements CopycatClient {
 
     @Override
     public void accept(State state) {
-      eventContext.executor().execute(() -> callback.accept(state));
+      eventContext.execute(() -> callback.accept(state));
     }
 
     @Override
@@ -364,7 +363,7 @@ public class DefaultCopycatClient implements CopycatClient {
       if (eventContext.isBlocked()) {
         callback.accept(message);
       } else {
-        eventContext.executor().execute(() -> callback.accept(message));
+        eventContext.execute(() -> callback.accept(message));
       }
     }
 

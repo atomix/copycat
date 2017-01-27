@@ -17,7 +17,6 @@ package io.atomix.copycat.examples;
 
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
-import io.atomix.copycat.server.StateMachineExecutor;
 
 /**
  * Value state machine.
@@ -25,57 +24,13 @@ import io.atomix.copycat.server.StateMachineExecutor;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class ValueStateMachine extends StateMachine {
-  private Commit<SetCommand> value;
+  @Override
+  public byte[] applyCommand(Commit commit) {
+    return new byte[0];
+  }
 
   @Override
-  protected void configure(StateMachineExecutor executor) {
-    executor.register(SetCommand.class, this::set);
-    executor.register(GetQuery.class, this::get);
-    executor.register(DeleteCommand.class, this::delete);
+  public byte[] applyQuery(Commit commit) {
+    return new byte[0];
   }
-
-  /**
-   * Sets the value.
-   */
-  private Object set(Commit<SetCommand> commit) {
-    try {
-      Commit<SetCommand> previous = value;
-      value = commit;
-      if (previous != null) {
-        Object result = previous.operation().value();
-        previous.close();
-        return result;
-      }
-      return null;
-    } catch (Exception e) {
-      commit.close();
-      throw e;
-    }
-  }
-
-  /**
-   * Gets the value.
-   */
-  private Object get(Commit<GetQuery> commit) {
-    try {
-      return value != null ? value.operation().value() : null;
-    } finally {
-      commit.close();
-    }
-  }
-
-  /**
-   * Deletes the value.
-   */
-  private void delete(Commit<DeleteCommand> commit) {
-    try {
-      if (value != null) {
-        value.close();
-        value = null;
-      }
-    } finally {
-      commit.close();
-    }
-  }
-
 }

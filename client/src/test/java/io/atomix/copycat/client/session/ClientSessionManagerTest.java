@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 import static org.mockito.Mockito.*;
 import static org.testng.Assert.assertEquals;
@@ -66,8 +65,10 @@ public class ClientSessionManagerTest {
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
     ThreadContext context = mock(ThreadContext.class);
-    Executor executor = new MockExecutor();
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     ClientSessionManager manager = new ClientSessionManager(connection, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF, Duration.ZERO);
     manager.open().join();
@@ -90,15 +91,4 @@ public class ClientSessionManagerTest {
 
     assertEquals(state.getState(), Session.State.CLOSED);
   }
-
-  /**
-   * Mock executor.
-   */
-  private static class MockExecutor implements Executor {
-    @Override
-    public void execute(Runnable command) {
-      command.run();
-    }
-  }
-
 }

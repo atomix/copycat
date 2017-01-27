@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.error.ProtocolException;
 import io.atomix.copycat.protocol.request.ConnectRequest;
@@ -94,7 +94,7 @@ class PassiveState extends ReserveState {
           .build()));
     } else {
       // Immediately register the session connection and send an accept request to the leader.
-      context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
+      context.getStateMachine().context().sessions().registerConnection(request.client(), connection);
 
       return forward(c -> c.accept(b ->
         b.withClient(request.client())
@@ -221,7 +221,7 @@ class PassiveState extends ReserveState {
           // If the entry is a connect entry then immediately configure the connection.
           if (entry.entry().type() == Entry.Type.CONNECT) {
             Indexed<ConnectEntry> connectEntry = (Indexed<ConnectEntry>) entry;
-            context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
+            context.getStateMachine().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
           }
         }
         lastIndex = writer.lastIndex();
@@ -252,7 +252,7 @@ class PassiveState extends ReserveState {
     logRequest(request);
 
     // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
-    if (request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
+    if (request.consistency() == ConsistencyLevel.SEQUENTIAL) {
 
       // If this server has not yet applied entries up to the client's session ID, forward the
       // query to the leader. This ensures that a follower does not tell the client its session
@@ -276,8 +276,7 @@ class PassiveState extends ReserveState {
           System.currentTimeMillis(),
           request.session(),
           request.sequence(),
-          request.query()),
-        0);
+          request.bytes()), 0);
 
       return queryLocal(entry, builder);
     } else {
@@ -301,7 +300,8 @@ class PassiveState extends ReserveState {
       b.withSession(request.session())
         .withSequence(request.sequence())
         .withIndex(request.index())
-        .withQuery(request.query())
+        .withQuery(request.bytes())
+        .withConsistency(request.consistency())
         .build()))
       .thenApply(response ->
         responseBuilder
@@ -333,7 +333,7 @@ class PassiveState extends ReserveState {
    */
   private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -362,7 +362,7 @@ class PassiveState extends ReserveState {
    */
   private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -406,8 +406,8 @@ class PassiveState extends ReserveState {
       if (result != null) {
         builder.withIndex(result.index);
         builder.withEventIndex(result.eventIndex);
-        if (result.result instanceof Exception) {
-          error = (Exception) result.result;
+        if (result.error != null) {
+          error = result.error;
         }
       }
 

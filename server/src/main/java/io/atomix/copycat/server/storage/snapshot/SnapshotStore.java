@@ -16,7 +16,6 @@
 package io.atomix.copycat.server.storage.snapshot;
 
 import com.esotericsoftware.kryo.Kryo;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.buffer.FileBuffer;

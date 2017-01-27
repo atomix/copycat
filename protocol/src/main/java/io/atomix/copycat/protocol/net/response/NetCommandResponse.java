@@ -30,7 +30,7 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
 public class NetCommandResponse extends CommandResponse implements NetResponse<NetCommandResponse> {
   private final long id;
 
-  public NetCommandResponse(long id, Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
+  public NetCommandResponse(long id, Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error, index, eventIndex, result);
     this.id = id;
   }
@@ -80,7 +80,8 @@ public class NetCommandResponse extends CommandResponse implements NetResponse<N
       }
       output.writeLong(response.index);
       output.writeLong(response.eventIndex);
-      kryo.writeClassAndObject(output, response.result);
+      output.writeInt(response.result.length);
+      output.write(response.result);
     }
 
     @Override
@@ -91,7 +92,7 @@ public class NetCommandResponse extends CommandResponse implements NetResponse<N
       if (status == Status.ERROR) {
         error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
       }
-      return new NetCommandResponse(id, status, error, input.readLong(), input.readLong(), kryo.readClassAndObject(input));
+      return new NetCommandResponse(id, status, error, input.readLong(), input.readLong(), input.readBytes(input.readInt()));
     }
   }
 }

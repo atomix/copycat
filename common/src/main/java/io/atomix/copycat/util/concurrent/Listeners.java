@@ -67,7 +67,12 @@ public class Listeners<T> implements Iterable<Listener<T>> {
     List<CompletableFuture<Void>> futures = new ArrayList<>(listeners.size());
     for (ListenerHolder listener : listeners) {
       if (listener.context != null) {
-        futures.add(listener.context.execute(() -> listener.listener.accept(event)));
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        listener.context.execute(() -> {
+          listener.listener.accept(event);
+          future.complete(null);
+        });
+        futures.add(future);
       } else {
         listener.listener.accept(event);
       }
@@ -97,7 +102,7 @@ public class Listeners<T> implements Iterable<Listener<T>> {
     public void accept(T event) {
       if (context != null) {
         try {
-          context.executor().execute(() -> listener.accept(event));
+          context.execute(() -> listener.accept(event));
         } catch (RejectedExecutionException e) {
         }
       } else {

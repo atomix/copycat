@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.protocol.error.InternalException;
 import io.atomix.copycat.protocol.ProtocolRequestFactory;
+import io.atomix.copycat.protocol.error.InternalException;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
@@ -97,8 +97,9 @@ final class LeaderAppender extends AbstractAppender {
    */
   public CompletableFuture<Long> appendEntries() {
     // If there are no other active members in the cluster, simply complete the append operation.
-    if (context.getClusterState().getRemoteMemberStates().isEmpty())
+    if (context.getClusterState().getRemoteMemberStates().isEmpty()) {
       return CompletableFuture.completedFuture(null);
+    }
 
     // If no heartbeat future already exists, that indicates there's no heartbeat currently under way.
     // Create a new heartbeat future and commit to all members in the cluster.
@@ -107,7 +108,7 @@ final class LeaderAppender extends AbstractAppender {
       heartbeatFuture = newHeartbeatFuture;
       heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
-        appendEntries(member);
+        member.context.execute(() -> appendEntries(member));
       }
       return newHeartbeatFuture;
     }
@@ -131,11 +132,15 @@ final class LeaderAppender extends AbstractAppender {
    * @return A completable future to be completed once the given log index has been committed.
    */
   public CompletableFuture<Long> appendEntries(long index) {
-    if (index == 0)
-      return appendEntries();
+    context.checkThread();
 
-    if (index <= context.getCommitIndex())
+    if (index == 0) {
+      return appendEntries();
+    }
+
+    if (index <= context.getCommitIndex()) {
       return CompletableFuture.completedFuture(index);
+    }
 
     // If there are no other stateful servers in the cluster, immediately commit the index.
     if (context.getClusterState().getActiveMemberStates().isEmpty() && context.getClusterState().getPassiveMemberStates().isEmpty()) {
@@ -157,7 +162,7 @@ final class LeaderAppender extends AbstractAppender {
     // Only send entry-specific AppendRequests to active members of the cluster.
     return appendFutures.computeIfAbsent(index, i -> {
       for (MemberState member : context.getClusterState().getActiveMemberStates()) {
-        appendEntries(member);
+        member.context.execute(() -> appendEntries(member));
       }
       return new CompletableFuture<>();
     });
@@ -166,8 +171,11 @@ final class LeaderAppender extends AbstractAppender {
   @Override
   protected void appendEntries(MemberState member) {
     // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
-    if (!open)
+    if (!open) {
       return;
+    }
+
+    member.context.checkThread();
 
     // If prior requests to the member have failed, build an empty append request to send to the member
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
@@ -238,6 +246,8 @@ final class LeaderAppender extends AbstractAppender {
       return;
     }
 
+    context.checkThread();
+
     if (error != null && member.getHeartbeatStartTime() == heartbeatTime) {
       int votingMemberSize = context.getClusterState().getActiveMemberStates().size() + (context.getCluster().member().type() == Member.Type.ACTIVE ? 1 : 0);
       int quorumSize = (int) Math.floor(votingMemberSize / 2) + 1;
@@ -273,7 +283,7 @@ final class LeaderAppender extends AbstractAppender {
     if (heartbeatFuture != null) {
       heartbeatTime = System.currentTimeMillis();
       for (MemberState member : context.getClusterState().getRemoteMemberStates()) {
-        appendEntries(member);
+        member.context.execute(() -> appendEntries(member));
       }
     }
   }
@@ -300,6 +310,8 @@ final class LeaderAppender extends AbstractAppender {
    * Checks whether any futures can be completed.
    */
   private void commitEntries() {
+    context.checkThread();
+
     // Sort the list of replicas, order by the last index that was replicated
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
@@ -333,14 +345,12 @@ final class LeaderAppender extends AbstractAppender {
    * Completes append entries attempts up to the given index.
    */
   private void completeCommits(long previousCommitIndex, long commitIndex) {
-    context.getThreadContext().executor().execute(() -> {
-      for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
-        CompletableFuture<Long> future = appendFutures.remove(i);
-        if (future != null) {
-          future.complete(i);
-        }
+    for (long i = previousCommitIndex + 1; i <= commitIndex; i++) {
+      CompletableFuture<Long> future = appendFutures.remove(i);
+      if (future != null) {
+        future.complete(i);
       }
-    });
+    }
   }
 
   /**
@@ -361,7 +371,7 @@ final class LeaderAppender extends AbstractAppender {
     super.handleAppendRequestFailure(member, request, error);
 
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, error);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, error));
   }
 
   /**
@@ -369,7 +379,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   protected void handleAppendResponseFailure(MemberState member, AppendRequest request, Throwable error) {
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, error);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, error));
 
     super.handleAppendResponseFailure(member, request, error);
   }
@@ -379,7 +389,7 @@ final class LeaderAppender extends AbstractAppender {
    */
   protected void handleAppendResponse(MemberState member, AppendRequest request, AppendResponse response) {
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, null);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, null));
 
     super.handleAppendResponse(member, request, response);
   }
@@ -397,7 +407,7 @@ final class LeaderAppender extends AbstractAppender {
 
       // If entries were committed to the replica then check commit indexes.
       if (!request.entries().isEmpty()) {
-        commitEntries();
+        context.threadContext.execute(this::commitEntries);
       }
 
       // If there are more entries to send then attempt to send another commit.
@@ -452,28 +462,30 @@ final class LeaderAppender extends AbstractAppender {
   protected void failAttempt(MemberState member, Throwable error) {
     super.failAttempt(member, error);
 
-    // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
-    // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
-    // that a partition occurred and transition back to the FOLLOWER state.
-    if (System.currentTimeMillis() - Math.max(heartbeatTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
-      LOGGER.warn("{} - Suspected network partition. Stepping down", context.getCluster().member().address());
-      context.setLeader(0);
-      context.transition(CopycatServer.State.FOLLOWER);
-    }
-    // If the number of failures has increased above 3 and the member hasn't been marked as UNAVAILABLE, do so.
-    else if (member.getFailureCount() >= 3) {
-      // If the member is currently marked as AVAILABLE, change its status to UNAVAILABLE and update the configuration.
-      if (member.getMember().status() == ServerMember.Status.AVAILABLE && !leader.configuring()) {
-        member.getMember().update(ServerMember.Status.UNAVAILABLE, Instant.now());
-        leader.configure(context.getCluster().members());
+    context.threadContext.execute(() -> {
+      // Verify that the leader has contacted a majority of the cluster within the last two election timeouts.
+      // If the leader is not able to contact a majority of the cluster within two election timeouts, assume
+      // that a partition occurred and transition back to the FOLLOWER state.
+      if (System.currentTimeMillis() - Math.max(heartbeatTime(), leaderTime) > context.getElectionTimeout().toMillis() * 2) {
+        LOGGER.warn("{} - Suspected network partition. Stepping down", context.getCluster().member().address());
+        context.setLeader(0);
+        context.transition(CopycatServer.State.FOLLOWER);
       }
-    }
+      // If the number of failures has increased above 3 and the member hasn't been marked as UNAVAILABLE, do so.
+      else if (member.getFailureCount() >= 3) {
+        // If the member is currently marked as AVAILABLE, change its status to UNAVAILABLE and update the configuration.
+        if (member.getMember().status() == ServerMember.Status.AVAILABLE && !leader.configuring()) {
+          member.getMember().update(ServerMember.Status.UNAVAILABLE, Instant.now());
+          leader.configure(context.getCluster().members());
+        }
+      }
+    });
   }
 
   @Override
   protected void handleConfigureResponse(MemberState member, ConfigureRequest request, ConfigureResponse response) {
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, null);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, null));
 
     super.handleConfigureResponse(member, request, response);
   }
@@ -483,13 +495,13 @@ final class LeaderAppender extends AbstractAppender {
     super.handleConfigureRequestFailure(member, request, error);
 
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, error);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, error));
   }
 
   @Override
   protected void handleConfigureResponseFailure(MemberState member, ConfigureRequest request, Throwable error) {
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, error);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, error));
 
     super.handleConfigureResponseFailure(member, request, error);
   }
@@ -497,7 +509,7 @@ final class LeaderAppender extends AbstractAppender {
   @Override
   protected void handleInstallResponse(MemberState member, InstallRequest request, InstallResponse response) {
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, null);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, null));
 
     super.handleInstallResponse(member, request, response);
   }
@@ -507,13 +519,13 @@ final class LeaderAppender extends AbstractAppender {
     super.handleInstallRequestFailure(member, request, error);
 
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, error);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, error));
   }
 
   @Override
   protected void handleInstallResponseFailure(MemberState member, InstallRequest request, Throwable error) {
     // Trigger commit futures if necessary.
-    updateHeartbeatTime(member, error);
+    context.threadContext.execute(() -> updateHeartbeatTime(member, error));
 
     super.handleInstallResponseFailure(member, request, error);
   }

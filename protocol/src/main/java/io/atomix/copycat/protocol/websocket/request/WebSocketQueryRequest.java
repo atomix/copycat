@@ -18,7 +18,7 @@ package io.atomix.copycat.protocol.websocket.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.request.QueryRequest;
 
 /**
@@ -35,8 +35,9 @@ public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequ
     @JsonProperty("session") long session,
     @JsonProperty("sequence") long sequence,
     @JsonProperty("index") long index,
-    @JsonProperty("query") Query query) {
-    super(session, sequence, index, query);
+    @JsonProperty("query") byte[] bytes,
+    @JsonProperty("consistency") ConsistencyLevel consistency) {
+    super(session, sequence, index, bytes, consistency);
     this.id = id;
   }
 
@@ -81,8 +82,14 @@ public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequ
 
   @Override
   @JsonGetter("query")
-  public Query query() {
-    return super.query();
+  public byte[] bytes() {
+    return super.bytes();
+  }
+
+  @Override
+  @JsonGetter("consistency")
+  public ConsistencyLevel consistency() {
+    return super.consistency();
   }
 
   /**
@@ -97,12 +104,12 @@ public class WebSocketQueryRequest extends QueryRequest implements WebSocketRequ
 
     @Override
     public QueryRequest copy(QueryRequest request) {
-      return new WebSocketQueryRequest(id, request.session(), request.sequence(), request.index(), request.query());
+      return new WebSocketQueryRequest(id, request.session(), request.sequence(), request.index(), request.bytes(), request.consistency());
     }
 
     @Override
     public QueryRequest build() {
-      return new WebSocketQueryRequest(id, session, sequence, index, query);
+      return new WebSocketQueryRequest(id, session, sequence, index, bytes, consistency);
     }
   }
 }

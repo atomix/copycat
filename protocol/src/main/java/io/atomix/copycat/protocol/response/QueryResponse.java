@@ -31,7 +31,7 @@ import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class QueryResponse extends OperationResponse {
-  protected QueryResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, Object result) {
+  protected QueryResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error, index, eventIndex, result);
   }
 

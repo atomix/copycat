@@ -34,7 +34,7 @@ final class FollowerAppender extends AbstractAppender {
   public void appendEntries() {
     if (open) {
       for (MemberState member : context.getClusterState().getAssignedPassiveMemberStates()) {
-        appendEntries(member);
+        member.context.execute(() -> appendEntries(member));
       }
     }
   }

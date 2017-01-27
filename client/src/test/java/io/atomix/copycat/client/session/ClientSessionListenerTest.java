@@ -30,7 +30,6 @@ import org.testng.annotations.Test;
 
 import java.util.Collections;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.mockito.Mockito.*;
@@ -55,9 +54,11 @@ public class ClientSessionListenerTest {
     ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
 
     state = new ClientSessionState(UUID.randomUUID().toString());
-    Executor executor = new MockExecutor();
     ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
+    doAnswer((a) -> {
+      ((Runnable) a.getArguments()[0]).run();
+      return null;
+    }).when(context).execute(any(Runnable.class));
 
     state.setSessionId(1).setState(Session.State.OPEN);
 
@@ -157,15 +158,4 @@ public class ClientSessionListenerTest {
     assertEquals(state.getEventIndex(), 1);
     assertFalse(received.get());
   }
-
-  /**
-   * Mock executor.
-   */
-  private static class MockExecutor implements Executor {
-    @Override
-    public void execute(Runnable command) {
-      command.run();
-    }
-  }
-
 }

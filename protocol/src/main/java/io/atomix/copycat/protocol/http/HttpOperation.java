@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.protocol.http;
 
-import io.atomix.copycat.Operation;
-
 import java.util.Map;
 
 /**
@@ -24,7 +22,7 @@ import java.util.Map;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public interface HttpOperation extends Operation<Object> {
+public interface HttpOperation extends java.io.Serializable {
 
   /**
    * Returns the HTTP request path.

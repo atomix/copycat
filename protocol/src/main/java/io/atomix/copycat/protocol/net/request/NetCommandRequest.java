@@ -18,7 +18,6 @@ package io.atomix.copycat.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.protocol.request.CommandRequest;
 
 /**
@@ -29,8 +28,8 @@ import io.atomix.copycat.protocol.request.CommandRequest;
 public class NetCommandRequest extends CommandRequest implements NetRequest<NetCommandRequest> {
   private final long id;
 
-  public NetCommandRequest(long id, long session, long sequence, Command command) {
-    super(session, sequence, command);
+  public NetCommandRequest(long id, long session, long sequence, byte[] bytes) {
+    super(session, sequence, bytes);
     this.id = id;
   }
 
@@ -56,12 +55,12 @@ public class NetCommandRequest extends CommandRequest implements NetRequest<NetC
 
     @Override
     public CommandRequest copy(CommandRequest request) {
-      return new NetCommandRequest(id, request.session(), request.sequence(), request.command());
+      return new NetCommandRequest(id, request.session(), request.sequence(), request.bytes());
     }
 
     @Override
     public CommandRequest build() {
-      return new NetCommandRequest(id, session, sequence, command);
+      return new NetCommandRequest(id, session, sequence, bytes);
     }
   }
 
@@ -74,12 +73,13 @@ public class NetCommandRequest extends CommandRequest implements NetRequest<NetC
       output.writeLong(request.id);
       output.writeLong(request.session);
       output.writeLong(request.sequence);
-      kryo.writeClassAndObject(output, request.command);
+      output.writeInt(request.bytes.length);
+      output.write(request.bytes);
     }
 
     @Override
     public NetCommandRequest read(Kryo kryo, Input input, Class<NetCommandRequest> type) {
-      return new NetCommandRequest(input.readLong(), input.readLong(), input.readLong(), (Command) kryo.readClassAndObject(input));
+      return new NetCommandRequest(input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()));
     }
   }
 }

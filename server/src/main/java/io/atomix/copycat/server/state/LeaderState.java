@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
-import io.atomix.copycat.protocol.error.ProtocolException;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.error.ProtocolException;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
 import io.atomix.copycat.server.CopycatServer;
@@ -164,7 +163,7 @@ final class LeaderState extends ActiveState {
     long term = context.getTerm();
 
     // Iterate through all currently registered sessions.
-    for (ServerSessionContext session : context.getStateMachine().executor().context().sessions().sessions.values()) {
+    for (ServerSessionContext session : context.getStateMachine().context().sessions().sessions.values()) {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
       if (session.state() == Session.State.UNSTABLE && !session.isUnregistering()) {
@@ -474,7 +473,7 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(request.session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -518,8 +517,6 @@ final class LeaderState extends ActiveState {
    * Applies the given command to the log.
    */
   private void applyCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
-    final Command command = request.command();
-
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<CommandEntry> entry;
@@ -527,7 +524,7 @@ final class LeaderState extends ActiveState {
     final LogWriter writer = context.getLogWriter();
     try {
       writer.lock();
-      entry = writer.append(term, new CommandEntry(timestamp, request.session(), request.sequence(), command));
+      entry = writer.append(term, new CommandEntry(timestamp, request.session(), request.sequence(), request.bytes()));
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     } finally {
       writer.unlock();
@@ -571,8 +568,6 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<QueryResponse> onQuery(final QueryRequest request, QueryResponse.Builder responseBuilder) {
-    Query query = request.query();
-
     final long timestamp = System.currentTimeMillis();
 
     context.checkThread();
@@ -585,10 +580,10 @@ final class LeaderState extends ActiveState {
         timestamp,
         request.session(),
         request.sequence(),
-        query),
+        request.bytes()),
       0);
 
-    Query.ConsistencyLevel consistency = query.consistency();
+    ConsistencyLevel consistency = request.consistency();
     if (consistency == null) {
       return queryLinearizable(entry, responseBuilder);
     }
@@ -610,7 +605,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> queryBoundedLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -641,7 +636,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> queryLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -678,7 +673,7 @@ final class LeaderState extends ActiveState {
    */
   private void sequenceLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.entry().session());
+    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -775,7 +770,7 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
-    context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
+    context.getStateMachine().context().sessions().registerConnection(request.client(), connection);
 
     AcceptRequest acceptRequest = new AcceptRequest.Builder()
       .withClient(request.client())
@@ -811,7 +806,7 @@ final class LeaderState extends ActiveState {
       writer.unlock();
     }
 
-    context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
+    context.getStateMachine().context().sessions().registerAddress(request.client(), request.address());
 
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
     appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {

@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.request;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.Operation;
 
 /**
  * Client operation request.
@@ -31,10 +30,12 @@ import io.atomix.copycat.Operation;
  */
 public abstract class OperationRequest extends SessionRequest {
   protected final long sequence;
+  protected final byte[] bytes;
 
-  protected OperationRequest(long session, long sequence) {
+  protected OperationRequest(long session, long sequence, byte[] bytes) {
     super(session);
     this.sequence = Assert.argNot(sequence, sequence < 0, "sequence must be positive");
+    this.bytes = Assert.notNull(bytes, "bytes");
   }
 
   /**
@@ -47,11 +48,13 @@ public abstract class OperationRequest extends SessionRequest {
   }
 
   /**
-   * Returns the request operation.
+   * Returns the operation bytes.
    *
-   * @return The request operation.
+   * @return The operation bytes.
    */
-  public abstract Operation operation();
+  public byte[] bytes() {
+    return bytes;
+  }
 
   /**
    * Operation request builder.

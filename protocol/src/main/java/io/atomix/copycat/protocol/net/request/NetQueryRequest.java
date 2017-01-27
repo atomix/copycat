@@ -18,7 +18,7 @@ package io.atomix.copycat.protocol.net.request;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.request.QueryRequest;
 
 /**
@@ -29,8 +29,8 @@ import io.atomix.copycat.protocol.request.QueryRequest;
 public class NetQueryRequest extends QueryRequest implements NetRequest<NetQueryRequest> {
   private final long id;
 
-  public NetQueryRequest(long id, long session, long sequence, long index, Query query) {
-    super(session, sequence, index, query);
+  public NetQueryRequest(long id, long session, long sequence, long index, byte[] bytes, ConsistencyLevel consistency) {
+    super(session, sequence, index, bytes, consistency);
     this.id = id;
   }
 
@@ -56,12 +56,12 @@ public class NetQueryRequest extends QueryRequest implements NetRequest<NetQuery
 
     @Override
     public QueryRequest copy(QueryRequest request) {
-      return new NetQueryRequest(id, request.session(), request.sequence(), request.index(), request.query());
+      return new NetQueryRequest(id, request.session(), request.sequence(), request.index(), request.bytes(), request.consistency());
     }
 
     @Override
     public QueryRequest build() {
-      return new NetQueryRequest(id, session, sequence, index, query);
+      return new NetQueryRequest(id, session, sequence, index, bytes, consistency);
     }
   }
 
@@ -75,12 +75,14 @@ public class NetQueryRequest extends QueryRequest implements NetRequest<NetQuery
       output.writeLong(request.session);
       output.writeLong(request.sequence);
       output.writeLong(request.index);
-      kryo.writeClassAndObject(output, request.query);
+      output.writeInt(request.bytes.length);
+      output.write(request.bytes);
+      output.writeByte(request.consistency.id);
     }
 
     @Override
     public NetQueryRequest read(Kryo kryo, Input input, Class<NetQueryRequest> type) {
-      return new NetQueryRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong(), (Query) kryo.readClassAndObject(input));
+      return new NetQueryRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()), ConsistencyLevel.forId(input.readByte()));
     }
   }
 }

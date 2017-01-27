@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.Command;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
@@ -116,7 +115,7 @@ public interface Snapshottable {
    * This method will be called while a server is replaying its log at startup. Typically, only the most
    * recent snapshot of the state machine state will be installed upon log replay. State machines should recover
    * all snapshottable state machine state from an installed snapshot. Note, however, that depending on the
-   * {@link Command.CompactionMode CompactionMode} of commands applied to a state machine,
+   * {@link io.atomix.copycat.server.Commit.CompactionMode CompactionMode} of commands applied to a state machine,
    * snapshots may only represent a single component of state recovery. State machines that use a mixture of
    * snapshottable and cleanable state should not overwrite state resulting from other types of commands when a
    * snapshot is installed.

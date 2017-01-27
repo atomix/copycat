@@ -15,8 +15,7 @@
  */
 package io.atomix.copycat.test;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
+import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.client.*;
 import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.protocol.Address;
@@ -31,6 +30,7 @@ import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
+import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.util.concurrent.Listener;
@@ -44,6 +44,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -124,7 +125,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private void submit(CopycatClient client, int count, int total) {
     if (count < total) {
-      client.submit(new TestCommand()).whenComplete((result, error) -> {
+      client.submitCommand(UUID.randomUUID().toString().getBytes()).whenComplete((result, error) -> {
         threadAssertNull(error);
         submit(client, count + 1, total);
       });
@@ -426,7 +427,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submit(new TestCommand()).thenAccept(result -> {
+    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -462,7 +463,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(live, total);
 
     CopycatClient client = createClient();
-    client.submit(new TestCommand()).thenAccept(result -> {
+    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -474,115 +475,115 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests submitting a query.
    */
   public void testOneNodeSubmitQueryWithSequentialConsistency() throws Throwable {
-    testSubmitQuery(1, Query.ConsistencyLevel.SEQUENTIAL);
+    testSubmitQuery(1, ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testOneNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(1, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    testSubmitQuery(1, ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testOneNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
-    testSubmitQuery(1, Query.ConsistencyLevel.LINEARIZABLE);
+    testSubmitQuery(1, ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testTwoNodeSubmitQueryWithSequentialConsistency() throws Throwable {
-    testSubmitQuery(2, Query.ConsistencyLevel.SEQUENTIAL);
+    testSubmitQuery(2, ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testTwoNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(2, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    testSubmitQuery(2, ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testTwoNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
-    testSubmitQuery(2, Query.ConsistencyLevel.LINEARIZABLE);
+    testSubmitQuery(2, ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testThreeNodeSubmitQueryWithSequentialConsistency() throws Throwable {
-    testSubmitQuery(3, Query.ConsistencyLevel.SEQUENTIAL);
+    testSubmitQuery(3, ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testThreeNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(3, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    testSubmitQuery(3, ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testThreeNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
-    testSubmitQuery(3, Query.ConsistencyLevel.LINEARIZABLE);
+    testSubmitQuery(3, ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testFourNodeSubmitQueryWithSequentialConsistency() throws Throwable {
-    testSubmitQuery(4, Query.ConsistencyLevel.SEQUENTIAL);
+    testSubmitQuery(4, ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testFourNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(4, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    testSubmitQuery(4, ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testFourNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
-    testSubmitQuery(4, Query.ConsistencyLevel.LINEARIZABLE);
+    testSubmitQuery(4, ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testFiveNodeSubmitQueryWithSequentialConsistency() throws Throwable {
-    testSubmitQuery(5, Query.ConsistencyLevel.SEQUENTIAL);
+    testSubmitQuery(5, ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testFiveNodeSubmitQueryWithBoundedLinearizableConsistency() throws Throwable {
-    testSubmitQuery(5, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    testSubmitQuery(5, ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
    * Tests submitting a query.
    */
   public void testFiveNodeSubmitQueryWithLinearizableConsistency() throws Throwable {
-    testSubmitQuery(5, Query.ConsistencyLevel.LINEARIZABLE);
+    testSubmitQuery(5, ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests submitting a query with a configured consistency level.
    */
-  private void testSubmitQuery(int nodes, Query.ConsistencyLevel consistency) throws Throwable {
+  private void testSubmitQuery(int nodes, ConsistencyLevel consistency) throws Throwable {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submit(new TestQuery(consistency)).thenAccept(result -> {
+    client.submitQuery(new byte[0], consistency).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -641,10 +642,10 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestEvent(true)).thenAccept(result -> {
+    client.submitCommand(new byte[]{2}).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(count.incrementAndGet(), 1L);
-      index.set(result);
+      index.set(HeapBuffer.wrap(result).readLong());
       resume();
     });
 
@@ -706,7 +707,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestEvent(false)).thenAccept(result -> {
+    client.submitCommand(new byte[]{3}).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -718,27 +719,27 @@ public class ClusterTest extends ConcurrentTestCase {
    * Tests that operations are properly sequenced on the client.
    */
   public void testSequenceLinearizableOperations() throws Throwable {
-    testSequenceOperations(5, Query.ConsistencyLevel.LINEARIZABLE);
+    testSequenceOperations(5, ConsistencyLevel.LINEARIZABLE);
   }
 
   /**
    * Tests that operations are properly sequenced on the client.
    */
   public void testSequenceBoundedLinearizableOperations() throws Throwable {
-    testSequenceOperations(5, Query.ConsistencyLevel.LINEARIZABLE_LEASE);
+    testSequenceOperations(5, ConsistencyLevel.LINEARIZABLE_LEASE);
   }
 
   /**
    * Tests that operations are properly sequenced on the client.
    */
   public void testSequenceSequentialOperations() throws Throwable {
-    testSequenceOperations(5, Query.ConsistencyLevel.SEQUENTIAL);
+    testSequenceOperations(5, ConsistencyLevel.SEQUENTIAL);
   }
 
   /**
    * Tests submitting a linearizable event that publishes to all sessions.
    */
-  private void testSequenceOperations(int nodes, Query.ConsistencyLevel consistency) throws Throwable {
+  private void testSequenceOperations(int nodes, ConsistencyLevel consistency) throws Throwable {
     createServers(nodes);
 
     AtomicInteger counter = new AtomicInteger();
@@ -752,26 +753,26 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submit(new TestCommand()).thenAccept(result -> {
+    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(counter.incrementAndGet(), 1);
-      threadAssertTrue(index.compareAndSet(0, result));
+      threadAssertTrue(index.compareAndSet(0, HeapBuffer.wrap(result).readLong()));
       resume();
     });
 
-    client.submit(new TestEvent(true)).thenAccept(result -> {
+    client.submitCommand(new byte[]{3}).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(counter.incrementAndGet(), 2);
-      threadAssertTrue(result > index.get());
-      index.set(result);
+      threadAssertTrue(HeapBuffer.wrap(result).readLong() > index.get());
+      index.set(HeapBuffer.wrap(result).readLong());
       resume();
     });
 
-    client.submit(new TestQuery(consistency)).thenAccept(result -> {
+    client.submitQuery(new byte[0], consistency).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(counter.incrementAndGet(), 4);
       long i = index.get();
-      threadAssertTrue(result >= i);
+      threadAssertTrue(HeapBuffer.wrap(result).readLong() >= i);
       resume();
     });
 
@@ -791,16 +792,16 @@ public class ClusterTest extends ConcurrentTestCase {
     client.onEvent("test", event -> {
       threadAssertEquals(index.get(), event);
       try {
-        threadAssertTrue(index.get() <= client.submit(new TestQuery(Query.ConsistencyLevel.LINEARIZABLE)).get(10, TimeUnit.SECONDS));
+        threadAssertTrue(index.get() <= HeapBuffer.wrap(client.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE).get(10, TimeUnit.SECONDS)).readLong());
       } catch (InterruptedException | TimeoutException | ExecutionException e) {
         threadFail(e);
       }
       resume();
     });
 
-    client.submit(new TestEvent(true)).thenAccept(result -> {
+    client.submitCommand(new byte[]{2}).thenAccept(result -> {
       threadAssertNotNull(result);
-      index.compareAndSet(0, result);
+      index.compareAndSet(0, HeapBuffer.wrap(result).readLong());
       resume();
     });
 
@@ -827,7 +828,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -863,7 +864,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -875,7 +876,7 @@ public class ClusterTest extends ConcurrentTestCase {
     leader.shutdown().get(10, TimeUnit.SECONDS);
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -911,7 +912,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -919,7 +920,7 @@ public class ClusterTest extends ConcurrentTestCase {
       await(30000, 2);
     }
 
-    client.submit(new TestEvent(true)).thenAccept(result -> {
+    client.submitCommand(new byte[]{2}).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -930,7 +931,7 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -959,7 +960,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -967,7 +968,7 @@ public class ClusterTest extends ConcurrentTestCase {
       await(30000, 2);
     }
 
-    client.submit(new TestEvent(true)).thenAccept(result -> {
+    client.submitCommand(new byte[]{2}).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -978,7 +979,7 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0 ; i < 10; i++) {
-      client.submit(new TestEvent(true)).thenAccept(result -> {
+      client.submitCommand(new byte[]{2}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -1017,7 +1018,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0; i < 10; i++) {
-      client.submit(new TestEvent(false)).thenAccept(result -> {
+      client.submitCommand(new byte[]{3}).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -1084,7 +1085,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
     client1.onEvent("expired", this::resume);
-    client1.submit(new TestExpire()).thenRun(this::resume);
+    client1.submitCommand(new byte[]{5}).thenRun(this::resume);
     ((DefaultCopycatClient) client2).kill().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
   }
@@ -1118,7 +1119,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
-    client1.submit(new TestClose()).thenRun(this::resume);
+    client1.submitCommand(new byte[]{4}).thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 1);
     client1.onEvent("closed", this::resume);
     client2.close().thenRun(this::resume);
@@ -1248,9 +1249,9 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test state machine.
    */
   public static class TestStateMachine extends StateMachine implements SessionListener, Snapshottable {
-    private Commit<TestCommand> last;
-    private Commit<TestExpire> expire;
-    private Commit<TestClose> close;
+    private Commit last;
+    private Commit expire;
+    private Commit close;
 
     @Override
     public void register(ServerSession session) {
@@ -1284,7 +1285,38 @@ public class ClusterTest extends ConcurrentTestCase {
       assert reader.readLong() == 10;
     }
 
-    public long command(Commit<TestCommand> commit) {
+    @Override
+    public byte[] applyCommand(Commit commit) {
+      switch (commit.bytes()[0]) {
+        case 1:
+          command(commit);
+          break;
+        case 2:
+          ownEvent(commit);
+          break;
+        case 3:
+          allEvents(commit);
+          break;
+        case 4:
+          close(commit);
+          break;
+        case 5:
+          expire(commit);
+          break;
+      }
+      return ((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array();
+    }
+
+    @Override
+    public byte[] applyQuery(Commit commit) {
+      try {
+        return ((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array();
+      } finally {
+        commit.close();
+      }
+    }
+
+    public long command(Commit commit) {
       try {
         return commit.index();
       } finally {
@@ -1294,86 +1326,31 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     }
 
-    public long query(Commit<TestQuery> commit) {
+    public void ownEvent(Commit commit) {
       try {
-        return commit.index();
+        commit.session().publish("test", commit.index());
       } finally {
         commit.close();
       }
     }
 
-    public long event(Commit<TestEvent> commit) {
+    public void allEvents(Commit commit) {
       try {
-        if (commit.operation().own()) {
-          commit.session().publish("test", commit.index());
-        } else {
-          for (ServerSession session : sessions) {
-            session.publish("test", commit.index());
-          }
+        for (ServerSession session : sessions) {
+          session.publish("test", commit.index());
         }
-        return commit.index();
       } finally {
         commit.close();
       }
     }
 
-    public void close(Commit<TestClose> commit) {
+    public void close(Commit commit) {
       this.close = commit;
     }
 
-    public void expire(Commit<TestExpire> commit) {
+    public void expire(Commit commit) {
       this.expire = commit;
     }
-  }
-
-  /**
-   * Test command.
-   */
-  public static class TestCommand implements Command<Long> {
-    public long value;
-  }
-
-  /**
-   * Test query.
-   */
-  public static class TestQuery implements Query<Long> {
-    private ConsistencyLevel consistency;
-
-    public TestQuery(ConsistencyLevel consistency) {
-      this.consistency = consistency;
-    }
-
-    @Override
-    public ConsistencyLevel consistency() {
-      return consistency;
-    }
-  }
-
-  /**
-   * Test event.
-   */
-  public static class TestEvent implements Command<Long> {
-    private boolean own;
-
-    public TestEvent(boolean own) {
-      this.own = own;
-    }
-
-    public boolean own() {
-      return own;
-    }
-  }
-
-  /**
-   * Test event.
-   */
-  public static class TestExpire implements Command<Void> {
-  }
-
-  /**
-   * Test event.
-   */
-  public static class TestClose implements Command<Void> {
   }
 
   /**

@@ -15,86 +15,35 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
-import io.atomix.copycat.protocol.error.CommandException;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 
-import java.lang.reflect.*;
 import java.time.Clock;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * Base class for user-provided Raft state machines.
  * <p>
  * Users should extend this class to create a state machine for use within a {@link CopycatServer}.
  * <p>
- * State machines are responsible for handling {@link Operation operations} submitted to the Raft cluster and
+ * State machines are responsible for handling operations submitted to the Raft cluster and
  * filtering {@link Commit committed} operations out of the Raft log. The most important rule of state machines is
  * that <em>state machines must be deterministic</em> in order to maintain Copycat's consistency guarantees. That is,
  * state machines must not change their behavior based on external influences and have no side effects. Users should
  * <em>never</em> use {@code System} time to control behavior within a state machine.
  * <p>
- * When {@link Command commands} and {@link Query queries} (i.e. <em>operations</em>) are submitted to the Raft cluster,
+ * When commands and queries (i.e. <em>operations</em>) are submitted to the Raft cluster,
  * the {@link CopycatServer} will log and replicate them as necessary and, once complete, apply them to the configured
  * state machine.
  *
- * <h3>State machine operations</h3>
- * State machine operations are implemented as methods on the state machine. Operations can be automatically detected
- * by the state machine during setup or can be explicitly registered by overriding the {@link #configure(StateMachineExecutor)}
- * method. Each operation method must take a single {@link Commit} argument for a specific operation type.
- * <pre>
- *   {@code
- *   public class MapStateMachine extends StateMachine {
- *
- *     public Object put(Commit<Put> commit) {
- *       Commit<Put> previous = map.put(commit.operation().key(), commit);
- *       if (previous != null) {
- *         try {
- *           return previous.operation().value();
- *         } finally {
- *           previous.close();
- *         }
- *       }
- *       return null;
- *     }
- *
- *     public Object get(Commit<Get> commit) {
- *       try {
- *         Commit<Put> current = map.get(commit.operation().key());
- *         return current != null ? current.operation().value() : null;
- *       } finally {
- *         commit.close();
- *       }
- *     }
- *   }
- *   }
- * </pre>
- * When operations are applied to the state machine they're wrapped in a {@link Commit} object. The commit provides the
- * context of how the command or query was committed to the cluster, including the log {@link Commit#index()}, the
- * {@link Session} from which the operation was submitted, and the approximate wall-clock {@link Commit#time()} at which
- * the commit was written to the Raft log. Note that the commit time is guaranteed to progress monotonically, but it may
- * not be representative of the progress of actual time. See the {@link Commit} documentation for more information.
- * <p>
- * State machine operations are guaranteed to be executed in the order in which they were submitted by the client,
- * always in the same thread, and thus always sequentially. State machines do not need to be thread safe, but they must
- * be deterministic. That is, state machines are guaranteed to see {@link Command}s in the same order on all servers,
- * and given the same commands in the same order, all servers' state machines should arrive at the same state with the
- * same output (return value). The return value of each operation callback is the response value that will be sent back
- * to the client.
- *
  * <h3>Deterministic scheduling</h3>
- * The {@link StateMachineExecutor} is responsible for executing state machine operations sequentially and provides an
+ * The {@link StateMachineContext} is responsible for executing state machine operations sequentially and provides an
  * interface similar to that of {@link java.util.concurrent.ScheduledExecutorService} to allow state machines to schedule
  * time-based callbacks. Because of the determinism requirement, scheduled callbacks are guaranteed to be executed
- * deterministically as well. The executor can be accessed via the {@link #executor} field.
- * See the {@link StateMachineExecutor} documentation for more information.
+ * deterministically as well. The context can be accessed via the {@link #context} field.
+ * See the {@link StateMachineContext} documentation for more information.
  * <pre>
  *   {@code
  *   public void putWithTtl(Commit<PutWithTtl> commit) {
@@ -192,19 +141,16 @@ import java.util.function.Function;
  * For snapshottable state machines, Copycat will periodically request a {@link io.atomix.copycat.server.storage.snapshot.Snapshot Snapshot}
  * of the state machine's state by calling the {@link Snapshottable#snapshot(SnapshotWriter)} method. Once the state
  * machine has written a snapshot of its state, Copycat will automatically remove all commands from the underlying log
- * marked with the {@link Command.CompactionMode#SNAPSHOT SNAPSHOT} compaction mode. Note that
+ * marked with the {@link io.atomix.copycat.server.Commit.CompactionMode#SNAPSHOT SNAPSHOT} compaction mode. Note that
  * state machines should still ensure that snapshottable commits are {@link Commit#close() closed} once they've been
  * applied to the state machine, but state machines are free to immediately close all snapshottable commits.
  *
  * @see Commit
- * @see Command
  * @see StateMachineContext
- * @see StateMachineExecutor
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class StateMachine implements AutoCloseable {
-  protected StateMachineExecutor executor;
   protected StateMachineContext context;
   protected Clock clock;
   protected Sessions sessions;
@@ -215,32 +161,33 @@ public abstract class StateMachine implements AutoCloseable {
   /**
    * Initializes the state machine.
    *
-   * @param executor The state machine executor.
+   * @param context The state machine context.
    * @throws NullPointerException if {@code context} is null
    */
-  public void init(StateMachineExecutor executor) {
-    this.executor = Assert.notNull(executor, "executor");
-    this.context = executor.context();
+  public void init(StateMachineContext context) {
+    this.context = Assert.notNull(context, "context");
     this.clock = context.clock();
     this.sessions = context.sessions();
     if (this instanceof SessionListener) {
-      executor.context().sessions().addListener((SessionListener) this);
+      context.sessions().addListener((SessionListener) this);
     }
-    configure(executor);
   }
 
   /**
-   * Configures the state machine.
-   * <p>
-   * By default, this method will configure state machine operations by extracting public methods with
-   * a single {@link Commit} parameter via reflection. Override this method to explicitly register
-   * state machine operations via the provided {@link StateMachineExecutor}.
+   * Applies a command to the state machine.
    *
-   * @param executor The state machine executor.
+   * @param commit the command commit to apply.
+   * @return The command result.
    */
-  protected void configure(StateMachineExecutor executor) {
-    registerOperations();
-  }
+  public abstract byte[] applyCommand(Commit commit);
+
+  /**
+   * Applies a query to the state machine.
+   *
+   * @param commit The query commit to apply.
+   * @return The query result.
+   */
+  public abstract byte[] applyQuery(Commit commit);
 
   /**
    * Closes the state machine.
@@ -249,127 +196,4 @@ public abstract class StateMachine implements AutoCloseable {
   public void close() {
 
   }
-
-  /**
-   * Registers operations for the class.
-   */
-  private void registerOperations() {
-    Class<?> type = getClass();
-    for (Method method : type.getMethods()) {
-      if (isOperationMethod(method)) {
-        registerMethod(method);
-      }
-    }
-  }
-
-  /**
-   * Returns a boolean value indicating whether the given method is an operation method.
-   */
-  private boolean isOperationMethod(Method method) {
-    Class<?>[] paramTypes = method.getParameterTypes();
-    return paramTypes.length == 1 && paramTypes[0] == Commit.class;
-  }
-
-  /**
-   * Registers an operation for the given method.
-   */
-  private void registerMethod(Method method) {
-    Type genericType = method.getGenericParameterTypes()[0];
-    Class<?> argumentType = resolveArgument(genericType);
-    if (argumentType != null && Operation.class.isAssignableFrom(argumentType)) {
-      registerMethod(argumentType, method);
-    }
-  }
-
-  /**
-   * Resolves the generic argument for the given type.
-   */
-  private Class<?> resolveArgument(Type type) {
-    if (type instanceof ParameterizedType) {
-      ParameterizedType paramType = (ParameterizedType) type;
-      return resolveClass(paramType.getActualTypeArguments()[0]);
-    } else if (type instanceof TypeVariable) {
-      return resolveClass(type);
-    } else if (type instanceof Class) {
-      TypeVariable<?>[] typeParams = ((Class<?>) type).getTypeParameters();
-      return resolveClass(typeParams[0]);
-    }
-    return null;
-  }
-
-  /**
-   * Resolves the generic class for the given type.
-   */
-  private Class<?> resolveClass(Type type) {
-    if (type instanceof Class) {
-      return (Class<?>) type;
-    } else if (type instanceof ParameterizedType) {
-      return resolveClass(((ParameterizedType) type).getRawType());
-    } else if (type instanceof WildcardType) {
-      Type[] bounds = ((WildcardType) type).getUpperBounds();
-      if (bounds.length > 0) {
-        return (Class<?>) bounds[0];
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Registers the given method for the given operation type.
-   */
-  private void registerMethod(Class<?> type, Method method) {
-    Class<?> returnType = method.getReturnType();
-    if (returnType == void.class || returnType == Void.class) {
-      registerVoidMethod(type, method);
-    } else {
-      registerValueMethod(type, method);
-    }
-  }
-
-  /**
-   * Registers an operation with a void return value.
-   */
-  @SuppressWarnings("unchecked")
-  private void registerVoidMethod(Class type, Method method) {
-    executor.register(type, wrapVoidMethod(method));
-  }
-
-  /**
-   * Wraps a void method.
-   */
-  private Consumer wrapVoidMethod(Method method) {
-    return c -> {
-      try {
-        method.invoke(this, c);
-      } catch (InvocationTargetException e) {
-        throw new CommandException(e);
-      } catch (IllegalAccessException e) {
-        throw new AssertionError(e);
-      }
-    };
-  }
-
-  /**
-   * Registers an operation with a non-void return value.
-   */
-  @SuppressWarnings("unchecked")
-  private void registerValueMethod(Class type, Method method) {
-    executor.register(type, wrapValueMethod(method));
-  }
-
-  /**
-   * Wraps a value method.
-   */
-  private Function wrapValueMethod(Method method) {
-    return c -> {
-      try {
-        return method.invoke(this, c);
-      } catch (InvocationTargetException e) {
-        throw new CommandException(e);
-      } catch (IllegalAccessException e) {
-        throw new AssertionError(e);
-      }
-    };
-  }
-
 }

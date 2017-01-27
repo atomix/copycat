@@ -24,10 +24,7 @@ import io.atomix.copycat.server.protocol.request.LeaveRequest;
 import io.atomix.copycat.server.protocol.response.LeaveResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.util.concurrent.Futures;
-import io.atomix.copycat.util.concurrent.Listener;
-import io.atomix.copycat.util.concurrent.Listeners;
-import io.atomix.copycat.util.concurrent.Scheduled;
+import io.atomix.copycat.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +47,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private final ServerContext context;
   private final ServerMember member;
   private volatile Configuration configuration;
+  private final CopycatThreadFactory threadFactory;
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
   private final Map<Address, MemberState> addressMap = new ConcurrentHashMap<>();
   private final Set<Member> members = new CopyOnWriteArraySet<>();
@@ -67,6 +65,7 @@ final class ClusterState implements Cluster, AutoCloseable {
     Instant time = Instant.now();
     this.member = new ServerMember(type, serverAddress, clientAddress, time).setCluster(this);
     this.context = Assert.notNull(context, "context");
+    this.threadFactory = new CopycatThreadFactory("copycat-server-" + serverAddress + "-appender-%d");
 
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
     configuration = context.getMetaStore().loadConfiguration();
@@ -80,7 +79,7 @@ final class ClusterState implements Cluster, AutoCloseable {
           this.members.add(this.member);
         } else {
           // If the member state doesn't already exist, create it.
-          MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this);
+          MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this, new SingleThreadContext(threadFactory));
           state.resetState(context.getLog());
           this.members.add(state.getMember());
           this.remoteMembers.add(state);
@@ -340,7 +339,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private synchronized CompletableFuture<Void> join() {
     joinFuture = new CompletableFuture<>();
 
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       // Transition the server to the appropriate state for the local member type.
       context.transition(member.type());
 
@@ -493,7 +492,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
     leaveFuture = new CompletableFuture<>();
 
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       // If a join attempt is still underway, cancel the join and complete the join future exceptionally.
       // The join future will be set to null once completed.
       cancelJoinTimer();
@@ -614,7 +613,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
         if (state == null) {
-          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this);
+          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this, new SingleThreadContext(threadFactory));
           state.resetState(context.getLog());
           this.members.add(state.getMember());
           this.remoteMembers.add(state);

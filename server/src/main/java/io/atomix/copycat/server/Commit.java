@@ -15,9 +15,6 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.session.Session;
 
@@ -28,12 +25,12 @@ import java.time.Instant;
  * <p>
  * Commits are representative of a log {@link io.atomix.copycat.server.storage.entry.Entry} that has been replicated
  * and committed via the Raft consensus algorithm.
- * When {@link Command commands} and {@link Query queries} are applied to the Raft {@link StateMachine}, they're
+ * When commands and queries are applied to the Raft {@link StateMachine}, they're
  * wrapped in a commit object. The commit object provides useful metadata regarding the location of the commit
  * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link Session} that
  * submitted the operation to the cluster.
  * <p>
- * All metadata exposed by this interface is backed by disk. The {@link #operation() operation} and its metadata is
+ * All metadata exposed by this interface is backed by disk. The operation and its metadata is
  * guaranteed to be consistent for a given {@link #index() index} across all servers in the cluster.
  * <p>
  * When state machines are done using a commit object, users should release the commit by calling {@link #close()}.
@@ -44,16 +41,16 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public interface Commit<T extends Operation> {
+public interface Commit {
 
   /**
    * Returns the commit index.
    * <p>
-   * This is the index at which the committed {@link Operation} was written in the Raft log.
-   * Copycat guarantees that this index will be unique for {@link Command} commits and will be the same for all
+   * This is the index at which the committed operation was written in the Raft log.
+   * Copycat guarantees that this index will be unique for command commits and will be the same for all
    * instances of the given operation on all servers in the cluster.
    * <p>
-   * For {@link Query} operations, the returned {@code index} may actually be representative of the last committed
+   * For query operations, the returned {@code index} may actually be representative of the last committed
    * index in the Raft log since queries are not actually written to disk. Thus, query commits cannot be assumed
    * to have unique indexes.
    *
@@ -91,50 +88,11 @@ public interface Commit<T extends Operation> {
   Instant time();
 
   /**
-   * Returns the commit type.
-   * <p>
-   * This is the {@link java.lang.Class} returned by the committed operation's {@link Object#getClass()} method.
+   * Returns the commit bytes.
    *
-   * @return The commit type.
-   * @throws IllegalStateException if the commit is {@link #close() closed}
+   * @return The commit bytes.
    */
-  Class<T> type();
-
-  /**
-   * Returns the operation submitted by the client.
-   *
-   * @return The operation submitted by the client.
-   * @throws IllegalStateException if the commit is {@link #close() closed}
-   */
-  T operation();
-
-  /**
-   * Returns the command submitted by the client.
-   * <p>
-   * This method is an alias for the {@link #operation()} method. It is intended to aid with clarity in code.
-   * This method does <em>not</em> perform any type checking of the operation to ensure it is in fact a
-   * {@link Command} object.
-   *
-   * @return The command submitted by the client.
-   * @throws IllegalStateException if the commit is {@link #close() closed}
-   */
-  default T command() {
-    return operation();
-  }
-
-  /**
-   * Returns the query submitted by the client.
-   * <p>
-   * This method is an alias for the {@link #operation()} method. It is intended to aid with clarity in code.
-   * This method does <em>not</em> perform any type checking of the operation to ensure it is in fact a
-   * {@link Query} object.
-   *
-   * @return The query submitted by the client.
-   * @throws IllegalStateException if the commit is {@link #close() closed}
-   */
-  default T query() {
-    return operation();
-  }
+  byte[] bytes();
 
   /**
    * Marks the commit for compaction from the Raft log.
@@ -146,7 +104,7 @@ public interface Commit<T extends Operation> {
   /**
    * Closes the commit.
    * <p>
-   * When a {@link Command} commit is closed, it will not be compacted from the log.
+   * When a commit is closed, it will not be compacted from the log.
    */
   void close();
 
@@ -164,7 +122,7 @@ public interface Commit<T extends Operation> {
    * Commands to a Copycat state machine typically come in one of two flavors; commands are either compacted from
    * the log via snapshotting or log cleaning. Log cleaning is the process of removing commands from the log when
    * they no longer contribute to the state machine's state. Commands compacted via log cleaning are represented
-   * by the {@link #QUORUM}, {@link #FULL}, {@link #SEQUENTIAL}, and {@link #TOMBSTONE} compaction modes. These types
+   * by the {@link #QUORUM}, {@link #SEQUENTIAL}, and {@link #TOMBSTONE} compaction modes. These types
    * of commands are removed from the log in a manor consistent with the configured compaction mode.
    * <p>
    * Alternatively, the simpler mode of compaction is snapshotting. Snapshotted commands are indicated by the
