@@ -11,17 +11,30 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
+ * limitations under the License
  */
+package io.atomix.copycat.client.session;
 
 /**
- * Classes and interfaces for managing client sessions.
- * <p>
- * Sessions represent the context in which clients communicate with a Raft cluster. Sessions allow clusters
- * to process requests according to client state. For instance, sessions are responsible for ensuring operations
- * are executed in the order specified by the client (sequential consistency) and operations are only applied
- * to the replicated state machine once (linearizability).
+ * Closed session exception.
  *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-package io.atomix.copycat.session;
+public class ClosedSessionException extends IllegalStateException {
+
+  public ClosedSessionException() {
+  }
+
+  public ClosedSessionException(String s) {
+    super(s);
+  }
+
+  public ClosedSessionException(String message, Throwable cause) {
+    super(message, cause);
+  }
+
+  public ClosedSessionException(Throwable cause) {
+    super(cause);
+  }
+
+}

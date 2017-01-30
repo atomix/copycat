@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolConnection;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
-import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
+import io.atomix.copycat.util.Assert;
 
 import java.util.HashSet;
 import java.util.Iterator;
@@ -37,8 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
 class ServerSessionManager implements Sessions {
   private final Map<String, Address> addresses = new ConcurrentHashMap<>();
   private final Map<String, ProtocolServerConnection> connections = new ConcurrentHashMap<>();
-  final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
-  final Map<String, ServerSessionContext> clients = new ConcurrentHashMap<>();
+  final Map<Long, ServerSession> sessions = new ConcurrentHashMap<>();
+  final Map<String, ServerSession> clients = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
   private final ServerContext context;
 
@@ -47,7 +47,7 @@ class ServerSessionManager implements Sessions {
   }
 
   @Override
-  public ServerSession session(long sessionId) {
+  public Session session(long sessionId) {
     return sessions.get(sessionId);
   }
 
@@ -67,7 +67,7 @@ class ServerSessionManager implements Sessions {
    * Registers an address.
    */
   ServerSessionManager registerAddress(String client, Address address) {
-    ServerSessionContext session = clients.get(client);
+    ServerSession session = clients.get(client);
     if (session != null) {
       session.setAddress(address);
       // If client was previously connected locally, close that connection.
@@ -87,7 +87,7 @@ class ServerSessionManager implements Sessions {
    * Registers a connection.
    */
   ServerSessionManager registerConnection(String client, ProtocolServerConnection connection) {
-    ServerSessionContext session = clients.get(client);
+    ServerSession session = clients.get(client);
     if (session != null) {
       session.setConnection(connection);
     }
@@ -103,7 +103,7 @@ class ServerSessionManager implements Sessions {
     while (iterator.hasNext()) {
       Map.Entry<String, ProtocolServerConnection> entry = iterator.next();
       if (entry.getValue().equals(connection)) {
-        ServerSessionContext session = clients.get(entry.getKey());
+        ServerSession session = clients.get(entry.getKey());
         if (session != null) {
           session.setConnection(null);
         }
@@ -116,7 +116,7 @@ class ServerSessionManager implements Sessions {
   /**
    * Registers a session.
    */
-  ServerSessionContext registerSession(ServerSessionContext session) {
+  ServerSession registerSession(ServerSession session) {
     session.setAddress(addresses.get(session.client()));
     session.setConnection(connections.get(session.client()));
     sessions.put(session.id(), session);
@@ -127,8 +127,8 @@ class ServerSessionManager implements Sessions {
   /**
    * Unregisters a session.
    */
-  ServerSessionContext unregisterSession(long sessionId) {
-    ServerSessionContext session = sessions.remove(sessionId);
+  ServerSession unregisterSession(long sessionId) {
+    ServerSession session = sessions.remove(sessionId);
     if (session != null) {
       clients.remove(session.client(), session);
       addresses.remove(session.client(), session.getAddress());
@@ -143,7 +143,7 @@ class ServerSessionManager implements Sessions {
    * @param sessionId The session ID.
    * @return The session or {@code null} if the session doesn't exist.
    */
-  ServerSessionContext getSession(long sessionId) {
+  ServerSession getSession(long sessionId) {
     return sessions.get(sessionId);
   }
 
@@ -153,13 +153,13 @@ class ServerSessionManager implements Sessions {
    * @param clientId The client ID.
    * @return The session or {@code null} if the session doesn't exist.
    */
-  ServerSessionContext getSession(String clientId) {
+  ServerSession getSession(String clientId) {
     return clients.get(clientId);
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public Iterator<ServerSession> iterator() {
+  public Iterator<Session> iterator() {
     return (Iterator) sessions.values().iterator();
   }
 

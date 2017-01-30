@@ -19,7 +19,6 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.PublishRequest;
-import io.atomix.copycat.session.Event;
 
 import java.util.List;
 
@@ -31,7 +30,7 @@ import java.util.List;
 public class NetPublishRequest extends PublishRequest implements NetRequest<NetPublishRequest> {
   private final long id;
 
-  public NetPublishRequest(long id, long session, long eventIndex, long previousIndex, List<Event<?>> events) {
+  public NetPublishRequest(long id, long session, long eventIndex, long previousIndex, List<byte[]> events) {
     super(session, eventIndex, previousIndex, events);
     this.id = id;
   }
@@ -83,7 +82,7 @@ public class NetPublishRequest extends PublishRequest implements NetRequest<NetP
     @Override
     @SuppressWarnings("unchecked")
     public NetPublishRequest read(Kryo kryo, Input input, Class<NetPublishRequest> type) {
-      return new NetPublishRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong(), (List<Event<?>>) kryo.readObject(input, List.class));
+      return new NetPublishRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong(), (List<byte[]>) kryo.readObject(input, List.class));
     }
   }
 }

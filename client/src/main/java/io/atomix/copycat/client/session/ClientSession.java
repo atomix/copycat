@@ -20,8 +20,6 @@ import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.protocol.ProtocolClient;
-import io.atomix.copycat.session.ClosedSessionException;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.Listener;
@@ -32,10 +30,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Handles submitting state machine {@link Command commands} and {@link Query queries} to the Copycat cluster.
+ * Handles submitting state machine commands and queries to the Copycat cluster.
  * <p>
  * The client session is responsible for maintaining a client's connection to a Copycat cluster and coordinating
- * the submission of {@link Command commands} and {@link Query queries} to various nodes in the cluster. Client
+ * the submission of commands and queries to various nodes in the cluster. Client
  * sessions are single-use objects that represent the context within which a cluster can guarantee linearizable
  * semantics for state machine operations. When a session is {@link #register() opened}, the session will register
  * itself with the cluster by attempting to contact each of the known servers. Once the session has been successfully
@@ -50,7 +48,87 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ClientSession implements Session {
+public class ClientSession {
+
+  /**
+   * Represents the state of a session.
+   * <p>
+   * Throughout the lifetime of a session, the session may change state as a result of communication or the lack
+   * thereof between the client and the cluster. See the specific states for more documentation.
+   */
+  public enum State {
+
+    /**
+     * Indicates that the session is connected and open.
+     * <p>
+     * This is the initial state of a session upon registration. Once the session is registered with the cluster,
+     * the session's state will be {@code OPEN} and will remain open so long as the client is able to communicate
+     * with the cluster to keep its session alive.
+     * <p>
+     * Clients withe a session in the {@code OPEN} state can be assumed to be operating normally and are guaranteed
+     * to benefit from linearizable reads and writes.
+     */
+    OPEN(true),
+
+    /**
+     * Indicates that the session in an unstable state and may or may not be {@link #EXPIRED}.
+     * <p>
+     * The unstable state is indicative of a state in which a client is unable to communicate with the cluster and
+     * therefore cannot determine whether its session is or is not expired. Until the client is able to re-establish
+     * communication with the cluster, its session will remain in this state. While in the {@code UNSTABLE} state,
+     * users of the client should assume that the session may have been expired and that other clients may react
+     * to the client having been expired while in the unstable state.
+     * <p>
+     * Commands submitted or completed in the {@code UNSTABLE} state may not be linearizable. An unstable session
+     * may be expired and a client may have to resubmit associated commands once a new session in registered. This
+     * can lead to duplicate commands being applied to servers state machines, thus breaking linearizability.
+     * <p>
+     * Once the client is able to re-establish communication with the cluster again it will determine whether the
+     * session is still active or indeed has been expired. The session will either transition back to the
+     * {@link #OPEN} state or {@link #EXPIRED} based on feedback from the cluster. Only the cluster can explicitly
+     * expire a session.
+     */
+    UNSTABLE(true),
+
+    /**
+     * Indicates that the session is expired.
+     * <p>
+     * Once an {@link #UNSTABLE} client re-establishes communication with the cluster, the cluster may indicate to
+     * the client that its session has been expired. In that case, the client may no longer submit operations under
+     * the expired session and must register a new session to continue operating on server state machines.
+     * <p>
+     * When a client's session is expired, commands submitted under the expired session that have not yet been completed
+     * may or may not be applied to server state machines. Linearizability is guaranteed only within the context of a
+     * session, and so linearizability may be broken if operations are resubmitted across sessions.
+     */
+    EXPIRED(false),
+
+    /**
+     * Indicates that the session has been closed.
+     * <p>
+     * This state indicates that the client's session was explicitly unregistered and the session was closed safely.
+     */
+    CLOSED(false);
+
+    private final boolean active;
+
+    State(boolean active) {
+      this.active = active;
+    }
+
+    /**
+     * Returns a boolean value indicating whether the state is an active state.
+     * <p>
+     * Sessions can only submit commands and receive events while in an active state.
+     *
+     * @return Indicates whether the state is an active state.
+     */
+    public boolean active() {
+      return active;
+    }
+
+  }
+
   private final ClientSessionState state;
   private final ClientConnection connection;
   private final ClientSessionManager manager;
@@ -70,17 +148,33 @@ public class ClientSession implements Session {
     this.submitter = new ClientSessionSubmitter(connection, state, sequencer, context);
   }
 
-  @Override
+  /**
+   * Returns the session ID.
+   * <p>
+   * The session ID is unique to an individual session within the cluster. That is, it is guaranteed that
+   * no two clients will have a session with the same ID.
+   *
+   * @return The session ID.
+   */
   public long id() {
     return state.getSessionId();
   }
 
-  @Override
+  /**
+   * Returns the current session state.
+   *
+   * @return The current session state.
+   */
   public State state() {
     return state.getState();
   }
 
-  @Override
+  /**
+   * Registers a callback to be called when the session state changes.
+   *
+   * @param callback The callback to be called when the session state changes.
+   * @return The state change listener.
+   */
   public Listener<State> onStateChange(Consumer<State> callback) {
     return state.onStateChange(callback);
   }
@@ -118,45 +212,22 @@ public class ClientSession implements Session {
    *
    * @return A completable future to be completed once the session is opened.
    */
-  public CompletableFuture<Session> register() {
+  public CompletableFuture<ClientSession> register() {
     return manager.open().thenApply(v -> this);
-  }
-
-  /**
-   * Registers a void event listener.
-   * <p>
-   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
-   * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
-   *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @return The listener context.
-   * @throws NullPointerException if {@code event} or {@code callback} is null
-   */
-  public Listener<Void> onEvent(String event, Runnable callback) {
-    return listener.onEvent(event, callback);
   }
 
   /**
    * Registers an event listener.
    * <p>
    * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
-   * from the Raft cluster for the session. {@link Session} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
+   * from the Raft cluster for the session.
    *
-   * @param event The event to which to listen.
    * @param callback The session receive callback.
-   * @param <T> The session event type.
    * @return The listener context.
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
-    return listener.onEvent(event, callback);
+  public Listener<byte[]> onEvent(Consumer<byte[]> callback) {
+    return listener.onEvent(callback);
   }
 
   /**

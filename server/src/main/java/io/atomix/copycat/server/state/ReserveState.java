@@ -262,7 +262,7 @@ class ReserveState extends InactiveState {
     context.checkThread();
     logRequest(request);
 
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(request.session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(request.session());
     if (session == null || session.getConnection() == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)

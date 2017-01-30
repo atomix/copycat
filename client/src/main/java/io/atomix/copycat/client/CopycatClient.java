@@ -18,7 +18,6 @@ package io.atomix.copycat.client;
 import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.SingleThreadContext;
@@ -39,7 +38,7 @@ import java.util.function.Consumer;
  * that operate on the cluster's replicated state machine. Copycat clients interact with one or more nodes in a Copycat cluster
  * through a session. When the client is {@link #connect() connected}, the client will attempt to communicate with one of the known member
  * {@link Address} provided to the builder. As long as the client can communicate with at least one correct member of the
- * cluster, it can register a session. Once the client is able to register a {@link Session}, it will receive an updated list
+ * cluster, it can register a session. Once the client is able to register a session, it will receive an updated list
  * of members for the entire cluster and thereafter be allowed to communicate with all servers.
  * <p>
  * Sessions are created by registering the client through the cluster leader. Clients always connect to a single node in the
@@ -96,11 +95,11 @@ import java.util.function.Consumer;
  * </pre>
  * The most notable client state is the {@link CopycatClient.State#SUSPENDED SUSPENDED} state. This state indicates that
  * the client cannot communicate with the cluster and consistency guarantees <em>may</em> have been broken. While in this
- * state, the client's session from the perspective of servers may timeout, the {@link Session} events sent to the client
+ * state, the client's session from the perspective of servers may timeout, the session events sent to the client
  * by the cluster may be lost.
  * <h3>Session events</h3>
  * Clients can receive arbitrary event notifications from the cluster by registering an event listener via
- * {@link #onEvent(String, Consumer)}. When a command is applied to a state machine, the state machine may publish any number
+ * {@link #onEvent(Consumer)}. When a command is applied to a state machine, the state machine may publish any number
  * of events to any open session. Events will be sent to the client by the server to which the client is connected as dictated
  * by the configured {@link ServerSelectionStrategy}. In the event a client is disconnected from a server, events will be
  * retained in memory on all servers until the client reconnects to another server or its session expires. Once a client
@@ -124,7 +123,7 @@ import java.util.function.Consumer;
  * be received by the client in sequential order. This means the {@link CompletableFuture}s returned when submitting
  * operations through the client are guaranteed to be completed in the order in which they were created.
  * <p>
- * Sequential consistency is also guaranteed for {@link #onEvent(String, Consumer) events} received by a client, and events
+ * Sequential consistency is also guaranteed for {@link #onEvent(Consumer) events} received by a client, and events
  * are sequenced with command and query responses. If a client submits a command that publishes an event and then immediately
  * submits a concurrent query, the client will first receive the command response, then the event message, then the query
  * response.
@@ -141,7 +140,7 @@ public interface CopycatClient {
    * Indicates the state of the client's communication with the Copycat cluster.
    * <p>
    * Throughout the lifetime of a client, the client will transition through various states according to its
-   * ability to communicate with the cluster within the context of a {@link Session}. In some cases, client
+   * ability to communicate with the cluster within the context of a session. In some cases, client
    * state changes may be indicative of a loss of guarantees. Users of the client should
    * {@link CopycatClient#onStateChange(Consumer) watch the state of the client} to determine when guarantees
    * are lost and react to changes in the client's ability to communicate with the cluster.
@@ -183,10 +182,10 @@ public interface CopycatClient {
      * Indicates that the client is suspended and its session may or may not be expired.
      * <p>
      * The {@code SUSPENDED} state is indicative of an inability to communicate with the cluster within the context of
-     * the client's {@link Session}. Operations submitted to or completed by clients in this state should be considered
+     * the client's session. Operations submitted to or completed by clients in this state should be considered
      * unsafe. An operation submitted to a {@link #CONNECTED} client that transitions to the {@code SUSPENDED} state
      * prior to the operation's completion may be committed multiple times in the event that the underlying session
-     * is ultimately {@link Session.State#EXPIRED expired}, thus breaking linearizability. Additionally, state machines
+     * is ultimately expired, thus breaking linearizability. Additionally, state machines
      * may see the session expire while the client is in this state.
      * <p>
      * If the client is configured with a {@link RecoveryStrategy} that recovers the client's session upon expiration,
@@ -205,7 +204,7 @@ public interface CopycatClient {
      * Indicates that the client is closed.
      * <p>
      * A client may transition to this state as a result of an expired session or an explicit {@link CopycatClient#close() close}
-     * by the user. In the event that the client's {@link Session} is lost, if the configured {@link RecoveryStrategy}
+     * by the user. In the event that the client's session is lost, if the configured {@link RecoveryStrategy}
      * forces the client to close upon failure, the client will immediately be closed. If the {@link RecoveryStrategy}
      * attempts to recover the client's session, the client still may close if it is unable to register a new session.
      */
@@ -286,18 +285,6 @@ public interface CopycatClient {
   ThreadContext context();
 
   /**
-   * Returns the client session.
-   * <p>
-   * The returned {@link Session} instance will remain constant as long as the client maintains its session with the cluster.
-   * Maintaining the client's session requires that the client be able to communicate with one server that can communicate
-   * with the leader at any given time. During periods where the cluster is electing a new leader, the client's session will
-   * not timeout but will resume once a new leader is elected.
-   *
-   * @return The client session or {@code null} if no session is register.
-   */
-  Session session();
-
-  /**
    * Submits a command to the Copycat cluster.
    * <p>
    * Commands are used to alter state machine state. All commands will be forwarded to the current cluster leader.
@@ -360,22 +347,6 @@ public interface CopycatClient {
   CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency);
 
   /**
-   * Registers a void event listener.
-   * <p>
-   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
-   * from the Raft cluster for the client. {@link CopycatClient} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
-   *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @return The listener context.
-   * @throws NullPointerException if {@code event} or {@code callback} is null
-   */
-  Listener<Void> onEvent(String event, Runnable callback);
-
-  /**
    * Registers an event listener.
    * <p>
    * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
@@ -384,13 +355,11 @@ public interface CopycatClient {
    * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
    * the state machine.
    *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @param <T> The session event type.
+   * @param callback The event receive callback.
    * @return The listener context.
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  <T> Listener<T> onEvent(String event, Consumer<T> callback);
+  Listener<byte[]> onEvent(Consumer<byte[]> callback);
 
   /**
    * Connects the client to Copycat cluster via the default server address.
@@ -409,7 +378,7 @@ public interface CopycatClient {
    * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
    * to retry the registration attempt.
    *
-   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   * @return A completable future to be completed once the client's session is registered.
    */
   default CompletableFuture<CopycatClient> connect() {
     return connect((Collection<Address>) null);
@@ -430,7 +399,7 @@ public interface CopycatClient {
    * to retry the registration attempt.
    *
    * @param members A set of server addresses to which to connect.
-   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   * @return A completable future to be completed once the client's session is registered.
    */
   default CompletableFuture<CopycatClient> connect(Address... members) {
     if (members == null || members.length == 0) {
@@ -455,14 +424,14 @@ public interface CopycatClient {
    * to retry the registration attempt.
    *
    * @param members A set of server addresses to which to connect.
-   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   * @return A completable future to be completed once the client's session is registered.
    */
   CompletableFuture<CopycatClient> connect(Collection<Address> members);
 
   /**
    * Recovers the client session.
    * <p>
-   * When a client is recovered, the client will create and register a new {@link Session}. Once the session is
+   * When a client is recovered, the client will create and register a new session. Once the session is
    * recovered, the client will transition to the {@link State#CONNECTED} state and resubmit pending operations
    * from the previous session. Pending operations are guaranteed to be submitted to the new session in the same
    * order in which they were submitted to the prior session and prior to submitting any new operations.
@@ -474,7 +443,7 @@ public interface CopycatClient {
   /**
    * Closes the client.
    * <p>
-   * Closing the client will cause the client to unregister its current {@link Session} if registered. Once the
+   * Closing the client will cause the client to unregister its current session if registered. Once the
    * client's session is unregistered, the returned {@link CompletableFuture} will be completed. If the client
    * is unable to unregister its session, the client will transition to the {@link State#SUSPENDED} state and
    * continue to attempt to reconnect and unregister its session until it is able to unregister its session or

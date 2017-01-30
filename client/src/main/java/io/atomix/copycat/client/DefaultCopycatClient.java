@@ -17,11 +17,10 @@ package io.atomix.copycat.client;
 
 import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.client.session.ClientSession;
+import io.atomix.copycat.client.session.ClosedSessionException;
 import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
-import io.atomix.copycat.session.ClosedSessionException;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.BlockingFuture;
 import io.atomix.copycat.util.concurrent.Futures;
@@ -62,8 +61,8 @@ public class DefaultCopycatClient implements CopycatClient {
   private volatile CompletableFuture<CopycatClient> recoverFuture;
   private volatile CompletableFuture<Void> closeFuture;
   private final Set<StateChangeListener> changeListeners = new CopyOnWriteArraySet<>();
-  private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
-  private Listener<Session.State> changeListener;
+  private final Set<EventListener> eventListeners = new CopyOnWriteArraySet<>();
+  private Listener<ClientSession.State> changeListener;
 
   DefaultCopycatClient(String clientId, Collection<Address> cluster, Protocol protocol, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout) {
     this.clientId = Assert.notNull(clientId, "clientId");
@@ -83,6 +82,15 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   /**
+   * Returns the client's session.
+   *
+   * @return The client's session.e
+   */
+  public ClientSession session() {
+    return session;
+  }
+
+  /**
    * Updates the client state.
    */
   private void setState(State state) {
@@ -96,11 +104,6 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public Listener<State> onStateChange(Consumer<State> callback) {
     return new StateChangeListener(callback);
-  }
-
-  @Override
-  public Session session() {
-    return session;
   }
 
   @Override
@@ -127,7 +130,7 @@ public class DefaultCopycatClient implements CopycatClient {
   /**
    * Handles a session state change.
    */
-  private void onStateChange(Session.State state) {
+  private void onStateChange(ClientSession.State state) {
     switch (state) {
       // When the session is opened, transition the state to CONNECTED.
       case OPEN:
@@ -220,13 +223,8 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public Listener<Void> onEvent(String event, Runnable callback) {
-    return onEvent(event, v -> callback.run());
-  }
-
-  @Override
-  public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
-    EventListener<T> listener = new EventListener<>(event, callback);
+  public Listener<byte[]> onEvent(Consumer<byte[]> callback) {
+    EventListener listener = new EventListener(callback);
     listener.register(session);
     return listener;
   }
@@ -307,7 +305,7 @@ public class DefaultCopycatClient implements CopycatClient {
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof DefaultCopycatClient && ((DefaultCopycatClient) object).session() == session;
+    return object instanceof DefaultCopycatClient && ((DefaultCopycatClient) object).session == session;
   }
 
   @Override
@@ -340,13 +338,11 @@ public class DefaultCopycatClient implements CopycatClient {
   /**
    * Event listener wrapper.
    */
-  private final class EventListener<T> implements Listener<T> {
-    private final String event;
-    private final Consumer<T> callback;
-    private Listener<T> parent;
+  private final class EventListener implements Listener<byte[]> {
+    private final Consumer<byte[]> callback;
+    private Listener<byte[]> parent;
 
-    private EventListener(String event, Consumer<T> callback) {
-      this.event = event;
+    private EventListener(Consumer<byte[]> callback) {
       this.callback = callback;
       eventListeners.add(this);
     }
@@ -355,11 +351,11 @@ public class DefaultCopycatClient implements CopycatClient {
      * Registers the session event listener.
      */
     public void register(ClientSession session) {
-      parent = session.onEvent(event, this);
+      parent = session.onEvent(this);
     }
 
     @Override
-    public void accept(T message) {
+    public void accept(byte[] message) {
       if (eventContext.isBlocked()) {
         callback.accept(message);
       } else {

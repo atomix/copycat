@@ -333,7 +333,7 @@ class PassiveState extends ReserveState {
    */
   private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -347,7 +347,7 @@ class PassiveState extends ReserveState {
   /**
    * Sequences the given query.
    */
-  private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSession session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
     if (entry.entry().sequence() > session.getCommandSequence()) {
@@ -362,7 +362,7 @@ class PassiveState extends ReserveState {
    */
   private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
         builder.withStatus(ProtocolResponse.Status.ERROR)
@@ -376,7 +376,7 @@ class PassiveState extends ReserveState {
   /**
    * Ensures the given query is applied after the appropriate index.
    */
-  private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSession session, CompletableFuture<QueryResponse> future) {
     // If the query index is greater than the session's last applied index, queue the request for handling once the
     // state machine is caught up.
     if (entry.index() > session.getLastApplied()) {

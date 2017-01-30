@@ -19,7 +19,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.atomix.copycat.protocol.request.PublishRequest;
-import io.atomix.copycat.session.Event;
 
 import java.util.List;
 
@@ -37,7 +36,7 @@ public class WebSocketPublishRequest extends PublishRequest implements WebSocket
     @JsonProperty("session") long session,
     @JsonProperty("eventIndex") long eventIndex,
     @JsonProperty("previousIndex") long previousIndex,
-    @JsonProperty("events") List<Event<?>> events) {
+    @JsonProperty("events") List<byte[]> events) {
     super(session, eventIndex, previousIndex, events);
     this.id = id;
   }
@@ -83,7 +82,7 @@ public class WebSocketPublishRequest extends PublishRequest implements WebSocket
 
   @Override
   @JsonGetter("events")
-  public List<Event<?>> events() {
+  public List<byte[]> events() {
     return super.events();
   }
 

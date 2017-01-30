@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.request;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.session.Event;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,9 +35,9 @@ import java.util.Objects;
 public class PublishRequest extends SessionRequest {
   protected final long eventIndex;
   protected final long previousIndex;
-  protected final List<Event<?>> events;
+  protected final List<byte[]> events;
 
-  protected PublishRequest(long session, long eventIndex, long previousIndex, List<Event<?>> events) {
+  protected PublishRequest(long session, long eventIndex, long previousIndex, List<byte[]> events) {
     super(session);
     this.eventIndex = Assert.argNot(eventIndex, eventIndex < 1, "eventIndex cannot be less than 1");
     this.previousIndex = Assert.argNot(previousIndex, previousIndex < 0, "previousIndex cannot be less than 0");
@@ -68,7 +67,7 @@ public class PublishRequest extends SessionRequest {
    *
    * @return The request events.
    */
-  public List<Event<?>> events() {
+  public List<byte[]> events() {
     return events;
   }
 
@@ -100,7 +99,7 @@ public class PublishRequest extends SessionRequest {
   public static class Builder extends SessionRequest.Builder<PublishRequest.Builder, PublishRequest> {
     protected long eventIndex;
     protected long previousIndex;
-    protected List<Event<?>> events;
+    protected List<byte[]> events;
 
     /**
      * Sets the event index.
@@ -132,7 +131,7 @@ public class PublishRequest extends SessionRequest {
      * @param events The request events.
      * @return The publish request builder.
      */
-    public Builder withEvents(List<Event<?>> events) {
+    public Builder withEvents(List<byte[]> events) {
       this.events = Assert.notNull(events, "events");
       return this;
     }

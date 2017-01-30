@@ -24,7 +24,6 @@ import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketQueryResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
@@ -58,7 +57,7 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
-      .setState(Session.State.OPEN);
+      .setState(ClientSession.State.OPEN);
 
     ThreadContext context = mock(ThreadContext.class);
     doAnswer((a) -> {
@@ -88,7 +87,7 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
-      .setState(Session.State.OPEN);
+      .setState(ClientSession.State.OPEN);
 
     ThreadContext context = mock(ThreadContext.class);
     doAnswer((a) -> {
@@ -145,7 +144,7 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
-      .setState(Session.State.OPEN);
+      .setState(ClientSession.State.OPEN);
 
     ThreadContext context = mock(ThreadContext.class);
     doAnswer((a) -> {
@@ -173,7 +172,7 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
-      .setState(Session.State.OPEN);
+      .setState(ClientSession.State.OPEN);
 
     ThreadContext context = mock(ThreadContext.class);
     doAnswer((a) -> {
@@ -226,7 +225,7 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
       .setSessionId(1)
-      .setState(Session.State.OPEN);
+      .setState(ClientSession.State.OPEN);
 
     ThreadContext context = mock(ThreadContext.class);
     doAnswer((a) -> {

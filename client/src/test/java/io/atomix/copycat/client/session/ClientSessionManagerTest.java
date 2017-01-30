@@ -22,7 +22,6 @@ import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketUnregisterResponse;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.testng.annotations.Test;
 
@@ -74,7 +73,7 @@ public class ClientSessionManagerTest {
     manager.open().join();
 
     assertEquals(state.getSessionId(), 1);
-    assertEquals(state.getState(), Session.State.OPEN);
+    assertEquals(state.getState(), ClientSession.State.OPEN);
 
     verify(connection).reset(new Address("localhost", 5000), Arrays.asList(
       new Address("localhost", 5000),
@@ -89,6 +88,6 @@ public class ClientSessionManagerTest {
 
     manager.close().join();
 
-    assertEquals(state.getState(), Session.State.CLOSED);
+    assertEquals(state.getState(), ClientSession.State.CLOSED);
   }
 }

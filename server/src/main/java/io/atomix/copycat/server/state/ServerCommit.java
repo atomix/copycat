@@ -16,7 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.server.Commit;
-import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
@@ -32,11 +32,11 @@ import java.time.Instant;
 final class ServerCommit<T extends java.io.Serializable> implements Commit {
   private final Type type;
   private final Indexed<? extends OperationEntry<?>> entry;
-  private final ServerSessionContext session;
+  private final ServerSession session;
   private final long timestamp;
   private boolean open = true;
 
-  ServerCommit(Type type, Indexed<? extends OperationEntry<?>> entry, ServerSessionContext session, long timestamp) {
+  ServerCommit(Type type, Indexed<? extends OperationEntry<?>> entry, ServerSession session, long timestamp) {
     this.type = type;
     this.entry = entry;
     this.session = session;
@@ -62,7 +62,7 @@ final class ServerCommit<T extends java.io.Serializable> implements Commit {
   }
 
   @Override
-  public ServerSession session() {
+  public Session session() {
     checkOpen();
     return session;
   }

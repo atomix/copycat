@@ -18,15 +18,13 @@ package io.atomix.copycat.server.state;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
-import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.RegisterEntry;
 import io.atomix.copycat.server.storage.entry.UnregisterEntry;
-import io.atomix.copycat.session.Event;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.Listeners;
@@ -41,8 +39,8 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ServerSessionContext implements ServerSession {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
+class ServerSession implements Session {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerSession.class);
 
   private final Indexed<RegisterEntry> registerEntry;
   private final String client;
@@ -74,7 +72,7 @@ class ServerSessionContext implements ServerSession {
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(Indexed<RegisterEntry> registerEntry, String client, Log log, ServerStateMachineContext context, long timeout) {
+  ServerSession(Indexed<RegisterEntry> registerEntry, String client, Log log, ServerStateMachineContext context, long timeout) {
     this.registerEntry = registerEntry;
     this.client = Assert.notNull(client, "client");
     this.log = Assert.notNull(log, "log");
@@ -183,7 +181,7 @@ class ServerSessionContext implements ServerSession {
    * @param timestamp The session timestamp.
    * @return The server session.
    */
-  ServerSessionContext setTimestamp(long timestamp) {
+  ServerSession setTimestamp(long timestamp) {
     this.timestamp = Math.max(this.timestamp, timestamp);
     return this;
   }
@@ -194,7 +192,7 @@ class ServerSessionContext implements ServerSession {
    * @param connectEntry The current session connect entry.
    * @return The server session.
    */
-  ServerSessionContext setConnectEntry(Indexed<ConnectEntry> connectEntry) {
+  ServerSession setConnectEntry(Indexed<ConnectEntry> connectEntry) {
     Indexed<ConnectEntry> previousConnectEntry = this.connectEntry;
     this.connectEntry = connectEntry;
     if (previousConnectEntry != null) {
@@ -209,7 +207,7 @@ class ServerSessionContext implements ServerSession {
    * @param keepAliveEntry The current session keep alive entry.
    * @return The server session.
    */
-  ServerSessionContext setKeepAliveEntry(Indexed<?> keepAliveEntry) {
+  ServerSession setKeepAliveEntry(Indexed<?> keepAliveEntry) {
     Indexed<?> previousKeepAliveEntry = this.keepAliveEntry;
     this.keepAliveEntry = keepAliveEntry;
     if (previousKeepAliveEntry != null) {
@@ -242,7 +240,7 @@ class ServerSessionContext implements ServerSession {
    * @param request The session request number.
    * @return The server session.
    */
-  ServerSessionContext setRequestSequence(long request) {
+  ServerSession setRequestSequence(long request) {
     if (request > this.requestSequence) {
       this.requestSequence = request;
 
@@ -280,7 +278,7 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The session operation sequence number.
    * @return The server session.
    */
-  ServerSessionContext setCommandSequence(long sequence) {
+  ServerSession setCommandSequence(long sequence) {
     // For each increment of the sequence number, trigger query callbacks that are dependent on the specific sequence.
     for (long i = commandSequence + 1; i <= sequence; i++) {
       commandSequence = i;
@@ -331,7 +329,7 @@ class ServerSessionContext implements ServerSession {
    * @param index The session index.
    * @return The server session.
    */
-  ServerSessionContext setLastApplied(long index) {
+  ServerSession setLastApplied(long index) {
     // Query callbacks for this session are added to the indexQueries map to be executed once the required index
     // for the query is reached. For each increment of the index, trigger query callbacks that are dependent
     // on the specific index.
@@ -357,7 +355,7 @@ class ServerSessionContext implements ServerSession {
    * @param runnable The command to execute.
    * @return The server session.
    */
-  ServerSessionContext registerRequest(long sequence, Runnable runnable) {
+  ServerSession registerRequest(long sequence, Runnable runnable) {
     commands.put(sequence, runnable);
     return this;
   }
@@ -369,7 +367,7 @@ class ServerSessionContext implements ServerSession {
    * @param query    The query to execute.
    * @return The server session.
    */
-  ServerSessionContext registerSequenceQuery(long sequence, Runnable query) {
+  ServerSession registerSequenceQuery(long sequence, Runnable query) {
     // Add a query to be run once the session's sequence number reaches the given sequence number.
     List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> {
       List<Runnable> q = queriesPool.poll();
@@ -386,7 +384,7 @@ class ServerSessionContext implements ServerSession {
    * @param query The query to execute.
    * @return The server session.
    */
-  ServerSessionContext registerIndexQuery(long index, Runnable query) {
+  ServerSession registerIndexQuery(long index, Runnable query) {
     // Add a query to be run once the session's index reaches the given index.
     List<Runnable> queries = this.indexQueries.computeIfAbsent(index, v -> {
       List<Runnable> q = queriesPool.poll();
@@ -407,7 +405,7 @@ class ServerSessionContext implements ServerSession {
    * @param result   The result.
    * @return The server session.
    */
-  ServerSessionContext registerResult(long sequence, ServerStateMachine.Result result) {
+  ServerSession registerResult(long sequence, ServerStateMachine.Result result) {
     results.put(sequence, result);
     return this;
   }
@@ -422,7 +420,7 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The sequence to clear.
    * @return The server session.
    */
-  ServerSessionContext clearResults(long sequence) {
+  ServerSession clearResults(long sequence) {
     if (sequence > commandLowWaterMark) {
       for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
         results.remove(i);
@@ -445,7 +443,7 @@ class ServerSessionContext implements ServerSession {
   /**
    * Sets the session connection.
    */
-  ServerSessionContext setConnection(ProtocolServerConnection connection) {
+  ServerSession setConnection(ProtocolServerConnection connection) {
     this.connection = connection;
     return this;
   }
@@ -462,7 +460,7 @@ class ServerSessionContext implements ServerSession {
   /**
    * Sets the session address.
    */
-  ServerSessionContext setAddress(Address address) {
+  ServerSession setAddress(Address address) {
     this.address = address;
     return this;
   }
@@ -484,12 +482,7 @@ class ServerSessionContext implements ServerSession {
   }
 
   @Override
-  public Session publish(String event) {
-    return publish(event, null);
-  }
-
-  @Override
-  public Session publish(String event, Object message) {
+  public Session publish(byte[] event) {
     Assert.state(open, "cannot publish events during session registration");
     Assert.stateNot(state == State.CLOSED, "session is closed");
     Assert.stateNot(state == State.EXPIRED, "session is expired");
@@ -497,8 +490,9 @@ class ServerSessionContext implements ServerSession {
 
     // If the client acked an index greater than the current event sequence number since we know the
     // client must have received it from another server.
-    if (completeIndex > context.index())
+    if (completeIndex > context.index()) {
       return this;
+    }
 
     // If no event has been published for this index yet, create a new event holder.
     if (this.event == null || this.event.eventIndex != context.index()) {
@@ -508,7 +502,7 @@ class ServerSessionContext implements ServerSession {
     }
 
     // Add the event to the event holder.
-    this.event.events.add(new Event<>(event, message));
+    this.event.events.add(event);
 
     return this;
   }
@@ -544,7 +538,7 @@ class ServerSessionContext implements ServerSession {
    * @param index The index to clear.
    * @return The server session.
    */
-  private ServerSessionContext clearEvents(long index) {
+  private ServerSession clearEvents(long index) {
     if (index > completeIndex) {
       EventHolder event = events.peek();
       while (event != null && event.eventIndex <= index) {
@@ -563,7 +557,7 @@ class ServerSessionContext implements ServerSession {
    * @param index The index from which to resend events.
    * @return The server session.
    */
-  ServerSessionContext resendEvents(long index) {
+  ServerSession resendEvents(long index) {
     clearEvents(index);
     for (EventHolder event : events) {
       sendEvent(event);
@@ -690,7 +684,7 @@ class ServerSessionContext implements ServerSession {
   private static class EventHolder {
     private final long eventIndex;
     private final long previousIndex;
-    private final List<Event<?>> events = new ArrayList<>(8);
+    private final List<byte[]> events = new ArrayList<>(8);
 
     private EventHolder(long eventIndex, long previousIndex) {
       this.eventIndex = eventIndex;

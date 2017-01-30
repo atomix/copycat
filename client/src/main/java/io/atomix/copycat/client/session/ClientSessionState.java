@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Listener;
 import org.slf4j.Logger;
@@ -34,12 +33,12 @@ final class ClientSessionState {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientSession.class);
   private final String clientId;
   private volatile long sessionId;
-  private volatile Session.State state = Session.State.CLOSED;
+  private volatile ClientSession.State state = ClientSession.State.CLOSED;
   private long commandRequest;
   private long commandResponse;
   private long responseIndex;
   private long eventIndex;
-  private final Set<Listener<Session.State>> changeListeners = new CopyOnWriteArraySet<>();
+  private final Set<Listener<ClientSession.State>> changeListeners = new CopyOnWriteArraySet<>();
 
   ClientSessionState(String clientId) {
     this.clientId = Assert.notNull(clientId, "clientId");
@@ -90,7 +89,7 @@ final class ClientSessionState {
    *
    * @return The session state.
    */
-  public Session.State getState() {
+  public ClientSession.State getState() {
     return state;
   }
 
@@ -100,7 +99,7 @@ final class ClientSessionState {
    * @param state The session state.
    * @return The session state.
    */
-  public ClientSessionState setState(Session.State state) {
+  public ClientSessionState setState(ClientSession.State state) {
     if (this.state != state) {
       this.state = state;
       changeListeners.forEach(l -> l.accept(state));
@@ -114,10 +113,10 @@ final class ClientSessionState {
    * @param callback The state change listener callback.
    * @return The state change listener.
    */
-  public Listener<Session.State> onStateChange(Consumer<Session.State> callback) {
-    Listener<Session.State> listener = new Listener<Session.State>() {
+  public Listener<ClientSession.State> onStateChange(Consumer<ClientSession.State> callback) {
+    Listener<ClientSession.State> listener = new Listener<ClientSession.State>() {
       @Override
-      public void accept(Session.State state) {
+      public void accept(ClientSession.State state) {
         callback.accept(state);
       }
       @Override

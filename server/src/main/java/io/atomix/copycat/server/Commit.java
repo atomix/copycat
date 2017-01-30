@@ -15,8 +15,7 @@
  */
 package io.atomix.copycat.server;
 
-import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.session.Session;
+import io.atomix.copycat.server.session.Session;
 
 import java.time.Instant;
 
@@ -27,7 +26,7 @@ import java.time.Instant;
  * and committed via the Raft consensus algorithm.
  * When commands and queries are applied to the Raft {@link StateMachine}, they're
  * wrapped in a commit object. The commit object provides useful metadata regarding the location of the commit
- * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link Session} that
+ * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link io.atomix.copycat.session.Session} that
  * submitted the operation to the cluster.
  * <p>
  * All metadata exposed by this interface is backed by disk. The operation and its metadata is
@@ -69,14 +68,14 @@ public interface Commit {
   /**
    * Returns the session that submitted the operation.
    * <p>
-   * The returned {@link Session} is representative of the session that submitted the operation
-   * that resulted in this {@link Commit}. The session can be used to {@link ServerSession#publish(String, Object)}
+   * The returned {@link io.atomix.copycat.session.Session} is representative of the session that submitted the operation
+   * that resulted in this {@link Commit}. The session can be used to {@link Session#publish(String, Object)}
    * event messages to the client.
    *
    * @return The session that created the commit.
    * @throws IllegalStateException if the commit is {@link #close() closed}
    */
-  ServerSession session();
+  Session session();
 
   /**
    * Returns the time at which the operation was committed.

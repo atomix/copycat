@@ -149,7 +149,7 @@ class ServerStateMachineContext implements StateMachineContext {
     }
 
     long index = this.index;
-    for (ServerSessionContext session : sessions.sessions.values()) {
+    for (ServerSession session : sessions.sessions.values()) {
       session.commit(index);
     }
   }

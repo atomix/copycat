@@ -24,11 +24,11 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.*;
+import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.system.Configuration;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.concurrent.ComposableFuture;
 import io.atomix.copycat.util.concurrent.Scheduled;
 
@@ -163,7 +163,7 @@ final class LeaderState extends ActiveState {
     long term = context.getTerm();
 
     // Iterate through all currently registered sessions.
-    for (ServerSessionContext session : context.getStateMachine().context().sessions().sessions.values()) {
+    for (ServerSession session : context.getStateMachine().context().sessions().sessions.values()) {
       // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
       // been committed for the session in some time, log and commit a new UnregisterEntry.
       if (session.state() == Session.State.UNSTABLE && !session.isUnregistering()) {
@@ -473,7 +473,7 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(request.session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(request.session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -489,7 +489,7 @@ final class LeaderState extends ActiveState {
   /**
    * Sequences the given command to the log.
    */
-  private void sequenceCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
+  private void sequenceCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSession session, CompletableFuture<CommandResponse> future) {
     // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
     // sequence number, queue this request for handling later. We want to handle command requests in the order in which
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
@@ -516,7 +516,7 @@ final class LeaderState extends ActiveState {
   /**
    * Applies the given command to the log.
    */
-  private void applyCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
+  private void applyCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSession session, CompletableFuture<CommandResponse> future) {
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<CommandEntry> entry;
@@ -605,7 +605,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> queryBoundedLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -621,7 +621,7 @@ final class LeaderState extends ActiveState {
   /**
    * Sequences a bounded linearizable query.
    */
-  private void sequenceBoundedLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void sequenceBoundedLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSession session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
     if (entry.entry().sequence() > session.getCommandSequence()) {
@@ -636,7 +636,7 @@ final class LeaderState extends ActiveState {
    */
   private CompletableFuture<QueryResponse> queryLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       return CompletableFuture.completedFuture(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)
@@ -652,7 +652,7 @@ final class LeaderState extends ActiveState {
   /**
    * Sends an append request for the given query entry.
    */
-  private void appendLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
+  private void appendLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSession session, CompletableFuture<QueryResponse> future) {
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
@@ -673,7 +673,7 @@ final class LeaderState extends ActiveState {
    */
   private void sequenceLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
+    ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(responseBuilder
         .withStatus(ProtocolResponse.Status.ERROR)

@@ -17,7 +17,6 @@ package io.atomix.copycat.test;
 
 import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.client.*;
-import io.atomix.copycat.client.session.ClientSession;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.websocket.WebSocketProtocol;
 import io.atomix.copycat.server.Commit;
@@ -26,7 +25,7 @@ import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.net.RaftNetProtocol;
-import io.atomix.copycat.server.session.ServerSession;
+import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -636,9 +635,9 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicLong index = new AtomicLong();
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertEquals(count.incrementAndGet(), 2L);
-      threadAssertEquals(index.get(), message);
+      threadAssertEquals(index.get(), HeapBuffer.wrap(message).readLong());
       resume();
     });
 
@@ -694,15 +693,15 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
-    createClient().onEvent("test", message -> {
+    createClient().onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
-    createClient().onEvent("test", message -> {
+    createClient().onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
@@ -746,10 +745,11 @@ public class ClusterTest extends ConcurrentTestCase {
     AtomicLong index = new AtomicLong();
 
     CopycatClient client = createClient();
-    client.<Long>onEvent("test", message -> {
+    client.onEvent(message -> {
+      long result = HeapBuffer.wrap(message).readLong();
       threadAssertEquals(counter.incrementAndGet(), 3);
-      threadAssertTrue(message >= index.get());
-      index.set(message);
+      threadAssertTrue(result >= index.get());
+      index.set(result);
       resume();
     });
 
@@ -789,8 +789,8 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client = createClient();
 
-    client.onEvent("test", event -> {
-      threadAssertEquals(index.get(), event);
+    client.onEvent(event -> {
+      threadAssertEquals(index.get(), HeapBuffer.wrap(event).readLong());
       try {
         threadAssertTrue(index.get() <= HeapBuffer.wrap(client.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE).get(10, TimeUnit.SECONDS)).readLong());
       } catch (InterruptedException | TimeoutException | ExecutionException e) {
@@ -822,7 +822,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
@@ -858,7 +858,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
@@ -906,7 +906,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
@@ -954,7 +954,7 @@ public class ClusterTest extends ConcurrentTestCase {
     List<CopycatServer> servers = createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
@@ -1002,17 +1002,17 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.onEvent("test", message -> {
+    client.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
 
-    createClient().onEvent("test", message -> {
+    createClient().onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
 
-    createClient().onEvent("test", message -> {
+    createClient().onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
@@ -1072,7 +1072,7 @@ public class ClusterTest extends ConcurrentTestCase {
           threadFail("State not allowed");
       }
     });
-    ((ClientSession) client.session()).expire().thenAccept(v -> resume());
+    ((DefaultCopycatClient) client).session().expire().thenAccept(v -> resume());
     await(5000, 2);
   }
 
@@ -1084,7 +1084,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
-    client1.onEvent("expired", this::resume);
+    client1.onEvent(e -> resume());
     client1.submitCommand(new byte[]{5}).thenRun(this::resume);
     ((DefaultCopycatClient) client2).kill().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
@@ -1121,7 +1121,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client2 = createClient();
     client1.submitCommand(new byte[]{4}).thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 1);
-    client1.onEvent("closed", this::resume);
+    client1.onEvent(e -> resume());
     client2.close().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 2);
   }
@@ -1254,25 +1254,25 @@ public class ClusterTest extends ConcurrentTestCase {
     private Commit close;
 
     @Override
-    public void register(ServerSession session) {
+    public void register(Session session) {
 
     }
 
     @Override
-    public void unregister(ServerSession session) {
+    public void unregister(Session session) {
 
     }
 
     @Override
-    public void expire(ServerSession session) {
+    public void expire(Session session) {
       if (expire != null)
-        expire.session().publish("expired");
+        expire.session().publish("expired".getBytes());
     }
 
     @Override
-    public void close(ServerSession session) {
+    public void close(Session session) {
       if (close != null && !session.equals(close.session()))
-        close.session().publish("closed");
+        close.session().publish("closed".getBytes());
     }
 
     @Override
@@ -1321,7 +1321,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     public void ownEvent(Commit commit) {
       try {
-        commit.session().publish("test", commit.index());
+        commit.session().publish(((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array());
       } finally {
         commit.close();
       }
@@ -1329,8 +1329,8 @@ public class ClusterTest extends ConcurrentTestCase {
 
     public void allEvents(Commit commit) {
       try {
-        for (ServerSession session : sessions) {
-          session.publish("test", commit.index());
+        for (Session session : sessions) {
+          session.publish(((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array());
         }
       } finally {
         commit.close();

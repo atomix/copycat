@@ -26,8 +26,6 @@ import io.atomix.copycat.protocol.response.CommandResponse;
 import io.atomix.copycat.protocol.response.OperationResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
-import io.atomix.copycat.session.ClosedSessionException;
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 
@@ -109,7 +107,7 @@ final class ClientSessionSubmitter {
    * @param attempt The attempt to submit.
    */
   private <T extends OperationRequest, U extends OperationResponse> void submit(OperationAttempt<T, U> attempt) {
-    if (state.getState() == Session.State.CLOSED || state.getState() == Session.State.EXPIRED) {
+    if (state.getState() == ClientSession.State.CLOSED || state.getState() == ClientSession.State.EXPIRED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
       attempt.execute(connection).whenComplete(attempt);

@@ -15,22 +15,19 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.protocol.error.UnknownSessionException;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
+import io.atomix.copycat.protocol.error.UnknownSessionException;
 import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.PublishResponse;
-import io.atomix.copycat.session.Event;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 
-import java.util.Map;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
@@ -41,7 +38,7 @@ import java.util.function.Consumer;
 final class ClientSessionListener {
   private final ClientSessionState state;
   private final ThreadContext context;
-  private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
+  private final List<Consumer<byte[]>> eventListeners = new CopyOnWriteArrayList<>();
   private final ClientSequencer sequencer;
 
   public ClientSessionListener(ProtocolClientConnection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
@@ -54,27 +51,17 @@ final class ClientSessionListener {
   /**
    * Registers a session event listener.
    */
-  @SuppressWarnings("unchecked")
-  public Listener<Void> onEvent(String event, Runnable callback) {
-    return onEvent(event, v -> callback.run());
-  }
-
-  /**
-   * Registers a session event listener.
-   */
-  @SuppressWarnings("unchecked")
-  public <T> Listener<T> onEvent(String event, Consumer listener) {
-    Set<Consumer> listeners = eventListeners.computeIfAbsent(event, e -> new CopyOnWriteArraySet<>());
-    listeners.add(listener);
-    return new Listener<T>() {
+  public Listener<byte[]> onEvent(Consumer<byte[]> listener) {
+    eventListeners.add(listener);
+    return new Listener<byte[]>() {
       @Override
-      public void accept(T event) {
+      public void accept(byte[] event) {
         listener.accept(event);
       }
 
       @Override
       public void close() {
-        listeners.remove(listener);
+        eventListeners.remove(listener);
       }
     };
   }
@@ -85,7 +72,6 @@ final class ClientSessionListener {
    * @param request The publish request to handle.
    * @return A completable future to be completed with the publish response.
    */
-  @SuppressWarnings("unchecked")
   private CompletableFuture<PublishResponse> handlePublish(PublishRequest request, PublishResponse.Builder builder) {
     state.getLogger().debug("{} - Received {}", state.getSessionId(), request);
 
@@ -118,12 +104,9 @@ final class ClientSessionListener {
     state.setEventIndex(request.eventIndex());
 
     sequencer.sequenceEvent(request, () -> {
-      for (Event<?> event : request.events()) {
-        Set<Consumer> listeners = eventListeners.get(event.name());
-        if (listeners != null) {
-          for (Consumer listener : listeners) {
-            listener.accept(event.message());
-          }
+      for (byte[] event : request.events()) {
+        for (Consumer<byte[]> listener : eventListeners) {
+          listener.accept(event);
         }
       }
     });

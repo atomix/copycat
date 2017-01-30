@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.client.session;
 
-import io.atomix.copycat.session.Session;
 import io.atomix.copycat.util.concurrent.Listener;
 import org.testng.annotations.Test;
 
@@ -41,7 +40,7 @@ public class ClientSessionStateTest {
     ClientSessionState state = new ClientSessionState(clientId);
     assertEquals(state.getClientId(), clientId);
     assertEquals(state.getSessionId(), 0);
-    assertEquals(state.getState(), Session.State.CLOSED);
+    assertEquals(state.getState(), ClientSession.State.CLOSED);
     assertEquals(state.getCommandRequest(), 0);
     assertEquals(state.getCommandResponse(), 0);
     assertEquals(state.getResponseIndex(), 0);
@@ -56,7 +55,7 @@ public class ClientSessionStateTest {
     assertEquals(state.setSessionId(1).getSessionId(), 1);
     assertEquals(state.getResponseIndex(), 1);
     assertEquals(state.getEventIndex(), 1);
-    assertEquals(state.setState(Session.State.OPEN).getState(), Session.State.OPEN);
+    assertEquals(state.setState(ClientSession.State.OPEN).getState(), ClientSession.State.OPEN);
     assertEquals(state.setCommandRequest(2).getCommandRequest(), 2);
     assertEquals(state.nextCommandRequest(), 3);
     assertEquals(state.getCommandRequest(), 3);
@@ -72,24 +71,24 @@ public class ClientSessionStateTest {
   public void testSessionStateChange() {
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
     AtomicBoolean changed = new AtomicBoolean();
-    AtomicReference<Session.State> change = new AtomicReference<>();
-    Listener<Session.State> listener = state.onStateChange(s -> {
+    AtomicReference<ClientSession.State> change = new AtomicReference<>();
+    Listener<ClientSession.State> listener = state.onStateChange(s -> {
       changed.set(true);
       change.set(s);
     });
 
-    assertEquals(state.getState(), Session.State.CLOSED);
-    state.setState(Session.State.CLOSED);
+    assertEquals(state.getState(), ClientSession.State.CLOSED);
+    state.setState(ClientSession.State.CLOSED);
     assertFalse(changed.get());
 
-    state.setState(Session.State.OPEN);
+    state.setState(ClientSession.State.OPEN);
     assertTrue(changed.get());
-    assertEquals(change.get(), Session.State.OPEN);
+    assertEquals(change.get(), ClientSession.State.OPEN);
 
     changed.set(false);
     listener.close();
 
-    state.setState(Session.State.EXPIRED);
+    state.setState(ClientSession.State.EXPIRED);
     assertFalse(changed.get());
   }
 

@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.protocol.http.response;
 
-import io.atomix.copycat.session.Event;
-
 import java.util.List;
 
 /**
@@ -26,7 +24,7 @@ import java.util.List;
  */
 public class HttpEventResponse extends HttpResponse {
   private long session;
-  private List<Event<?>> events;
+  private List<byte[]> events;
 
   public long getSession() {
     return session;
@@ -37,11 +35,11 @@ public class HttpEventResponse extends HttpResponse {
     return this;
   }
 
-  public List<Event<?>> getEvents() {
+  public List<byte[]> getEvents() {
     return events;
   }
 
-  public HttpEventResponse setEvents(List<Event<?>> events) {
+  public HttpEventResponse setEvents(List<byte[]> events) {
     this.events = events;
     return this;
   }

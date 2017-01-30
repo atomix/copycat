@@ -203,7 +203,7 @@ final class ServerStateMachine implements AutoCloseable {
       // Update the index for each session. This will be used to trigger queries that are awaiting the
       // application of specific indexes to the state machine. Setting the session index may cause query
       // callbacks to be called and queries to be evaluated.
-      for (ServerSessionContext session : context.sessions().sessions.values()) {
+      for (ServerSession session : context.sessions().sessions.values()) {
         session.setLastApplied(i);
       }
 
@@ -234,7 +234,7 @@ final class ServerStateMachine implements AutoCloseable {
   private long calculateLastCompleted(long index) {
     // Calculate the last completed index as the lowest index acknowledged by all clients.
     long lastCompleted = index;
-    for (ServerSessionContext session : context.sessions().sessions.values()) {
+    for (ServerSession session : context.sessions().sessions.values()) {
       lastCompleted = Math.min(lastCompleted, session.getLastCompleted());
     }
     return lastCompleted;
@@ -415,7 +415,7 @@ final class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> applyConnect(Indexed<ConnectEntry> entry) {
     // Connections are stored in the state machine when they're *written* to the log, so we need only
     // release them once they're committed.
-    ServerSessionContext session = context.sessions().getSession(entry.entry().client());
+    ServerSession session = context.sessions().getSession(entry.entry().client());
     if (session != null) {
       // Update the session connect entry.
       session.setConnectEntry(entry);
@@ -446,7 +446,7 @@ final class ServerStateMachine implements AutoCloseable {
     // Allow the executor to execute any scheduled events.
     long timestamp = context.timestamp(entry.entry().timestamp());
 
-    ServerSessionContext session = new ServerSessionContext(entry, entry.entry().client(), log, context, entry.entry().timeout());
+    ServerSession session = new ServerSession(entry, entry.entry().client(), log, context, entry.entry().timeout());
     context.sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
@@ -470,7 +470,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Registers a session.
    */
-  private void registerSession(long index, long timestamp, ServerSessionContext session, CompletableFuture<Long> future) {
+  private void registerSession(long index, long timestamp, ServerSession session, CompletableFuture<Long> future) {
     context.checkThread();
 
     if (!log.isOpen()) {
@@ -531,7 +531,7 @@ final class ServerStateMachine implements AutoCloseable {
    * from the log before they're replicated to some servers.
    */
   private CompletableFuture<Void> applyKeepAlive(Indexed<KeepAliveEntry> entry) {
-    ServerSessionContext session = context.sessions().getSession(entry.entry().session());
+    ServerSession session = context.sessions().getSession(entry.entry().session());
 
     // Update the deterministic executor time and allow the executor to execute any scheduled events.
     long timestamp = context.timestamp(entry.entry().timestamp());
@@ -589,7 +589,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Applies a keep alive for a session.
    */
-  private void keepAliveSession(long index, long timestamp, long commandSequence, long eventIndex, ServerSessionContext session, CompletableFuture<Void> future) {
+  private void keepAliveSession(long index, long timestamp, long commandSequence, long eventIndex, ServerSession session, CompletableFuture<Void> future) {
     context.checkThread();
 
     if (!log.isOpen()) {
@@ -647,7 +647,7 @@ final class ServerStateMachine implements AutoCloseable {
   private CompletableFuture<Void> applyUnregister(Indexed<UnregisterEntry> entry) {
     // Get the session from the context sessions. Note that we do not unregister the session here. Sessions
     // can only be unregistered once all references to session commands have been released by the state machine.
-    ServerSessionContext session = context.sessions().getSession(entry.entry().session());
+    ServerSession session = context.sessions().getSession(entry.entry().session());
 
     // Update the deterministic executor time and allow the executor to execute any scheduled events.
     long timestamp = context.timestamp(entry.entry().timestamp());
@@ -683,7 +683,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Unregisters the given session.
    */
-  private void unregisterSession(Indexed<UnregisterEntry> entry, ServerSessionContext session, CompletableFuture<Void> future) {
+  private void unregisterSession(Indexed<UnregisterEntry> entry, ServerSession session, CompletableFuture<Void> future) {
     context.checkThread();
 
     if (!log.isOpen()) {
@@ -741,7 +741,7 @@ final class ServerStateMachine implements AutoCloseable {
    * <p>
    * Command entries result in commands being executed on the user provided {@link StateMachine} and a
    * response being sent back to the client by completing the returned future. All command responses are
-   * cached in the command's {@link ServerSessionContext} for fault tolerance. In the event that the same command
+   * cached in the command's {@link ServerSession} for fault tolerance. In the event that the same command
    * is applied to the state machine more than once, the original response will be returned.
    * <p>
    * Command entries are written with a sequence number. The sequence number is used to ensure that
@@ -756,7 +756,7 @@ final class ServerStateMachine implements AutoCloseable {
     final CompletableFuture<Result> future = new CompletableFuture<>();
 
     // First check to ensure that the session exists.
-    ServerSessionContext session = context.sessions().getSession(entry.entry().session());
+    ServerSession session = context.sessions().getSession(entry.entry().session());
 
     // If the session is null, return an UnknownSessionException. Commands applied to the state machine must
     // have a session. We ensure that session register/unregister entries are not compacted from the log
@@ -813,7 +813,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Sequences a command according to the command sequence number.
    */
-  private void sequenceCommand(long sequence, ServerSessionContext session, CompletableFuture<Result> future) {
+  private void sequenceCommand(long sequence, ServerSession session, CompletableFuture<Result> future) {
     context.checkThread();
 
     if (!log.isOpen()) {
@@ -832,7 +832,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine command.
    */
-  private void executeCommand(long index, long sequence, long timestamp, ServerCommit commit, ServerSessionContext session, CompletableFuture<Result> future) {
+  private void executeCommand(long index, long sequence, long timestamp, ServerCommit commit, ServerSession session, CompletableFuture<Result> future) {
     context.checkThread();
 
     if (!log.isOpen()) {
@@ -897,7 +897,7 @@ final class ServerStateMachine implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   private CompletableFuture<Result> applyQuery(Indexed<QueryEntry> entry) {
-    ServerSessionContext session = context.sessions().getSession(entry.entry().session());
+    ServerSession session = context.sessions().getSession(entry.entry().session());
 
     // If the session is null then that indicates that the session already timed out or it never existed.
     // Return with an UnknownSessionException.
@@ -920,7 +920,7 @@ final class ServerStateMachine implements AutoCloseable {
   /**
    * Executes a state machine query.
    */
-  private void executeQuery(ServerCommit commit, ServerSessionContext session, CompletableFuture<Result> future) {
+  private void executeQuery(ServerCommit commit, ServerSession session, CompletableFuture<Result> future) {
     context.checkThread();
 
     if (!log.isOpen()) {
@@ -963,7 +963,7 @@ final class ServerStateMachine implements AutoCloseable {
     // Iterate through all the server sessions and reset timestamps. This ensures that sessions do not
     // timeout during leadership changes or shortly thereafter.
     long timestamp = context.timestamp(entry.entry().timestamp());
-    for (ServerSessionContext session : context.sessions().sessions.values()) {
+    for (ServerSession session : context.sessions().sessions.values()) {
       session.setTimestamp(timestamp);
     }
     entry.compact(Compaction.Mode.SEQUENTIAL);
@@ -980,7 +980,7 @@ final class ServerStateMachine implements AutoCloseable {
    * regard to session expiration.
    */
   private void suspectSessions(long exclude, long timestamp) {
-    for (ServerSessionContext session : context.sessions().sessions.values()) {
+    for (ServerSession session : context.sessions().sessions.values()) {
       if (session.id() != exclude && timestamp - session.timeout() > session.getTimestamp()) {
         session.suspect();
       }
