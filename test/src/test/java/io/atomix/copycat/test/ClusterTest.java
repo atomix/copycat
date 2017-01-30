@@ -1286,8 +1286,10 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     @Override
-    public byte[] applyCommand(Commit commit) {
+    public byte[] apply(Commit commit) {
       switch (commit.bytes()[0]) {
+        case 0:
+          break;
         case 1:
           command(commit);
           break;
@@ -1305,15 +1307,6 @@ public class ClusterTest extends ConcurrentTestCase {
           break;
       }
       return ((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array();
-    }
-
-    @Override
-    public byte[] applyQuery(Commit commit) {
-      try {
-        return ((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array();
-      } finally {
-        commit.close();
-      }
     }
 
     public long command(Commit commit) {

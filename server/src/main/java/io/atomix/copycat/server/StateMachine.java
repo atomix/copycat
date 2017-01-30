@@ -174,26 +174,17 @@ public abstract class StateMachine implements AutoCloseable {
   }
 
   /**
-   * Applies a command to the state machine.
+   * Applies a commit to the state machine.
    *
-   * @param commit the command commit to apply.
-   * @return The command result.
+   * @param commit the commit to apply.
+   * @return The commit result.
    */
-  public abstract byte[] applyCommand(Commit commit);
-
-  /**
-   * Applies a query to the state machine.
-   *
-   * @param commit The query commit to apply.
-   * @return The query result.
-   */
-  public abstract byte[] applyQuery(Commit commit);
+  public abstract byte[] apply(Commit commit);
 
   /**
    * Closes the state machine.
    */
   @Override
   public void close() {
-
   }
 }

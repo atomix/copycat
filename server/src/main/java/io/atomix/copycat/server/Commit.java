@@ -44,6 +44,13 @@ import java.time.Instant;
 public interface Commit {
 
   /**
+   * Returns the commit type.
+   *
+   * @return The commit type.
+   */
+  Type type();
+
+  /**
    * Returns the commit index.
    * <p>
    * This is the index at which the committed operation was written in the Raft log.
@@ -80,7 +87,7 @@ public interface Commit {
    * commit times are guaranteed to progress monotonically, never going back in time.
    * <p>
    * Users should <em>never</em> use {@code System} time to control behavior in a state machine and should instead rely
-   * upon {@link Commit} times or use the {@link StateMachineExecutor} for time-based controls.
+   * upon {@link Commit} times or use the {@link StateMachineContext} for time-based controls.
    *
    * @return The commit time.
    * @throws IllegalStateException if the commit is {@link #close() closed}
@@ -107,6 +114,14 @@ public interface Commit {
    * When a commit is closed, it will not be compacted from the log.
    */
   void close();
+
+  /**
+   * Commit type.
+   */
+  enum Type {
+    COMMAND,
+    QUERY,
+  }
 
   /**
    * Constants for specifying command compaction modes.

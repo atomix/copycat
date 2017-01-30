@@ -20,12 +20,7 @@ package io.atomix.copycat.server;
  */
 public class TestStateMachine extends StateMachine {
   @Override
-  public byte[] applyCommand(Commit commit) {
-    return new byte[0];
-  }
-
-  @Override
-  public byte[] applyQuery(Commit commit) {
+  public byte[] apply(Commit commit) {
     return new byte[0];
   }
 }

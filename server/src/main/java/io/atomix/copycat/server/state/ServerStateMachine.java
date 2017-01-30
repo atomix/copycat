@@ -17,6 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.protocol.error.InternalException;
 import io.atomix.copycat.protocol.error.UnknownSessionException;
+import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.session.SessionListener;
@@ -795,7 +796,7 @@ final class ServerStateMachine implements AutoCloseable {
 
       // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
       // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-      ServerCommit commit = new ServerCommit(entry, session, timestamp);
+      ServerCommit commit = new ServerCommit(Commit.Type.COMMAND, entry, session, timestamp);
       context.executor.execute(() -> executeCommand(index, sequence, timestamp, commit, session, future));
 
       // Update the last applied index prior to the command sequence number. This is necessary to ensure queries sequenced
@@ -858,7 +859,7 @@ final class ServerStateMachine implements AutoCloseable {
 
     try {
       // Execute the state machine operation and get the result.e
-      byte[] output = stateMachine.applyCommand(commit);
+      byte[] output = stateMachine.apply(commit);
 
       // Once the operation has been applied to the state machine, commit events published by the command.
       // The state machine context will build a composite future for events published to all sessions.
@@ -910,7 +911,7 @@ final class ServerStateMachine implements AutoCloseable {
       return Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.entry().session()));
     } else {
       CompletableFuture<Result> future = new CompletableFuture<>();
-      ServerCommit commit = new ServerCommit(new Indexed<>(lastApplied, entry.term(), entry.entry(), entry.size()), session, context.timestamp());
+      ServerCommit commit = new ServerCommit(Commit.Type.QUERY, new Indexed<>(lastApplied, entry.term(), entry.entry(), entry.size()), session, context.timestamp());
       context.executor.execute(() -> executeQuery(commit, session, future));
       return future;
     }
@@ -942,7 +943,7 @@ final class ServerStateMachine implements AutoCloseable {
     context.init(index, commit.time(), ServerStateMachineContext.Type.QUERY);
 
     try {
-      byte[] result = stateMachine.applyQuery(commit);
+      byte[] result = stateMachine.apply(commit);
       executor.execute(() -> future.complete(new Result(index, eventIndex, result, null)));
     } catch (Exception e) {
       executor.execute(() -> future.complete(new Result(index, eventIndex, null, e)));

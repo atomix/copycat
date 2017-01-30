@@ -30,12 +30,14 @@ import java.time.Instant;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class ServerCommit<T extends java.io.Serializable> implements Commit {
+  private final Type type;
   private final Indexed<? extends OperationEntry<?>> entry;
   private final ServerSessionContext session;
   private final long timestamp;
   private boolean open = true;
 
-  public ServerCommit(Indexed<? extends OperationEntry<?>> entry, ServerSessionContext session, long timestamp) {
+  ServerCommit(Type type, Indexed<? extends OperationEntry<?>> entry, ServerSessionContext session, long timestamp) {
+    this.type = type;
     this.entry = entry;
     this.session = session;
     this.timestamp = timestamp;
@@ -46,6 +48,11 @@ final class ServerCommit<T extends java.io.Serializable> implements Commit {
    */
   private void checkOpen() {
     Assert.state(open, "commit not open");
+  }
+
+  @Override
+  public Type type() {
+    return type;
   }
 
   @Override

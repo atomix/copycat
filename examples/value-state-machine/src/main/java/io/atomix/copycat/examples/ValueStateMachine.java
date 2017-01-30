@@ -25,12 +25,7 @@ import io.atomix.copycat.server.StateMachine;
  */
 public class ValueStateMachine extends StateMachine {
   @Override
-  public byte[] applyCommand(Commit commit) {
-    return new byte[0];
-  }
-
-  @Override
-  public byte[] applyQuery(Commit commit) {
+  public byte[] apply(Commit commit) {
     return new byte[0];
   }
 }
