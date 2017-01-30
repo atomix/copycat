@@ -18,7 +18,6 @@ package io.atomix.copycat.server.storage.entry;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.session.Session;
 
 /**
  * Stores a client keep-alive request.
@@ -27,8 +26,7 @@ import io.atomix.copycat.session.Session;
  * has kept its {@link #session() session} alive. Each client must periodically submit a
  * {@link io.atomix.copycat.protocol.request.KeepAliveRequest} which results in a keep-alive entry
  * being written to the Raft log. When a keep-alive is committed to the internal Raft state machine,
- * the session timeout for the associated {@link Session} will be
- * reset.
+ * the session timeout for the associated session will be reset.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
