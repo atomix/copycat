@@ -20,6 +20,7 @@ import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.RecoveryStrategies;
 import io.atomix.copycat.client.ServerSelectionStrategies;
 import io.atomix.copycat.protocol.Address;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -93,7 +94,7 @@ public class ValueClientExample {
    * Recursively sets state machine values.
    */
   private static void recursiveSet(CopycatClient client, AtomicInteger counter) {
-    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenRun(() -> {
+    client.submitCommand(HeapBuffer.allocate().writeString(UUID.randomUUID().toString()).flip()).thenRun(() -> {
       counter.incrementAndGet();
       recursiveSet(client, counter);
     });

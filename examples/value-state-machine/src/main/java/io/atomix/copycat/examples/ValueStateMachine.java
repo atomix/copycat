@@ -17,6 +17,8 @@ package io.atomix.copycat.examples;
 
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 
 /**
  * Value state machine.
@@ -25,7 +27,7 @@ import io.atomix.copycat.server.StateMachine;
  */
 public class ValueStateMachine extends StateMachine {
   @Override
-  public byte[] apply(Commit commit) {
-    return new byte[0];
+  public Buffer apply(Commit commit) {
+    return HeapBuffer.allocate();
   }
 }

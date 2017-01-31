@@ -16,6 +16,7 @@
 package io.atomix.copycat.server;
 
 import io.atomix.copycat.server.session.Session;
+import io.atomix.copycat.util.buffer.BufferInput;
 
 import java.time.Instant;
 
@@ -26,7 +27,7 @@ import java.time.Instant;
  * and committed via the Raft consensus algorithm.
  * When commands and queries are applied to the Raft {@link StateMachine}, they're
  * wrapped in a commit object. The commit object provides useful metadata regarding the location of the commit
- * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link io.atomix.copycat.session.Session} that
+ * in the Raft replicated log, the {@link #time()} at which the commit was logged, and the {@link io.atomix.copycat.server.session.Session} that
  * submitted the operation to the cluster.
  * <p>
  * All metadata exposed by this interface is backed by disk. The operation and its metadata is
@@ -68,8 +69,8 @@ public interface Commit {
   /**
    * Returns the session that submitted the operation.
    * <p>
-   * The returned {@link io.atomix.copycat.session.Session} is representative of the session that submitted the operation
-   * that resulted in this {@link Commit}. The session can be used to {@link Session#publish(String, Object)}
+   * The returned {@link io.atomix.copycat.server.session.Session} is representative of the session that submitted the operation
+   * that resulted in this {@link Commit}. The session can be used to {@link Session#publish(io.atomix.copycat.util.buffer.Buffer)}
    * event messages to the client.
    *
    * @return The session that created the commit.
@@ -94,11 +95,11 @@ public interface Commit {
   Instant time();
 
   /**
-   * Returns the commit bytes.
+   * Returns the commit buffer.
    *
-   * @return The commit bytes.
+   * @return The commit buffer.
    */
-  byte[] bytes();
+  BufferInput buffer();
 
   /**
    * Marks the commit for compaction from the Raft log.

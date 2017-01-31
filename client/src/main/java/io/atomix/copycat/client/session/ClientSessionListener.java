@@ -21,6 +21,8 @@ import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.PublishResponse;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.ThreadContext;
@@ -38,7 +40,7 @@ import java.util.function.Consumer;
 final class ClientSessionListener {
   private final ClientSessionState state;
   private final ThreadContext context;
-  private final List<Consumer<byte[]>> eventListeners = new CopyOnWriteArrayList<>();
+  private final List<Consumer<BufferInput>> eventListeners = new CopyOnWriteArrayList<>();
   private final ClientSequencer sequencer;
 
   public ClientSessionListener(ProtocolClientConnection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
@@ -51,11 +53,11 @@ final class ClientSessionListener {
   /**
    * Registers a session event listener.
    */
-  public Listener<byte[]> onEvent(Consumer<byte[]> listener) {
+  public Listener<BufferInput> onEvent(Consumer<BufferInput> listener) {
     eventListeners.add(listener);
-    return new Listener<byte[]>() {
+    return new Listener<BufferInput>() {
       @Override
-      public void accept(byte[] event) {
+      public void accept(BufferInput event) {
         listener.accept(event);
       }
 
@@ -105,8 +107,8 @@ final class ClientSessionListener {
 
     sequencer.sequenceEvent(request, () -> {
       for (byte[] event : request.events()) {
-        for (Consumer<byte[]> listener : eventListeners) {
-          listener.accept(event);
+        for (Consumer<BufferInput> listener : eventListeners) {
+          listener.accept(HeapBuffer.wrap(event));
         }
       }
     });

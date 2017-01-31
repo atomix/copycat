@@ -24,6 +24,8 @@ import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketQueryResponse;
 import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
@@ -66,7 +68,7 @@ public class ClientSessionSubmitterTest {
     }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
-    assertEquals(submitter.submitCommand(new byte[0]).get(), "Hello world!".getBytes());
+    assertEquals(submitter.submitCommand(HeapBuffer.allocate().flip()).get().readBytes(), "Hello world!".getBytes());
     assertEquals(state.getCommandRequest(), 1);
     assertEquals(state.getCommandResponse(), 1);
     assertEquals(state.getResponseIndex(), 10);
@@ -97,8 +99,8 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
-    CompletableFuture<byte[]> result1 = submitter.submitCommand(new byte[0]);
-    CompletableFuture<byte[]> result2 = submitter.submitCommand(new byte[0]);
+    CompletableFuture<BufferInput> result1 = submitter.submitCommand(HeapBuffer.allocate().flip());
+    CompletableFuture<BufferInput> result2 = submitter.submitCommand(HeapBuffer.allocate().flip());
 
     future2.complete(new WebSocketCommandResponse.Builder(2)
       .withStatus(WebSocketResponse.Status.OK)
@@ -120,9 +122,9 @@ public class ClientSessionSubmitterTest {
       .build());
 
     assertTrue(result1.isDone());
-    assertEquals(result1.get(), "Hello world!".getBytes());
+    assertEquals(result1.get().readBytes(), "Hello world!".getBytes());
     assertTrue(result2.isDone());
-    assertEquals(result2.get(), "Hello world again!".getBytes());
+    assertEquals(result2.get().readBytes(), "Hello world again!".getBytes());
 
     assertEquals(state.getCommandRequest(), 2);
     assertEquals(state.getCommandResponse(), 2);
@@ -153,7 +155,7 @@ public class ClientSessionSubmitterTest {
     }).when(context).execute(any(Runnable.class));
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
-    assertEquals(submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE).get(), "Hello world!".getBytes());
+    assertEquals(submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE).get().readBytes(), "Hello world!".getBytes());
     assertEquals(state.getResponseIndex(), 10);
   }
 
@@ -182,8 +184,8 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
-    CompletableFuture<byte[]> result1 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
-    CompletableFuture<byte[]> result2 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
+    CompletableFuture<BufferInput> result1 = submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE);
+    CompletableFuture<BufferInput> result2 = submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE);
 
     future2.complete(new WebSocketQueryResponse.Builder(1)
       .withStatus(WebSocketResponse.Status.OK)
@@ -203,9 +205,9 @@ public class ClientSessionSubmitterTest {
       .build());
 
     assertTrue(result1.isDone());
-    assertEquals(result1.get(), "Hello world!".getBytes());
+    assertEquals(result1.get().readBytes(), "Hello world!".getBytes());
     assertTrue(result2.isDone());
-    assertEquals(result2.get(), "Hello world again!".getBytes());
+    assertEquals(result2.get().readBytes(), "Hello world again!".getBytes());
 
     assertEquals(state.getResponseIndex(), 10);
   }
@@ -235,8 +237,8 @@ public class ClientSessionSubmitterTest {
 
     ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
 
-    CompletableFuture<byte[]> result1 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
-    CompletableFuture<byte[]> result2 = submitter.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE);
+    CompletableFuture<BufferInput> result1 = submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE);
+    CompletableFuture<BufferInput> result2 = submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE);
 
     assertEquals(state.getResponseIndex(), 1);
 
@@ -252,7 +254,7 @@ public class ClientSessionSubmitterTest {
 
     assertTrue(result1.isCompletedExceptionally());
     assertTrue(result2.isDone());
-    assertEquals(result2.get(), "Hello world!".getBytes());
+    assertEquals(result2.get().readBytes(), "Hello world!".getBytes());
 
     assertEquals(state.getResponseIndex(), 10);
   }

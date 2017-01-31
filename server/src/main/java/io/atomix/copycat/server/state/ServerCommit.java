@@ -21,6 +21,8 @@ import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.OperationEntry;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 
 import java.time.Instant;
 
@@ -74,8 +76,8 @@ final class ServerCommit<T extends java.io.Serializable> implements Commit {
   }
 
   @Override
-  public byte[] bytes() {
-    return entry.entry().bytes();
+  public BufferInput buffer() {
+    return HeapBuffer.wrap(entry.entry().bytes());
   }
 
   @Override
@@ -110,7 +112,7 @@ final class ServerCommit<T extends java.io.Serializable> implements Commit {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, session=%s, time=%s, operation=byte[%d]]", getClass().getSimpleName(), index(), session(), time(), bytes().length);
+    return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), buffer());
   }
 
 }

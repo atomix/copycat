@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.session;
 
+import io.atomix.copycat.util.buffer.Buffer;
 import io.atomix.copycat.util.concurrent.Listener;
 
 import java.util.concurrent.CompletableFuture;
@@ -173,6 +174,6 @@ public interface Session {
    * @return A completable future to be called once the event has been published.
    * @throws NullPointerException If {@code event} is {@code null}
    */
-  Session publish(byte[] event);
+  Session publish(Buffer event);
 
 }

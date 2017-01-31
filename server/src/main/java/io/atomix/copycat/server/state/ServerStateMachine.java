@@ -31,6 +31,7 @@ import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
 import io.atomix.copycat.util.concurrent.ComposableFuture;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.ThreadContext;
@@ -859,7 +860,7 @@ final class ServerStateMachine implements AutoCloseable {
 
     try {
       // Execute the state machine operation and get the result.e
-      byte[] output = stateMachine.apply(commit);
+      Buffer output = stateMachine.apply(commit);
 
       // Once the operation has been applied to the state machine, commit events published by the command.
       // The state machine context will build a composite future for events published to all sessions.
@@ -943,7 +944,7 @@ final class ServerStateMachine implements AutoCloseable {
     context.init(index, commit.time(), ServerStateMachineContext.Type.QUERY);
 
     try {
-      byte[] result = stateMachine.apply(commit);
+      Buffer result = stateMachine.apply(commit);
       executor.execute(() -> future.complete(new Result(index, eventIndex, result, null)));
     } catch (Exception e) {
       executor.execute(() -> future.complete(new Result(index, eventIndex, null, e)));
@@ -998,10 +999,10 @@ final class ServerStateMachine implements AutoCloseable {
   static final class Result {
     final long index;
     final long eventIndex;
-    final byte[] result;
+    final Buffer result;
     final Exception error;
 
-    Result(long index, long eventIndex, byte[] result, Exception error) {
+    Result(long index, long eventIndex, Buffer result, Exception error) {
       this.index = index;
       this.eventIndex = eventIndex;
       this.result = result;

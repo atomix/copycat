@@ -15,12 +15,15 @@
  */
 package io.atomix.copycat.server;
 
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
+
 /**
  * Test state machine.
  */
 public class TestStateMachine extends StateMachine {
   @Override
-  public byte[] apply(Commit commit) {
-    return new byte[0];
+  public Buffer apply(Commit commit) {
+    return HeapBuffer.allocate(0);
   }
 }

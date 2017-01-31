@@ -27,6 +27,9 @@ import io.atomix.copycat.protocol.response.OperationResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 
 import java.net.ConnectException;
@@ -69,8 +72,8 @@ final class ClientSessionSubmitter {
    * @param command The command to submit.
    * @return A completable future to be completed once the command has been submitted.
    */
-  public CompletableFuture<byte[]> submitCommand(byte[] command) {
-    CompletableFuture<byte[]> future = new CompletableFuture<>();
+  public CompletableFuture<BufferInput> submitCommand(Buffer command) {
+    CompletableFuture<BufferInput> future = new CompletableFuture<>();
     context.execute(() -> submitCommand(command, future));
     return future;
   }
@@ -78,7 +81,7 @@ final class ClientSessionSubmitter {
   /**
    * Submits a command to the cluster.
    */
-  private void submitCommand(byte[] command, CompletableFuture<byte[]> future) {
+  private void submitCommand(Buffer command, CompletableFuture<BufferInput> future) {
     submit(new CommandAttempt(sequencer.nextRequest(), state.getSessionId(), state.nextCommandRequest(), command, future));
   }
 
@@ -88,8 +91,8 @@ final class ClientSessionSubmitter {
    * @param query The query to submit.
    * @return A completable future to be completed once the query has been submitted.
    */
-  public CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency) {
-    CompletableFuture<byte[]> future = new CompletableFuture<>();
+  public CompletableFuture<BufferInput> submitQuery(Buffer query, ConsistencyLevel consistency) {
+    CompletableFuture<BufferInput> future = new CompletableFuture<>();
     context.execute(() -> submitQuery(query, consistency, future));
     return future;
   }
@@ -97,7 +100,7 @@ final class ClientSessionSubmitter {
   /**
    * Submits a query to the cluster.
    */
-  private void submitQuery(byte[] query, ConsistencyLevel consistency, CompletableFuture<byte[]> future) {
+  private void submitQuery(Buffer query, ConsistencyLevel consistency, CompletableFuture<BufferInput> future) {
     submit(new QueryAttempt(sequencer.nextRequest(), state.getSessionId(), state.getCommandRequest(), state.getResponseIndex(), query, consistency, future));
   }
 
@@ -133,9 +136,9 @@ final class ClientSessionSubmitter {
   private abstract class OperationAttempt<T extends OperationRequest, U extends OperationResponse> implements BiConsumer<U, Throwable> {
     protected final long id;
     protected final int attempt;
-    protected final CompletableFuture<byte[]> future;
+    protected final CompletableFuture<BufferInput> future;
 
-    protected OperationAttempt(long id, int attempt, CompletableFuture<byte[]> future) {
+    protected OperationAttempt(long id, int attempt, CompletableFuture<BufferInput> future) {
       this.id = id;
       this.attempt = attempt;
       this.future = future;
@@ -228,16 +231,16 @@ final class ClientSessionSubmitter {
   private final class CommandAttempt extends OperationAttempt<CommandRequest, CommandResponse> {
     private final long session;
     private final long sequence;
-    private final byte[] command;
+    private final Buffer command;
 
-    public CommandAttempt(long id, long session, long sequence, byte[] command, CompletableFuture<byte[]> future) {
+    public CommandAttempt(long id, long session, long sequence, Buffer command, CompletableFuture<BufferInput> future) {
       super(id, 1, future);
       this.session = session;
       this.sequence = sequence;
       this.command = command;
     }
 
-    public CommandAttempt(long id, int attempt, long session, long sequence, byte[] command, CompletableFuture<byte[]> future) {
+    public CommandAttempt(long id, int attempt, long session, long sequence, Buffer command, CompletableFuture<BufferInput> future) {
       super(id, attempt, future);
       this.session = session;
       this.sequence = sequence;
@@ -249,7 +252,7 @@ final class ClientSessionSubmitter {
       return connection.command(builder ->
         builder.withSession(session)
           .withSequence(sequence)
-          .withCommand(command)
+          .withCommand(command.rewind().readBytes())
           .build());
     }
 
@@ -294,7 +297,7 @@ final class ClientSessionSubmitter {
       sequence(response, () -> {
         state.setCommandResponse(sequence);
         state.setResponseIndex(response.index());
-        future.complete(response.result());
+        future.complete(HeapBuffer.wrap(response.result()));
       });
     }
   }
@@ -306,10 +309,10 @@ final class ClientSessionSubmitter {
     private final long session;
     private final long sequence;
     private final long index;
-    private final byte[] query;
+    private final Buffer query;
     private final ConsistencyLevel consistency;
 
-    public QueryAttempt(long id, long sessionId, long sequence, long index, byte[] query, ConsistencyLevel consistency, CompletableFuture<byte[]> future) {
+    public QueryAttempt(long id, long sessionId, long sequence, long index, Buffer query, ConsistencyLevel consistency, CompletableFuture<BufferInput> future) {
       super(id, 1, future);
       this.session = sessionId;
       this.sequence = sequence;
@@ -318,7 +321,7 @@ final class ClientSessionSubmitter {
       this.consistency = consistency;
     }
 
-    public QueryAttempt(long id, int attempt, long sessionId, long sequence, long index, byte[] query, ConsistencyLevel consistency, CompletableFuture<byte[]> future) {
+    public QueryAttempt(long id, int attempt, long sessionId, long sequence, long index, Buffer query, ConsistencyLevel consistency, CompletableFuture<BufferInput> future) {
       super(id, attempt, future);
       this.session = sessionId;
       this.sequence = sequence;
@@ -333,7 +336,7 @@ final class ClientSessionSubmitter {
         builder.withSession(session)
           .withSequence(sequence)
           .withIndex(index)
-          .withQuery(query)
+          .withQuery(query.rewind().readBytes())
           .withConsistency(consistency)
           .build());
     }
@@ -367,7 +370,7 @@ final class ClientSessionSubmitter {
     protected void complete(QueryResponse response) {
       sequence(response, () -> {
         state.setResponseIndex(response.index());
-        future.complete(response.result());
+        future.complete(HeapBuffer.wrap(response.result()));
       });
     }
   }

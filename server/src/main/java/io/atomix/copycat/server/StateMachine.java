@@ -20,6 +20,7 @@ import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
 
 import java.time.Clock;
 
@@ -71,7 +72,7 @@ import java.time.Clock;
  *   }
  *   }
  * </pre>
- * Attempts to {@link io.atomix.copycat.server.session.Session#publish(String, Object) publish} events during the execution will result in an
+ * Attempts to {@link io.atomix.copycat.server.session.Session#publish(Buffer) publish} events during the execution will result in an
  * {@link IllegalStateException}.
  * <p>
  * Even though state machines on multiple servers may appear to publish the same event, Copycat's protocol ensures that only
@@ -110,7 +111,7 @@ import java.time.Clock;
  * commit log. Copycat will guarantee that {@link Commit}s are persisted in the underlying
  * {@link io.atomix.copycat.server.storage.Log} as long as is necessary (even after a commit is closed) to
  * ensure all operations are applied to a majority of servers and to guarantee delivery of
- * {@link io.atomix.copycat.server.session.Session#publish(String, Object) session events} published as a result of specific operations.
+ * {@link io.atomix.copycat.server.session.Session#publish(Buffer) session events} published as a result of specific operations.
  * State machines only need to specify when it's safe to remove each commit from the log.
  * <p>
  * Note that if commits are not properly closed and are instead garbage collected, a warning will be logged.
@@ -179,7 +180,7 @@ public abstract class StateMachine implements AutoCloseable {
    * @param commit the commit to apply.
    * @return The commit result.
    */
-  public abstract byte[] apply(Commit commit);
+  public abstract Buffer apply(Commit commit);
 
   /**
    * Closes the state machine.

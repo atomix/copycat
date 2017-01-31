@@ -21,6 +21,8 @@ import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.protocol.ProtocolClient;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.BufferInput;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.ThreadContext;
@@ -185,7 +187,7 @@ public class ClientSession {
    * @param command The command to submit.
    * @return A completable future to be completed with the command result.
    */
-  public CompletableFuture<byte[]> submitCommand(byte[] command) {
+  public CompletableFuture<BufferInput> submitCommand(Buffer command) {
     State state = state();
     if (state == State.CLOSED || state == State.EXPIRED) {
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
@@ -199,7 +201,7 @@ public class ClientSession {
    * @param query The query to submit.
    * @return A completable future to be completed with the query result.
    */
-  public CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency) {
+  public CompletableFuture<BufferInput> submitQuery(Buffer query, ConsistencyLevel consistency) {
     State state = state();
     if (state == State.CLOSED || state == State.EXPIRED) {
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
@@ -226,7 +228,7 @@ public class ClientSession {
    * @return The listener context.
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  public Listener<byte[]> onEvent(Consumer<byte[]> callback) {
+  public Listener<BufferInput> onEvent(Consumer<BufferInput> callback) {
     return listener.onEvent(callback);
   }
 

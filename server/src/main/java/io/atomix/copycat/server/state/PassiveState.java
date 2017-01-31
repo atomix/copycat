@@ -413,7 +413,7 @@ class PassiveState extends ReserveState {
 
       if (error == null) {
         future.complete(logResponse(builder.withStatus(ProtocolResponse.Status.OK)
-          .withResult(result.result)
+          .withResult(result.result.readBytes())
           .build()));
       } else if (error instanceof CompletionException && error.getCause() instanceof ProtocolException) {
         future.complete(logResponse(builder.withStatus(ProtocolResponse.Status.ERROR)

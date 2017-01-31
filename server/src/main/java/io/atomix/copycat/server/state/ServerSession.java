@@ -26,6 +26,7 @@ import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.RegisterEntry;
 import io.atomix.copycat.server.storage.entry.UnregisterEntry;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.Listeners;
 import org.slf4j.Logger;
@@ -482,7 +483,7 @@ class ServerSession implements Session {
   }
 
   @Override
-  public Session publish(byte[] event) {
+  public Session publish(Buffer event) {
     Assert.state(open, "cannot publish events during session registration");
     Assert.stateNot(state == State.CLOSED, "session is closed");
     Assert.stateNot(state == State.EXPIRED, "session is expired");
@@ -502,7 +503,7 @@ class ServerSession implements Session {
     }
 
     // Add the event to the event holder.
-    this.event.events.add(event);
+    this.event.events.add(event.readBytes());
 
     return this;
   }

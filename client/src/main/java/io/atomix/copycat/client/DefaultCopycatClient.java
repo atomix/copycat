@@ -22,6 +22,8 @@ import io.atomix.copycat.client.util.AddressSelector;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.BufferInput;
 import io.atomix.copycat.util.concurrent.BlockingFuture;
 import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.Listener;
@@ -189,12 +191,12 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public CompletableFuture<byte[]> submitCommand(byte[] command) {
+  public CompletableFuture<BufferInput> submitCommand(Buffer command) {
     ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
 
-    BlockingFuture<byte[]> future = new BlockingFuture<>();
+    BlockingFuture<BufferInput> future = new BlockingFuture<>();
     session.submitCommand(command).whenComplete((result, error) -> {
       if (eventContext.isBlocked()) {
         future.accept(result, error);
@@ -206,12 +208,12 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency) {
+  public CompletableFuture<BufferInput> submitQuery(Buffer query, ConsistencyLevel consistency) {
     ClientSession session = this.session;
     if (session == null)
       return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
 
-    BlockingFuture<byte[]> future = new BlockingFuture<>();
+    BlockingFuture<BufferInput> future = new BlockingFuture<>();
     session.submitQuery(query, consistency).whenComplete((result, error) -> {
       if (eventContext.isBlocked()) {
         future.accept(result, error);
@@ -223,7 +225,7 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
-  public Listener<byte[]> onEvent(Consumer<byte[]> callback) {
+  public Listener<BufferInput> onEvent(Consumer<BufferInput> callback) {
     EventListener listener = new EventListener(callback);
     listener.register(session);
     return listener;
@@ -338,11 +340,11 @@ public class DefaultCopycatClient implements CopycatClient {
   /**
    * Event listener wrapper.
    */
-  private final class EventListener implements Listener<byte[]> {
-    private final Consumer<byte[]> callback;
-    private Listener<byte[]> parent;
+  private final class EventListener implements Listener<BufferInput> {
+    private final Consumer<BufferInput> callback;
+    private Listener<BufferInput> parent;
 
-    private EventListener(Consumer<byte[]> callback) {
+    private EventListener(Consumer<BufferInput> callback) {
       this.callback = callback;
       eventListeners.add(this);
     }
@@ -355,7 +357,7 @@ public class DefaultCopycatClient implements CopycatClient {
     }
 
     @Override
-    public void accept(byte[] message) {
+    public void accept(BufferInput message) {
       if (eventContext.isBlocked()) {
         callback.accept(message);
       } else {

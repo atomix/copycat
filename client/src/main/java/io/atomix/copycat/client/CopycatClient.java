@@ -19,6 +19,8 @@ import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.BufferInput;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.atomix.copycat.util.concurrent.SingleThreadContext;
 import io.atomix.copycat.util.concurrent.ThreadContext;
@@ -50,7 +52,7 @@ import java.util.function.Consumer;
  * greater than the cluster's session timeout.
  * <p>
  * Clients communicate with the distributed state machine by submitting commands and queries to
- * the cluster through the {@link #submitCommand(byte[])} and {@link #submitQuery(byte[])} methods respectively:
+ * the cluster through the {@link #submitCommand(Buffer)} and {@link #submitQuery(Buffer)} methods respectively:
  * <pre>
  *   {@code
  *   client.submit(new PutCommand("foo", "Hello world!")).thenAccept(result -> {
@@ -304,7 +306,7 @@ public interface CopycatClient {
    * command or query submission futures that preceded it. The future will always be completed on the
    * @throws NullPointerException if {@code command} is null
    */
-  CompletableFuture<byte[]> submitCommand(byte[] command);
+  CompletableFuture<BufferInput> submitCommand(Buffer command);
 
   /**
    * Submits a query to the Copycat cluster.
@@ -323,7 +325,7 @@ public interface CopycatClient {
    * command or query submission futures that preceded it. The future will always be completed on the
    * @throws NullPointerException if {@code query} is null
    */
-  default CompletableFuture<byte[]> submitQuery(byte[] query) {
+  default CompletableFuture<BufferInput> submitQuery(Buffer query) {
     return submitQuery(query, ConsistencyLevel.LINEARIZABLE);
   }
 
@@ -344,7 +346,7 @@ public interface CopycatClient {
    * command or query submission futures that preceded it. The future will always be completed on the
    * @throws NullPointerException if {@code query} is null
    */
-  CompletableFuture<byte[]> submitQuery(byte[] query, ConsistencyLevel consistency);
+  CompletableFuture<BufferInput> submitQuery(Buffer query, ConsistencyLevel consistency);
 
   /**
    * Registers an event listener.
@@ -359,7 +361,7 @@ public interface CopycatClient {
    * @return The listener context.
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
-  Listener<byte[]> onEvent(Consumer<byte[]> callback);
+  Listener<BufferInput> onEvent(Consumer<BufferInput> callback);
 
   /**
    * Connects the client to Copycat cluster via the default server address.

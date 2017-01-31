@@ -29,9 +29,10 @@ import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.concurrent.Listener;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.testng.annotations.AfterMethod;
@@ -124,7 +125,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private void submit(CopycatClient client, int count, int total) {
     if (count < total) {
-      client.submitCommand(UUID.randomUUID().toString().getBytes()).whenComplete((result, error) -> {
+      client.submitCommand(HeapBuffer.allocate().writeString(UUID.randomUUID().toString()).flip()).whenComplete((result, error) -> {
         threadAssertNull(error);
         submit(client, count + 1, total);
       });
@@ -426,7 +427,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeString(UUID.randomUUID().toString()).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -462,7 +463,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(live, total);
 
     CopycatClient client = createClient();
-    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeString(UUID.randomUUID().toString()).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -582,7 +583,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submitQuery(new byte[0], consistency).thenAccept(result -> {
+    client.submitQuery(HeapBuffer.allocate().flip(), consistency).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -637,14 +638,14 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client = createClient();
     client.onEvent(message -> {
       threadAssertEquals(count.incrementAndGet(), 2L);
-      threadAssertEquals(index.get(), HeapBuffer.wrap(message).readLong());
+      threadAssertEquals(index.get(), message.readLong());
       resume();
     });
 
-    client.submitCommand(new byte[]{2}).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(count.incrementAndGet(), 1L);
-      index.set(HeapBuffer.wrap(result).readLong());
+      index.set(result.readLong());
       resume();
     });
 
@@ -706,7 +707,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    client.submitCommand(new byte[]{3}).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeByte(3).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -746,33 +747,33 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client = createClient();
     client.onEvent(message -> {
-      long result = HeapBuffer.wrap(message).readLong();
+      long result = message.readLong();
       threadAssertEquals(counter.incrementAndGet(), 3);
       threadAssertTrue(result >= index.get());
       index.set(result);
       resume();
     });
 
-    client.submitCommand(UUID.randomUUID().toString().getBytes()).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeString(UUID.randomUUID().toString()).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(counter.incrementAndGet(), 1);
-      threadAssertTrue(index.compareAndSet(0, HeapBuffer.wrap(result).readLong()));
+      threadAssertTrue(index.compareAndSet(0, result.readLong()));
       resume();
     });
 
-    client.submitCommand(new byte[]{3}).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeByte(3).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(counter.incrementAndGet(), 2);
-      threadAssertTrue(HeapBuffer.wrap(result).readLong() > index.get());
-      index.set(HeapBuffer.wrap(result).readLong());
+      threadAssertTrue(result.readLong() > index.get());
+      index.set(result.readLong());
       resume();
     });
 
-    client.submitQuery(new byte[0], consistency).thenAccept(result -> {
+    client.submitQuery(HeapBuffer.allocate().flip(), consistency).thenAccept(result -> {
       threadAssertNotNull(result);
       threadAssertEquals(counter.incrementAndGet(), 4);
       long i = index.get();
-      threadAssertTrue(HeapBuffer.wrap(result).readLong() >= i);
+      threadAssertTrue(result.readLong() >= i);
       resume();
     });
 
@@ -790,18 +791,18 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client = createClient();
 
     client.onEvent(event -> {
-      threadAssertEquals(index.get(), HeapBuffer.wrap(event).readLong());
+      threadAssertEquals(index.get(), event.readLong());
       try {
-        threadAssertTrue(index.get() <= HeapBuffer.wrap(client.submitQuery(new byte[0], ConsistencyLevel.LINEARIZABLE).get(10, TimeUnit.SECONDS)).readLong());
+        threadAssertTrue(index.get() <= client.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE).get(10, TimeUnit.SECONDS).readLong());
       } catch (InterruptedException | TimeoutException | ExecutionException e) {
         threadFail(e);
       }
       resume();
     });
 
-    client.submitCommand(new byte[]{2}).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
-      index.compareAndSet(0, HeapBuffer.wrap(result).readLong());
+      index.compareAndSet(0, result.readLong());
       resume();
     });
 
@@ -828,7 +829,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -864,7 +865,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -876,7 +877,7 @@ public class ClusterTest extends ConcurrentTestCase {
     leader.shutdown().get(10, TimeUnit.SECONDS);
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -912,7 +913,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -920,7 +921,7 @@ public class ClusterTest extends ConcurrentTestCase {
       await(30000, 2);
     }
 
-    client.submitCommand(new byte[]{2}).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -931,7 +932,7 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -960,7 +961,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -968,7 +969,7 @@ public class ClusterTest extends ConcurrentTestCase {
       await(30000, 2);
     }
 
-    client.submitCommand(new byte[]{2}).thenAccept(result -> {
+    client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
@@ -979,7 +980,7 @@ public class ClusterTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0 ; i < 10; i++) {
-      client.submitCommand(new byte[]{2}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(2).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -1018,7 +1019,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
 
     for (int i = 0; i < 10; i++) {
-      client.submitCommand(new byte[]{3}).thenAccept(result -> {
+      client.submitCommand(HeapBuffer.allocate().writeByte(3).flip()).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
       });
@@ -1085,7 +1086,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
     client1.onEvent(e -> resume());
-    client1.submitCommand(new byte[]{5}).thenRun(this::resume);
+    client1.submitCommand(HeapBuffer.allocate().writeByte(5).flip()).thenRun(this::resume);
     ((DefaultCopycatClient) client2).kill().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
   }
@@ -1119,7 +1120,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     CopycatClient client1 = createClient();
     CopycatClient client2 = createClient();
-    client1.submitCommand(new byte[]{4}).thenRun(this::resume);
+    client1.submitCommand(HeapBuffer.allocate().writeByte(4).flip()).thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 1);
     client1.onEvent(e -> resume());
     client2.close().thenRun(this::resume);
@@ -1266,13 +1267,13 @@ public class ClusterTest extends ConcurrentTestCase {
     @Override
     public void expire(Session session) {
       if (expire != null)
-        expire.session().publish("expired".getBytes());
+        expire.session().publish(HeapBuffer.allocate().writeString("expired").flip());
     }
 
     @Override
     public void close(Session session) {
       if (close != null && !session.equals(close.session()))
-        close.session().publish("closed".getBytes());
+        close.session().publish(HeapBuffer.allocate().writeString("closed").flip());
     }
 
     @Override
@@ -1286,8 +1287,8 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     @Override
-    public byte[] apply(Commit commit) {
-      switch (commit.bytes()[0]) {
+    public Buffer apply(Commit commit) {
+      switch (commit.buffer().readByte()) {
         case 0:
           break;
         case 1:
@@ -1306,7 +1307,7 @@ public class ClusterTest extends ConcurrentTestCase {
           expire(commit);
           break;
       }
-      return ((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array();
+      return HeapBuffer.allocate(8).writeLong(commit.index()).flip();
     }
 
     public long command(Commit commit) {
@@ -1321,7 +1322,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     public void ownEvent(Commit commit) {
       try {
-        commit.session().publish(((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array());
+        commit.session().publish(HeapBuffer.allocate(8).writeLong(commit.index()).flip());
       } finally {
         commit.close();
       }
@@ -1330,7 +1331,7 @@ public class ClusterTest extends ConcurrentTestCase {
     public void allEvents(Commit commit) {
       try {
         for (Session session : sessions) {
-          session.publish(((HeapBuffer) HeapBuffer.allocate(8).writeLong(commit.index())).array());
+          session.publish(HeapBuffer.allocate(8).writeLong(commit.index()).flip());
         }
       } finally {
         commit.close();
