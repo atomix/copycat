@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.FileBuffer;
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.FileBuffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.Assert;
 
 /**

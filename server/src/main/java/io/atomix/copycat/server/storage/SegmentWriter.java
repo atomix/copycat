@@ -15,12 +15,9 @@
  */
 package io.atomix.copycat.server.storage;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 
 /**
  * Segment writer.
@@ -41,7 +38,6 @@ public class SegmentWriter implements Writer {
   private final Segment segment;
   private final Buffer buffer;
   private final HeapBuffer memory = HeapBuffer.allocate();
-  private final Kryo serializer = new Kryo();
   private long firstIndex;
   private Indexed<? extends Entry<?>> lastEntry;
   private long skip;
@@ -80,17 +76,17 @@ public class SegmentWriter implements Writer {
       // Read the entry bytes from the buffer into memory.
       buffer.read(memory.clear().limit(length));
 
-      // Deserialize the entry into memory.
-      final Input input = new Input(memory.array());
+      // Flip the in-memory buffer.
+      memory.flip();
 
       // Read the entry type ID from the input.
-      final int typeId = input.readByte();
+      final int typeId = memory.readByte();
 
       // Look up the entry type.
       final Entry.Type<?> type = Entry.Type.forId(typeId);
 
       // Deserialize the entry.
-      final Entry entry = serializer.readObject(input, type.type(), type.serializer());
+      final Entry entry = type.serializer().readObject(memory, type.type());
 
       // Return the indexed entry. We compute the size by the entry length plus index/term length.
       lastEntry = new Indexed<>(index, lastTerm, entry, length + Long.BYTES + Long.BYTES);
@@ -231,23 +227,21 @@ public class SegmentWriter implements Writer {
     final long lengthPosition = memory.position();
     memory.skip(Integer.BYTES);
 
+    final long entryPosition = memory.position();
+
     // Write the entry type ID.
     memory.writeByte(entry.type().id());
 
     // Serialize the entry into the buffer.
-    Output output = new Output(memory.array());
-    final int entryPosition = (int) memory.position();
-    output.setPosition(entryPosition);
-    serializer.writeObject(output, entry, entry.type().serializer());
-    output.flush();
+    entry.type().serializer().writeObject(memory, entry);
 
-    // Compute the length of the entry by subtracting the entry start position from the end position
-    // and adding the entry type ID byte.
-    final int length = output.position() - entryPosition + Byte.BYTES;
+    // Write the length of the entry to the memory buffer by subtracting the
+    // start position from the current position.
+    int length = (int) (memory.position() - entryPosition);
     memory.writeInt(lengthPosition, length);
 
     // Write the in-memory entry buffer to the segment.
-    buffer.write(memory.position(output.position()).flip());
+    buffer.write(memory.flip());
 
     // Increment the entry count.
     entryCount++;
@@ -289,17 +283,17 @@ public class SegmentWriter implements Writer {
     // Read the entry bytes from the buffer into memory.
     buffer.read(memory.clear().limit(length));
 
-    // Deserialize the entry into memory.
-    Input input = new Input(memory.array());
+    // Flip the in-memory buffer.
+    memory.flip();
 
     // Read the entry type ID from the input.
-    int typeId = input.readByte();
+    int typeId = memory.readByte();
 
     // Look up the entry type.
     Entry.Type<?> type = Entry.Type.forId(typeId);
 
     // Deserialize the entry.
-    Entry entry = serializer.readObject(input, type.type(), type.serializer());
+    Entry entry = type.serializer().readObject(memory, type.type());
 
     // Return the indexed entry. We compute the size by the entry length plus index/term length.
     lastEntry = new Indexed<>(lastIndex, lastTerm, entry, length + Long.BYTES + Long.BYTES);
@@ -339,17 +333,17 @@ public class SegmentWriter implements Writer {
       // Read the entry bytes from the buffer into memory.
       buffer.read(memory.clear().limit(length));
 
-      // Deserialize the entry into memory.
-      input = new Input(memory.array());
+      // Flip the in-memory buffer.
+      memory.flip();
 
       // Read the entry type ID from the input.
-      typeId = input.readByte();
+      typeId = memory.readByte();
 
       // Look up the entry type.
       type = Entry.Type.forId(typeId);
 
       // Deserialize the entry.
-      entry = serializer.readObject(input, type.type(), type.serializer());
+      entry = type.serializer().readObject(memory, type.type());
 
       // Return the indexed entry. We compute the size by the entry length plus index/term length.
       lastEntry = new Indexed<>(lastIndex, lastTerm, entry, length + Long.BYTES + Long.BYTES);

@@ -15,9 +15,8 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Stores a client keep-alive request.
@@ -71,9 +70,9 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   /**
    * Keep alive entry serializer.
    */
-  public static class Serializer extends SessionEntry.Serializer<KeepAliveEntry> {
+  public static class Serializer implements SessionEntry.Serializer<KeepAliveEntry> {
     @Override
-    public void write(Kryo kryo, Output output, KeepAliveEntry entry) {
+    public void writeObject(BufferOutput output, KeepAliveEntry entry) {
       output.writeLong(entry.timestamp);
       output.writeLong(entry.session);
       output.writeLong(entry.commandSequence);
@@ -81,7 +80,7 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
     }
 
     @Override
-    public KeepAliveEntry read(Kryo kryo, Input input, Class<KeepAliveEntry> type) {
+    public KeepAliveEntry readObject(BufferInput input, Class<KeepAliveEntry> type) {
       return new KeepAliveEntry(input.readLong(), input.readLong(), input.readLong(), input.readLong());
     }
   }

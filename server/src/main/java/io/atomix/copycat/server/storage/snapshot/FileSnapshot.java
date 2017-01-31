@@ -15,9 +15,9 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.FileBuffer;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.FileBuffer;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -60,7 +60,7 @@ final class FileSnapshot extends Snapshot {
     descriptor.copyTo(buffer);
 
     int length = buffer.position(SnapshotDescriptor.BYTES).readInt();
-    return openWriter(new SnapshotWriter(buffer.skip(length).mark(), this, store.serializer()), descriptor);
+    return openWriter(new SnapshotWriter(buffer.skip(length).mark(), this), descriptor);
   }
 
   @Override
@@ -76,7 +76,7 @@ final class FileSnapshot extends Snapshot {
     Buffer buffer = FileBuffer.allocate(file.file(), SnapshotDescriptor.BYTES);
     SnapshotDescriptor descriptor = new SnapshotDescriptor(buffer);
     int length = buffer.position(SnapshotDescriptor.BYTES).readInt();
-    return openReader(new SnapshotReader(buffer.mark().limit(SnapshotDescriptor.BYTES + Integer.BYTES + length), this, store.serializer()), descriptor);
+    return openReader(new SnapshotReader(buffer.mark().limit(SnapshotDescriptor.BYTES + Integer.BYTES + length), this), descriptor);
   }
 
   @Override

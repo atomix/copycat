@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
 import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -73,21 +73,37 @@ public class NetAppendRequest extends AppendRequest implements RaftNetRequest<Ne
    */
   public static class Serializer extends RaftNetRequest.Serializer<NetAppendRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetAppendRequest request) {
+    @SuppressWarnings("unchecked")
+    public void writeObject(BufferOutput output, NetAppendRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.term);
       output.writeInt(request.leader);
       output.writeLong(request.logIndex);
       output.writeLong(request.logTerm);
-      kryo.writeClassAndObject(output, request.entries);
+      output.writeInt(request.entries.size());
+      for (Indexed entry : request.entries) {
+        new Indexed.Serializer().writeObject(output, entry);
+      }
       output.writeLong(request.commitIndex);
       output.writeLong(request.globalIndex);
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public NetAppendRequest read(Kryo kryo, Input input, Class<NetAppendRequest> type) {
-      return new NetAppendRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), (List) kryo.readClassAndObject(input), input.readLong(), input.readLong());
+    public NetAppendRequest readObject(BufferInput input, Class<NetAppendRequest> type) {
+      final long id = input.readLong();
+      final long term = input.readLong();
+      final int leader = input.readInt();
+      final long logIndex = input.readLong();
+      final long logTerm = input.readLong();
+      final int size = input.readInt();
+      final List<Indexed<? extends Entry<?>>> entries = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        entries.add(new Indexed.Serializer().readObject(input, Indexed.class));
+      }
+      final long commitIndex = input.readLong();
+      final long globalIndex = input.readLong();
+      return new NetAppendRequest(id, term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
     }
   }
 }

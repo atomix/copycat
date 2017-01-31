@@ -15,12 +15,15 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.ConfigureRequest;
+import io.atomix.copycat.server.state.ServerMember;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -73,19 +76,48 @@ public class NetConfigureRequest extends ConfigureRequest implements RaftNetRequ
    */
   public static class Serializer extends RaftNetRequest.Serializer<NetConfigureRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetConfigureRequest request) {
+    public void writeObject(BufferOutput output, NetConfigureRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.term);
       output.writeInt(request.leader);
       output.writeLong(request.index);
       output.writeLong(request.timestamp);
-      kryo.writeClassAndObject(output, request.members);
+      output.writeInt(request.members.size());
+      for (Member member : request.members) {
+        output.writeByte(member.type().ordinal());
+        output.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
+        if (member.clientAddress() != null) {
+          output.writeBoolean(true)
+            .writeString(member.clientAddress().host())
+            .writeInt(member.clientAddress().port());
+        } else {
+          output.writeBoolean(false);
+        }
+        output.writeLong(member.updated().toEpochMilli());
+      }
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public NetConfigureRequest read(Kryo kryo, Input input, Class<NetConfigureRequest> type) {
-      return new NetConfigureRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong(), (List) kryo.readClassAndObject(input));
+    public NetConfigureRequest readObject(BufferInput input, Class<NetConfigureRequest> type) {
+      final long id = input.readLong();
+      final long term = input.readLong();
+      final int leader = input.readInt();
+      final long index = input.readLong();
+      final long timestamp = input.readLong();
+      final int size = input.readInt();
+      final List<Member> members = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        Member.Type memberType = Member.Type.values()[input.readByte()];
+        Address serverAddress = new Address(input.readString(), input.readInt());
+        Address clientAddress = null;
+        if (input.readBoolean()) {
+          clientAddress = new Address(input.readString(), input.readInt());
+        }
+        Instant updated = Instant.ofEpochMilli(input.readLong());
+        members.add(new ServerMember(memberType, serverAddress, clientAddress, updated));
+      }
+      return new NetConfigureRequest(id, term, leader, index, timestamp, members);
     }
   }
 }

@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.protocol.request.VoteRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP vote request.
@@ -69,7 +68,7 @@ public class NetVoteRequest extends VoteRequest implements RaftNetRequest<NetVot
    */
   public static class Serializer extends RaftNetRequest.Serializer<NetVoteRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetVoteRequest request) {
+    public void writeObject(BufferOutput output, NetVoteRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.term);
       output.writeInt(request.candidate);
@@ -78,7 +77,7 @@ public class NetVoteRequest extends VoteRequest implements RaftNetRequest<NetVot
     }
 
     @Override
-    public NetVoteRequest read(Kryo kryo, Input input, Class<NetVoteRequest> type) {
+    public NetVoteRequest readObject(BufferInput input, Class<NetVoteRequest> type) {
       return new NetVoteRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readLong());
     }
   }

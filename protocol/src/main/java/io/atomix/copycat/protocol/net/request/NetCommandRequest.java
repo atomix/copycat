@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.CommandRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP command request.
@@ -69,7 +68,7 @@ public class NetCommandRequest extends CommandRequest implements NetRequest<NetC
    */
   public static class Serializer extends NetRequest.Serializer<NetCommandRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetCommandRequest request) {
+    public void writeObject(BufferOutput output, NetCommandRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.session);
       output.writeLong(request.sequence);
@@ -78,7 +77,7 @@ public class NetCommandRequest extends CommandRequest implements NetRequest<NetC
     }
 
     @Override
-    public NetCommandRequest read(Kryo kryo, Input input, Class<NetCommandRequest> type) {
+    public NetCommandRequest readObject(BufferInput input, Class<NetCommandRequest> type) {
       return new NetCommandRequest(input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()));
     }
   }

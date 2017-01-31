@@ -15,13 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.net.response.NetResponse;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.PollResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP poll response.
@@ -72,7 +71,7 @@ public class NetPollResponse extends PollResponse implements RaftNetResponse<Net
    */
   public static class Serializer extends RaftNetResponse.Serializer<NetPollResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetPollResponse response) {
+    public void writeObject(BufferOutput output, NetPollResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.OK) {
@@ -85,7 +84,7 @@ public class NetPollResponse extends PollResponse implements RaftNetResponse<Net
     }
 
     @Override
-    public NetPollResponse read(Kryo kryo, Input input, Class<NetPollResponse> type) {
+    public NetPollResponse readObject(BufferInput input, Class<NetPollResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {

@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 
 /**
  * In-memory snapshot backed by a {@link HeapBuffer}.
@@ -50,7 +50,7 @@ final class MemorySnapshot extends Snapshot {
   @Override
   public SnapshotWriter writer() {
     checkWriter();
-    return new SnapshotWriter(buffer.reset().slice(), this, store.serializer());
+    return new SnapshotWriter(buffer.reset().slice(), this);
   }
 
   @Override
@@ -61,7 +61,7 @@ final class MemorySnapshot extends Snapshot {
 
   @Override
   public synchronized SnapshotReader reader() {
-    return openReader(new SnapshotReader(buffer.reset().slice(), this, store.serializer()), descriptor);
+    return openReader(new SnapshotReader(buffer.reset().slice(), this), descriptor);
   }
 
   @Override

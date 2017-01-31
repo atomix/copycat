@@ -15,12 +15,11 @@
  */
 package io.atomix.copycat.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.PublishResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP publish response.
@@ -71,7 +70,7 @@ public class NetPublishResponse extends PublishResponse implements NetResponse<N
    */
   public static class Serializer extends NetResponse.Serializer<NetPublishResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetPublishResponse response) {
+    public void writeObject(BufferOutput output, NetPublishResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.ERROR) {
@@ -82,7 +81,7 @@ public class NetPublishResponse extends PublishResponse implements NetResponse<N
     }
 
     @Override
-    public NetPublishResponse read(Kryo kryo, Input input, Class<NetPublishResponse> type) {
+    public NetPublishResponse readObject(BufferInput input, Class<NetPublishResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {

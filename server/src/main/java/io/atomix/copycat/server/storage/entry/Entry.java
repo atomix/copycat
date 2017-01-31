@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
+import io.atomix.copycat.util.CopycatSerializer;
+
 /**
  * Stores a state change in a {@link io.atomix.copycat.server.storage.Log}.
  *
@@ -88,7 +90,7 @@ public abstract class Entry<T extends Entry<T>> {
      *
      * @return The entry class.
      */
-    public Class<T> type() {
+    public Class type() {
       return type;
     }
 
@@ -111,7 +113,9 @@ public abstract class Entry<T extends Entry<T>> {
 
   /**
    * Entry serializer.
+   *
+   * @param <T> The entry type.
    */
-  public static abstract class Serializer<T extends Entry> extends com.esotericsoftware.kryo.Serializer<T> {
+  public interface Serializer<T extends Entry> extends CopycatSerializer<T> {
   }
 }

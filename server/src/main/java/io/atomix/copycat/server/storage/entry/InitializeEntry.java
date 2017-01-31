@@ -15,9 +15,8 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Indicates a leader change has occurred.
@@ -47,14 +46,14 @@ public class InitializeEntry extends TimestampedEntry<InitializeEntry> {
   /**
    * Initialize entry serializer.
    */
-  public static class Serializer extends TimestampedEntry.Serializer<InitializeEntry> {
+  public static class Serializer implements TimestampedEntry.Serializer<InitializeEntry> {
     @Override
-    public void write(Kryo kryo, Output output, InitializeEntry entry) {
+    public void writeObject(BufferOutput output, InitializeEntry entry) {
       output.writeLong(entry.timestamp);
     }
 
     @Override
-    public InitializeEntry read(Kryo kryo, Input input, Class<InitializeEntry> type) {
+    public InitializeEntry readObject(BufferInput input, Class<InitializeEntry> type) {
       return new InitializeEntry(input.readLong());
     }
   }

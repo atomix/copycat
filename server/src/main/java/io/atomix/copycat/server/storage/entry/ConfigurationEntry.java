@@ -15,13 +15,17 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.state.ServerMember;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Stores a cluster configuration.
@@ -63,17 +67,41 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
   /**
    * Configuration entry serializer.
    */
-  public static class Serializer extends TimestampedEntry.Serializer<ConfigurationEntry> {
+  public static class Serializer implements TimestampedEntry.Serializer<ConfigurationEntry> {
     @Override
-    public void write(Kryo kryo, Output output, ConfigurationEntry entry) {
+    public void writeObject(BufferOutput output, ConfigurationEntry entry) {
       output.writeLong(entry.timestamp);
-      kryo.writeClassAndObject(output, entry.members);
+      output.writeInt(entry.members.size());
+      for (Member member : entry.members) {
+        output.writeByte(member.type().ordinal());
+        output.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
+        if (member.clientAddress() != null) {
+          output.writeBoolean(true)
+            .writeString(member.clientAddress().host())
+            .writeInt(member.clientAddress().port());
+        } else {
+          output.writeBoolean(false);
+        }
+        output.writeLong(member.updated().toEpochMilli());
+      }
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public ConfigurationEntry read(Kryo kryo, Input input, Class<ConfigurationEntry> type) {
-      return new ConfigurationEntry(input.readLong(), (Collection<Member>) kryo.readClassAndObject(input));
+    public ConfigurationEntry readObject(BufferInput input, Class<ConfigurationEntry> type) {
+      long timestamp = input.readLong();
+      int size = input.readInt();
+      List<Member> members = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        Member.Type memberType = Member.Type.values()[input.readByte()];
+        Address serverAddress = new Address(input.readString(), input.readInt());
+        Address clientAddress = null;
+        if (input.readBoolean()) {
+          clientAddress = new Address(input.readString(), input.readInt());
+        }
+        Instant updated = Instant.ofEpochMilli(input.readLong());
+        members.add(new ServerMember(memberType, serverAddress, clientAddress, updated));
+      }
+      return new ConfigurationEntry(timestamp, members);
     }
   }
 }

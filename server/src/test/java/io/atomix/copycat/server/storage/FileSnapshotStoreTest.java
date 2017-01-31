@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.storage;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
@@ -49,7 +48,7 @@ public class FileSnapshotStoreTest extends AbstractSnapshotStoreTest {
       .withStorageLevel(StorageLevel.DISK)
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new SnapshotStore("test", storage, new Kryo());
+    return new SnapshotStore("test", storage);
   }
 
   /**

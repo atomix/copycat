@@ -15,13 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.net.response.NetResponse;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP append response.
@@ -72,7 +71,7 @@ public class NetAppendResponse extends AppendResponse implements RaftNetResponse
    */
   public static class Serializer extends RaftNetResponse.Serializer<NetAppendResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetAppendResponse response) {
+    public void writeObject(BufferOutput output, NetAppendResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.OK) {
@@ -86,7 +85,7 @@ public class NetAppendResponse extends AppendResponse implements RaftNetResponse
     }
 
     @Override
-    public NetAppendResponse read(Kryo kryo, Input input, Class<NetAppendResponse> type) {
+    public NetAppendResponse readObject(BufferInput input, Class<NetAppendResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {

@@ -15,11 +15,9 @@
  */
 package io.atomix.copycat.server.storage;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 
 import java.util.NoSuchElementException;
 
@@ -33,7 +31,6 @@ public class SegmentReader implements Reader {
   private final Buffer buffer;
   private final Mode mode;
   private final HeapBuffer memory = HeapBuffer.allocate();
-  private final Kryo serializer = new Kryo();
   private volatile long firstIndex;
   private volatile int nextOffset = 0;
   private volatile Indexed<? extends Entry<?>> currentEntry;
@@ -206,17 +203,17 @@ public class SegmentReader implements Reader {
       // Read the entry bytes from the buffer into memory.
       buffer.read(memory.clear().limit(length));
 
-      // Deserialize the entry into memory.
-      final Input input = new Input(memory.array());
+      // Flip the in-memory buffer.
+      memory.flip();
 
       // Read the entry type ID from the input.
-      final int typeId = input.readByte();
+      final int typeId = memory.readByte();
 
       // Look up the entry type.
       final Entry.Type<?> type = Entry.Type.forId(typeId);
 
       // Deserialize the entry.
-      final Entry entry = serializer.readObject(input, type.type(), type.serializer());
+      final Entry entry = type.serializer().readObject(memory, type.type());
 
       // If the index has been committed, create the entry with a cleaner.
       final Indexed<? extends Entry<?>> indexed;

@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.ConnectRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP connect request.
@@ -69,13 +68,13 @@ public class NetConnectRequest extends ConnectRequest implements NetRequest<NetC
    */
   public static class Serializer extends NetRequest.Serializer<NetConnectRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetConnectRequest request) {
+    public void writeObject(BufferOutput output, NetConnectRequest request) {
       output.writeLong(request.id);
       output.writeString(request.client);
     }
 
     @Override
-    public NetConnectRequest read(Kryo kryo, Input input, Class<NetConnectRequest> type) {
+    public NetConnectRequest readObject(BufferInput input, Class<NetConnectRequest> type) {
       return new NetConnectRequest(input.readLong(), input.readString());
     }
   }

@@ -15,12 +15,11 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.buffer.FileBuffer;
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.FileBuffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,8 +63,7 @@ import java.util.*;
  * a snapshot may actually only represent a subset of the state machine's state. Indeed, internal Copycat
  * server state machines use log cleaning and store no state in snapshots. When a snapshot is taken of
  * the state machine state, only prior entries that contributed to the state stored in the snapshot -
- * commands marked with the {@link Command.CompactionMode#SNAPSHOT SNAPSHOT}
- * compaction mode - are removed from the log prior to the snapshot.
+ * commands marked with the {@code SNAPSHOT} compaction mode - are removed from the log prior to the snapshot.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
@@ -73,14 +71,12 @@ public class SnapshotStore implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(SnapshotStore.class);
   private final String name;
   final Storage storage;
-  private final Kryo serializer;
   private final TreeMap<Long, Snapshot> snapshots = new TreeMap<>();
   private Snapshot currentSnapshot;
 
-  public SnapshotStore(String name, Storage storage, Kryo serializer) {
+  public SnapshotStore(String name, Storage storage) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
-    this.serializer = Assert.notNull(serializer, "serializer");
     open();
   }
 
@@ -95,15 +91,6 @@ public class SnapshotStore implements AutoCloseable {
     if (!snapshots.isEmpty()) {
       currentSnapshot = snapshots.lastEntry().getValue();
     }
-  }
-
-  /**
-   * Returns the snapshot store serializer.
-   *
-   * @return The snapshot store serializer.
-   */
-  public Kryo serializer() {
-    return serializer;
   }
 
   /**

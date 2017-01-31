@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.server.storage;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.util.CopycatSerializer;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Indexed log entry.
@@ -147,22 +147,23 @@ public class Indexed<T extends Entry<T>> {
   /**
    * Indexed entry serializer.
    */
-  public static class Serializer extends com.esotericsoftware.kryo.Serializer<Indexed<?>> {
+  public static class Serializer implements CopycatSerializer<Indexed> {
     @Override
-    public void write(Kryo kryo, Output output, Indexed<?> entry) {
+    @SuppressWarnings("unchecked")
+    public void writeObject(BufferOutput output, Indexed entry) {
       output.writeLong(entry.index);
       output.writeLong(entry.term);
       output.writeByte(entry.entry.type().id());
-      kryo.writeObject(output, entry.entry, entry.entry.type().serializer());
+      entry.type().serializer().writeObject(output, entry.entry);
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public Indexed<?> read(Kryo kryo, Input input, Class<Indexed<?>> type) {
+    public Indexed readObject(BufferInput input, Class<Indexed> type) {
       long index = input.readLong();
       long term = input.readLong();
       Entry.Type<?> entryType = Entry.Type.forId(input.readByte());
-      return new Indexed(index, term, kryo.readObject(input, entryType.type(), entryType.serializer()), (int) input.total());
+      return new Indexed(index, term, entryType.serializer().readObject(input, entryType.type()), (int) input.position());
     }
   }
 }

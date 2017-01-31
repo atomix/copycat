@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.protocol.net;
 
-import com.esotericsoftware.kryo.pool.KryoFactory;
-import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.protocol.RaftProtocolServer;
 import io.atomix.copycat.server.protocol.RaftProtocolServerConnection;
@@ -32,17 +30,15 @@ import java.util.function.Consumer;
  */
 public class RaftNetServer implements RaftProtocolServer {
   private final NetServer server;
-  private final KryoPool kryoPool;
 
-  public RaftNetServer(NetServer server, KryoFactory kryoFactory) {
+  public RaftNetServer(NetServer server) {
     this.server = server;
-    this.kryoPool = new KryoPool.Builder(kryoFactory).softReferences().build();
   }
 
   @Override
   public CompletableFuture<Void> listen(Address address, Consumer<RaftProtocolServerConnection> listener) {
     server.connectHandler(socket -> {
-      listener.accept(new RaftNetServerConnection(socket, kryoPool));
+      listener.accept(new RaftNetServerConnection(socket));
     });
 
     CompletableFuture<Void> future = new CompletableFuture<>();

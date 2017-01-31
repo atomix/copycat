@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.storage;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.system.Configuration;
@@ -57,7 +56,7 @@ public class MetaStoreTest {
     storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new MetaStore("test", storage, new Kryo());
+    return new MetaStore("test", storage);
   }
 
   /**

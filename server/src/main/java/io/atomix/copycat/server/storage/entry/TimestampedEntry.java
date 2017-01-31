@@ -44,6 +44,6 @@ public abstract class TimestampedEntry<T extends TimestampedEntry<T>> extends En
   /**
    * Timestamped entry serializer.
    */
-  public static abstract class Serializer<T extends TimestampedEntry> extends Entry.Serializer<T> {
+  public interface Serializer<T extends TimestampedEntry> extends Entry.Serializer<T> {
   }
 }

@@ -15,9 +15,8 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Represents a state machine query.
@@ -48,9 +47,9 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
   /**
    * Query entry serializer.
    */
-  public static class Serializer extends OperationEntry.Serializer<QueryEntry> {
+  public static class Serializer implements OperationEntry.Serializer<QueryEntry> {
     @Override
-    public void write(Kryo kryo, Output output, QueryEntry entry) {
+    public void writeObject(BufferOutput output, QueryEntry entry) {
       output.writeLong(entry.timestamp);
       output.writeLong(entry.session);
       output.writeLong(entry.sequence);
@@ -59,7 +58,7 @@ public class QueryEntry extends OperationEntry<QueryEntry> {
     }
 
     @Override
-    public QueryEntry read(Kryo kryo, Input input, Class<QueryEntry> type) {
+    public QueryEntry readObject(BufferInput input, Class<QueryEntry> type) {
       return new QueryEntry(input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()));
     }
   }

@@ -15,11 +15,11 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.PublishRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -71,18 +71,30 @@ public class NetPublishRequest extends PublishRequest implements NetRequest<NetP
    */
   public static class Serializer extends NetRequest.Serializer<NetPublishRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetPublishRequest request) {
+    public void writeObject(BufferOutput output, NetPublishRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.session);
       output.writeLong(request.eventIndex);
       output.writeLong(request.previousIndex);
-      kryo.writeObject(output, request.events);
+      output.writeInt(request.events.size());
+      for (byte[] event : request.events) {
+        output.writeInt(event.length).write(event);
+      }
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public NetPublishRequest read(Kryo kryo, Input input, Class<NetPublishRequest> type) {
-      return new NetPublishRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong(), (List<byte[]>) kryo.readObject(input, List.class));
+    public NetPublishRequest readObject(BufferInput input, Class<NetPublishRequest> type) {
+      final long id = input.readLong();
+      final long session = input.readLong();
+      final long eventIndex = input.readLong();
+      final long previousIndex = input.readLong();
+      final int size = input.readInt();
+      final List<byte[]> events = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        events.add(input.readBytes(input.readInt()));
+      }
+      return new NetPublishRequest(id, session, eventIndex, previousIndex, events);
     }
   }
 }

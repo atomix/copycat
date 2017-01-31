@@ -15,22 +15,22 @@
  */
 package io.atomix.copycat.server.storage.system;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.state.ServerMember;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.FileBuffer;
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.FileBuffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.util.Collection;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Manages persistence of server configurations.
@@ -46,12 +46,10 @@ import java.util.Collection;
 public class MetaStore implements AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(MetaStore.class);
   private final Storage storage;
-  private final Kryo serializer;
   private final Buffer buffer;
 
-  public MetaStore(String name, Storage storage, Kryo serializer) {
+  public MetaStore(String name, Storage storage) {
     this.storage = Assert.notNull(storage, "storage");
-    this.serializer = Assert.notNull(serializer, "serializer");
     if (storage.level() == StorageLevel.MEMORY) {
       buffer = HeapBuffer.allocate(12);
     } else {
@@ -59,15 +57,6 @@ public class MetaStore implements AutoCloseable {
       File file = new File(storage.directory(), String.format("%s.meta", name));
       buffer = FileBuffer.allocate(file, 12);
     }
-  }
-
-  /**
-   * Returns the metastore serializer.
-   *
-   * @return The metastore serializer.
-   */
-  public Kryo serializer() {
-    return serializer;
   }
 
   /**
@@ -127,15 +116,21 @@ public class MetaStore implements AutoCloseable {
       .writeLong(configuration.term())
       .writeLong(configuration.time());
 
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    Output output = new Output(outputStream);
-    serializer.writeClassAndObject(output, configuration.members());
-    output.flush();
-    byte[] bytes = outputStream.toByteArray();
+    buffer.writeInt(configuration.members().size());
+    for (Member member : configuration.members()) {
+      buffer.writeByte(member.type().ordinal());
+      buffer.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
+      if (member.clientAddress() != null) {
+        buffer.writeBoolean(true)
+          .writeString(member.clientAddress().host())
+          .writeInt(member.clientAddress().port());
+      } else {
+        buffer.writeBoolean(false);
+      }
+      buffer.writeLong(member.updated().toEpochMilli());
+    }
 
-    buffer.writeInt(bytes.length)
-      .write(bytes)
-      .flush();
+    buffer.flush();
     return this;
   }
 
@@ -151,9 +146,19 @@ public class MetaStore implements AutoCloseable {
       long term = buffer.readLong();
       long time = buffer.readLong();
 
-      byte[] bytes = new byte[buffer.readInt()];
-      buffer.read(bytes);
-      Collection<Member> members = (Collection<Member>) serializer.readClassAndObject(new Input(bytes));
+      final int size = buffer.readInt();
+      final List<Member> members = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        Member.Type memberType = Member.Type.values()[buffer.readByte()];
+        Address serverAddress = new Address(buffer.readString(), buffer.readInt());
+        Address clientAddress = null;
+        if (buffer.readBoolean()) {
+          clientAddress = new Address(buffer.readString(), buffer.readInt());
+        }
+        Instant updated = Instant.ofEpochMilli(buffer.readLong());
+        members.add(new ServerMember(memberType, serverAddress, clientAddress, updated));
+      }
+
       return new Configuration(index, term, time, members);
     }
     return null;

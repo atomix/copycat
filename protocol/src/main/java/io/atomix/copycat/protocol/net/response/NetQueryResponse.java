@@ -15,12 +15,11 @@
  */
 package io.atomix.copycat.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP query response.
@@ -71,7 +70,7 @@ public class NetQueryResponse extends QueryResponse implements NetResponse<NetQu
    */
   public static class Serializer extends NetResponse.Serializer<NetQueryResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetQueryResponse response) {
+    public void writeObject(BufferOutput output, NetQueryResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.ERROR) {
@@ -85,7 +84,7 @@ public class NetQueryResponse extends QueryResponse implements NetResponse<NetQu
     }
 
     @Override
-    public NetQueryResponse read(Kryo kryo, Input input, Class<NetQueryResponse> type) {
+    public NetQueryResponse readObject(BufferInput input, Class<NetQueryResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       NetResponse.Error error = null;

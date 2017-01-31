@@ -15,15 +15,16 @@
  */
 package io.atomix.copycat.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.RegisterResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * TCP register response.
@@ -74,14 +75,17 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
    */
   public static class Serializer extends NetResponse.Serializer<NetRegisterResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetRegisterResponse response) {
+    public void writeObject(BufferOutput output, NetRegisterResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.OK) {
         output.writeLong(response.session);
-        kryo.writeObject(output, response.leader);
-        kryo.writeClassAndObject(output, response.members);
         output.writeLong(response.timeout);
+        output.writeString(response.leader.host()).writeInt(response.leader.port());
+        output.writeInt(response.members.size());
+        for (Address address : response.members) {
+          output.writeString(address.host()).writeInt(address.port());
+        }
       } else {
         output.writeByte(response.error.type().id());
         output.writeString(response.error.message());
@@ -90,11 +94,19 @@ public class NetRegisterResponse extends RegisterResponse implements NetResponse
 
     @Override
     @SuppressWarnings("unchecked")
-    public NetRegisterResponse read(Kryo kryo, Input input, Class<NetRegisterResponse> type) {
+    public NetRegisterResponse readObject(BufferInput input, Class<NetRegisterResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {
-        return new NetRegisterResponse(id, status, null, input.readLong(), kryo.readObject(input, Address.class), (Collection) kryo.readClassAndObject(input), input.readLong());
+        final long session = input.readLong();
+        final long timeout = input.readLong();
+        final Address leader = new Address(input.readString(), input.readInt());
+        final int size = input.readInt();
+        final List<Address> members = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+          members.add(new Address(input.readString(), input.readInt()));
+        }
+        return new NetRegisterResponse(id, status, null, session, leader, members, timeout);
       } else {
         NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
         return new NetRegisterResponse(id, status, error, 0, null, null, 0);

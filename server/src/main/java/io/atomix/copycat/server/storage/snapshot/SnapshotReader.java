@@ -15,12 +15,10 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.BufferInput;
-import io.atomix.copycat.server.storage.buffer.Bytes;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.Bytes;
 
 /**
  * Reads bytes from a state machine {@link Snapshot}.
@@ -38,12 +36,15 @@ import io.atomix.copycat.util.Assert;
 public class SnapshotReader implements BufferInput<SnapshotReader> {
   private final Buffer buffer;
   private final Snapshot snapshot;
-  private final Kryo serializer;
 
-  SnapshotReader(Buffer buffer, Snapshot snapshot, Kryo serializer) {
+  SnapshotReader(Buffer buffer, Snapshot snapshot) {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
-    this.serializer = Assert.notNull(serializer, "serializer");
+  }
+
+  @Override
+  public long position() {
+    return buffer.position();
   }
 
   @Override
@@ -60,19 +61,6 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   public SnapshotReader skip(long bytes) {
     buffer.skip(bytes);
     return this;
-  }
-
-  /**
-   * Reads an object from the buffer.
-   *
-   * @param <T> The type of the object to read.
-   * @return The read object.
-   */
-  @SuppressWarnings("unchecked")
-  public <T> T readObject() {
-    byte[] bytes = new byte[(int) buffer.remaining()];
-    buffer.read(bytes);
-    return (T) serializer.readClassAndObject(new Input(bytes));
   }
 
   @Override
@@ -103,6 +91,16 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   public SnapshotReader read(Buffer buffer) {
     this.buffer.read(buffer);
     return this;
+  }
+
+  @Override
+  public byte[] readBytes() {
+    return buffer.readBytes();
+  }
+
+  @Override
+  public byte[] readBytes(int length) {
+    return buffer.readBytes(length);
   }
 
   @Override

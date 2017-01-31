@@ -15,11 +15,10 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.protocol.request.AcceptRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP accept request.
@@ -70,15 +69,15 @@ public class NetAcceptRequest extends AcceptRequest implements RaftNetRequest<Ne
    */
   public static class Serializer extends RaftNetRequest.Serializer<NetAcceptRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetAcceptRequest request) {
+    public void writeObject(BufferOutput output, NetAcceptRequest request) {
       output.writeLong(request.id);
       output.writeString(request.client);
-      kryo.writeClassAndObject(output, request.address);
+      output.writeString(request.address.host()).writeInt(request.address.port());
     }
 
     @Override
-    public NetAcceptRequest read(Kryo kryo, Input input, Class<NetAcceptRequest> type) {
-      return new NetAcceptRequest(input.readLong(), input.readString(), (Address) kryo.readClassAndObject(input));
+    public NetAcceptRequest readObject(BufferInput input, Class<NetAcceptRequest> type) {
+      return new NetAcceptRequest(input.readLong(), input.readString(), new Address(input.readString(), input.readInt()));
     }
   }
 }

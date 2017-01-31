@@ -15,15 +15,16 @@
  */
 package io.atomix.copycat.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ConnectResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * TCP connect response.
@@ -74,12 +75,15 @@ public class NetConnectResponse extends ConnectResponse implements NetResponse<N
    */
   public static class Serializer extends NetResponse.Serializer<NetConnectResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetConnectResponse response) {
+    public void writeObject(BufferOutput output, NetConnectResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.OK) {
-        kryo.writeObject(output, response.leader);
-        kryo.writeClassAndObject(output, response.members);
+        output.writeString(response.leader.host()).writeInt(response.leader.port());
+        output.writeInt(response.members.size());
+        for (Address address : response.members) {
+          output.writeString(address.host()).writeInt(address.port());
+        }
       } else {
         output.writeByte(response.error.type().id());
         output.writeString(response.error.message());
@@ -88,11 +92,17 @@ public class NetConnectResponse extends ConnectResponse implements NetResponse<N
 
     @Override
     @SuppressWarnings("unchecked")
-    public NetConnectResponse read(Kryo kryo, Input input, Class<NetConnectResponse> type) {
+    public NetConnectResponse readObject(BufferInput input, Class<NetConnectResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {
-        return new NetConnectResponse(id, status, null, kryo.readObject(input, Address.class), (Collection) kryo.readClassAndObject(input));
+        final Address leader = new Address(input.readString(), input.readInt());
+        final int size = input.readInt();
+        final List<Address> members = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+          members.add(new Address(input.readString(), input.readInt()));
+        }
+        return new NetConnectResponse(id, status, null, leader, members);
       } else {
         NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
         return new NetConnectResponse(id, status, error, null, null);

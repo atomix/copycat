@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.storage;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.server.storage.snapshot.SnapshotFile;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -262,7 +261,7 @@ public class Storage {
    * @return The metastore.
    */
   public MetaStore openMetaStore(String name) {
-    return new MetaStore(name, this, new Kryo());
+    return new MetaStore(name, this);
   }
 
   /**
@@ -288,7 +287,7 @@ public class Storage {
    * @return The snapshot store.
    */
   public SnapshotStore openSnapshotStore(String name) {
-    return new SnapshotStore(name, this, new Kryo());
+    return new SnapshotStore(name, this);
   }
 
   /**

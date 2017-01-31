@@ -15,10 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.KryoSerializable;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
@@ -39,7 +35,7 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public final class ServerMember implements Member, KryoSerializable, AutoCloseable {
+public final class ServerMember implements Member, AutoCloseable {
   private Member.Type type;
   private Status status = Status.AVAILABLE;
   private Instant updated;
@@ -255,31 +251,6 @@ public final class ServerMember implements Member, KryoSerializable, AutoCloseab
     if (configureTimeout != null) {
       configureTimeout.cancel();
       configureTimeout = null;
-    }
-  }
-
-  @Override
-  public void write(Kryo kryo, Output output) {
-    output.writeByte(type.ordinal());
-    output.writeByte(status.ordinal());
-    output.writeLong(updated.toEpochMilli());
-    kryo.writeObject(output, serverAddress);
-    if (clientAddress != null) {
-      output.writeBoolean(true);
-      kryo.writeObject(output, clientAddress);
-    } else {
-      output.writeBoolean(false);
-    }
-  }
-
-  @Override
-  public void read(Kryo kryo, Input input) {
-    type = Member.Type.values()[input.readByte()];
-    status = Status.values()[input.readByte()];
-    updated = Instant.ofEpochMilli(input.readLong());
-    serverAddress = kryo.readObject(input, Address.class);
-    if (input.readBoolean()) {
-      clientAddress = kryo.readObject(input, Address.class);
     }
   }
 

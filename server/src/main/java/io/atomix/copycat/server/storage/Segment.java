@@ -15,10 +15,10 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.FileBuffer;
-import io.atomix.copycat.server.storage.buffer.MappedBuffer;
-import io.atomix.copycat.server.storage.buffer.SlicedBuffer;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.FileBuffer;
+import io.atomix.copycat.util.buffer.MappedBuffer;
+import io.atomix.copycat.util.buffer.SlicedBuffer;
 
 /**
  * Log segment.

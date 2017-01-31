@@ -15,16 +15,20 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.net.response.NetResponse;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.response.LeaveResponse;
+import io.atomix.copycat.server.state.ServerMember;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * TCP leave response.
@@ -75,14 +79,26 @@ public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse<N
    */
   public static class Serializer extends RaftNetResponse.Serializer<NetLeaveResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetLeaveResponse response) {
+    public void writeObject(BufferOutput output, NetLeaveResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.OK) {
         output.writeLong(response.index);
         output.writeLong(response.term);
         output.writeLong(response.timestamp);
-        kryo.writeObject(output, response.members);
+        output.writeInt(response.members.size());
+        for (Member member : response.members) {
+          output.writeByte(member.type().ordinal());
+          output.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
+          if (member.clientAddress() != null) {
+            output.writeBoolean(true)
+              .writeString(member.clientAddress().host())
+              .writeInt(member.clientAddress().port());
+          } else {
+            output.writeBoolean(false);
+          }
+          output.writeLong(member.updated().toEpochMilli());
+        }
       } else {
         output.writeByte(response.error.type().id());
         output.writeString(response.error.message());
@@ -91,11 +107,26 @@ public class NetLeaveResponse extends LeaveResponse implements RaftNetResponse<N
 
     @Override
     @SuppressWarnings("unchecked")
-    public NetLeaveResponse read(Kryo kryo, Input input, Class<NetLeaveResponse> type) {
+    public NetLeaveResponse readObject(BufferInput input, Class<NetLeaveResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {
-        return new NetLeaveResponse(id, status, null, input.readLong(), input.readLong(), input.readLong(), (Collection) kryo.readClassAndObject(input));
+        final long index = input.readLong();
+        final long term = input.readLong();
+        final long timestamp = input.readLong();
+        final int size = input.readInt();
+        final List<Member> members = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+          Member.Type memberType = Member.Type.values()[input.readByte()];
+          Address serverAddress = new Address(input.readString(), input.readInt());
+          Address clientAddress = null;
+          if (input.readBoolean()) {
+            clientAddress = new Address(input.readString(), input.readInt());
+          }
+          Instant updated = Instant.ofEpochMilli(input.readLong());
+          members.add(new ServerMember(memberType, serverAddress, clientAddress, updated));
+        }
+        return new NetLeaveResponse(id, status, null, index, term, timestamp, members);
       } else {
         NetResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
         return new NetLeaveResponse(id, status, error, 0, 0, 0, null);

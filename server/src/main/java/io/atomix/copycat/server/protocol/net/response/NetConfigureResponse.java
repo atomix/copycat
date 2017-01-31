@@ -15,13 +15,12 @@
  */
 package io.atomix.copycat.server.protocol.net.response;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.net.response.NetResponse;
 import io.atomix.copycat.protocol.response.AbstractResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.protocol.response.ConfigureResponse;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP configure response.
@@ -72,7 +71,7 @@ public class NetConfigureResponse extends ConfigureResponse implements RaftNetRe
    */
   public static class Serializer extends RaftNetResponse.Serializer<NetConfigureResponse> {
     @Override
-    public void write(Kryo kryo, Output output, NetConfigureResponse response) {
+    public void writeObject(BufferOutput output, NetConfigureResponse response) {
       output.writeLong(response.id);
       output.writeByte(response.status.id());
       if (response.status == Status.ERROR) {
@@ -82,7 +81,7 @@ public class NetConfigureResponse extends ConfigureResponse implements RaftNetRe
     }
 
     @Override
-    public NetConfigureResponse read(Kryo kryo, Input input, Class<NetConfigureResponse> type) {
+    public NetConfigureResponse readObject(BufferInput input, Class<NetConfigureResponse> type) {
       final long id = input.readLong();
       final Status status = Status.forId(input.readByte());
       if (status == Status.OK) {

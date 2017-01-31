@@ -15,14 +15,10 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Output;
-import io.atomix.copycat.server.storage.buffer.Buffer;
-import io.atomix.copycat.server.storage.buffer.BufferOutput;
-import io.atomix.copycat.server.storage.buffer.Bytes;
 import io.atomix.copycat.util.Assert;
-
-import java.io.ByteArrayOutputStream;
+import io.atomix.copycat.util.buffer.Buffer;
+import io.atomix.copycat.util.buffer.BufferOutput;
+import io.atomix.copycat.util.buffer.Bytes;
 
 /**
  * Writes bytes to a state machine {@link Snapshot}.
@@ -40,26 +36,10 @@ import java.io.ByteArrayOutputStream;
 public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
   final Buffer buffer;
   private final Snapshot snapshot;
-  private final Kryo serializer;
 
-  SnapshotWriter(Buffer buffer, Snapshot snapshot, Kryo serializer) {
+  SnapshotWriter(Buffer buffer, Snapshot snapshot) {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
-    this.serializer = Assert.notNull(serializer, "serializer");
-  }
-
-  /**
-   * Writes an object to the snapshot.
-   *
-   * @param object The object to write.
-   * @return The snapshot writer.
-   */
-  public SnapshotWriter writeObject(Object object) {
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    Output output = new Output(outputStream);
-    serializer.writeClassAndObject(output, object);
-    output.flush();
-    return write(outputStream.toByteArray());
   }
 
   @Override
@@ -90,6 +70,11 @@ public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
   public SnapshotWriter write(Buffer buffer) {
     this.buffer.write(buffer);
     return this;
+  }
+
+  @Override
+  public SnapshotWriter writeBytes(byte[] bytes) {
+    return write(bytes);
   }
 
   @Override

@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.server.protocol.request.InstallRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP install request.
@@ -69,7 +68,7 @@ public class NetInstallRequest extends InstallRequest implements RaftNetRequest<
    */
   public static class Serializer extends RaftNetRequest.Serializer<NetInstallRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetInstallRequest request) {
+    public void writeObject(BufferOutput output, NetInstallRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.term);
       output.writeInt(request.leader);
@@ -81,7 +80,7 @@ public class NetInstallRequest extends InstallRequest implements RaftNetRequest<
     }
 
     @Override
-    public NetInstallRequest read(Kryo kryo, Input input, Class<NetInstallRequest> type) {
+    public NetInstallRequest readObject(BufferInput input, Class<NetInstallRequest> type) {
       return new NetInstallRequest(input.readLong(), input.readLong(), input.readInt(), input.readLong(), input.readInt(), input.readBytes(input.readInt()), input.readBoolean());
     }
   }

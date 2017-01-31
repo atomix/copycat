@@ -15,9 +15,8 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Stores a client session close.
@@ -61,16 +60,16 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
   /**
    * Unregister entry serializer.
    */
-  public static class Serializer extends SessionEntry.Serializer<UnregisterEntry> {
+  public static class Serializer implements SessionEntry.Serializer<UnregisterEntry> {
     @Override
-    public void write(Kryo kryo, Output output, UnregisterEntry entry) {
+    public void writeObject(BufferOutput output, UnregisterEntry entry) {
       output.writeLong(entry.timestamp);
       output.writeLong(entry.session);
       output.writeBoolean(entry.expired);
     }
 
     @Override
-    public UnregisterEntry read(Kryo kryo, Input input, Class<UnregisterEntry> type) {
+    public UnregisterEntry readObject(BufferInput input, Class<UnregisterEntry> type) {
       return new UnregisterEntry(input.readLong(), input.readLong(), input.readBoolean());
     }
   }

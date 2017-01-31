@@ -29,7 +29,7 @@ import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.buffer.HeapBuffer;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.util.concurrent.Listener;

@@ -15,7 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.copycat.server.storage.buffer.HeapBytes;
+import io.atomix.copycat.util.buffer.HeapBytes;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.util.Assert;
 

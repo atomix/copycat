@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.UnregisterRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP unregister request.
@@ -69,13 +68,13 @@ public class NetUnregisterRequest extends UnregisterRequest implements NetReques
    */
   public static class Serializer extends NetRequest.Serializer<NetUnregisterRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetUnregisterRequest request) {
+    public void writeObject(BufferOutput output, NetUnregisterRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.session);
     }
 
     @Override
-    public NetUnregisterRequest read(Kryo kryo, Input input, Class<NetUnregisterRequest> type) {
+    public NetUnregisterRequest readObject(BufferInput input, Class<NetUnregisterRequest> type) {
       return new NetUnregisterRequest(input.readLong(), input.readLong());
     }
   }

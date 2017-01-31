@@ -59,6 +59,6 @@ public abstract class OperationEntry<T extends OperationEntry<T>> extends Sessio
   /**
    * Operation entry serializer.
    */
-  public static abstract class Serializer<T extends OperationEntry> extends SessionEntry.Serializer<T> {
+  public interface Serializer<T extends OperationEntry> extends SessionEntry.Serializer<T> {
   }
 }

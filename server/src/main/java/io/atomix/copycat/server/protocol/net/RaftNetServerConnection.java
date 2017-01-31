@@ -15,9 +15,6 @@
  */
 package io.atomix.copycat.server.protocol.net;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.ProtocolListener;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.net.NetServerConnection;
@@ -28,6 +25,7 @@ import io.atomix.copycat.server.protocol.net.request.RaftNetRequest;
 import io.atomix.copycat.server.protocol.net.response.*;
 import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.*;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.vertx.core.net.NetSocket;
 
 /**
@@ -46,25 +44,21 @@ public class RaftNetServerConnection extends NetServerConnection implements Raft
   private ProtocolListener<VoteRequest, VoteResponse.Builder, VoteResponse> voteListener;
   private ProtocolListener<AppendRequest, AppendResponse.Builder, AppendResponse> appendListener;
 
-  public RaftNetServerConnection(NetSocket socket, KryoPool kryoPool) {
-    super(socket, kryoPool);
+  public RaftNetServerConnection(NetSocket socket) {
+    super(socket);
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   protected void handleMessage(int id, byte[] bytes) {
-    final Kryo kryo = kryoPool.borrow();
-    try {
-      if (RaftNetRequest.Type.isProtocolRequest(id)) {
-        NetRequest.Type<?> type = RaftNetRequest.Type.forId(id);
-        NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer());
-        onRequest(request);
-      } else if (RaftNetResponse.Type.isProtocolResponse(id)) {
-        NetResponse.Type<?> type = RaftNetResponse.Type.forId(id);
-        NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer());
-        onResponse(response);
-      }
-    } finally {
-      kryoPool.release(kryo);
+    if (RaftNetRequest.Type.isProtocolRequest(id)) {
+      NetRequest.Type<?> type = RaftNetRequest.Type.forId(id);
+      NetRequest request = type.serializer().readObject(HeapBuffer.wrap(bytes), type.type());
+      onRequest(request);
+    } else if (RaftNetResponse.Type.isProtocolResponse(id)) {
+      NetResponse.Type<?> type = RaftNetResponse.Type.forId(id);
+      NetResponse response = type.serializer().readObject(HeapBuffer.wrap(bytes), type.type());
+      onResponse(response);
     }
   }
 

@@ -15,21 +15,17 @@
  */
 package io.atomix.copycat.protocol.net;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.ProtocolConnection;
 import io.atomix.copycat.protocol.net.request.NetRequest;
 import io.atomix.copycat.protocol.net.response.NetResponse;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.concurrent.Listener;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
 import io.vertx.core.parsetools.RecordParser;
 import org.slf4j.Logger;
 
-import java.io.ByteArrayOutputStream;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,16 +38,14 @@ import java.util.function.Consumer;
  */
 public abstract class NetConnection implements ProtocolConnection {
   private final NetSocket socket;
-  protected final KryoPool kryoPool;
   private final RecordParser parser = RecordParser.newFixed(4, null);
   private int size = -1;
   private Consumer<Throwable> exceptionListener;
   private Consumer<ProtocolConnection> closeListener;
   private final Map<Long, CompletableFuture> futures = new ConcurrentHashMap<>();
 
-  protected NetConnection(NetSocket socket, KryoPool kryoPool) {
+  protected NetConnection(NetSocket socket) {
     this.socket = socket;
-    this.kryoPool = kryoPool;
     parser.setOutput(this::handleBuffer);
     socket.handler(parser);
     socket.exceptionHandler(this::handleException);
@@ -82,20 +76,16 @@ public abstract class NetConnection implements ProtocolConnection {
   /**
    * Handles a message.
    */
+  @SuppressWarnings("unchecked")
   protected void handleMessage(int id, byte[] bytes) {
-    final Kryo kryo = kryoPool.borrow();
-    try {
-      if (NetRequest.Type.isProtocolRequest(id)) {
-        NetRequest.Type<?> type = NetRequest.Type.forId(id);
-        NetRequest request = kryo.readObject(new Input(bytes), type.type(), type.serializer());
-        onRequest(request);
-      } else if (NetResponse.Type.isProtocolResponse(id)) {
-        NetResponse.Type<?> type = NetResponse.Type.forId(id);
-        NetResponse response = kryo.readObject(new Input(bytes), type.type(), type.serializer());
-        onResponse(response);
-      }
-    } finally {
-      kryoPool.release(kryo);
+    if (NetRequest.Type.isProtocolRequest(id)) {
+      NetRequest.Type<?> type = NetRequest.Type.forId(id);
+      NetRequest request = type.serializer().readObject(HeapBuffer.wrap(bytes), type.type());
+      onRequest(request);
+    } else if (NetResponse.Type.isProtocolResponse(id)) {
+      NetResponse.Type<?> type = NetResponse.Type.forId(id);
+      NetResponse response = type.serializer().readObject(HeapBuffer.wrap(bytes), type.type());
+      onResponse(response);
     }
   }
 
@@ -118,48 +108,36 @@ public abstract class NetConnection implements ProtocolConnection {
   /**
    * Sends a web socket request.
    */
+  @SuppressWarnings("unchecked")
   protected <T extends NetRequest, U extends ProtocolResponse> CompletableFuture<U> sendRequest(T request) {
-    final Kryo kryo = kryoPool.borrow();
-    try {
-      CompletableFuture<U> future = new CompletableFuture<>();
-      futures.put(request.id(), future);
-      logger().debug("Sending {}", request);
-      ByteArrayOutputStream os = new ByteArrayOutputStream();
-      Output output = new Output(os);
-      kryo.writeObject(output, request, request.type().serializer());
-      output.flush();
-      byte[] bytes = os.toByteArray();
-      Buffer buffer = Buffer.buffer()
-        .appendInt(1 + bytes.length)
-        .appendByte((byte) request.type().id())
-        .appendBytes(bytes);
-      socket.write(buffer);
-      return future;
-    } finally {
-      kryoPool.release(kryo);
-    }
+    CompletableFuture<U> future = new CompletableFuture<>();
+    futures.put(request.id(), future);
+    logger().debug("Sending {}", request);
+    HeapBuffer memory = HeapBuffer.allocate();
+    request.type().serializer().writeObject(memory, request);
+    memory.flip();
+    Buffer buffer = Buffer.buffer()
+      .appendInt(1 + (int) memory.limit())
+      .appendByte((byte) request.type().id())
+      .appendBytes(memory.readBytes());
+    socket.write(buffer);
+    return future;
   }
 
   /**
    * Sends a web socket response.
    */
+  @SuppressWarnings("unchecked")
   protected <T extends NetResponse> void sendResponse(T response) {
-    final Kryo kryo = kryoPool.borrow();
-    try {
-      logger().debug("Sending {}", response);
-      ByteArrayOutputStream os = new ByteArrayOutputStream();
-      Output output = new Output(os);
-      kryo.writeObject(output, response, response.type().serializer());
-      output.flush();
-      byte[] bytes = os.toByteArray();
-      Buffer buffer = Buffer.buffer()
-        .appendInt(1 + bytes.length)
-        .appendByte((byte) response.type().id())
-        .appendBytes(bytes);
-      socket.write(buffer);
-    } finally {
-      kryoPool.release(kryo);
-    }
+    logger().debug("Sending {}", response);
+    HeapBuffer memory = HeapBuffer.allocate();
+    response.type().serializer().writeObject(memory, response);
+    memory.flip();
+    Buffer buffer = Buffer.buffer()
+      .appendInt(1 + (int) memory.limit())
+      .appendByte((byte) response.type().id())
+      .appendBytes(memory.readBytes());
+    socket.write(buffer);
   }
 
   /**

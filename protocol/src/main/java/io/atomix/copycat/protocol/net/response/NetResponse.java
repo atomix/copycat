@@ -16,6 +16,7 @@
 package io.atomix.copycat.protocol.net.response;
 
 import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.util.CopycatSerializer;
 
 /**
  * Base interface for responses.
@@ -64,7 +65,7 @@ public interface NetResponse<T extends NetResponse<T>> extends ProtocolResponse 
      *
      * @return The response class.
      */
-    public Class<T> type() {
+    public Class type() {
       return type;
     }
 
@@ -159,7 +160,7 @@ public interface NetResponse<T extends NetResponse<T>> extends ProtocolResponse 
   /**
    * Response serializer.
    */
-  abstract class Serializer<T extends NetResponse> extends com.esotericsoftware.kryo.Serializer<T> {
+  abstract class Serializer<T extends NetResponse> implements CopycatSerializer<T> {
   }
 
 }

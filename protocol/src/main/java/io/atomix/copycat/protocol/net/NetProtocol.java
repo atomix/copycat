@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.protocol.net;
 
-import com.esotericsoftware.kryo.Kryo;
 import io.atomix.copycat.protocol.Protocol;
 import io.atomix.copycat.protocol.ProtocolClient;
 import io.atomix.copycat.protocol.ProtocolServer;
@@ -41,12 +40,12 @@ public class NetProtocol implements Protocol {
 
   @Override
   public ProtocolClient createClient() {
-    return new NetClient(vertx.createNetClient(), Kryo::new);
+    return new NetClient(vertx.createNetClient());
   }
 
   @Override
   public ProtocolServer createServer() {
-    return new NetServer(vertx.createNetServer(), Kryo::new);
+    return new NetServer(vertx.createNetServer());
   }
 
   @Override

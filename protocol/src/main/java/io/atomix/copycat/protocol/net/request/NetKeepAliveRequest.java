@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.KeepAliveRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP keep alive request.
@@ -69,7 +68,7 @@ public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest<
    */
   public static class Serializer extends NetRequest.Serializer<NetKeepAliveRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetKeepAliveRequest request) {
+    public void writeObject(BufferOutput output, NetKeepAliveRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.session);
       output.writeLong(request.commandSequence);
@@ -77,7 +76,7 @@ public class NetKeepAliveRequest extends KeepAliveRequest implements NetRequest<
     }
 
     @Override
-    public NetKeepAliveRequest read(Kryo kryo, Input input, Class<NetKeepAliveRequest> type) {
+    public NetKeepAliveRequest readObject(BufferInput input, Class<NetKeepAliveRequest> type) {
       return new NetKeepAliveRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong());
     }
   }

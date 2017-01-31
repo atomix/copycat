@@ -40,6 +40,6 @@ public abstract class SessionEntry<T extends SessionEntry<T>> extends Timestampe
   /**
    * Session entry serializer.
    */
-  public static abstract class Serializer<T extends SessionEntry> extends TimestampedEntry.Serializer<T> {
+  public interface Serializer<T extends SessionEntry> extends TimestampedEntry.Serializer<T> {
   }
 }

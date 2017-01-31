@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Stores a client register request.
@@ -72,16 +71,16 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   /**
    * Register entry serializer.
    */
-  public static class Serializer extends TimestampedEntry.Serializer<RegisterEntry> {
+  public static class Serializer implements TimestampedEntry.Serializer<RegisterEntry> {
     @Override
-    public void write(Kryo kryo, Output output, RegisterEntry entry) {
+    public void writeObject(BufferOutput output, RegisterEntry entry) {
       output.writeLong(entry.timestamp);
       output.writeString(entry.client);
       output.writeLong(entry.timeout);
     }
 
     @Override
-    public RegisterEntry read(Kryo kryo, Input input, Class<RegisterEntry> type) {
+    public RegisterEntry readObject(BufferInput input, Class<RegisterEntry> type) {
       return new RegisterEntry(input.readLong(), input.readString(), input.readLong());
     }
   }

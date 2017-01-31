@@ -15,10 +15,9 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.request.RegisterRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP register request.
@@ -69,14 +68,14 @@ public class NetRegisterRequest extends RegisterRequest implements NetRequest<Ne
    */
   public static class Serializer extends NetRequest.Serializer<NetRegisterRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetRegisterRequest request) {
+    public void writeObject(BufferOutput output, NetRegisterRequest request) {
       output.writeLong(request.id);
       output.writeString(request.client);
       output.writeLong(request.timeout);
     }
 
     @Override
-    public NetRegisterRequest read(Kryo kryo, Input input, Class<NetRegisterRequest> type) {
+    public NetRegisterRequest readObject(BufferInput input, Class<NetRegisterRequest> type) {
       return new NetRegisterRequest(input.readLong(), input.readString(), input.readLong());
     }
   }

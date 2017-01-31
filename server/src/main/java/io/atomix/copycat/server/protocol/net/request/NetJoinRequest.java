@@ -15,11 +15,14 @@
  */
 package io.atomix.copycat.server.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
+import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.request.JoinRequest;
+import io.atomix.copycat.server.state.ServerMember;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
+
+import java.time.Instant;
 
 /**
  * TCP join request.
@@ -70,14 +73,32 @@ public class NetJoinRequest extends JoinRequest implements RaftNetRequest<NetJoi
    */
   public static class Serializer extends RaftNetRequest.Serializer<NetJoinRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetJoinRequest request) {
+    public void writeObject(BufferOutput output, NetJoinRequest request) {
       output.writeLong(request.id);
-      kryo.writeClassAndObject(output, request.member);
+      output.writeByte(request.member.type().ordinal());
+      output.writeString(request.member.serverAddress().host()).writeInt(request.member.serverAddress().port());
+      if (request.member.clientAddress() != null) {
+        output.writeBoolean(true)
+          .writeString(request.member.clientAddress().host())
+          .writeInt(request.member.clientAddress().port());
+      } else {
+        output.writeBoolean(false);
+      }
+      output.writeLong(request.member.updated().toEpochMilli());
     }
 
     @Override
-    public NetJoinRequest read(Kryo kryo, Input input, Class<NetJoinRequest> type) {
-      return new NetJoinRequest(input.readLong(), (Member) kryo.readClassAndObject(input));
+    public NetJoinRequest readObject(BufferInput input, Class<NetJoinRequest> type) {
+      final long id = input.readLong();
+      final Member.Type memberType = Member.Type.values()[input.readByte()];
+      final Address serverAddress = new Address(input.readString(), input.readInt());
+      Address clientAddress = null;
+      if (input.readBoolean()) {
+        clientAddress = new Address(input.readString(), input.readInt());
+      }
+      final Instant updated = Instant.ofEpochMilli(input.readLong());
+      final Member member = new ServerMember(memberType, serverAddress, clientAddress, updated);
+      return new NetJoinRequest(id, member);
     }
   }
 }

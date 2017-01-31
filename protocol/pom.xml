@@ -47,10 +47,5 @@
       <artifactId>bson4jackson</artifactId>
       <version>${jackson.bson.version}</version>
     </dependency>
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo</artifactId>
-      <version>${kryo.version}</version>
-    </dependency>
   </dependencies>
 </project>

@@ -15,8 +15,6 @@
  */
 package io.atomix.copycat.server.protocol.net;
 
-import com.esotericsoftware.kryo.pool.KryoFactory;
-import com.esotericsoftware.kryo.pool.KryoPool;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.server.protocol.RaftProtocolClient;
 import io.atomix.copycat.server.protocol.RaftProtocolClientConnection;
@@ -31,11 +29,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public class RaftNetClient implements RaftProtocolClient {
   private final NetClient client;
-  private final KryoPool kryoPool;
 
-  public RaftNetClient(NetClient client, KryoFactory kryoFactory) {
+  public RaftNetClient(NetClient client) {
     this.client = client;
-    this.kryoPool = new KryoPool.Builder(kryoFactory).softReferences().build();
   }
 
   @Override
@@ -43,7 +39,7 @@ public class RaftNetClient implements RaftProtocolClient {
     CompletableFuture<RaftProtocolClientConnection> future = new CompletableFuture<>();
     client.connect(address.port(), address.host(), result -> {
       if (result.succeeded()) {
-        future.complete(new RaftNetClientConnection(result.result(), kryoPool));
+        future.complete(new RaftNetClientConnection(result.result()));
       } else {
         future.completeExceptionally(result.cause());
       }

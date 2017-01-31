@@ -15,11 +15,10 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.util.Assert;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * Stores a connection between a client and server.
@@ -71,17 +70,18 @@ public class ConnectEntry extends TimestampedEntry<ConnectEntry> {
   /**
    * Connect entry serializer.
    */
-  public static class Serializer extends TimestampedEntry.Serializer<ConnectEntry> {
+  public static class Serializer implements TimestampedEntry.Serializer<ConnectEntry> {
     @Override
-    public void write(Kryo kryo, Output output, ConnectEntry entry) {
+    public void writeObject(BufferOutput output, ConnectEntry entry) {
       output.writeLong(entry.timestamp);
       output.writeString(entry.client);
-      kryo.writeObject(output, entry.address);
+      output.writeString(entry.address.host());
+      output.writeInt(entry.address.port());
     }
 
     @Override
-    public ConnectEntry read(Kryo kryo, Input input, Class<ConnectEntry> type) {
-      return new ConnectEntry(input.readLong(), input.readString(), kryo.readObject(input, Address.class));
+    public ConnectEntry readObject(BufferInput input, Class<ConnectEntry> type) {
+      return new ConnectEntry(input.readLong(), input.readString(), new Address(input.readString(), input.readInt()));
     }
   }
 }

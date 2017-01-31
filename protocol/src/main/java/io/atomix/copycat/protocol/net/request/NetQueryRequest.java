@@ -15,11 +15,10 @@
  */
 package io.atomix.copycat.protocol.net.request;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.request.QueryRequest;
+import io.atomix.copycat.util.buffer.BufferInput;
+import io.atomix.copycat.util.buffer.BufferOutput;
 
 /**
  * TCP query request.
@@ -70,7 +69,7 @@ public class NetQueryRequest extends QueryRequest implements NetRequest<NetQuery
    */
   public static class Serializer extends NetRequest.Serializer<NetQueryRequest> {
     @Override
-    public void write(Kryo kryo, Output output, NetQueryRequest request) {
+    public void writeObject(BufferOutput output, NetQueryRequest request) {
       output.writeLong(request.id);
       output.writeLong(request.session);
       output.writeLong(request.sequence);
@@ -81,7 +80,7 @@ public class NetQueryRequest extends QueryRequest implements NetRequest<NetQuery
     }
 
     @Override
-    public NetQueryRequest read(Kryo kryo, Input input, Class<NetQueryRequest> type) {
+    public NetQueryRequest readObject(BufferInput input, Class<NetQueryRequest> type) {
       return new NetQueryRequest(input.readLong(), input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()), ConsistencyLevel.forId(input.readByte()));
     }
   }

@@ -16,6 +16,7 @@
 package io.atomix.copycat.protocol.net.request;
 
 import io.atomix.copycat.protocol.request.ProtocolRequest;
+import io.atomix.copycat.util.CopycatSerializer;
 
 /**
  * Base interface for requests.
@@ -60,7 +61,7 @@ public interface NetRequest<T extends NetRequest<T>> extends ProtocolRequest {
      *
      * @return The request class.
      */
-    public Class<T> type() {
+    public Class type() {
       return type;
     }
 
@@ -147,7 +148,7 @@ public interface NetRequest<T extends NetRequest<T>> extends ProtocolRequest {
   /**
    * Request serializer.
    */
-  abstract class Serializer<T extends NetRequest> extends com.esotericsoftware.kryo.Serializer<T> {
+  abstract class Serializer<T extends NetRequest> implements CopycatSerializer<T> {
   }
 
 }
