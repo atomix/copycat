@@ -79,7 +79,7 @@ public enum ServerSelectionStrategies implements ServerSelectionStrategy {
     @Override
     public List<Address> selectConnections(Address leader, List<Address> servers) {
       Collections.shuffle(servers);
-      if (leader != null) {
+      if (leader != null && servers.size() > 1) {
         List<Address> results = new ArrayList<>(servers.size());
         for (Address address : servers) {
           if (!address.equals(leader)) {
