@@ -30,6 +30,7 @@ import io.atomix.catalyst.util.Assert;
  */
 public abstract class SessionRequest extends AbstractRequest {
   protected long session;
+  protected boolean forwarded;
 
   /**
    * Returns the session ID.
@@ -42,12 +43,24 @@ public abstract class SessionRequest extends AbstractRequest {
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
+    super.readObject(buffer, serializer);
     session = buffer.readLong();
+    forwarded = buffer.readBoolean();
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
+    super.writeObject(buffer, serializer);
     buffer.writeLong(session);
+    buffer.writeBoolean(forwarded);
+  }
+
+  public void setForwarded() {
+    forwarded = true;
+  }
+
+  public boolean wasForwarded() {
+    return forwarded;
   }
 
   /**
@@ -68,6 +81,11 @@ public abstract class SessionRequest extends AbstractRequest {
     @SuppressWarnings("unchecked")
     public T withSession(long session) {
       request.session = Assert.argNot(session, session < 1, "session cannot be less than 1");
+      return (T) this;
+    }
+
+    public T forwarded() {
+      request.forwarded = true;
       return (T) this;
     }
 

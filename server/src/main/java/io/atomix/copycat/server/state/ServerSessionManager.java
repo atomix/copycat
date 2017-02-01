@@ -25,6 +25,7 @@ import io.atomix.copycat.server.session.Sessions;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -162,4 +163,15 @@ class ServerSessionManager implements Sessions {
     return (Iterator) sessions.values().iterator();
   }
 
+  public boolean hasConnection(long sessionId) {
+    ServerSessionContext serverSessionContext = sessions.get(sessionId);
+    Optional<Map.Entry<String, ServerSessionContext>> entry = clients.entrySet().stream().filter(k -> k.getValue().equals(serverSessionContext)).findFirst();
+    if (entry.isPresent()) {
+      String client = entry.get().getKey();
+      return connections.containsKey(client);
+    } else {
+      // We don't know about this session, might be a newly registered. Just let it pass for now.
+      return true;
+    }
+  }
 }
