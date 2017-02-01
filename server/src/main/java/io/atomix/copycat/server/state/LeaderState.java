@@ -809,8 +809,6 @@ final class LeaderState extends ActiveState {
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
-    context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
-
     CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();

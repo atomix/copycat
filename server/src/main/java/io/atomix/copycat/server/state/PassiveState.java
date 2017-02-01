@@ -23,7 +23,6 @@ import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.*;
-import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -201,12 +200,6 @@ class PassiveState extends ReserveState {
       if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-      }
-
-      // If the entry is a connect entry then immediately configure the connection.
-      if (entry instanceof ConnectEntry) {
-        ConnectEntry connectEntry = (ConnectEntry) entry;
-        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
       }
     }
 
