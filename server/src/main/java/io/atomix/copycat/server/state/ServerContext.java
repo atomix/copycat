@@ -517,8 +517,7 @@ public class ServerContext implements AutoCloseable {
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
+    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request, connection));
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
     connection.handler(CommandRequest.class, request -> state.command(request));
     connection.handler(QueryRequest.class, request -> state.query(request));
@@ -536,9 +535,7 @@ public class ServerContext implements AutoCloseable {
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
     connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(AcceptRequest.class, request -> state.accept(request));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
+    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request, connection));
     connection.handler(UnregisterRequest.class, request -> state.unregister(request));
     connection.handler(PublishRequest.class, request -> state.publish(request));
     connection.handler(ConfigureRequest.class, request -> state.configure(request));

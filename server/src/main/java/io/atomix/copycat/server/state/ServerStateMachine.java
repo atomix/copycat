@@ -15,10 +15,10 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.ComposableFuture;
 import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.InternalException;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.server.Snapshottable;
@@ -329,8 +329,6 @@ final class ServerStateMachine implements AutoCloseable {
       return (CompletableFuture<T>) apply((UnregisterEntry) entry);
     } else if (entry instanceof InitializeEntry) {
       return (CompletableFuture<T>) apply((InitializeEntry) entry);
-    } else if (entry instanceof ConnectEntry) {
-      return (CompletableFuture<T>) apply((ConnectEntry) entry);
     } else if (entry instanceof ConfigurationEntry) {
       return (CompletableFuture<T>) apply((ConfigurationEntry) entry);
     }
@@ -348,37 +346,6 @@ final class ServerStateMachine implements AutoCloseable {
     // Clean the configuration entry from the log. The entry will be retained until it has been stored
     // on all servers.
     log.release(entry.getIndex());
-    return CompletableFuture.completedFuture(null);
-  }
-
-  /**
-   * Applies connect entry to the state machine.
-   * <p>
-   * Connect entries are applied to internal server state when written to the log. Thus, no significant logic needs
-   * to take place in the handling of connect entries. We simply release the previous connect entry for the session
-   * from the log. This ensures that the most recent connection is always retained in the log and replicated. Note
-   * that connection indexes are not stored when applied to the internal state since a ConnectEntry may be applied
-   * but never committed. Storing indexes in the internal state machine ensures that the stored index is committed
-   * and will therefore be retained in the log.
-   */
-  private CompletableFuture<Void> apply(ConnectEntry entry) {
-    // Connections are stored in the state machine when they're *written* to the log, so we need only
-    // release them once they're committed.
-    ServerSessionContext session = executor().context().sessions().getSession(entry.getClient());
-    if (session != null) {
-      // Update the session connect index.
-      session.setConnectIndex(entry.getIndex());
-
-      // Set the session as trusted. This will prevent the leader from explicitly unregistering the
-      // session if it hasn't done so already.
-      session.trust();
-
-      // Update the session's timestamp with the current state machine time.
-      session.setTimestamp(entry.getTimestamp());
-
-      // Connections are also treated like keep-alive operations if a session exists for the client.
-      session.setKeepAliveIndex(entry.getIndex());
-    }
     return CompletableFuture.completedFuture(null);
   }
 

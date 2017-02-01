@@ -19,8 +19,6 @@ import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.ConnectRequest;
-import io.atomix.copycat.protocol.ConnectResponse;
 import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import org.slf4j.Logger;
@@ -246,35 +244,7 @@ public class ClientConnection implements Connection {
       connection.handler((Class) entry.getKey(), entry.getValue());
     }
 
-    // When we first connect to a new server, first send a ConnectRequest to the server to establish
-    // the connection with the server-side state machine.
-    ConnectRequest request = ConnectRequest.builder()
-      .withClientId(id)
-      .build();
-
-    LOGGER.debug("Sending {}", request);
-    connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
-  }
-
-  /**
-   * Handles a connect response.
-   */
-  private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<Connection> future) {
-    if (open) {
-      if (error == null) {
-        LOGGER.debug("Received {}", response);
-        // If the connection was successfully created, immediately send a keep-alive request
-        // to the server to ensure we maintain our session and get an updated list of server addresses.
-        if (response.status() == Response.Status.OK) {
-          selector.reset(response.leader(), response.members());
-          future.complete(connection);
-        } else {
-          connect(future);
-        }
-      } else {
-        connect(future);
-      }
-    }
+    future.complete(connection);
   }
 
   @Override

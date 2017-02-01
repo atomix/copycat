@@ -17,7 +17,6 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.PublishRequest;
@@ -48,7 +47,6 @@ class ServerSessionContext implements ServerSession {
   private volatile State state = State.OPEN;
   private final long timeout;
   private Connection connection;
-  private Address address;
   private volatile long references;
   private long connectIndex;
   private long keepAliveIndex;
@@ -471,21 +469,6 @@ class ServerSessionContext implements ServerSession {
    */
   Connection getConnection() {
     return connection;
-  }
-
-  /**
-   * Sets the session address.
-   */
-  ServerSessionContext setAddress(Address address) {
-    this.address = address;
-    return this;
-  }
-
-  /**
-   * Returns the session address.
-   */
-  Address getAddress() {
-    return address;
   }
 
   /**

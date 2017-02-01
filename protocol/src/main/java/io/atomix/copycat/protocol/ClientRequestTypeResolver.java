@@ -30,7 +30,6 @@ public final class ClientRequestTypeResolver implements SerializableTypeResolver
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
     put(CommandRequest.class, -3);
-    put(ConnectRequest.class, -4);
     put(KeepAliveRequest.class, -5);
     put(PublishRequest.class, -6);
     put(QueryRequest.class, -7);

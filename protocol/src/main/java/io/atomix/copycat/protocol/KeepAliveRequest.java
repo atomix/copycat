@@ -59,6 +59,7 @@ public class KeepAliveRequest extends SessionRequest {
 
   private long commandSequence;
   private long eventIndex;
+  private boolean forwarded;
 
   /**
    * Returns the command sequence number.
@@ -78,11 +79,21 @@ public class KeepAliveRequest extends SessionRequest {
     return eventIndex;
   }
 
+  /**
+   * Returns a boolean indicating whether the request was forwarded.
+   *
+   * @return Indicates whether the request was forwarded from another server.
+   */
+  public boolean forwarded() {
+    return forwarded;
+  }
+
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     commandSequence = buffer.readLong();
     eventIndex = buffer.readLong();
+    forwarded = buffer.readBoolean();
   }
 
   @Override
@@ -90,11 +101,12 @@ public class KeepAliveRequest extends SessionRequest {
     super.writeObject(buffer, serializer);
     buffer.writeLong(commandSequence);
     buffer.writeLong(eventIndex);
+    buffer.writeBoolean(forwarded);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, commandSequence);
+    return Objects.hash(getClass(), session, commandSequence, forwarded);
   }
 
   @Override
@@ -103,14 +115,15 @@ public class KeepAliveRequest extends SessionRequest {
       KeepAliveRequest request = (KeepAliveRequest) object;
       return request.session == session
         && request.commandSequence == commandSequence
-        && request.eventIndex == eventIndex;
+        && request.eventIndex == eventIndex
+        && request.forwarded == forwarded;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
+    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d, forwarded=%b]", getClass().getSimpleName(), session, commandSequence, eventIndex, forwarded);
   }
 
   /**
@@ -142,6 +155,17 @@ public class KeepAliveRequest extends SessionRequest {
      */
     public Builder withEventIndex(long eventIndex) {
       request.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
+      return this;
+    }
+
+    /**
+     * Sets whether the request was forwarded from another server.
+     *
+     * @param forwarded Whether the request was forwarded.
+     * @return The request builder.
+     */
+    public Builder withForwarded(boolean forwarded) {
+      request.forwarded = forwarded;
       return this;
     }
 
