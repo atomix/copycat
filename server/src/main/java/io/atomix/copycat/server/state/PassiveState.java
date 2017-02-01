@@ -21,9 +21,10 @@ import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.CopycatException;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
-import io.atomix.copycat.server.storage.entry.ConnectEntry;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -31,7 +32,6 @@ import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.stream.Collectors;
 
 /**
  * Passive state.
@@ -68,33 +68,27 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request, Connection connection) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
+      return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      // Immediately register the session connection and send an accept request to the leader.
-      context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
+      // If the request was not forwarded from another server, associate the connection with the session.
+      if (!request.forwarded()) {
+        context.getStateMachine().executor().context().sessions().registerConnection(request.session(), connection);
+      }
 
-      AcceptRequest acceptRequest = AcceptRequest.builder()
-        .withClient(request.client())
-        .withAddress(context.getCluster().member().serverAddress())
-        .build();
-      return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
-        .thenApply(acceptResponse -> ConnectResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
-          .withMembers(context.getCluster().members().stream()
-            .map(Member::clientAddress)
-            .filter(m -> m != null)
-            .collect(Collectors.toList()))
+      // Forward the request to the leader, indicating that the request is coming from another server.
+      return this.<KeepAliveRequest, KeepAliveResponse>forward(
+        KeepAliveRequest.builder(request)
+          .withForwarded(true)
           .build())
-        .exceptionally(error -> ConnectResponse.builder()
+        .exceptionally(error -> KeepAliveResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
           .build())
@@ -201,12 +195,6 @@ class PassiveState extends ReserveState {
       if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-      }
-
-      // If the entry is a connect entry then immediately configure the connection.
-      if (entry instanceof ConnectEntry) {
-        ConnectEntry connectEntry = (ConnectEntry) entry;
-        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
       }
     }
 

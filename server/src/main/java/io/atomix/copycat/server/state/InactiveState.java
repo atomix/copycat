@@ -70,17 +70,7 @@ class InactiveState extends AbstractState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
-    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
-  }
-
-  @Override
-  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
-    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
-  }
-
-  @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request, Connection connection) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

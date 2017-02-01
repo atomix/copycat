@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.session.ServerSession;
@@ -34,10 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSessionManager implements Sessions {
-  private final Map<String, Address> addresses = new ConcurrentHashMap<>();
-  private final Map<String, Connection> connections = new ConcurrentHashMap<>();
+  private final Map<Long, Connection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
-  final Map<String, ServerSessionContext> clients = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
   private final ServerContext context;
 
@@ -63,34 +60,17 @@ class ServerSessionManager implements Sessions {
   }
 
   /**
-   * Registers an address.
-   */
-  ServerSessionManager registerAddress(String client, Address address) {
-    ServerSessionContext session = clients.get(client);
-    if (session != null) {
-      session.setAddress(address);
-      // If client was previously connected locally, close that connection.
-      if (!address.equals(context.getCluster().member().serverAddress())) {
-        Connection connection = connections.remove(client);
-        if (connection != null) {
-          connection.close();
-          session.setConnection(null);
-        }
-      }
-    }
-    addresses.put(client, address);
-    return this;
-  }
-
-  /**
    * Registers a connection.
    */
-  ServerSessionManager registerConnection(String client, Connection connection) {
-    ServerSessionContext session = clients.get(client);
+  ServerSessionManager registerConnection(long sessionId, Connection connection) {
+    ServerSessionContext session = sessions.get(sessionId);
     if (session != null) {
       session.setConnection(connection);
     }
-    connections.put(client, connection);
+
+    // It's possible for a connection to be registered before the RegisterEntry is applied on this
+    // server, thus we have to store connection information even if a session doesn't exist.
+    connections.put(sessionId, connection);
     return this;
   }
 
@@ -98,11 +78,11 @@ class ServerSessionManager implements Sessions {
    * Unregisters a connection.
    */
   ServerSessionManager unregisterConnection(Connection connection) {
-    Iterator<Map.Entry<String, Connection>> iterator = connections.entrySet().iterator();
+    Iterator<Map.Entry<Long, Connection>> iterator = connections.entrySet().iterator();
     while (iterator.hasNext()) {
-      Map.Entry<String, Connection> entry = iterator.next();
+      Map.Entry<Long, Connection> entry = iterator.next();
       if (entry.getValue().equals(connection)) {
-        ServerSessionContext session = clients.get(entry.getKey());
+        ServerSessionContext session = sessions.get(entry.getKey());
         if (session != null) {
           session.setConnection(null);
         }
@@ -116,10 +96,8 @@ class ServerSessionManager implements Sessions {
    * Registers a session.
    */
   ServerSessionContext registerSession(ServerSessionContext session) {
-    session.setAddress(addresses.get(session.client()));
-    session.setConnection(connections.get(session.client()));
+    session.setConnection(connections.get(session.id()));
     sessions.put(session.id(), session);
-    clients.put(session.client(), session);
     return session;
   }
 
@@ -129,8 +107,6 @@ class ServerSessionManager implements Sessions {
   ServerSessionContext unregisterSession(long sessionId) {
     ServerSessionContext session = sessions.remove(sessionId);
     if (session != null) {
-      clients.remove(session.client(), session);
-      addresses.remove(session.client(), session.getAddress());
       connections.remove(session.client(), session.getConnection());
     }
     return session;
@@ -144,16 +120,6 @@ class ServerSessionManager implements Sessions {
    */
   ServerSessionContext getSession(long sessionId) {
     return sessions.get(sessionId);
-  }
-
-  /**
-   * Gets a session by client ID.
-   *
-   * @param clientId The client ID.
-   * @return The session or {@code null} if the session doesn't exist.
-   */
-  ServerSessionContext getSession(String clientId) {
-    return clients.get(clientId);
   }
 
   @Override

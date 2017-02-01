@@ -30,7 +30,6 @@ public final class ClientResponseTypeResolver implements SerializableTypeResolve
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Response>, Integer> TYPES = new HashMap() {{
     put(CommandResponse.class, -10);
-    put(ConnectResponse.class, -11);
     put(KeepAliveResponse.class, -12);
     put(PublishResponse.class, -13);
     put(QueryResponse.class, -14);

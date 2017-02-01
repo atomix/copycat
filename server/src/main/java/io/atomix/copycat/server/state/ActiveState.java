@@ -19,7 +19,6 @@ import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.*;
-import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.concurrent.CompletableFuture;
@@ -124,12 +123,6 @@ abstract class ActiveState extends PassiveState {
           context.getLog().truncate(entry.getIndex() - 1).append(entry);
           LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
         }
-      }
-
-      // If the entry is a connect entry then immediately configure the connection.
-      if (entry instanceof ConnectEntry) {
-        ConnectEntry connectEntry = (ConnectEntry) entry;
-        context.getStateMachine().executor().context().sessions().registerAddress(connectEntry.getClient(), connectEntry.getAddress());
       }
     }
 
