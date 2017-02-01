@@ -22,7 +22,10 @@ import io.atomix.copycat.error.CopycatException;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.InstallResponse;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -77,26 +80,17 @@ class PassiveState extends ReserveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      // Immediately register the session connection and send an accept request to the leader.
+      // Associate the connection with the appropriate session.
       context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
-      AcceptRequest acceptRequest = AcceptRequest.builder()
-        .withClient(request.client())
-        .withAddress(context.getCluster().member().serverAddress())
-        .build();
-      return this.<AcceptRequest, AcceptResponse>forward(acceptRequest)
-        .thenApply(acceptResponse -> ConnectResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
-          .withMembers(context.getCluster().members().stream()
-            .map(Member::clientAddress)
-            .filter(m -> m != null)
-            .collect(Collectors.toList()))
-          .build())
-        .exceptionally(error -> ConnectResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.NO_LEADER_ERROR)
-          .build())
+      return CompletableFuture.completedFuture(ConnectResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withLeader(context.getCluster().member().clientAddress())
+        .withMembers(context.getCluster().members().stream()
+          .map(Member::clientAddress)
+          .filter(m -> m != null)
+          .collect(Collectors.toList()))
+        .build())
         .thenApply(this::logResponse);
     }
   }

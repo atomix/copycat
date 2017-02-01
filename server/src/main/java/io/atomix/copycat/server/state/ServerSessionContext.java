@@ -48,7 +48,6 @@ class ServerSessionContext implements ServerSession {
   private final long timeout;
   private Connection connection;
   private volatile long references;
-  private long connectIndex;
   private long keepAliveIndex;
   private long requestSequence;
   private long commandSequence;
@@ -179,30 +178,6 @@ class ServerSessionContext implements ServerSession {
    */
   ServerSessionContext setTimestamp(long timestamp) {
     this.timestamp = Math.max(this.timestamp, timestamp);
-    return this;
-  }
-
-  /**
-   * Returns the current session connect index.
-   *
-   * @return The current session connect index.
-   */
-  long getConnectIndex() {
-    return connectIndex;
-  }
-
-  /**
-   * Sets the current session connect index.
-   *
-   * @param connectIndex The current session connect index.
-   * @return The server session.
-   */
-  ServerSessionContext setConnectIndex(long connectIndex) {
-    long previousConnectIndex = this.connectIndex;
-    this.connectIndex = connectIndex;
-    if (previousConnectIndex > 0) {
-      log.release(previousConnectIndex);
-    }
     return this;
   }
 

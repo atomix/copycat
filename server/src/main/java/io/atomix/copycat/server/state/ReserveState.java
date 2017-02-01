@@ -161,17 +161,6 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    return CompletableFuture.completedFuture(logResponse(AcceptResponse.builder()
-      .withStatus(Response.Status.ERROR)
-      .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
-  }
-
-  @Override
   public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     context.checkThread();
     logRequest(request);

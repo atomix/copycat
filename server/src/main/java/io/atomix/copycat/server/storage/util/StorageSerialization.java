@@ -37,7 +37,6 @@ public final class StorageSerialization implements SerializableTypeResolver {
     put(InitializeEntry.class, -39);
     put(QueryEntry.class, -40);
     put(RegisterEntry.class, -41);
-    put(ConnectEntry.class, -42);
     put(UnregisterEntry.class, -43);
   }};
 
