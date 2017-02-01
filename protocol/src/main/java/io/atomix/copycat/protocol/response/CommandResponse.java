@@ -15,13 +15,11 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.request.WebSocketCommandRequest;
-
 /**
  * Client command response.
  * <p>
  * Command responses are sent by servers to clients upon the completion of a
- * {@link WebSocketCommandRequest}. Command responses are sent with the
+ * {@link io.atomix.copycat.protocol.request.CommandRequest}. Command responses are sent with the
  * {@link #index()} (or index) of the state machine at the point at which the command was evaluated.
  * This can be used by the client to ensure it sees state progress monotonically. Note, however, that
  * command responses may not be sent or received in sequential order. If a command response has to await
