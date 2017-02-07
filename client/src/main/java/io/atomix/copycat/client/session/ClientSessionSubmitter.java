@@ -26,13 +26,7 @@ import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.error.UnknownSessionException;
-import io.atomix.copycat.protocol.CommandRequest;
-import io.atomix.copycat.protocol.CommandResponse;
-import io.atomix.copycat.protocol.OperationRequest;
-import io.atomix.copycat.protocol.OperationResponse;
-import io.atomix.copycat.protocol.QueryRequest;
-import io.atomix.copycat.protocol.QueryResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.ClosedSessionException;
 import io.atomix.copycat.session.Session;
 
@@ -288,6 +282,8 @@ final class ClientSessionSubmitter {
           complete(response.error().createException());
         } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
+        } else {
+          complete(response.error().createException());
         }
       } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
         retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
@@ -299,17 +295,12 @@ final class ClientSessionSubmitter {
     @Override
     public void fail(Throwable cause) {
       super.fail(cause);
-
-      // If the session is still registered (as far as we know) submit a no-op command
-      // for this sequence number to ensure that the client can continue to progress.
-      if (!(cause instanceof UnknownSessionException)) {
-        CommandRequest request = CommandRequest.builder()
-                .withSession(this.request.session())
-                .withSequence(this.request.sequence())
-                .withCommand(new NoOpCommand())
-                .build();
-        context.executor().execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
-      }
+      CommandRequest request = CommandRequest.builder()
+        .withSession(this.request.session())
+        .withSequence(this.request.sequence())
+        .withCommand(new NoOpCommand())
+        .build();
+      context.executor().execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
     }
 
     @Override
