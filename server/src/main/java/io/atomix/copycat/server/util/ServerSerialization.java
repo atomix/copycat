@@ -32,7 +32,6 @@ import java.util.Map;
 public final class ServerSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
-    put(AcceptRequest.class, -17);
     put(AppendRequest.class, -18);
     put(ConfigureRequest.class, -19);
     put(InstallRequest.class, -20);
@@ -41,7 +40,6 @@ public final class ServerSerialization implements SerializableTypeResolver {
     put(PollRequest.class, -23);
     put(ReconfigureRequest.class, -24);
     put(VoteRequest.class, -25);
-    put(AcceptResponse.class, -26);
     put(AppendResponse.class, -27);
     put(ConfigureResponse.class, -28);
     put(InstallResponse.class, -29);

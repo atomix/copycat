@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.session.ServerSession;
@@ -34,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSessionManager implements Sessions {
-  private final Map<String, Address> addresses = new ConcurrentHashMap<>();
   private final Map<String, Connection> connections = new ConcurrentHashMap<>();
   final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
   final Map<String, ServerSessionContext> clients = new ConcurrentHashMap<>();
@@ -59,26 +57,6 @@ class ServerSessionManager implements Sessions {
   @Override
   public Sessions removeListener(SessionListener listener) {
     listeners.remove(Assert.notNull(listener, "listener"));
-    return this;
-  }
-
-  /**
-   * Registers an address.
-   */
-  ServerSessionManager registerAddress(String client, Address address) {
-    ServerSessionContext session = clients.get(client);
-    if (session != null) {
-      session.setAddress(address);
-      // If client was previously connected locally, close that connection.
-      if (!address.equals(context.getCluster().member().serverAddress())) {
-        Connection connection = connections.remove(client);
-        if (connection != null) {
-          connection.close();
-          session.setConnection(null);
-        }
-      }
-    }
-    addresses.put(client, address);
     return this;
   }
 
@@ -116,7 +94,6 @@ class ServerSessionManager implements Sessions {
    * Registers a session.
    */
   ServerSessionContext registerSession(ServerSessionContext session) {
-    session.setAddress(addresses.get(session.client()));
     session.setConnection(connections.get(session.client()));
     sessions.put(session.id(), session);
     clients.put(session.client(), session);
@@ -130,7 +107,6 @@ class ServerSessionManager implements Sessions {
     ServerSessionContext session = sessions.remove(sessionId);
     if (session != null) {
       clients.remove(session.client(), session);
-      addresses.remove(session.client(), session.getAddress());
       connections.remove(session.client(), session.getConnection());
     }
     return session;

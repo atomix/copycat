@@ -774,83 +774,18 @@ final class LeaderState extends ActiveState {
     context.checkThread();
     logRequest(request);
 
+    // Associate the connection with the appropriate client.
     context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
 
-    AcceptRequest acceptRequest = AcceptRequest.builder()
-      .withClient(request.client())
-      .withAddress(context.getCluster().member().serverAddress())
-      .build();
-    return accept(acceptRequest)
-      .thenApply(acceptResponse -> ConnectResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withLeader(context.getCluster().member().clientAddress())
-        .withMembers(context.getCluster().members().stream()
-          .map(Member::clientAddress)
-          .filter(m -> m != null)
-          .collect(Collectors.toList()))
-        .build())
+    return CompletableFuture.completedFuture(ConnectResponse.builder()
+      .withStatus(Response.Status.OK)
+      .withLeader(context.getCluster().member().clientAddress())
+      .withMembers(context.getCluster().members().stream()
+        .map(Member::clientAddress)
+        .filter(m -> m != null)
+        .collect(Collectors.toList()))
+      .build())
       .thenApply(this::logResponse);
-  }
-
-  @Override
-  public CompletableFuture<AcceptResponse> accept(AcceptRequest request) {
-    final long timestamp = System.currentTimeMillis();
-    final long index;
-
-    context.checkThread();
-    logRequest(request);
-
-    try (ConnectEntry entry = context.getLog().create(ConnectEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setClient(request.client())
-        .setTimestamp(timestamp)
-        .setAddress(request.address());
-      index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
-    }
-
-    context.getStateMachine().executor().context().sessions().registerAddress(request.client(), request.address());
-
-    CompletableFuture<AcceptResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
-      if (isOpen()) {
-        if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((connectResult, connectError) -> {
-            if (isOpen()) {
-              if (connectError == null) {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.OK)
-                  .build()));
-              } else if (connectError instanceof CompletionException && connectError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) connectError.getCause()).getType())
-                  .build()));
-              } else if (connectError instanceof CopycatException) {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) connectError).getType())
-                  .build()));
-              } else {
-                future.complete(logResponse(AcceptResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
-                  .build()));
-              }
-              checkSessions();
-            }
-          });
-        } else {
-          future.complete(logResponse(AcceptResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-      }
-    });
-
-    return future;
   }
 
   @Override

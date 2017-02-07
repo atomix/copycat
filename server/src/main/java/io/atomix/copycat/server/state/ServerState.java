@@ -54,14 +54,6 @@ public interface ServerState extends Managed<ServerState> {
   CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection);
 
   /**
-   * Handles an accept request.
-   *
-   * @param request The request to handle.
-   * @return A completable future to be completed with the request response.
-   */
-  CompletableFuture<AcceptResponse> accept(AcceptRequest request);
-
-  /**
    * Handles a keep alive request.
    *
    * @param request The request to handle.
