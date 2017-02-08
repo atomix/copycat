@@ -132,7 +132,7 @@ public class AppendResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, term=%d, succeeded=%b, logIndex=%d]", getClass().getSimpleName(), status, term, succeeded, logIndex);
+    return String.format("%s[status=%s, error=%s, term=%d, succeeded=%b, logIndex=%d]", getClass().getSimpleName(), status, error, term, succeeded, logIndex);
   }
 
   /**
