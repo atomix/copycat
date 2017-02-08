@@ -1077,7 +1077,7 @@ public class ClusterTest extends ConcurrentTestCase {
       }
     });
     ((ClientSession) client.session()).expire().thenAccept(v -> resume());
-    await(5000, 2);
+    await(5000, 3);
   }
 
   /**
