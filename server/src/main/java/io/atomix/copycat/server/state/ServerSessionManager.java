@@ -94,10 +94,14 @@ class ServerSessionManager implements Sessions {
    * Registers a session.
    */
   ServerSessionContext registerSession(ServerSessionContext session) {
+    ServerSessionContext oldSession = clients.remove(session.client());
+    if (oldSession != null) {
+      sessions.remove(oldSession.id());
+    }
     session.setConnection(connections.get(session.client()));
     sessions.put(session.id(), session);
     clients.put(session.client(), session);
-    return session;
+    return oldSession;
   }
 
   /**

@@ -364,7 +364,8 @@ final class ServerStateMachine implements AutoCloseable {
 
     long sessionId = entry.getIndex();
     ServerSessionContext session = new ServerSessionContext(sessionId, entry.getClient(), log, executor.context(), entry.getTimeout());
-    executor.context().sessions().registerSession(session);
+
+    ServerSessionContext oldSession = executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
     // is guaranteed to be monotonically increasing, whereas the RegisterEntry may have an earlier timestamp
@@ -381,14 +382,14 @@ final class ServerStateMachine implements AutoCloseable {
     // Call the register() method on the user-provided state machine to allow the state machine to react to
     // a new session being registered. User state machine methods are always called in the state machine thread.
     CompletableFuture<Long> future = new ComposableFuture<>();
-    executor.executor().execute(() -> registerSession(index, timestamp, session, future, context));
+    executor.executor().execute(() -> registerSession(index, timestamp, session, oldSession, future, context));
     return future;
   }
 
   /**
    * Registers a session.
    */
-  private void registerSession(long index, long timestamp, ServerSessionContext session, CompletableFuture<Long> future, ThreadContext context) {
+  private void registerSession(long index, long timestamp, ServerSessionContext session, ServerSessionContext oldSession, CompletableFuture<Long> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -403,9 +404,18 @@ final class ServerStateMachine implements AutoCloseable {
     // before the registration is completed.
     executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
+    // If the session overrides a previous session, expire the old session.
+    if (oldSession != null) {
+      oldSession.expire(0);
+    }
+
     // Register the session and then open it. This ensures that state machines cannot publish events to this
     // session before the client has learned of the session ID.
     for (SessionListener listener : executor.context().sessions().listeners) {
+      if (oldSession != null) {
+        listener.expire(oldSession);
+        listener.close(oldSession);
+      }
       listener.register(session);
     }
     session.open();
