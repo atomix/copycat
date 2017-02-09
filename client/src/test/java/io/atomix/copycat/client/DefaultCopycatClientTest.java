@@ -32,7 +32,6 @@ import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
@@ -323,6 +322,93 @@ public class DefaultCopycatClientTest {
     latch.await();
 
     assertEquals(copycatClient.submit(new TestCommand()).join(), "Hello world!");
+  }
+
+  /**
+   * Tests calling the recovery strategy when a command fails due to UnknownSessionException.
+   */
+  public void testQuerySessionRecovery() throws Throwable {
+    Connection connection = mock(Connection.class);
+    when(connection.close()).thenReturn(CompletableFuture.completedFuture(null));
+
+    Client client = mock(Client.class);
+    when(client.connect(any())).thenReturn(CompletableFuture.completedFuture(connection));
+
+    Transport transport = mock(Transport.class);
+    when(transport.client()).thenReturn(client);
+
+    // Handle connect requests.
+    when(connection.send(isA(ConnectRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(ConnectResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withLeader(LEADER)
+        .withMembers(MEMBERS)
+        .build()));
+
+    // Handle register requests.
+    when(connection.send(isA(RegisterRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withSession(1)
+        .withTimeout(5000)
+        .withLeader(LEADER)
+        .withMembers(MEMBERS)
+        .build()))
+      .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withSession(2)
+        .withTimeout(5000)
+        .withLeader(LEADER)
+        .withMembers(MEMBERS)
+        .build()));
+
+    // Handle keep-alive requests.
+    Mockito.when(connection.send(isA(KeepAliveRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withLeader(LEADER)
+        .withMembers(MEMBERS)
+        .build()));
+
+    // Fail command requests.
+    Mockito.when(connection.send(isA(QueryRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
+        .build()))
+      .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withIndex(1)
+        .withEventIndex(0)
+        .withResult("Hello world!")
+        .build()));
+
+    CopycatClient copycatClient = CopycatClient.builder()
+      .withTransport(transport)
+      .withRecoveryStrategy(RecoveryStrategies.RECOVER)
+      .build();
+
+    copycatClient.connect(MEMBERS).join();
+
+    try {
+      copycatClient.submit(new TestQuery()).join();
+      fail();
+    } catch (CompletionException e) {
+      if (!(e.getCause() instanceof ClosedSessionException)) {
+        fail();
+      }
+    }
+
+    CountDownLatch latch = new CountDownLatch(1);
+    copycatClient.onStateChange(state -> {
+      if (state == CopycatClient.State.CONNECTED) {
+        assertEquals(2, copycatClient.session().id());
+        latch.countDown();
+      }
+    });
+    latch.await();
+
+    assertEquals(copycatClient.submit(new TestQuery()).join(), "Hello world!");
   }
 
   /**
