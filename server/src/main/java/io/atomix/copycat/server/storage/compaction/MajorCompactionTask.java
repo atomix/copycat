@@ -153,8 +153,8 @@ public final class MajorCompactionTask implements CompactionTask {
       .withId(firstSegment.descriptor().id())
       .withVersion(firstSegment.descriptor().version() + 1)
       .withIndex(firstSegment.descriptor().index())
-      .withMaxSegmentSize(manager.storage().maxSegmentSize())
-      .withMaxEntries(manager.storage().maxEntriesPerSegment())
+      .withMaxSegmentSize(Math.max(segments.stream().mapToLong(s -> s.descriptor().maxSegmentSize()).max().getAsLong(), manager.storage().maxSegmentSize()))
+      .withMaxEntries(Math.max(segments.stream().mapToInt(s -> s.descriptor().maxEntries()).max().getAsInt(), manager.storage().maxEntriesPerSegment()))
       .build());
 
     compactGroup(segments, predicates, compactSegment);
