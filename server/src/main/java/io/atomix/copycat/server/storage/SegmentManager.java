@@ -64,6 +64,15 @@ public class SegmentManager implements AutoCloseable {
   }
 
   /**
+   * Returns the storage configuration underlying the segment manager.
+   *
+   * @return The storage configuration.
+   */
+  public Storage storage() {
+    return storage;
+  }
+
+  /**
    * Returns the entry serializer.
    *
    * @return The entry serializer.
