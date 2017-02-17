@@ -1060,7 +1060,7 @@ public class ClusterTest extends ConcurrentTestCase {
     final CopycatClient client = createClient(RecoveryStrategies.RECOVER);
     final AtomicReference<CopycatClient.State> prev =
         new AtomicReference<>(CopycatClient.State.CONNECTED);
-    client.onStateChange(s -> {
+    Listener<CopycatClient.State> stateListener = client.onStateChange(s -> {
       switch (s) {
         case CONNECTED:
           threadAssertEquals(CopycatClient.State.SUSPENDED,
@@ -1078,6 +1078,7 @@ public class ClusterTest extends ConcurrentTestCase {
     });
     ((ClientSession) client.session()).expire().thenAccept(v -> resume());
     await(5000, 3);
+    stateListener.close();
   }
 
   /**
