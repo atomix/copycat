@@ -27,13 +27,13 @@ import java.nio.charset.StandardCharsets;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class ByteBufOutput implements BufferOutput<ByteBufOutput> {
+public final class ByteBufOutput implements BufferOutput<ByteBufOutput> {
   ByteBuf buffer;
 
   /**
    * Sets the underlying byte buffer.
    */
-  ByteBufOutput setByteBuf(ByteBuf buffer) {
+  public ByteBufOutput setByteBuf(ByteBuf buffer) {
     this.buffer = buffer;
     return this;
   }

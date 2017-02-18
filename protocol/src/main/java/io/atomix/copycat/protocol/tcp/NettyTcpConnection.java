@@ -80,20 +80,13 @@ public abstract class NettyTcpConnection implements ProtocolConnection {
   /**
    * Called when a message is received.
    */
-  @SuppressWarnings("unchecked")
   protected void onMessage(ByteBuf buffer) {
     final long id = buffer.readLong();
     final byte typeId = buffer.readByte();
     if (ProtocolRequest.Type.isProtocolRequest(typeId)) {
-      ProtocolRequest.Type type = ProtocolRequest.Type.forId(typeId);
-      ProtocolRequestSerializer<?> serializer = ProtocolRequestSerializer.forType(type);
-      ProtocolRequest request = serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
-      onRequest(id, request);
+      onRequest(id, readRequest(typeId, buffer));
     } else if (ProtocolResponse.Type.isProtocolResponse(typeId)) {
-      ProtocolResponse.Type type = ProtocolResponse.Type.forId(typeId);
-      ProtocolResponseSerializer<?> serializer = ProtocolResponseSerializer.forType(type);
-      ProtocolResponse response = serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
-      onResponse(id, response);
+      onResponse(id, readResponse(typeId, buffer));
     }
   }
 
@@ -116,6 +109,44 @@ public abstract class NettyTcpConnection implements ProtocolConnection {
   }
 
   /**
+   * Serializes a request.
+   */
+  @SuppressWarnings("unchecked")
+  protected void writeRequest(ProtocolRequest request, ByteBuf buffer) {
+    ProtocolRequestSerializer serializer = ProtocolRequestSerializer.forType(request.type());
+    serializer.writeObject(OUTPUT.get().setByteBuf(buffer), request);
+  }
+
+  /**
+   * Deserializes a request.
+   */
+  @SuppressWarnings("unchecked")
+  protected ProtocolRequest readRequest(int typeId, ByteBuf buffer) {
+    ProtocolRequest.Type type = ProtocolRequest.Type.forId(typeId);
+    ProtocolRequestSerializer<?> serializer = ProtocolRequestSerializer.forType(type);
+    return serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
+  }
+
+  /**
+   * Serializes a response.
+   */
+  @SuppressWarnings("unchecked")
+  protected void writeResponse(ProtocolResponse response, ByteBuf buffer) {
+    ProtocolResponseSerializer serializer = ProtocolResponseSerializer.forType(response.type());
+    serializer.writeObject(OUTPUT.get().setByteBuf(buffer), response);
+  }
+
+  /**
+   * Deserializes a response.
+   */
+  @SuppressWarnings("unchecked")
+  protected ProtocolResponse readResponse(int typeId, ByteBuf buffer) {
+    ProtocolResponse.Type type = ProtocolResponse.Type.forId(typeId);
+    ProtocolResponseSerializer<?> serializer = ProtocolResponseSerializer.forType(type);
+    return serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
+  }
+
+  /**
    * Sends a web socket request.
    */
   @SuppressWarnings("unchecked")
@@ -124,11 +155,10 @@ public abstract class NettyTcpConnection implements ProtocolConnection {
     ResponseFuture<U> future = new ResponseFuture<>(System.currentTimeMillis());
     responseFutures.put(id, future);
     logger().debug("Sending {}", request);
-    ProtocolRequestSerializer serializer = ProtocolRequestSerializer.forType(request.type());
     ByteBuf buffer = channel.alloc().buffer(9)
       .writeLong(id)
       .writeByte(request.type().id());
-    serializer.writeObject(OUTPUT.get().setByteBuf(buffer), request);
+    writeRequest(request, buffer);
     channel.writeAndFlush(buffer);
     return future;
   }
@@ -139,11 +169,10 @@ public abstract class NettyTcpConnection implements ProtocolConnection {
   @SuppressWarnings("unchecked")
   protected <T extends ProtocolResponse> void sendResponse(long id, T response) {
     logger().debug("Sending {}", response);
-    ProtocolResponseSerializer serializer = ProtocolResponseSerializer.forType(response.type());
     ByteBuf buffer = channel.alloc().buffer(9)
       .writeLong(id)
       .writeByte(response.type().id());
-    serializer.writeObject(OUTPUT.get().setByteBuf(buffer), response);
+    writeResponse(response, buffer);
     channel.writeAndFlush(buffer);
   }
 

@@ -43,21 +43,44 @@ public class NettyTcpRaftClientConnection extends NettyTcpClientConnection imple
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   protected void onMessage(ByteBuf buffer) {
     final long id = buffer.readLong();
     final byte typeId = buffer.readByte();
-    if (ProtocolRequest.Type.isProtocolRequest(typeId)) {
-      ProtocolRequest.Type type = ProtocolRequest.Type.forId(typeId);
-      ProtocolRequestSerializer<?> serializer = RaftProtocolRequestSerializer.forType(type);
-      ProtocolRequest request = serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
-      onRequest(id, request);
-    } else if (ProtocolResponse.Type.isProtocolResponse(typeId)) {
-      ProtocolResponse.Type type = ProtocolResponse.Type.forId(typeId);
-      ProtocolResponseSerializer<?> serializer = RaftProtocolResponseSerializer.forType(type);
-      ProtocolResponse response = serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
-      onResponse(id, response);
+    if (RaftProtocolRequest.Type.isProtocolRequest(typeId)) {
+      onRequest(id, readRequest(typeId, buffer));
+    } else if (RaftProtocolResponse.Type.isProtocolResponse(typeId)) {
+      onResponse(id, readResponse(typeId, buffer));
     }
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  protected void writeRequest(ProtocolRequest request, ByteBuf buffer) {
+    ProtocolRequestSerializer serializer = RaftProtocolRequestSerializer.forType(request.type());
+    serializer.writeObject(OUTPUT.get().setByteBuf(buffer), request);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  protected ProtocolRequest readRequest(int typeId, ByteBuf buffer) {
+    ProtocolRequest.Type type = RaftProtocolRequest.Type.forId(typeId);
+    ProtocolRequestSerializer<?> serializer = RaftProtocolRequestSerializer.forType(type);
+    return serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  protected void writeResponse(ProtocolResponse response, ByteBuf buffer) {
+    ProtocolResponseSerializer serializer = RaftProtocolResponseSerializer.forType(response.type());
+    serializer.writeObject(OUTPUT.get().setByteBuf(buffer), response);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  protected ProtocolResponse readResponse(int typeId, ByteBuf buffer) {
+    ProtocolResponse.Type type = RaftProtocolResponse.Type.forId(typeId);
+    ProtocolResponseSerializer<?> serializer = RaftProtocolResponseSerializer.forType(type);
+    return serializer.readObject(INPUT.get().setByteBuf(buffer), type.type());
   }
 
   @Override

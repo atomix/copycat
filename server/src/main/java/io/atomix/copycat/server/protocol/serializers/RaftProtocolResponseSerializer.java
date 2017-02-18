@@ -47,7 +47,7 @@ public abstract class RaftProtocolResponseSerializer<T extends RaftProtocolRespo
       case 0x1f:
         return new AppendResponseSerializer();
       default:
-        throw new IllegalArgumentException("unknown response type: " + type);
+        return ProtocolResponseSerializer.forType(type);
     }
   }
 

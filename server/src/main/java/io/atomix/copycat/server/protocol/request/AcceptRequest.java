@@ -72,6 +72,11 @@ public class AcceptRequest extends AbstractRequest implements RaftProtocolReques
     return address;
   }
 
+  @Override
+  public String toString() {
+    return String.format("%s[client=%s, address=%s]", getClass().getSimpleName(), client, address);
+  }
+
   /**
    * Register client request builder.
    */

@@ -55,7 +55,7 @@ public final class TcpOptions {
   private boolean tcpNoDelay = DEFAULT_TCP_NO_DELAY;
   private int acceptBacklog = DEFAULT_ACCEPT_BACKLOG;
   private int requestTimeout = DEFAULT_REQUEST_TIMEOUT;
-  private SslOptions sslOptions;
+  private SslOptions sslOptions = new SslOptions();
 
   private TcpOptions() {
   }
