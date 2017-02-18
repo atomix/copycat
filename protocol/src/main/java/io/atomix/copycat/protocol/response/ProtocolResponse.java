@@ -70,13 +70,13 @@ public interface ProtocolResponse {
      */
     public static boolean isProtocolResponse(int id) {
       switch (id) {
-        case 0x00:
-        case 0x01:
-        case 0x02:
-        case 0x03:
-        case 0x04:
-        case 0x05:
-        case 0x06:
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15:
+        case 0x16:
           return true;
         default:
           return false;
@@ -91,19 +91,19 @@ public interface ProtocolResponse {
      */
     public static Type forId(int id) {
       switch (id) {
-        case 0x00:
+        case 0x10:
           return CONNECT;
-        case 0x01:
+        case 0x11:
           return REGISTER;
-        case 0x02:
+        case 0x12:
           return KEEP_ALIVE;
-        case 0x03:
+        case 0x13:
           return UNREGISTER;
-        case 0x04:
+        case 0x14:
           return QUERY;
-        case 0x05:
+        case 0x15:
           return COMMAND;
-        case 0x06:
+        case 0x16:
           return PUBLISH;
         default:
           throw new IllegalArgumentException("Unknown response type: " + id);
