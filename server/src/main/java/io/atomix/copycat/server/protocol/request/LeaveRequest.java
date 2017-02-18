@@ -26,9 +26,24 @@ import io.atomix.copycat.server.cluster.Member;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class LeaveRequest extends ConfigurationRequest {
+public class LeaveRequest extends ConfigurationRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new leave request builder.
+   *
+   * @return A new leave request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   public LeaveRequest(Member member) {
     super(member);
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.LEAVE;
   }
 
   /**

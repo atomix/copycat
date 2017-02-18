@@ -42,34 +42,6 @@ public abstract class AbstractResponse implements ProtocolResponse {
   }
 
   /**
-   * Abstract response error.
-   */
-  public static class Error implements ProtocolResponse.Error {
-    private final Type type;
-    private final String message;
-
-    public Error(Type type, String message) {
-      this.type = type;
-      this.message = message;
-    }
-
-    @Override
-    public Type type() {
-      return type;
-    }
-
-    @Override
-    public String message() {
-      return message;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s[type=%s, message=%s]", getClass().getSimpleName(), type.name(), message);
-    }
-  }
-
-  /**
    * Abstract response builder.
    *
    * @param <T> The builder type.

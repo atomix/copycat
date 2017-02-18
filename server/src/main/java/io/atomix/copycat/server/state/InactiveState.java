@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
@@ -23,6 +22,7 @@ import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.*;
 import io.atomix.copycat.server.storage.system.Configuration;
+import io.atomix.copycat.util.concurrent.Futures;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -43,7 +43,7 @@ class InactiveState extends AbstractState {
   }
 
   @Override
-  public CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request, ConfigureResponse.Builder responseBuilder) {
+  public CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
@@ -62,83 +62,83 @@ class InactiveState extends AbstractState {
     }
 
     return CompletableFuture.completedFuture(logResponse(
-      responseBuilder
+      ConfigureResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .build()));
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder responseBuilder) {
+  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ProtocolServerConnection connection) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder responseBuilder) {
+  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder responseBuilder) {
+  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder responseBuilder) {
+  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<PublishResponse> onPublish(PublishRequest request, PublishResponse.Builder responseBuilder) {
+  public CompletableFuture<PublishResponse> onPublish(PublishRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder responseBuilder) {
+  public CompletableFuture<InstallResponse> onInstall(InstallRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<JoinResponse> onJoin(JoinRequest request, JoinResponse.Builder responseBuilder) {
+  public CompletableFuture<JoinResponse> onJoin(JoinRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request, ReconfigureResponse.Builder responseBuilder) {
+  public CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<LeaveResponse> onLeave(LeaveRequest request, LeaveResponse.Builder responseBuilder) {
+  public CompletableFuture<LeaveResponse> onLeave(LeaveRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<PollResponse> onPoll(PollRequest request, PollResponse.Builder responseBuilder) {
+  public CompletableFuture<PollResponse> onPoll(PollRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<CommandResponse> onCommand(CommandRequest request, CommandResponse.Builder responseBuilder) {
+  public CompletableFuture<CommandResponse> onCommand(CommandRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
-  public CompletableFuture<QueryResponse> onQuery(QueryRequest request, QueryResponse.Builder responseBuilder) {
+  public CompletableFuture<QueryResponse> onQuery(QueryRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 }

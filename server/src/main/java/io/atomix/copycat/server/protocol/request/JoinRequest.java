@@ -26,9 +26,24 @@ import io.atomix.copycat.server.cluster.Member;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class JoinRequest extends ConfigurationRequest {
+public class JoinRequest extends ConfigurationRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new join request builder.
+   *
+   * @return A new join request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   public JoinRequest(Member member) {
     super(member);
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.JOIN;
   }
 
   /**

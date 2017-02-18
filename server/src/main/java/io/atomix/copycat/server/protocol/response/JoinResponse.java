@@ -31,8 +31,23 @@ import java.util.Collection;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class JoinResponse extends ConfigurationResponse {
+
+  /**
+   * Returns a new join response builder.
+   *
+   * @return A new join response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   public JoinResponse(Status status, ProtocolResponse.Error error, long index, long term, long timestamp, Collection<Member> members) {
     super(status, error, index, term, timestamp, members);
+  }
+
+  @Override
+  public RaftProtocolResponse.Type type() {
+    return RaftProtocolResponse.Type.JOIN;
   }
 
   /**

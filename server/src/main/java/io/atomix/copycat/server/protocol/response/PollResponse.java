@@ -30,7 +30,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class PollResponse extends AbstractResponse {
+public class PollResponse extends AbstractResponse implements RaftProtocolResponse {
+
+  /**
+   * Returns a new poll response builder.
+   *
+   * @return A new poll response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long term;
   protected final boolean accepted;
 
@@ -38,6 +48,11 @@ public class PollResponse extends AbstractResponse {
     super(status, error);
     this.term = Assert.argNot(term, term < 0, "term must be positive");
     this.accepted = accepted;
+  }
+
+  @Override
+  public RaftProtocolResponse.Type type() {
+    return RaftProtocolResponse.Type.POLL;
   }
 
   /**

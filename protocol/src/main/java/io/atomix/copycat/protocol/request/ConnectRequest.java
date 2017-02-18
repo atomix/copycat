@@ -30,10 +30,25 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConnectRequest extends AbstractRequest {
+
+  /**
+   * Returns a new connect request builder.
+   *
+   * @return A new connect request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final String client;
 
-  protected ConnectRequest(String client) {
+  public ConnectRequest(String client) {
     this.client = Assert.notNull(client, "client");
+  }
+
+  @Override
+  public Type type() {
+    return Type.CONNECT;
   }
 
   /**

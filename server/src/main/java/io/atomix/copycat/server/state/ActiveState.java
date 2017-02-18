@@ -44,7 +44,7 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request, final AppendResponse.Builder responseBuilder) {
+  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -52,7 +52,7 @@ abstract class ActiveState extends PassiveState {
     // assign that term and leader to the current context and transition to follower.
     boolean transition = updateTermAndLeader(request.term(), request.leader());
 
-    CompletableFuture<AppendResponse> future = CompletableFuture.completedFuture(logResponse(handleAppend(request, responseBuilder)));
+    CompletableFuture<AppendResponse> future = CompletableFuture.completedFuture(logResponse(handleAppend(request)));
 
     // If a transition is required then transition back to the follower state.
     // If the node is already a follower then the transition will be ignored.
@@ -63,11 +63,11 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  protected AppendResponse checkPreviousEntry(AppendRequest request, AppendResponse.Builder responseBuilder) {
+  protected AppendResponse checkPreviousEntry(AppendRequest request) {
     final long lastIndex = context.getLogWriter().lastIndex();
     if (request.logIndex() != 0 && request.logIndex() > lastIndex) {
       LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), lastIndex);
-      return responseBuilder
+      return AppendResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
@@ -79,20 +79,20 @@ abstract class ActiveState extends PassiveState {
     final Indexed<? extends Entry<?>> previousEntry = context.getLogReader().get(request.logIndex());
     if (previousEntry == null || previousEntry.term() != request.logTerm()) {
       LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, (previousEntry != null ? previousEntry.term() : null));
-      return responseBuilder
+      return AppendResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
         .withLogIndex(request.logIndex() <= lastIndex ? request.logIndex() - 1 : lastIndex)
         .build();
     } else {
-      return appendEntries(request, responseBuilder);
+      return appendEntries(request);
     }
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  protected AppendResponse appendEntries(AppendRequest request, AppendResponse.Builder responseBuilder) {
+  protected AppendResponse appendEntries(AppendRequest request) {
     // Get the last entry index or default to the request log index.
     long lastEntryIndex = request.logIndex();
     if (!request.entries().isEmpty()) {
@@ -139,7 +139,7 @@ abstract class ActiveState extends PassiveState {
     // Apply commits to the local state machine.
     context.getStateMachine().applyAll(context.getCommitIndex());
 
-    return responseBuilder
+    return AppendResponse.builder()
       .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
@@ -148,35 +148,35 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  public CompletableFuture<PollResponse> onPoll(PollRequest request, PollResponse.Builder responseBuilder) {
+  public CompletableFuture<PollResponse> onPoll(PollRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), 0);
-    return CompletableFuture.completedFuture(logResponse(handlePoll(request, responseBuilder)));
+    return CompletableFuture.completedFuture(logResponse(handlePoll(request)));
   }
 
   /**
    * Handles a poll request.
    */
-  protected PollResponse handlePoll(PollRequest request, PollResponse.Builder responseBuilder) {
+  protected PollResponse handlePoll(PollRequest request) {
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
       LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getCluster().member().address(), request);
-      return responseBuilder
+      return PollResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withAccepted(false)
         .build();
     } else if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
-      return responseBuilder
+      return PollResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withAccepted(true)
         .build();
     } else {
-      return responseBuilder
+      return PollResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withAccepted(false)
@@ -185,7 +185,7 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  public CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -193,7 +193,7 @@ abstract class ActiveState extends PassiveState {
     // assign that term and leader to the current context.
     boolean transition = updateTermAndLeader(request.term(), 0);
 
-    CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(request, responseBuilder)));
+    CompletableFuture<VoteResponse> future = CompletableFuture.completedFuture(logResponse(handleVote(request)));
     if (transition) {
       context.transition(CopycatServer.State.FOLLOWER);
     }
@@ -203,13 +203,13 @@ abstract class ActiveState extends PassiveState {
   /**
    * Handles a vote request.
    */
-  protected VoteResponse handleVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
+  protected VoteResponse handleVote(VoteRequest request) {
     // If the request term is not as great as the current context term then don't
     // vote for the candidate. We want to vote for candidates that are at least
     // as up to date as us.
     if (request.term() < context.getTerm()) {
       LOGGER.debug("{} - Rejected {}: candidate's term is less than the current term", context.getCluster().member().address(), request);
-      return responseBuilder
+      return VoteResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withVoted(false)
@@ -218,7 +218,7 @@ abstract class ActiveState extends PassiveState {
     // If a leader was already determined for this term then reject the request.
     else if (context.getLeader() != null) {
       LOGGER.debug("{} - Rejected {}: leader already exists", context.getCluster().member().address(), request);
-      return responseBuilder
+      return VoteResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withVoted(false)
@@ -228,7 +228,7 @@ abstract class ActiveState extends PassiveState {
     // node) then don't vote for it. Only vote for candidates that we know about.
     else if (!context.getClusterState().getRemoteMemberStates().stream().<Integer>map(m -> m.getMember().id()).collect(Collectors.toSet()).contains(request.candidate())) {
       LOGGER.debug("{} - Rejected {}: candidate is not known to the local member", context.getCluster().member().address(), request);
-      return responseBuilder
+      return VoteResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withVoted(false)
@@ -238,13 +238,13 @@ abstract class ActiveState extends PassiveState {
     else if (context.getLastVotedFor() == 0) {
       if (isLogUpToDate(request.logIndex(), request.logTerm(), request)) {
         context.setLastVotedFor(request.candidate());
-        return responseBuilder
+        return VoteResponse.builder()
           .withStatus(ProtocolResponse.Status.OK)
           .withTerm(context.getTerm())
           .withVoted(true)
           .build();
       } else {
-        return responseBuilder
+        return VoteResponse.builder()
           .withStatus(ProtocolResponse.Status.OK)
           .withTerm(context.getTerm())
           .withVoted(false)
@@ -254,7 +254,7 @@ abstract class ActiveState extends PassiveState {
     // If we already voted for the requesting server, respond successfully.
     else if (context.getLastVotedFor() == request.candidate()) {
       LOGGER.debug("{} - Accepted {}: already voted for {}", context.getCluster().member().address(), request, context.getCluster().member(context.getLastVotedFor()).address());
-      return responseBuilder
+      return VoteResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withVoted(true)
@@ -263,7 +263,7 @@ abstract class ActiveState extends PassiveState {
     // In this case, we've already voted for someone else.
     else {
       LOGGER.debug("{} - Rejected {}: already voted for {}", context.getCluster().member().address(), request, context.getCluster().member(context.getLastVotedFor()).address());
-      return responseBuilder
+      return VoteResponse.builder()
         .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withVoted(false)

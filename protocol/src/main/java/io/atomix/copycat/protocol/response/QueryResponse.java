@@ -15,13 +15,11 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
-
 /**
  * Client query response.
  * <p>
  * Query responses are sent by servers to clients upon the completion of a
- * {@link WebSocketQueryRequest}. Query responses are sent with the
+ * {@link io.atomix.copycat.protocol.request.QueryRequest}. Query responses are sent with the
  * {@link #index()} of the state machine at the point at which the query was evaluated.
  * This can be used by the client to ensure it sees state progress monotonically. Note, however, that
  * query responses may not be sent or received in sequential order. If a query response is proxied through
@@ -31,8 +29,23 @@ import io.atomix.copycat.protocol.websocket.request.WebSocketQueryRequest;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class QueryResponse extends OperationResponse {
-  protected QueryResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
+
+  /**
+   * Returns a new query response builder.
+   *
+   * @return A new query response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public QueryResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error, index, eventIndex, result);
+  }
+
+  @Override
+  public Type type() {
+    return Type.QUERY;
   }
 
   /**

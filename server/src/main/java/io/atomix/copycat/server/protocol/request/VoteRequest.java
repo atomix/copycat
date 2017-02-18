@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.protocol.request;
 
-import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.protocol.request.AbstractRequest;
+import io.atomix.copycat.util.Assert;
 
 import java.util.Objects;
 
@@ -29,7 +29,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class VoteRequest extends AbstractRequest {
+public class VoteRequest extends AbstractRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new vote request builder.
+   *
+   * @return A new vote request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long term;
   protected final int candidate;
   protected final long logIndex;
@@ -40,6 +50,11 @@ public class VoteRequest extends AbstractRequest {
     this.candidate = candidate;
     this.logIndex = Assert.argNot(logIndex, logIndex < 0, "logIndex must not be negative");
     this.logTerm = Assert.argNot(logTerm, logTerm < 0,"logTerm must not be negative");
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.VOTE;
   }
 
   /**

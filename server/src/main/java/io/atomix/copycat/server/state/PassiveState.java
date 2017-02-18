@@ -26,6 +26,7 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.protocol.request.AcceptRequest;
 import io.atomix.copycat.server.protocol.request.AppendRequest;
 import io.atomix.copycat.server.protocol.request.InstallRequest;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
@@ -83,25 +84,26 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ProtocolServerConnection connection) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(
-        responseBuilder.withStatus(ProtocolResponse.Status.ERROR)
+        ConnectResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build()));
     } else {
       // Immediately register the session connection and send an accept request to the leader.
       context.getStateMachine().context().sessions().registerConnection(request.client(), connection);
 
-      return forward(c -> c.accept(b ->
-        b.withClient(request.client())
-          .withAddress(context.getCluster().member().serverAddress())
-          .build()))
+      return forward(c -> c.accept(AcceptRequest.builder()
+        .withClient(request.client())
+        .withAddress(context.getCluster().member().serverAddress())
+        .build()))
         .thenApply(acceptResponse ->
-          responseBuilder
+          ConnectResponse.builder()
             .withStatus(ProtocolResponse.Status.OK)
             .withLeader(context.getLeader() != null ? context.getLeader().clientAddress() : null)
             .withMembers(context.getCluster().members().stream()
@@ -110,7 +112,7 @@ class PassiveState extends ReserveState {
               .collect(Collectors.toList()))
             .build())
         .exceptionally(error ->
-          responseBuilder
+          ConnectResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -119,37 +121,38 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request, AppendResponse.Builder builder) {
+  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
 
-    return CompletableFuture.completedFuture(logResponse(handleAppend(request, builder)));
+    return CompletableFuture.completedFuture(logResponse(handleAppend(request)));
   }
 
   /**
    * Handles an append request.
    */
-  protected AppendResponse handleAppend(AppendRequest request, AppendResponse.Builder builder) {
+  protected AppendResponse handleAppend(AppendRequest request) {
     // If the request term is less than the current term then immediately
     // reply false and return our current term. The leader will receive
     // the updated term and step down.
     if (request.term() < context.getTerm()) {
       LOGGER.debug("{} - Rejected {}: request term is less than the current term ({})", context.getCluster().member().address(), request, context.getTerm());
-      return builder.withStatus(ProtocolResponse.Status.OK)
+      return AppendResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
         .withLogIndex(context.getLogWriter().lastIndex())
         .build();
     } else {
-      return checkGlobalIndex(request, builder);
+      return checkGlobalIndex(request);
     }
   }
 
   /**
    * Checks whether the log needs to be truncated based on the globalIndex.
    */
-  protected AppendResponse checkGlobalIndex(AppendRequest request, AppendResponse.Builder builder) {
+  protected AppendResponse checkGlobalIndex(AppendRequest request) {
     // If the globalIndex has changed and is not present in the local log, truncate the log.
     // This ensures that if major compaction progressed on any server beyond the entries in this
     // server's log that this server receives all entries after compaction.
@@ -166,32 +169,33 @@ class PassiveState extends ReserveState {
 
     // If an entry was provided, check the entry against the local log.
     if (request.logIndex() != 0) {
-      return checkPreviousEntry(request, builder);
+      return checkPreviousEntry(request);
     } else {
-      return appendEntries(request, builder);
+      return appendEntries(request);
     }
   }
 
   /**
    * Checks the previous entry in the append request for consistency.
    */
-  protected AppendResponse checkPreviousEntry(AppendRequest request, AppendResponse.Builder builder) {
+  protected AppendResponse checkPreviousEntry(AppendRequest request) {
     final long lastIndex = context.getLogWriter().lastIndex();
     if (request.logIndex() != 0 && request.logIndex() > lastIndex) {
       LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), lastIndex);
-      return builder.withStatus(ProtocolResponse.Status.OK)
+      return AppendResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
         .withLogIndex(context.getLogWriter().lastIndex())
         .build();
     }
-    return appendEntries(request, builder);
+    return appendEntries(request);
   }
 
   /**
    * Appends entries to the local log.
    */
-  protected AppendResponse appendEntries(AppendRequest request, AppendResponse.Builder builder) {
+  protected AppendResponse appendEntries(AppendRequest request) {
     // Get the last entry index or default to the request log index.
     long lastEntryIndex = request.logIndex();
     if (!request.entries().isEmpty()) {
@@ -239,7 +243,8 @@ class PassiveState extends ReserveState {
     // Apply commits to the state machine in batch.
     context.getStateMachine().applyAll(context.getCommitIndex());
 
-    return builder.withStatus(ProtocolResponse.Status.OK)
+    return AppendResponse.builder()
+      .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
       .withLogIndex(lastIndex)
@@ -247,7 +252,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<QueryResponse> onQuery(QueryRequest request, QueryResponse.Builder builder) {
+  public CompletableFuture<QueryResponse> onQuery(QueryRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -259,14 +264,14 @@ class PassiveState extends ReserveState {
       // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
       if (context.getStateMachine().getLastApplied() < request.session()) {
         LOGGER.debug("{} - State out of sync, forwarding query to leader");
-        return queryForward(request, builder);
+        return queryForward(request);
       }
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
       if (context.getLogWriter().lastIndex() < context.getCommitIndex()) {
         LOGGER.debug("{} - State out of sync, forwarding query to leader");
-        return queryForward(request, builder);
+        return queryForward(request);
       }
 
       final Indexed<QueryEntry> entry = new Indexed<>(
@@ -278,33 +283,34 @@ class PassiveState extends ReserveState {
           request.sequence(),
           request.bytes()), 0);
 
-      return queryLocal(entry, builder);
+      return queryLocal(entry);
     } else {
-      return queryForward(request, builder);
+      return queryForward(request);
     }
   }
 
   /**
    * Forwards the query to the leader.
    */
-  private CompletableFuture<QueryResponse> queryForward(QueryRequest request, QueryResponse.Builder responseBuilder) {
+  private CompletableFuture<QueryResponse> queryForward(QueryRequest request) {
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(
-        responseBuilder.withStatus(ProtocolResponse.Status.ERROR)
+        QueryResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build()));
     }
 
     LOGGER.debug("{} - Forwarded {}", context.getCluster().member().address(), request);
-    return forward(connection -> connection.query(b ->
-      b.withSession(request.session())
-        .withSequence(request.sequence())
-        .withIndex(request.index())
-        .withQuery(request.bytes())
-        .withConsistency(request.consistency())
-        .build()))
+    return forward(connection -> connection.query(QueryRequest.builder()
+      .withSession(request.session())
+      .withSequence(request.sequence())
+      .withIndex(request.index())
+      .withQuery(request.bytes())
+      .withConsistency(request.consistency())
+      .build()))
       .thenApply(response ->
-        responseBuilder
+        QueryResponse.builder()
           .withStatus(response.status())
           .withError(response.error())
           .withIndex(response.index())
@@ -312,7 +318,7 @@ class PassiveState extends ReserveState {
           .withResult(response.result())
           .build())
       .exceptionally(error ->
-        responseBuilder
+        QueryResponse.builder()
           .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build())
@@ -322,78 +328,80 @@ class PassiveState extends ReserveState {
   /**
    * Performs a local query.
    */
-  protected CompletableFuture<QueryResponse> queryLocal(Indexed<QueryEntry> entry, QueryResponse.Builder builder) {
+  protected CompletableFuture<QueryResponse> queryLocal(Indexed<QueryEntry> entry) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    sequenceQuery(entry, builder, future);
+    sequenceQuery(entry, future);
     return future;
   }
 
   /**
    * Sequences the given query.
    */
-  private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
+  private void sequenceQuery(Indexed<QueryEntry> entry, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
+        QueryResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR)
           .build()));
     } else {
-      sequenceQuery(entry, builder, session, future);
+      sequenceQuery(entry, session, future);
     }
   }
 
   /**
    * Sequences the given query.
    */
-  private void sequenceQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSession session, CompletableFuture<QueryResponse> future) {
+  private void sequenceQuery(Indexed<QueryEntry> entry, ServerSession session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
     if (entry.entry().sequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.entry().sequence(), () -> indexQuery(entry, builder, future));
+      session.registerSequenceQuery(entry.entry().sequence(), () -> indexQuery(entry, future));
     } else {
-      indexQuery(entry, builder, future);
+      indexQuery(entry, future);
     }
   }
 
   /**
    * Ensures the given query is applied after the appropriate index.
    */
-  private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
+  private void indexQuery(Indexed<QueryEntry> entry, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
       future.complete(logResponse(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
+        QueryResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.UNKNOWN_SESSION_ERROR)
           .build()));
     } else {
-      indexQuery(entry, builder, session, future);
+      indexQuery(entry, session, future);
     }
   }
 
   /**
    * Ensures the given query is applied after the appropriate index.
    */
-  private void indexQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, ServerSession session, CompletableFuture<QueryResponse> future) {
+  private void indexQuery(Indexed<QueryEntry> entry, ServerSession session, CompletableFuture<QueryResponse> future) {
     // If the query index is greater than the session's last applied index, queue the request for handling once the
     // state machine is caught up.
     if (entry.index() > session.getLastApplied()) {
-      session.registerIndexQuery(entry.index(), () -> applyQuery(entry, builder, future));
+      session.registerIndexQuery(entry.index(), () -> applyQuery(entry, future));
     } else {
-      applyQuery(entry, builder, future);
+      applyQuery(entry, future);
     }
   }
 
   /**
    * Applies a query to the state machine.
    */
-  protected CompletableFuture<QueryResponse> applyQuery(Indexed<QueryEntry> entry, QueryResponse.Builder builder, CompletableFuture<QueryResponse> future) {
+  protected CompletableFuture<QueryResponse> applyQuery(Indexed<QueryEntry> entry, CompletableFuture<QueryResponse> future) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // indexes will be the last applied index.
     context.getStateMachine().<ServerStateMachine.Result>apply(entry).whenComplete((result, error) -> {
-      completeOperation(result, builder, error, future);
+      completeOperation(result, QueryResponse.builder(), error, future);
     });
     return future;
   }
@@ -432,7 +440,7 @@ class PassiveState extends ReserveState {
   }
 
   @Override
-  public CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder builder) {
+  public CompletableFuture<InstallResponse> onInstall(InstallRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
@@ -440,7 +448,8 @@ class PassiveState extends ReserveState {
     // If the request is for a lesser term, reject the request.
     if (request.term() < context.getTerm()) {
       return CompletableFuture.completedFuture(logResponse(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
+        InstallResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
           .build()));
     }
@@ -463,7 +472,8 @@ class PassiveState extends ReserveState {
       // For new snapshots, the initial snapshot offset must be 0.
       if (request.offset() > 0) {
         return CompletableFuture.completedFuture(logResponse(
-          builder.withStatus(ProtocolResponse.Status.ERROR)
+          InstallResponse.builder()
+            .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
             .build()));
       }
@@ -475,7 +485,8 @@ class PassiveState extends ReserveState {
     // If the request offset is greater than the next expected snapshot offset, fail the request.
     if (request.offset() > nextSnapshotOffset) {
       return CompletableFuture.completedFuture(logResponse(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
+        InstallResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
           .build()));
     }
@@ -495,7 +506,8 @@ class PassiveState extends ReserveState {
     }
 
     return CompletableFuture.completedFuture(logResponse(
-      builder.withStatus(ProtocolResponse.Status.OK)
+      InstallResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .build()));
   }
 

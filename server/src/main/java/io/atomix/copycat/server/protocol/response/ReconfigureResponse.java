@@ -26,8 +26,23 @@ import java.util.Collection;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ReconfigureResponse extends ConfigurationResponse {
+
+  /**
+   * Returns a new reconfigure response builder.
+   *
+   * @return A new reconfigure response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   public ReconfigureResponse(Status status, ProtocolResponse.Error error, long index, long term, long timestamp, Collection<Member> members) {
     super(status, error, index, term, timestamp, members);
+  }
+
+  @Override
+  public RaftProtocolResponse.Type type() {
+    return RaftProtocolResponse.Type.RECONFIGURE;
   }
 
   /**

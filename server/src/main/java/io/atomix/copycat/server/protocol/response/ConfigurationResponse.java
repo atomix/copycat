@@ -35,7 +35,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class ConfigurationResponse extends AbstractResponse {
+public abstract class ConfigurationResponse extends AbstractResponse implements RaftProtocolResponse {
   protected final long index;
   protected final long term;
   protected final long timestamp;

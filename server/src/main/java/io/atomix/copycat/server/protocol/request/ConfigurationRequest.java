@@ -30,7 +30,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class ConfigurationRequest extends AbstractRequest {
+public abstract class ConfigurationRequest extends AbstractRequest implements RaftProtocolRequest {
   protected final Member member;
 
   protected ConfigurationRequest(Member member) {

@@ -16,7 +16,6 @@
 package io.atomix.copycat.server.protocol;
 
 import io.atomix.copycat.protocol.ProtocolClientConnection;
-import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.*;
 
@@ -32,73 +31,73 @@ public interface RaftProtocolClientConnection extends RaftProtocolConnection, Pr
   /**
    * Sends a join request to the server.
    *
-   * @param factory The join request factory.
+   * @param request The join request.
    * @return A completable future to be completed once the join response is received.
    */
-  CompletableFuture<JoinResponse> join(ProtocolRequestFactory<JoinRequest.Builder, JoinRequest> factory);
+  CompletableFuture<JoinResponse> join(JoinRequest request);
 
   /**
    * Sends a leave request to the server.
    *
-   * @param factory The leave request factory.
+   * @param request The leave request.
    * @return A completable future to be completed once the leave response is received.
    */
-  CompletableFuture<LeaveResponse> leave(ProtocolRequestFactory<LeaveRequest.Builder, LeaveRequest> factory);
+  CompletableFuture<LeaveResponse> leave(LeaveRequest request);
 
   /**
    * Sends an install request to the server.
    *
-   * @param factory The install request factory.
+   * @param request The install request.
    * @return A completable future to be completed once the install response is received.
    */
-  CompletableFuture<InstallResponse> install(ProtocolRequestFactory<InstallRequest.Builder, InstallRequest> factory);
+  CompletableFuture<InstallResponse> install(InstallRequest request);
 
   /**
    * Sends a configure request to the server.
    *
-   * @param factory The configure request factory.
+   * @param request The configure request.
    * @return A completable future to be completed once the configure response is received.
    */
-  CompletableFuture<ConfigureResponse> configure(ProtocolRequestFactory<ConfigureRequest.Builder, ConfigureRequest> factory);
+  CompletableFuture<ConfigureResponse> configure(ConfigureRequest request);
 
   /**
    * Sends a reconfigure request to the server.
    *
-   * @param factory The reconfigure request factory.
+   * @param request The reconfigure request.
    * @return A completable future to be completed once the reconfigure response is received.
    */
-  CompletableFuture<ReconfigureResponse> reconfigure(ProtocolRequestFactory<ReconfigureRequest.Builder, ReconfigureRequest> factory);
+  CompletableFuture<ReconfigureResponse> reconfigure(ReconfigureRequest request);
 
   /**
    * Sends an accept request to the server.
    *
-   * @param factory The accept request factory.
+   * @param request The accept request.
    * @return A completable future to be completed once the accept response is received.
    */
-  CompletableFuture<AcceptResponse> accept(ProtocolRequestFactory<AcceptRequest.Builder, AcceptRequest> factory);
+  CompletableFuture<AcceptResponse> accept(AcceptRequest request);
 
   /**
    * Sends a poll request to the server.
    *
-   * @param factory The poll request factory.
+   * @param request The poll request.
    * @return A completable future to be completed once the poll response is received.
    */
-  CompletableFuture<PollResponse> poll(ProtocolRequestFactory<PollRequest.Builder, PollRequest> factory);
+  CompletableFuture<PollResponse> poll(PollRequest request);
 
   /**
    * Sends a vote request to the server.
    *
-   * @param factory The vote request factory.
+   * @param request The vote request.
    * @return A completable future to be completed once the vote response is received.
    */
-  CompletableFuture<VoteResponse> vote(ProtocolRequestFactory<VoteRequest.Builder, VoteRequest> factory);
+  CompletableFuture<VoteResponse> vote(VoteRequest request);
 
   /**
    * Sends an append request to the server.
    *
-   * @param factory The append request factory.
+   * @param request The append request.
    * @return A completable future to be completed once the append response is received.
    */
-  CompletableFuture<AppendResponse> append(ProtocolRequestFactory<AppendRequest.Builder, AppendRequest> factory);
+  CompletableFuture<AppendResponse> append(AppendRequest request);
 
 }

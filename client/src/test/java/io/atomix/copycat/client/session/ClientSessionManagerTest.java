@@ -18,10 +18,11 @@ package io.atomix.copycat.client.session;
 import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.util.ClientConnection;
 import io.atomix.copycat.protocol.Address;
-import io.atomix.copycat.protocol.ProtocolRequestFactory;
-import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketUnregisterResponse;
+import io.atomix.copycat.protocol.request.RegisterRequest;
+import io.atomix.copycat.protocol.request.UnregisterRequest;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
+import io.atomix.copycat.protocol.response.RegisterResponse;
+import io.atomix.copycat.protocol.response.UnregisterResponse;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.testng.annotations.Test;
 
@@ -50,8 +51,8 @@ public class ClientSessionManagerTest {
     ClientConnection connection = mock(ClientConnection.class);
     when(connection.reset()).thenReturn(connection);
     when(connection.servers()).thenReturn(Collections.singletonList(new Address("localhost", 5000)));
-    when(connection.register(any(ProtocolRequestFactory.class)))
-      .thenReturn(CompletableFuture.completedFuture(new WebSocketRegisterResponse.Builder(1)
+    when(connection.register(any(RegisterRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withSession(1)
         .withLeader(new Address("localhost:5000"))
         .withMembers(Arrays.asList(
@@ -81,9 +82,9 @@ public class ClientSessionManagerTest {
       new Address("localhost", 5002)
     ));
 
-    when(connection.unregister(any(ProtocolRequestFactory.class)))
-      .thenReturn(CompletableFuture.completedFuture(new WebSocketUnregisterResponse.Builder(2)
-        .withStatus(WebSocketResponse.Status.OK)
+    when(connection.unregister(any(UnregisterRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(UnregisterResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .build()));
 
     manager.close().join();

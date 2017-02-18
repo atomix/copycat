@@ -17,8 +17,10 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.util.ClientConnection;
+import io.atomix.copycat.protocol.request.KeepAliveRequest;
+import io.atomix.copycat.protocol.request.RegisterRequest;
+import io.atomix.copycat.protocol.request.UnregisterRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Scheduled;
 import io.atomix.copycat.util.concurrent.ThreadContext;
@@ -82,14 +84,15 @@ final class ClientSessionManager {
   private void register(RegisterAttempt attempt) {
     state.getLogger().debug("Registering session: attempt {}", attempt.attempt);
 
-    connection.reset().register(builder ->
-      builder.withClient(state.getClientId())
+    connection.reset().register(
+      RegisterRequest.builder()
+        .withClient(state.getClientId())
         .withTimeout(sessionTimeout.toMillis())
         .build())
       .whenComplete((response, error) -> {
         if (error == null) {
           state.getLogger().debug("Received {}", response);
-          if (response.status() == WebSocketResponse.Status.OK) {
+          if (response.status() == ProtocolResponse.Status.OK) {
             interval = Duration.ofMillis(response.timeout()).dividedBy(2);
             connection.reset(response.leader(), response.members());
             state.setSessionId(response.session())
@@ -124,8 +127,9 @@ final class ClientSessionManager {
       connection.reset();
     }
 
-    connection.keepAlive(builder ->
-      builder.withSession(sessionId)
+    connection.keepAlive(
+      KeepAliveRequest.builder()
+        .withSession(sessionId)
         .withCommandSequence(state.getCommandResponse())
         .withEventIndex(state.getEventIndex())
         .build())
@@ -134,7 +138,7 @@ final class ClientSessionManager {
           if (error == null) {
             state.getLogger().debug("{} - Received {}", sessionId, response);
             // If the request was successful, update the address selector and schedule the next keep-alive.
-            if (response.status() == WebSocketResponse.Status.OK) {
+            if (response.status() == ProtocolResponse.Status.OK) {
               connection.reset(response.leader(), response.members());
               state.setState(ClientSession.State.OPEN);
               scheduleKeepAlive();
@@ -226,15 +230,16 @@ final class ClientSessionManager {
       connection.reset();
     }
 
-    connection.unregister(builder ->
-      builder.withSession(sessionId)
+    connection.unregister(
+      UnregisterRequest.builder()
+        .withSession(sessionId)
         .build())
       .whenComplete((response, error) -> {
         if (state.getState() != ClientSession.State.CLOSED) {
           if (error == null) {
             state.getLogger().debug("{} - Received {}", sessionId, response);
             // If the request was successful, update the session state and complete the close future.
-            if (response.status() == WebSocketResponse.Status.OK) {
+            if (response.status() == ProtocolResponse.Status.OK) {
               state.setState(ClientSession.State.CLOSED);
               future.complete(null);
             }

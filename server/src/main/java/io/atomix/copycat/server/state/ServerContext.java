@@ -514,14 +514,14 @@ public class ServerContext implements AutoCloseable {
   public void connectClient(ProtocolServerConnection connection) {
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.onRegister((request, builder) -> runOnContext(() -> state.onRegister(request, builder)));
-    connection.onConnect((request, builder) -> runOnContext(() -> state.onConnect(request, builder, connection)));
-    connection.onKeepAlive((request, builder) -> runOnContext(() -> state.onKeepAlive(request, builder)));
-    connection.onUnregister((request, builder) -> runOnContext(() -> state.onUnregister(request, builder)));
-    connection.onCommand((request, builder) -> runOnContext(() -> state.onCommand(request, builder)));
-    connection.onQuery((request, builder) -> runOnContext(() -> state.onQuery(request, builder)));
+    connection.onRegister(request -> runOnContext(() -> state.onRegister(request)));
+    connection.onConnect(request -> runOnContext(() -> state.onConnect(request, connection)));
+    connection.onKeepAlive(request -> runOnContext(() -> state.onKeepAlive(request)));
+    connection.onUnregister(request -> runOnContext(() -> state.onUnregister(request)));
+    connection.onCommand(request -> runOnContext(() -> state.onCommand(request)));
+    connection.onQuery(request -> runOnContext(() -> state.onQuery(request)));
 
-    connection.closeListener(stateMachine.context().sessions()::unregisterConnection);
+    connection.onClose(stateMachine.context().sessions()::unregisterConnection);
   }
 
   /**
@@ -531,23 +531,23 @@ public class ServerContext implements AutoCloseable {
     // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.onRegister((request, builder) -> runOnContext(() -> state.onRegister(request, builder)));
-    connection.onConnect((request, builder) -> runOnContext(() -> state.onConnect(request, builder, connection)));
-    connection.onAccept((request, builder) -> runOnContext(() -> state.onAccept(request, builder)));
-    connection.onKeepAlive((request, builder) -> runOnContext(() -> state.onKeepAlive(request, builder)));
-    connection.onUnregister((request, builder) -> runOnContext(() -> state.onUnregister(request, builder)));
-    connection.onConfigure((request, builder) -> runOnContext(() -> state.onConfigure(request, builder)));
-    connection.onInstall((request, builder) -> runOnContext(() -> state.onInstall(request, builder)));
-    connection.onJoin((request, builder) -> runOnContext(() -> state.onJoin(request, builder)));
-    connection.onReconfigure((request, builder) -> runOnContext(() -> state.onReconfigure(request, builder)));
-    connection.onLeave((request, builder) -> runOnContext(() -> state.onLeave(request, builder)));
-    connection.onAppend((request, builder) -> runOnContext(() -> state.onAppend(request, builder)));
-    connection.onPoll((request, builder) -> runOnContext(() -> state.onPoll(request, builder)));
-    connection.onVote((request, builder) -> runOnContext(() -> state.onVote(request, builder)));
-    connection.onCommand((request, builder) -> runOnContext(() -> state.onCommand(request, builder)));
-    connection.onQuery((request, builder) -> runOnContext(() -> state.onQuery(request, builder)));
+    connection.onRegister(request -> runOnContext(() -> state.onRegister(request)));
+    connection.onConnect(request -> runOnContext(() -> state.onConnect(request, connection)));
+    connection.onAccept(request -> runOnContext(() -> state.onAccept(request)));
+    connection.onKeepAlive(request -> runOnContext(() -> state.onKeepAlive(request)));
+    connection.onUnregister(request -> runOnContext(() -> state.onUnregister(request)));
+    connection.onConfigure(request -> runOnContext(() -> state.onConfigure(request)));
+    connection.onInstall(request -> runOnContext(() -> state.onInstall(request)));
+    connection.onJoin(request -> runOnContext(() -> state.onJoin(request)));
+    connection.onReconfigure(request -> runOnContext(() -> state.onReconfigure(request)));
+    connection.onLeave(request -> runOnContext(() -> state.onLeave(request)));
+    connection.onAppend(request -> runOnContext(() -> state.onAppend(request)));
+    connection.onPoll(request -> runOnContext(() -> state.onPoll(request)));
+    connection.onVote(request -> runOnContext(() -> state.onVote(request)));
+    connection.onCommand(request -> runOnContext(() -> state.onCommand(request)));
+    connection.onQuery(request -> runOnContext(() -> state.onQuery(request)));
 
-    connection.closeListener(stateMachine.context().sessions()::unregisterConnection);
+    connection.onClose(stateMachine.context().sessions()::unregisterConnection);
   }
 
   /**

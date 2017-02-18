@@ -76,7 +76,7 @@ public final class ConnectionManager {
    */
   private synchronized CompletableFuture<RaftProtocolClientConnection> createConnection(Address address) {
     return client.connect(address).thenApply(connection -> {
-      connection.closeListener(c -> {
+      connection.onClose(c -> {
         if (connections.get(address) == c) {
           connections.remove(address);
         }

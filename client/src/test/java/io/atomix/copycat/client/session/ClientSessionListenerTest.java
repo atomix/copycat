@@ -18,10 +18,8 @@ package io.atomix.copycat.client.session;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
 import io.atomix.copycat.protocol.ProtocolListener;
 import io.atomix.copycat.protocol.request.PublishRequest;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.PublishResponse;
-import io.atomix.copycat.protocol.websocket.request.WebSocketPublishRequest;
-import io.atomix.copycat.protocol.websocket.response.WebSocketPublishResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
@@ -41,7 +39,7 @@ import static org.testng.Assert.*;
 @Test
 public class ClientSessionListenerTest {
   private ClientSessionState state;
-  private ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> listener;
+  private ProtocolListener<PublishRequest, PublishResponse> listener;
 
   /**
    * Creates a client session listener.
@@ -79,14 +77,14 @@ public class ClientSessionListenerTest {
     });
 
     PublishResponse response;
-    response = this.listener.onRequest(new WebSocketPublishRequest.Builder(1)
+    response = this.listener.onRequest(PublishRequest.builder()
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(1)
       .withEvents(Collections.singletonList("Hello world!".getBytes()))
-      .build(), new WebSocketPublishResponse.Builder(1)).get();
+      .build()).get();
 
-    assertEquals(response.status(), WebSocketResponse.Status.OK);
+    assertEquals(response.status(), ProtocolResponse.Status.OK);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertTrue(received.get());
@@ -105,27 +103,27 @@ public class ClientSessionListenerTest {
     });
 
     PublishResponse response;
-    response = this.listener.onRequest(new WebSocketPublishRequest.Builder(1)
+    response = this.listener.onRequest(PublishRequest.builder()
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(1)
       .withEvents(Collections.singletonList("Hello world!".getBytes()))
-      .build(), new WebSocketPublishResponse.Builder(1)).get();
+      .build()).get();
 
-    assertEquals(response.status(), WebSocketResponse.Status.OK);
+    assertEquals(response.status(), ProtocolResponse.Status.OK);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertTrue(received.get());
 
     received.set(false);
-    response = this.listener.onRequest(new WebSocketPublishRequest.Builder(2)
+    response = this.listener.onRequest(PublishRequest.builder()
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(1)
       .withEvents(Collections.singletonList("Hello world!".getBytes()))
-      .build(), new WebSocketPublishResponse.Builder(2)).get();
+      .build()).get();
 
-    assertEquals(response.status(), WebSocketResponse.Status.OK);
+    assertEquals(response.status(), ProtocolResponse.Status.OK);
     assertEquals(response.index(), 10);
     assertEquals(state.getEventIndex(), 10);
     assertFalse(received.get());
@@ -144,14 +142,14 @@ public class ClientSessionListenerTest {
     });
 
     PublishResponse response;
-    response = this.listener.onRequest(new WebSocketPublishRequest.Builder(1)
+    response = this.listener.onRequest(PublishRequest.builder()
       .withSession(1)
       .withEventIndex(10)
       .withPreviousIndex(2)
       .withEvents(Collections.singletonList("Hello world!".getBytes()))
-      .build(), new WebSocketPublishResponse.Builder(2)).get();
+      .build()).get();
 
-    assertEquals(response.status(), WebSocketResponse.Status.ERROR);
+    assertEquals(response.status(), ProtocolResponse.Status.ERROR);
     assertEquals(response.index(), 1);
     assertEquals(state.getEventIndex(), 1);
     assertFalse(received.get());

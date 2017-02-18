@@ -27,8 +27,23 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class UnregisterRequest extends SessionRequest {
-  protected UnregisterRequest(long session) {
+
+  /**
+   * Returns a new unregister request builder.
+   *
+   * @return A new unregister request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public UnregisterRequest(long session) {
     super(session);
+  }
+
+  @Override
+  public Type type() {
+    return Type.UNREGISTER;
   }
 
   @Override

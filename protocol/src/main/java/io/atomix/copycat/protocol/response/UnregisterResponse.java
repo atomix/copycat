@@ -15,24 +15,36 @@
  */
 package io.atomix.copycat.protocol.response;
 
-import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
-import io.atomix.copycat.protocol.websocket.request.WebSocketUnregisterRequest;
-
 import java.util.Objects;
 
 /**
  * Session unregister response.
  * <p>
- * Session unregister responses are sent in response to a {@link WebSocketUnregisterRequest}.
+ * Session unregister responses are sent in response to a {@link io.atomix.copycat.protocol.request.UnregisterRequest}.
  * If the response is successful, that indicates the session was successfully unregistered. For unsuccessful
- * unregister requests, sessions can still be expired by simply halting {@link WebSocketKeepAliveRequest}s
+ * unregister requests, sessions can still be expired by simply halting {@link io.atomix.copycat.protocol.request.KeepAliveRequest}s
  * to the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class UnregisterResponse extends SessionResponse {
-  protected UnregisterResponse(Status status, ProtocolResponse.Error error) {
+
+  /**
+   * Returns a new unregister response builder.
+   *
+   * @return A new unregister response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public UnregisterResponse(Status status, ProtocolResponse.Error error) {
     super(status, error);
+  }
+
+  @Override
+  public Type type() {
+    return Type.UNREGISTER;
   }
 
   @Override

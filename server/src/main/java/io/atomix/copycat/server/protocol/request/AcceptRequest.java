@@ -30,13 +30,28 @@ import io.atomix.copycat.protocol.request.AbstractRequest;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class AcceptRequest extends AbstractRequest {
+public class AcceptRequest extends AbstractRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new accept request builder.
+   *
+   * @return A new accept request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final String client;
   protected final Address address;
 
-  protected AcceptRequest(String client, Address address) {
+  public AcceptRequest(String client, Address address) {
     this.client = Assert.notNull(client, "client");
     this.address = Assert.notNull(address, "address");
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.ACCEPT;
   }
 
   /**

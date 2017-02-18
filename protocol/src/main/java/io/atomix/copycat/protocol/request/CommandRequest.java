@@ -38,8 +38,22 @@ import java.util.Objects;
  */
 public class CommandRequest extends OperationRequest {
 
-  protected CommandRequest(long session, long sequence, byte[] bytes) {
+  /**
+   * Returns a new command request builder.
+   *
+   * @return A new command request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public CommandRequest(long session, long sequence, byte[] bytes) {
     super(session, sequence, bytes);
+  }
+
+  @Override
+  public Type type() {
+    return Type.COMMAND;
   }
 
   @Override

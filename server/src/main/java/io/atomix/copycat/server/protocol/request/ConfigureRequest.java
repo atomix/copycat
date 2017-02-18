@@ -32,7 +32,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class ConfigureRequest extends AbstractRequest {
+public class ConfigureRequest extends AbstractRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new configure request builder.
+   *
+   * @return A new configure request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long term;
   protected final int leader;
   protected final long index;
@@ -45,6 +55,11 @@ public class ConfigureRequest extends AbstractRequest {
     this.index = Assert.argNot(index, index < 0, "index must be positive");
     this.timestamp = Assert.argNot(timestamp, timestamp <= 0, "timestamp must be positive");
     this.members = Assert.notNull(members, "members");
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.CONFIGURE;
   }
 
   /**

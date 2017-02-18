@@ -41,13 +41,28 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class QueryRequest extends OperationRequest {
+
+  /**
+   * Returns a new query request builder.
+   *
+   * @return A new query request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long index;
   protected final ConsistencyLevel consistency;
 
-  protected QueryRequest(long session, long sequence, long index, byte[] bytes, ConsistencyLevel consistency) {
+  public QueryRequest(long session, long sequence, long index, byte[] bytes, ConsistencyLevel consistency) {
     super(session, sequence, bytes);
     this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
     this.consistency = Assert.notNull(consistency, "consistency");
+  }
+
+  @Override
+  public Type type() {
+    return Type.QUERY;
   }
 
   /**

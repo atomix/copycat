@@ -31,9 +31,24 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class AcceptResponse extends AbstractResponse {
+public class AcceptResponse extends AbstractResponse implements RaftProtocolResponse {
+
+  /**
+   * Returns a new accept response builder.
+   *
+   * @return A new accept response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   public AcceptResponse(ProtocolResponse.Status status, ProtocolResponse.Error error) {
     super(status, error);
+  }
+
+  @Override
+  public RaftProtocolResponse.Type type() {
+    return RaftProtocolResponse.Type.ACCEPT;
   }
 
   @Override

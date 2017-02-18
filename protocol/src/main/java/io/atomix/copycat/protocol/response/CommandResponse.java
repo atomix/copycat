@@ -29,8 +29,23 @@ package io.atomix.copycat.protocol.response;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandResponse extends OperationResponse {
-  protected CommandResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
+
+  /**
+   * Returns a new command response builder.
+   *
+   * @return A new command response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public CommandResponse(Status status, ProtocolResponse.Error error, long index, long eventIndex, byte[] result) {
     super(status, error, index, eventIndex, result);
+  }
+
+  @Override
+  public Type type() {
+    return Type.COMMAND;
   }
 
   /**

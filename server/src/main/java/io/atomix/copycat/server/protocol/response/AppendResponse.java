@@ -32,7 +32,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class AppendResponse extends AbstractResponse {
+public class AppendResponse extends AbstractResponse implements RaftProtocolResponse {
+
+  /**
+   * Returns a new append response builder.
+   *
+   * @return A new append response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long term;
   protected final boolean succeeded;
   protected final long logIndex;
@@ -42,6 +52,11 @@ public class AppendResponse extends AbstractResponse {
     this.term = Assert.argNot(term, term <= 0, "term must be positive");
     this.succeeded = succeeded;
     this.logIndex = Assert.argNot(logIndex, logIndex < 0, "logIndex must not be negative");
+  }
+
+  @Override
+  public RaftProtocolResponse.Type type() {
+    return RaftProtocolResponse.Type.APPEND;
   }
 
   /**

@@ -33,7 +33,7 @@ public interface ProtocolServerConnection extends ProtocolConnection {
    * @param listener The listener to be called when a connect request is received from the server.
    * @return The client connection.
    */
-  ProtocolServerConnection onConnect(ProtocolListener<ConnectRequest, ConnectResponse.Builder, ConnectResponse> listener);
+  ProtocolServerConnection onConnect(ProtocolListener<ConnectRequest, ConnectResponse> listener);
 
   /**
    * Registers a listener to be called when a register request is received from the server.
@@ -41,7 +41,7 @@ public interface ProtocolServerConnection extends ProtocolConnection {
    * @param listener The listener to be called when a register request is received from the server.
    * @return The client connection.
    */
-  ProtocolServerConnection onRegister(ProtocolListener<RegisterRequest, RegisterResponse.Builder, RegisterResponse> listener);
+  ProtocolServerConnection onRegister(ProtocolListener<RegisterRequest, RegisterResponse> listener);
 
   /**
    * Registers a listener to be called when a keep-alive request is received from the server.
@@ -49,7 +49,7 @@ public interface ProtocolServerConnection extends ProtocolConnection {
    * @param listener The listener to be called when a keep-alive request is received from the server.
    * @return The client connection.
    */
-  ProtocolServerConnection onKeepAlive(ProtocolListener<KeepAliveRequest, KeepAliveResponse.Builder, KeepAliveResponse> listener);
+  ProtocolServerConnection onKeepAlive(ProtocolListener<KeepAliveRequest, KeepAliveResponse> listener);
 
   /**
    * Registers a listener to be called when an unregister request is received from the server.
@@ -57,7 +57,7 @@ public interface ProtocolServerConnection extends ProtocolConnection {
    * @param listener The listener to be called when an unregister request is received from the server.
    * @return The client connection.
    */
-  ProtocolServerConnection onUnregister(ProtocolListener<UnregisterRequest, UnregisterResponse.Builder, UnregisterResponse> listener);
+  ProtocolServerConnection onUnregister(ProtocolListener<UnregisterRequest, UnregisterResponse> listener);
 
   /**
    * Registers a listener to be called when a command request is received from the server.
@@ -65,7 +65,7 @@ public interface ProtocolServerConnection extends ProtocolConnection {
    * @param listener The listener to be called when a command request is received from the server.
    * @return The client connection.
    */
-  ProtocolServerConnection onCommand(ProtocolListener<CommandRequest, CommandResponse.Builder, CommandResponse> listener);
+  ProtocolServerConnection onCommand(ProtocolListener<CommandRequest, CommandResponse> listener);
 
   /**
    * Registers a listener to be called when a query request is received from the server.
@@ -73,14 +73,14 @@ public interface ProtocolServerConnection extends ProtocolConnection {
    * @param listener The listener to be called when a query request is received from the server.
    * @return The client connection.
    */
-  ProtocolServerConnection onQuery(ProtocolListener<QueryRequest, QueryResponse.Builder, QueryResponse> listener);
+  ProtocolServerConnection onQuery(ProtocolListener<QueryRequest, QueryResponse> listener);
 
   /**
-   * Sends a publish request to the server.
+   * Sends a publish request to the client.
    *
-   * @param builder The publish request builder.
+   * @param request The publish request.
    * @return A completable future to be completed once the publish response is received.
    */
-  CompletableFuture<PublishResponse> publish(ProtocolRequestFactory<PublishRequest.Builder, PublishRequest> builder);
+  CompletableFuture<PublishResponse> publish(PublishRequest request);
 
 }

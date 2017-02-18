@@ -249,8 +249,9 @@ final class ClientSessionSubmitter {
 
     @Override
     protected CompletableFuture<CommandResponse> execute(ProtocolClientConnection connection) {
-      return connection.command(builder ->
-        builder.withSession(session)
+      return connection.command(
+        CommandRequest.builder()
+          .withSession(session)
           .withSequence(sequence)
           .withCommand(command.rewind().readBytes())
           .build());
@@ -332,8 +333,9 @@ final class ClientSessionSubmitter {
 
     @Override
     protected CompletableFuture<QueryResponse> execute(ProtocolClientConnection connection) {
-      return connection.query(builder ->
-        builder.withSession(session)
+      return connection.query(
+        QueryRequest.builder()
+          .withSession(session)
           .withSequence(sequence)
           .withIndex(index)
           .withQuery(query.rewind().readBytes())

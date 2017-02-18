@@ -32,7 +32,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class AppendRequest extends AbstractRequest {
+public class AppendRequest extends AbstractRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new append request builder.
+   *
+   * @return A new append request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long term;
   protected final int leader;
   protected final long logIndex;
@@ -49,6 +59,11 @@ public class AppendRequest extends AbstractRequest {
     this.entries = Assert.notNull(entries, "entries");
     this.commitIndex = Assert.argNot(commitIndex, commitIndex < 0, "commitIndex must not be negative");
     this.globalIndex = Assert.argNot(globalIndex, globalIndex < 0, "globalIndex must not be negative");
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.APPEND;
   }
 
   /**

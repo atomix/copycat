@@ -29,9 +29,24 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class InstallResponse extends AbstractResponse {
+public class InstallResponse extends AbstractResponse implements RaftProtocolResponse {
+
+  /**
+   * Returns a new install response builder.
+   *
+   * @return A new install response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   public InstallResponse(Status status, ProtocolResponse.Error error) {
     super(status, error);
+  }
+
+  @Override
+  public RaftProtocolResponse.Type type() {
+    return RaftProtocolResponse.Type.INSTALL;
   }
 
   @Override

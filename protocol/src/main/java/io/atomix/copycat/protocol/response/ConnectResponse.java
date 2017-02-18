@@ -31,13 +31,28 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConnectResponse extends AbstractResponse {
+
+  /**
+   * Returns a new connect response builder.
+   *
+   * @return A new connect response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final Address leader;
   protected final Collection<Address> members;
 
-  protected ConnectResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
+  public ConnectResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
     super(status, error);
     this.leader = leader;
     this.members = Assert.notNull(members, "members");
+  }
+
+  @Override
+  public Type type() {
+    return Type.CONNECT;
   }
 
   /**

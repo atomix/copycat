@@ -30,50 +30,50 @@ public interface ProtocolClientConnection extends ProtocolConnection {
   /**
    * Sends a connect request to the server.
    *
-   * @param builder The connect request builder.
+   * @param request The connect builder.
    * @return A completable future to be completed once the connect response is received.
    */
-  CompletableFuture<ConnectResponse> connect(ProtocolRequestFactory<ConnectRequest.Builder, ConnectRequest> builder);
+  CompletableFuture<ConnectResponse> connect(ConnectRequest request);
 
   /**
    * Sends a register request to the server.
    *
-   * @param builder The register request builder.
+   * @param request The register builder.
    * @return A completable future to be completed once the register response is received.
    */
-  CompletableFuture<RegisterResponse> register(ProtocolRequestFactory<RegisterRequest.Builder, RegisterRequest> builder);
+  CompletableFuture<RegisterResponse> register(RegisterRequest request);
 
   /**
    * Sends a keep-alive request to the server.
    *
-   * @param builder The keep-alive request builder.
+   * @param request The keep-alive builder.
    * @return A completable future to be completed once the keep-alive response is received.
    */
-  CompletableFuture<KeepAliveResponse> keepAlive(ProtocolRequestFactory<KeepAliveRequest.Builder, KeepAliveRequest> builder);
+  CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
 
   /**
    * Sends an unregister request to the server.
    *
-   * @param builder The unregister request builder.
+   * @param request The unregister builder.
    * @return A completable future to be completed once the unregister response is received.
    */
-  CompletableFuture<UnregisterResponse> unregister(ProtocolRequestFactory<UnregisterRequest.Builder, UnregisterRequest> builder);
+  CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
 
   /**
    * Sends a command request to the server.
    *
-   * @param builder The command request builder.
+   * @param request The command builder.
    * @return A completable future to be completed once the command response is received.
    */
-  CompletableFuture<CommandResponse> command(ProtocolRequestFactory<CommandRequest.Builder, CommandRequest> builder);
+  CompletableFuture<CommandResponse> command(CommandRequest request);
 
   /**
    * Sends a query request to the server.
    *
-   * @param builder The query request builder.
+   * @param request The query builder.
    * @return A completable future to be completed once the query response is received.
    */
-  CompletableFuture<QueryResponse> query(ProtocolRequestFactory<QueryRequest.Builder, QueryRequest> builder);
+  CompletableFuture<QueryResponse> query(QueryRequest request);
 
   /**
    * Registers a listener to be called when a publish request is received from the server.
@@ -81,6 +81,6 @@ public interface ProtocolClientConnection extends ProtocolConnection {
    * @param listener The listener to be called when a publish request is received from the server.
    * @return The client connection.
    */
-  ProtocolClientConnection onPublish(ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> listener);
+  ProtocolClientConnection onPublish(ProtocolListener<PublishRequest, PublishResponse> listener);
 
 }

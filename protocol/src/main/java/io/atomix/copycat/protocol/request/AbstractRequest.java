@@ -20,7 +20,7 @@ package io.atomix.copycat.protocol.request;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class AbstractRequest implements ProtocolRequest {
+public abstract class AbstractRequest implements ProtocolRequest {
 
   /**
    * Abstract request builder.

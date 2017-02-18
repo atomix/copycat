@@ -26,4 +26,9 @@ public interface Protocol extends ProtocolBase {
 
   @Override
   ProtocolServer createServer();
+
+  /**
+   * Protocol builder.
+   */
+  interface Builder<T extends Protocol> extends io.atomix.copycat.util.Builder<T> {}
 }

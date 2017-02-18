@@ -25,7 +25,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ReconfigureRequest extends ConfigurationRequest {
+public class ReconfigureRequest extends ConfigurationRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new reconfigure response builder.
+   *
+   * @return A new reconfigure response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long index;
   protected final long term;
 
@@ -33,6 +43,11 @@ public class ReconfigureRequest extends ConfigurationRequest {
     super(member);
     this.index = Assert.argNot(index, index < 0, "index must be positive");
     this.term = Assert.argNot(term, term < 0, "term must be positive");
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.RECONFIGURE;
   }
 
   /**

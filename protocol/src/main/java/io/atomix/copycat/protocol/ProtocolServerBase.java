@@ -43,7 +43,7 @@ public interface ProtocolServerBase<T extends ProtocolConnection> {
   /**
    * Closes the server.
    * <p>
-   * When the server is closed, any {@link ProtocolServerConnection#closeListener(Consumer) close listeners} registered
+   * When the server is closed, any {@link ProtocolServerConnection#onClose(Consumer) close listeners} registered
    * on the server's {@link ProtocolServerConnection}s will be invoked prior to shutdown.
    *
    * @return A completable future to be completed once the server is closed.

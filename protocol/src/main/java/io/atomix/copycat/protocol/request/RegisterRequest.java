@@ -31,12 +31,27 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class RegisterRequest extends AbstractRequest {
+
+  /**
+   * Returns a new register request builder.
+   *
+   * @return A new register request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final String client;
   protected final long timeout;
 
-  protected RegisterRequest(String client, long timeout) {
+  public RegisterRequest(String client, long timeout) {
     this.client = Assert.notNull(client, "client");
     this.timeout = Assert.arg(timeout, timeout >= -1, "timeout must be -1 or greater");
+  }
+
+  @Override
+  public Type type() {
+    return Type.REGISTER;
   }
 
   /**

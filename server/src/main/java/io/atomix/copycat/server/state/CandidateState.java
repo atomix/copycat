@@ -138,12 +138,12 @@ final class CandidateState extends ActiveState {
     for (ServerMember member : votingMembers) {
       LOGGER.debug("{} - Requesting vote from {} for term {}", context.getCluster().member().address(), member, context.getTerm());
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.vote(builder ->
-          builder.withTerm(context.getTerm())
-            .withCandidate(context.getCluster().member().id())
-            .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
-            .withLogTerm(lastTerm)
-            .build())
+        connection.vote(VoteRequest.builder()
+          .withTerm(context.getTerm())
+          .withCandidate(context.getCluster().member().id())
+          .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
+          .withLogTerm(lastTerm)
+          .build())
           .whenCompleteAsync((response, error) -> {
             context.checkThread();
             if (isOpen() && !complete.get()) {
@@ -174,7 +174,7 @@ final class CandidateState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request) {
     context.checkThread();
 
     // If the request indicates a term that is greater than the current term then
@@ -183,18 +183,18 @@ final class CandidateState extends ActiveState {
       context.setTerm(request.term());
       context.transition(CopycatServer.State.FOLLOWER);
     }
-    return super.onAppend(request, responseBuilder);
+    return super.onAppend(request);
   }
 
   @Override
-  public CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
 
     // If the request indicates a term that is greater than the current term then
     // assign that term and leader to the current context and step down as a candidate.
     if (updateTermAndLeader(request.term(), 0)) {
-      CompletableFuture<VoteResponse> future = super.onVote(request, responseBuilder);
+      CompletableFuture<VoteResponse> future = super.onVote(request);
       context.transition(CopycatServer.State.FOLLOWER);
       return future;
     }
@@ -202,14 +202,14 @@ final class CandidateState extends ActiveState {
     // If the vote request is not for this candidate then reject the vote.
     if (request.candidate() == context.getCluster().member().id()) {
       return CompletableFuture.completedFuture(logResponse(
-        responseBuilder
+        VoteResponse.builder()
           .withStatus(ProtocolResponse.Status.OK)
           .withTerm(context.getTerm())
           .withVoted(true)
           .build()));
     } else {
       return CompletableFuture.completedFuture(logResponse(
-        responseBuilder
+        VoteResponse.builder()
           .withStatus(ProtocolResponse.Status.OK)
           .withTerm(context.getTerm())
           .withVoted(false)

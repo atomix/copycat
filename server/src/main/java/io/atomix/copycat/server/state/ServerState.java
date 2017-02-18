@@ -43,144 +43,128 @@ public interface ServerState extends Managed<ServerState> {
    * Handles a register request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder builder);
+  CompletableFuture<RegisterResponse> onRegister(RegisterRequest request);
 
   /**
    * Handles a connect request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder builder, ProtocolServerConnection connection);
+  CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ProtocolServerConnection connection);
 
   /**
    * Handles an accept request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder builder);
+  CompletableFuture<AcceptResponse> onAccept(AcceptRequest request);
 
   /**
    * Handles a keep alive request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder builder);
+  CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request);
 
   /**
    * Handles an unregister request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder builder);
+  CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request);
 
   /**
    * Handles a publish request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<PublishResponse> onPublish(PublishRequest request, PublishResponse.Builder builder);
+  CompletableFuture<PublishResponse> onPublish(PublishRequest request);
 
   /**
    * Handles a configure request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request, ConfigureResponse.Builder builder);
+  CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request);
 
   /**
    * Handles an install request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder builder);
+  CompletableFuture<InstallResponse> onInstall(InstallRequest request);
 
   /**
    * Handles a join request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<JoinResponse> onJoin(JoinRequest request, JoinResponse.Builder builder);
+  CompletableFuture<JoinResponse> onJoin(JoinRequest request);
 
   /**
    * Handles a configure request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request, ReconfigureResponse.Builder builder);
+  CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request);
 
   /**
    * Handles a leave request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<LeaveResponse> onLeave(LeaveRequest request, LeaveResponse.Builder builder);
+  CompletableFuture<LeaveResponse> onLeave(LeaveRequest request);
 
   /**
    * Handles an append request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder builder);
+  CompletableFuture<AppendResponse> onAppend(AppendRequest request);
 
   /**
    * Handles a poll request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<PollResponse> onPoll(PollRequest request, PollResponse.Builder builder);
+  CompletableFuture<PollResponse> onPoll(PollRequest request);
 
   /**
    * Handles a vote request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder builder);
+  CompletableFuture<VoteResponse> onVote(VoteRequest request);
 
   /**
    * Handles a command request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<CommandResponse> onCommand(CommandRequest request, CommandResponse.Builder builder);
+  CompletableFuture<CommandResponse> onCommand(CommandRequest request);
 
   /**
    * Handles a query request.
    *
    * @param request The request to handle.
-   * @param builder The response builder.
    * @return A completable future to be completed with the request response.
    */
-  CompletableFuture<QueryResponse> onQuery(QueryRequest request, QueryResponse.Builder builder);
+  CompletableFuture<QueryResponse> onQuery(QueryRequest request);
 
 }

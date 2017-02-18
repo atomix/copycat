@@ -26,15 +26,14 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @FunctionalInterface
-public interface ProtocolListener<T extends ProtocolRequest, U extends ProtocolResponse.Builder<U, V>, V extends ProtocolResponse> {
+public interface ProtocolListener<T extends ProtocolRequest, U extends ProtocolResponse> {
 
   /**
    * Called when a request is received.
    *
    * @param request The request that was received.
-   * @param builder The protocol response builder.
    * @return A completable future to be completed with the response.
    */
-  CompletableFuture<V> onRequest(T request, U builder);
+  CompletableFuture<U> onRequest(T request);
 
 }

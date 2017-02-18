@@ -38,7 +38,7 @@ public interface ProtocolClientBase<T extends ProtocolConnection> {
    * Closes the client.
    * <p>
    * Before the client is closed, all {@link ProtocolClientConnection}s opened by the client will be closed
-   * and any registered {@link ProtocolClientConnection#closeListener(java.util.function.Consumer)}s will be invoked.
+   * and any registered {@link ProtocolClientConnection#onClose(java.util.function.Consumer)}s will be invoked.
    *
    * @return A completable future to be called once the client is closed.
    * @throws IllegalStateException if not called from a Catalyst thread

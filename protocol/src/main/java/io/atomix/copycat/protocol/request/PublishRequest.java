@@ -33,15 +33,30 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class PublishRequest extends SessionRequest {
+
+  /**
+   * Returns a new publish request builder.
+   *
+   * @return A new publish request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long eventIndex;
   protected final long previousIndex;
   protected final List<byte[]> events;
 
-  protected PublishRequest(long session, long eventIndex, long previousIndex, List<byte[]> events) {
+  public PublishRequest(long session, long eventIndex, long previousIndex, List<byte[]> events) {
     super(session);
     this.eventIndex = Assert.argNot(eventIndex, eventIndex < 1, "eventIndex cannot be less than 1");
     this.previousIndex = Assert.argNot(previousIndex, previousIndex < 0, "previousIndex cannot be less than 0");
     this.events = Assert.notNull(events, "events");
+  }
+
+  @Override
+  public Type type() {
+    return Type.PUBLISH;
   }
 
   /**

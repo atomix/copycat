@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.protocol.error.InternalException;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
@@ -181,7 +180,7 @@ final class LeaderAppender extends AbstractAppender {
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
     if (member.getFailureCount() > 0) {
       if (member.canAppend()) {
-        sendAppendRequest(member, builder -> buildAppendEmptyRequest(member, builder));
+        sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
     // If the member term is less than the current term or the member's configuration index is less
@@ -191,13 +190,13 @@ final class LeaderAppender extends AbstractAppender {
     // Once the configuration is complete sendAppendRequest will be called recursively.
     else if (member.getConfigTerm() < context.getTerm() || member.getConfigIndex() < context.getClusterState().getConfiguration().index()) {
       if (member.canConfigure()) {
-        sendConfigureRequest(member, builder -> buildConfigureRequest(member, builder));
+        sendConfigureRequest(member, buildConfigureRequest(member));
       }
     }
     // If the member is a reserve or passive member, send an empty AppendRequest to it.
     else if (member.getMember().type() == Member.Type.RESERVE || member.getMember().type() == Member.Type.PASSIVE) {
       if (member.canAppend()) {
-        sendAppendRequest(member, builder -> buildAppendEmptyRequest(member, builder));
+        sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
@@ -206,12 +205,12 @@ final class LeaderAppender extends AbstractAppender {
       && context.getSnapshotStore().currentSnapshot().index() >= member.getLogReader().currentIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (member.canInstall()) {
-        sendInstallRequest(member, builder -> buildInstallRequest(member, builder));
+        sendInstallRequest(member, buildInstallRequest(member));
       }
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (member.canAppend()) {
-      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, context.getLogWriter().lastIndex()));
+      sendAppendRequest(member, buildAppendRequest(member, context.getLogWriter().lastIndex()));
     }
   }
 
@@ -356,12 +355,12 @@ final class LeaderAppender extends AbstractAppender {
   /**
    * Connects to the member and sends a commit message.
    */
-  protected void sendAppendRequest(MemberState member, ProtocolRequestFactory<AppendRequest.Builder, AppendRequest> factory) {
+  protected void sendAppendRequest(MemberState member, AppendRequest request) {
     // Set the start time of the member's current commit. This will be used to associate responses
     // with the current commit request.
     member.setHeartbeatStartTime(heartbeatTime);
 
-    super.sendAppendRequest(member, factory);
+    super.sendAppendRequest(member, request);
   }
 
   /**

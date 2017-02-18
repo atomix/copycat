@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.request;
 
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.protocol.websocket.response.WebSocketRegisterResponse;
 
 import java.util.Objects;
 
@@ -25,7 +24,7 @@ import java.util.Objects;
  * <p>
  * Keep alive requests are sent by clients to servers to maintain a session registered via
  * a {@link RegisterRequest}. Once a session has been registered, clients are responsible for sending
- * keep alive requests to the cluster at a rate less than the provided {@link WebSocketRegisterResponse#timeout()}.
+ * keep alive requests to the cluster at a rate less than the provided {@link io.atomix.copycat.protocol.response.RegisterResponse#timeout()}.
  * Keep alive requests also server to acknowledge the receipt of responses and events by the client.
  * The {@link #commandSequence()} number indicates the highest command sequence number for which the client
  * has received a response, and the {@link #eventIndex()} number indicates the highest index for which the
@@ -34,13 +33,28 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class KeepAliveRequest extends SessionRequest {
+
+  /**
+   * Returns a new keep-alive request builder.
+   *
+   * @return A new keep-alive request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long commandSequence;
   protected final long eventIndex;
 
-  protected KeepAliveRequest(long session, long commandSequence, long eventIndex) {
+  public KeepAliveRequest(long session, long commandSequence, long eventIndex) {
     super(session);
     this.commandSequence = Assert.argNot(commandSequence, commandSequence < 0, "commandSequence cannot be negative");
     this.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
+  }
+
+  @Override
+  public Type type() {
+    return Type.KEEP_ALIVE;
   }
 
   /**

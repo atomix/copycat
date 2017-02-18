@@ -17,13 +17,12 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.protocol.ProtocolClientConnection;
-import io.atomix.copycat.protocol.ProtocolRequestFactory;
 import io.atomix.copycat.protocol.error.QueryException;
+import io.atomix.copycat.protocol.request.CommandRequest;
+import io.atomix.copycat.protocol.request.QueryRequest;
 import io.atomix.copycat.protocol.response.CommandResponse;
+import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.protocol.response.QueryResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketCommandResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketQueryResponse;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.util.buffer.BufferInput;
 import io.atomix.copycat.util.buffer.HeapBuffer;
 import io.atomix.copycat.util.concurrent.ThreadContext;
@@ -50,9 +49,9 @@ public class ClientSessionSubmitterTest {
   @SuppressWarnings("unchecked")
   public void testSubmitCommand() throws Throwable {
     ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
-    when(connection.command(any(ProtocolRequestFactory.class)))
-      .thenReturn(CompletableFuture.completedFuture(new WebSocketCommandResponse.Builder(1)
-        .withStatus(WebSocketResponse.Status.OK)
+    when(connection.command(any(CommandRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .withIndex(10)
         .withResult("Hello world!".getBytes())
         .build()));
@@ -83,7 +82,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<CommandResponse> future2 = new CompletableFuture<>();
 
     ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
-    Mockito.when(connection.command(any(ProtocolRequestFactory.class)))
+    Mockito.when(connection.command(any(CommandRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -102,8 +101,8 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<BufferInput> result1 = submitter.submitCommand(HeapBuffer.allocate().flip());
     CompletableFuture<BufferInput> result2 = submitter.submitCommand(HeapBuffer.allocate().flip());
 
-    future2.complete(new WebSocketCommandResponse.Builder(2)
-      .withStatus(WebSocketResponse.Status.OK)
+    future2.complete(CommandResponse.builder()
+      .withStatus(ProtocolResponse.Status.OK)
       .withIndex(10)
       .withResult("Hello world again!".getBytes())
       .build());
@@ -115,8 +114,8 @@ public class ClientSessionSubmitterTest {
     assertFalse(result1.isDone());
     assertFalse(result2.isDone());
 
-    future1.complete(new WebSocketCommandResponse.Builder(3)
-      .withStatus(WebSocketResponse.Status.OK)
+    future1.complete(CommandResponse.builder()
+      .withStatus(ProtocolResponse.Status.OK)
       .withIndex(9)
       .withResult("Hello world!".getBytes())
       .build());
@@ -137,9 +136,9 @@ public class ClientSessionSubmitterTest {
   @SuppressWarnings("unchecked")
   public void testSubmitQuery() throws Throwable {
     ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
-    when(connection.query(any(ProtocolRequestFactory.class)))
-      .thenReturn(CompletableFuture.completedFuture(new WebSocketQueryResponse.Builder(1)
-        .withStatus(WebSocketResponse.Status.OK)
+    when(connection.query(any(QueryRequest.class)))
+      .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .withIndex(10)
         .withResult("Hello world!".getBytes())
         .build()));
@@ -168,7 +167,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
     ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
-    Mockito.when(connection.query(any(ProtocolRequestFactory.class)))
+    Mockito.when(connection.query(any(QueryRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -187,8 +186,8 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<BufferInput> result1 = submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE);
     CompletableFuture<BufferInput> result2 = submitter.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE);
 
-    future2.complete(new WebSocketQueryResponse.Builder(1)
-      .withStatus(WebSocketResponse.Status.OK)
+    future2.complete(QueryResponse.builder()
+      .withStatus(ProtocolResponse.Status.OK)
       .withIndex(10)
       .withResult("Hello world again!".getBytes())
       .build());
@@ -198,8 +197,8 @@ public class ClientSessionSubmitterTest {
     assertFalse(result1.isDone());
     assertFalse(result2.isDone());
 
-    future1.complete(new WebSocketQueryResponse.Builder(2)
-      .withStatus(WebSocketResponse.Status.OK)
+    future1.complete(QueryResponse.builder()
+      .withStatus(ProtocolResponse.Status.OK)
       .withIndex(9)
       .withResult("Hello world!".getBytes())
       .build());
@@ -221,7 +220,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
     ProtocolClientConnection connection = mock(ProtocolClientConnection.class);
-    Mockito.when(connection.query(any(ProtocolRequestFactory.class)))
+    Mockito.when(connection.query(any(QueryRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -246,11 +245,11 @@ public class ClientSessionSubmitterTest {
     assertFalse(result2.isDone());
 
     future1.completeExceptionally(new QueryException("failure"));
-    future2.complete(new WebSocketQueryResponse.Builder(1)
-        .withStatus(WebSocketResponse.Status.OK)
-        .withIndex(10)
-        .withResult("Hello world!".getBytes())
-        .build());
+    future2.complete(QueryResponse.builder()
+      .withStatus(ProtocolResponse.Status.OK)
+      .withIndex(10)
+      .withResult("Hello world!".getBytes())
+      .build());
 
     assertTrue(result1.isCompletedExceptionally());
     assertTrue(result2.isDone());

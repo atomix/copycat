@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.response;
 
 import io.atomix.copycat.protocol.Address;
-import io.atomix.copycat.protocol.websocket.request.WebSocketKeepAliveRequest;
 import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
@@ -25,7 +24,7 @@ import java.util.Objects;
 /**
  * Session keep alive response.
  * <p>
- * Session keep alive responses are sent upon the completion of a {@link WebSocketKeepAliveRequest}
+ * Session keep alive responses are sent upon the completion of a {@link io.atomix.copycat.protocol.request.KeepAliveRequest}
  * from a client. Keep alive responses, when successful, provide the current cluster configuration and leader
  * to the client to ensure clients can evolve with the structure of the cluster and make intelligent decisions
  * about connecting to the cluster.
@@ -33,10 +32,20 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class KeepAliveResponse extends SessionResponse {
+
+  /**
+   * Returns a new keep-alive response builder.
+   *
+   * @return A new keep-alive response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final Address leader;
   protected final Collection<Address> members;
 
-  protected KeepAliveResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
+  public KeepAliveResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
     super(status, error);
     if (status == Status.OK) {
       this.leader = leader;
@@ -45,6 +54,11 @@ public class KeepAliveResponse extends SessionResponse {
       this.leader = null;
       this.members = null;
     }
+  }
+
+  @Override
+  public Type type() {
+    return Type.KEEP_ALIVE;
   }
 
   /**

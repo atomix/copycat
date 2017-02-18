@@ -18,7 +18,6 @@ package io.atomix.copycat.client.util;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.protocol.request.*;
 import io.atomix.copycat.protocol.response.*;
-import io.atomix.copycat.protocol.websocket.response.WebSocketResponse;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Listener;
 import org.slf4j.Logger;
@@ -45,7 +44,7 @@ public class ClientConnection implements ProtocolClientConnection {
   private final ProtocolClient client;
   private final AddressSelector selector;
   private CompletableFuture<ProtocolClientConnection> connectFuture;
-  private ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> publishListener;
+  private ProtocolListener<PublishRequest, PublishResponse> publishListener;
   private ProtocolClientConnection connection;
   private boolean open = true;
 
@@ -96,49 +95,49 @@ public class ClientConnection implements ProtocolClientConnection {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> connect(ProtocolRequestFactory<ConnectRequest.Builder, ConnectRequest> builder) {
+  public CompletableFuture<ConnectResponse> connect(ConnectRequest request) {
     CompletableFuture<ConnectResponse> future = new CompletableFuture<>();
-    sendRequest(connection -> connection.connect(builder), future);
+    sendRequest(connection -> connection.connect(request), future);
     return future;
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> register(ProtocolRequestFactory<RegisterRequest.Builder, RegisterRequest> builder) {
+  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
-    sendRequest(connection -> connection.register(builder), future);
+    sendRequest(connection -> connection.register(request), future);
     return future;
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(ProtocolRequestFactory<KeepAliveRequest.Builder, KeepAliveRequest> builder) {
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
-    sendRequest(connection -> connection.keepAlive(builder), future);
+    sendRequest(connection -> connection.keepAlive(request), future);
     return future;
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> unregister(ProtocolRequestFactory<UnregisterRequest.Builder, UnregisterRequest> builder) {
+  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
-    sendRequest(connection -> connection.unregister(builder), future);
+    sendRequest(connection -> connection.unregister(request), future);
     return future;
   }
 
   @Override
-  public CompletableFuture<CommandResponse> command(ProtocolRequestFactory<CommandRequest.Builder, CommandRequest> builder) {
+  public CompletableFuture<CommandResponse> command(CommandRequest request) {
     CompletableFuture<CommandResponse> future = new CompletableFuture<>();
-    sendRequest(connection -> connection.command(builder), future);
+    sendRequest(connection -> connection.command(request), future);
     return future;
   }
 
   @Override
-  public CompletableFuture<QueryResponse> query(ProtocolRequestFactory<QueryRequest.Builder, QueryRequest> builder) {
+  public CompletableFuture<QueryResponse> query(QueryRequest request) {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    sendRequest(connection -> connection.query(builder), future);
+    sendRequest(connection -> connection.query(request), future);
     return future;
   }
 
   @Override
-  public ProtocolClientConnection onPublish(ProtocolListener<PublishRequest, PublishResponse.Builder, PublishResponse> listener) {
+  public ProtocolClientConnection onPublish(ProtocolListener<PublishRequest, PublishResponse> listener) {
     this.publishListener = listener;
     return this;
   }
@@ -176,7 +175,7 @@ public class ClientConnection implements ProtocolClientConnection {
   private <T extends ProtocolRequest, U extends ProtocolResponse> void handleResponse(Function<ProtocolClientConnection, CompletableFuture<U>> factory, U response, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
-        if (response.status() == WebSocketResponse.Status.OK
+        if (response.status() == ProtocolResponse.Status.OK
           || response.error().type() == ProtocolResponse.Error.Type.COMMAND_ERROR
           || response.error().type() == ProtocolResponse.Error.Type.QUERY_ERROR
           || response.error().type() == ProtocolResponse.Error.Type.APPLICATION_ERROR
@@ -268,13 +267,13 @@ public class ClientConnection implements ProtocolClientConnection {
     LOGGER.debug("Setting up connection to {}", address);
 
     this.connection = connection;
-    connection.closeListener(c -> {
+    connection.onClose(c -> {
       if (c.equals(this.connection)) {
         LOGGER.debug("Connection closed");
         this.connection = null;
       }
     });
-    connection.exceptionListener(c -> {
+    connection.onException(c -> {
       if (c.equals(this.connection)) {
         LOGGER.debug("Connection lost");
         this.connection = null;
@@ -287,7 +286,7 @@ public class ClientConnection implements ProtocolClientConnection {
 
     // When we first connect to a new server, first send a ConnectRequest to the server to establish
     // the connection with the server-side state machine.
-    connection.connect(builder -> builder.withClient(id).build())
+    connection.connect(ConnectRequest.builder().withClient(id).build())
       .whenComplete((r, e) -> handleConnectResponse(r, e, future));
   }
 
@@ -299,7 +298,7 @@ public class ClientConnection implements ProtocolClientConnection {
       if (error == null) {
         // If the connection was successfully created, immediately send a keep-alive request
         // to the server to ensure we maintain our session and get an updated list of server addresses.
-        if (response.status() == WebSocketResponse.Status.OK) {
+        if (response.status() == ProtocolResponse.Status.OK) {
           selector.reset(new Address(response.leader()), response.members().stream().map(Address::new).collect(Collectors.toList()));
           future.complete(connection);
         } else {
@@ -312,12 +311,12 @@ public class ClientConnection implements ProtocolClientConnection {
   }
 
   @Override
-  public Listener<Throwable> exceptionListener(Consumer<Throwable> listener) {
+  public Listener<Throwable> onException(Consumer<Throwable> listener) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public Listener<ProtocolConnection> closeListener(Consumer<ProtocolConnection> listener) {
+  public Listener<ProtocolConnection> onClose(Consumer<ProtocolConnection> listener) {
     throw new UnsupportedOperationException();
   }
 

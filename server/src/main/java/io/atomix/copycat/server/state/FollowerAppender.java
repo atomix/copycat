@@ -56,12 +56,12 @@ final class FollowerAppender extends AbstractAppender {
       && context.getSnapshotStore().currentSnapshot().index() >= member.getLogReader().currentIndex()
       && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
       if (member.canInstall()) {
-        sendInstallRequest(member, builder -> buildInstallRequest(member, builder));
+        sendInstallRequest(member, buildInstallRequest(member));
       }
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (member.canAppend() && hasMoreEntries(member)) {
-      sendAppendRequest(member, builder -> buildAppendRequest(member, builder, Math.min(context.getCommitIndex(), context.getLogWriter().lastIndex())));
+      sendAppendRequest(member, buildAppendRequest(member, Math.min(context.getCommitIndex(), context.getLogWriter().lastIndex())));
     }
   }
 

@@ -33,7 +33,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when a join request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onJoin(ProtocolListener<JoinRequest, JoinResponse.Builder, JoinResponse> listener);
+  ProtocolServerConnection onJoin(ProtocolListener<JoinRequest, JoinResponse> listener);
 
   /**
    * Registers a listener to be called when a leave request is received from the client.
@@ -41,7 +41,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when a leave request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onLeave(ProtocolListener<LeaveRequest, LeaveResponse.Builder, LeaveResponse> listener);
+  ProtocolServerConnection onLeave(ProtocolListener<LeaveRequest, LeaveResponse> listener);
 
   /**
    * Registers a listener to be called when an install request is received from the client.
@@ -49,7 +49,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when an install request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onInstall(ProtocolListener<InstallRequest, InstallResponse.Builder, InstallResponse> listener);
+  ProtocolServerConnection onInstall(ProtocolListener<InstallRequest, InstallResponse> listener);
 
   /**
    * Registers a listener to be called when a configure request is received from the client.
@@ -57,7 +57,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when a configure request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onConfigure(ProtocolListener<ConfigureRequest, ConfigureResponse.Builder, ConfigureResponse> listener);
+  ProtocolServerConnection onConfigure(ProtocolListener<ConfigureRequest, ConfigureResponse> listener);
 
   /**
    * Registers a listener to be called when a reconfigure request is received from the client.
@@ -65,7 +65,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when a reconfigure request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onReconfigure(ProtocolListener<ReconfigureRequest, ReconfigureResponse.Builder, ReconfigureResponse> listener);
+  ProtocolServerConnection onReconfigure(ProtocolListener<ReconfigureRequest, ReconfigureResponse> listener);
 
   /**
    * Registers a listener to be called when an accept request is received from the client.
@@ -73,7 +73,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when an accept request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onAccept(ProtocolListener<AcceptRequest, AcceptResponse.Builder, AcceptResponse> listener);
+  ProtocolServerConnection onAccept(ProtocolListener<AcceptRequest, AcceptResponse> listener);
 
   /**
    * Registers a listener to be called when a poll request is received from the client.
@@ -81,7 +81,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when a poll request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onPoll(ProtocolListener<PollRequest, PollResponse.Builder, PollResponse> listener);
+  ProtocolServerConnection onPoll(ProtocolListener<PollRequest, PollResponse> listener);
 
   /**
    * Registers a listener to be called when a vote request is received from the client.
@@ -89,7 +89,7 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when a vote request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onVote(ProtocolListener<VoteRequest, VoteResponse.Builder, VoteResponse> listener);
+  ProtocolServerConnection onVote(ProtocolListener<VoteRequest, VoteResponse> listener);
 
   /**
    * Registers a listener to be called when an append request is received from the client.
@@ -97,6 +97,6 @@ public interface RaftProtocolServerConnection extends RaftProtocolConnection, Pr
    * @param listener The listener to be called when an append request is received from the client.
    * @return The client connection.
    */
-  ProtocolServerConnection onAppend(ProtocolListener<AppendRequest, AppendResponse.Builder, AppendResponse> listener);
+  ProtocolServerConnection onAppend(ProtocolListener<AppendRequest, AppendResponse> listener);
 
 }

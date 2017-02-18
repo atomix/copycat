@@ -17,6 +17,7 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.ProtocolServerConnection;
+import io.atomix.copycat.protocol.request.PublishRequest;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.storage.Indexed;
@@ -579,12 +580,12 @@ class ServerSession implements Session {
    * Sends an event.
    */
   private void sendEvent(EventHolder event, ProtocolServerConnection connection) {
-    connection.publish(builder ->
-      builder.withSession(id())
-        .withEventIndex(event.eventIndex)
-        .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
-        .withEvents(event.events)
-        .build())
+    connection.publish(PublishRequest.builder()
+      .withSession(id())
+      .withEventIndex(event.eventIndex)
+      .withPreviousIndex(Math.max(event.previousIndex, completeIndex))
+      .withEvents(event.events)
+      .build())
       .whenComplete((response, error) -> {
         if (error == null) {
           LOGGER.debug("{} - Received {}", id(), response);

@@ -16,10 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.request.AppendRequest;
-import io.atomix.copycat.server.protocol.request.ConfigureRequest;
-import io.atomix.copycat.server.protocol.request.InstallRequest;
-import io.atomix.copycat.server.protocol.request.VoteRequest;
+import io.atomix.copycat.server.protocol.request.*;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.ConfigureResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
@@ -143,12 +140,12 @@ final class FollowerState extends ActiveState {
     for (ServerMember member : votingMembers) {
       LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.poll(builder ->
-          builder.withTerm(context.getTerm())
-            .withCandidate(context.getCluster().member().id())
-            .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
-            .withLogTerm(lastTerm)
-            .build())
+        connection.poll(PollRequest.builder()
+          .withTerm(context.getTerm())
+          .withCandidate(context.getCluster().member().id())
+          .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
+          .withLogTerm(lastTerm)
+          .build())
           .whenCompleteAsync((response, error) -> {
             context.checkThread();
             if (isOpen() && !complete.get()) {
@@ -178,22 +175,22 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder responseBuilder) {
-    CompletableFuture<InstallResponse> future = super.onInstall(request, responseBuilder);
+  public CompletableFuture<InstallResponse> onInstall(InstallRequest request) {
+    CompletableFuture<InstallResponse> future = super.onInstall(request);
     resetHeartbeatTimeout();
     return future;
   }
 
   @Override
-  public CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request, ConfigureResponse.Builder responseBuilder) {
-    CompletableFuture<ConfigureResponse> future = super.onConfigure(request, responseBuilder);
+  public CompletableFuture<ConfigureResponse> onConfigure(ConfigureRequest request) {
+    CompletableFuture<ConfigureResponse> future = super.onConfigure(request);
     resetHeartbeatTimeout();
     return future;
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
-    CompletableFuture<AppendResponse> future = super.onAppend(request, responseBuilder);
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request) {
+    CompletableFuture<AppendResponse> future = super.onAppend(request);
 
     // Reset the heartbeat timeout.
     resetHeartbeatTimeout();
@@ -204,9 +201,9 @@ final class FollowerState extends ActiveState {
   }
 
   @Override
-  protected VoteResponse handleVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
+  protected VoteResponse handleVote(VoteRequest request) {
     // Reset the heartbeat timeout if we voted for another candidate.
-    VoteResponse response = super.handleVote(request, responseBuilder);
+    VoteResponse response = super.handleVote(request);
     if (response.voted()) {
       resetHeartbeatTimeout();
     }

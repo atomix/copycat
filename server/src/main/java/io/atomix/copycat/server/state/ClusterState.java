@@ -20,8 +20,9 @@ import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.protocol.request.JoinRequest;
 import io.atomix.copycat.server.protocol.request.LeaveRequest;
-import io.atomix.copycat.server.protocol.response.LeaveResponse;
+import io.atomix.copycat.server.protocol.request.ReconfigureRequest;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.*;
@@ -371,7 +372,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       context.getConnections().getConnection(member.getMember().serverAddress())
         .thenCompose(connection ->
-          connection.join(builder -> builder
+          connection.join(JoinRequest.builder()
             .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
             .build()))
         .whenComplete((response, error) -> {
@@ -439,7 +440,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
         LOGGER.debug("{} - Sending server identification to {}", member().address(), leader.address());
         context.getConnections().getConnection(leader.serverAddress())
-          .thenCompose(connection -> connection.reconfigure(builder -> builder
+          .thenCompose(connection -> connection.reconfigure(ReconfigureRequest.builder()
             .withIndex(configuration.index())
             .withTerm(configuration.term())
             .withMember(member())
@@ -524,9 +525,9 @@ final class ClusterState implements Cluster, AutoCloseable {
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    context.getServerState().onLeave(new LeaveRequest.Builder()
+    context.getServerState().onLeave(LeaveRequest.builder()
       .withMember(member())
-      .build(), new LeaveResponse.Builder()).whenComplete((response, error) -> {
+      .build()).whenComplete((response, error) -> {
       // Cancel the leave timer.
       cancelLeaveTimer();
 

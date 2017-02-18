@@ -16,7 +16,6 @@
 package io.atomix.copycat.protocol.response;
 
 import io.atomix.copycat.protocol.Address;
-import io.atomix.copycat.protocol.websocket.request.WebSocketRegisterRequest;
 import io.atomix.copycat.util.Assert;
 
 import java.util.Collection;
@@ -25,7 +24,7 @@ import java.util.Objects;
 /**
  * Session register response.
  * <p>
- * Session register responses are sent in response to {@link WebSocketRegisterRequest}s
+ * Session register responses are sent in response to {@link io.atomix.copycat.protocol.request.RegisterRequest}
  * sent by a client. Upon the successful registration of a session, the register response will contain the
  * registered {@link #session()} identifier, the session {@link #timeout()}, and the current cluster
  * {@link #leader()} and {@link #members()} to allow the client to make intelligent decisions about
@@ -34,12 +33,22 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class RegisterResponse extends AbstractResponse {
+
+  /**
+   * Returns a new register response builder.
+   *
+   * @return A new register response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long session;
   protected final Address leader;
   protected final Collection<Address> members;
   protected final long timeout;
 
-  protected RegisterResponse(Status status, ProtocolResponse.Error error, long session, Address leader, Collection<Address> members, long timeout) {
+  public RegisterResponse(Status status, ProtocolResponse.Error error, long session, Address leader, Collection<Address> members, long timeout) {
     super(status, error);
     if (status == Status.OK) {
       this.session = Assert.argNot(session, session < 1, "session must be positive");
@@ -52,6 +61,11 @@ public class RegisterResponse extends AbstractResponse {
       this.members = null;
       this.timeout = 0;
     }
+  }
+
+  @Override
+  public Type type() {
+    return Type.REGISTER;
   }
 
   /**

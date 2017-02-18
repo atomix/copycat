@@ -51,7 +51,7 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(AppendRequest request, AppendResponse.Builder responseBuilder) {
+  public CompletableFuture<AppendResponse> onAppend(AppendRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), request.leader());
@@ -60,7 +60,7 @@ class ReserveState extends InactiveState {
     context.setCommitIndex(request.commitIndex());
     context.setGlobalIndex(request.globalIndex());
 
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
+    return CompletableFuture.completedFuture(logResponse(AppendResponse.builder()
       .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
@@ -69,50 +69,49 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<PollResponse> onPoll(PollRequest request, PollResponse.Builder responseBuilder) {
+  public CompletableFuture<PollResponse> onPoll(PollRequest request) {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
+    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(ProtocolResponse.Status.ERROR)
       .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
   @Override
-  public CompletableFuture<VoteResponse> onVote(VoteRequest request, VoteResponse.Builder responseBuilder) {
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request) {
     context.checkThread();
     logRequest(request);
     updateTermAndLeader(request.term(), 0);
 
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
+    return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
       .withStatus(ProtocolResponse.Status.ERROR)
       .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
       .build()));
   }
 
   @Override
-  public CompletableFuture<CommandResponse> onCommand(CommandRequest request, CommandResponse.Builder responseBuilder) {
+  public CompletableFuture<CommandResponse> onCommand(CommandRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(
         logResponse(
-          responseBuilder
+          CommandResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build()));
     } else {
       return forward(connection ->
-        connection.command(builder ->
-          builder
-            .withSession(request.session())
-            .withSequence(request.sequence())
-            .withCommand(request.bytes())
-            .build()))
+        connection.command(CommandRequest.builder()
+          .withSession(request.session())
+          .withSequence(request.sequence())
+          .withCommand(request.bytes())
+          .build()))
         .thenApply(response ->
-          responseBuilder
+          CommandResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withIndex(response.index())
@@ -120,7 +119,7 @@ class ReserveState extends InactiveState {
             .withResult(response.result())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          CommandResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -129,29 +128,28 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<QueryResponse> onQuery(QueryRequest request, QueryResponse.Builder responseBuilder) {
+  public CompletableFuture<QueryResponse> onQuery(QueryRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(
         logResponse(
-          responseBuilder
+          QueryResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build()));
     } else {
       return forward(connection ->
-        connection.query(builder ->
-          builder
-            .withSession(request.session())
-            .withSequence(request.sequence())
-            .withIndex(request.index())
-            .withQuery(request.bytes())
-            .withConsistency(request.consistency())
-            .build()))
+        connection.query(QueryRequest.builder()
+          .withSession(request.session())
+          .withSequence(request.sequence())
+          .withIndex(request.index())
+          .withQuery(request.bytes())
+          .withConsistency(request.consistency())
+          .build()))
         .thenApply(response ->
-          responseBuilder
+          QueryResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withIndex(response.index())
@@ -159,7 +157,7 @@ class ReserveState extends InactiveState {
             .withResult(response.result())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          QueryResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -168,24 +166,24 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder responseBuilder) {
+  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        RegisterResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
+          .build()));
     } else {
       return forward(connection ->
-        connection.register(builder ->
-          builder
-            .withClient(request.client())
-            .withTimeout(request.timeout())
-            .build()))
+        connection.register(RegisterRequest.builder()
+          .withClient(request.client())
+          .withTimeout(request.timeout())
+          .build()))
         .thenApply(response ->
-          responseBuilder
+          RegisterResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withSession(response.session())
@@ -194,7 +192,7 @@ class ReserveState extends InactiveState {
             .withTimeout(response.timeout())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          RegisterResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -203,53 +201,55 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ProtocolServerConnection connection) {
     context.checkThread();
     logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
-      .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    return CompletableFuture.completedFuture(logResponse(
+      ConnectResponse.builder()
+        .withStatus(ProtocolResponse.Status.ERROR)
+        .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
   }
 
   @Override
-  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder responseBuilder) {
+  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request) {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
-      .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    return CompletableFuture.completedFuture(logResponse(
+      AcceptResponse.builder()
+        .withStatus(ProtocolResponse.Status.ERROR)
+        .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder responseBuilder) {
+  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        KeepAliveResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
+          .build()));
     } else {
       return forward(connection ->
-        connection.keepAlive(builder ->
-          builder
-            .withSession(request.session())
-            .withCommandSequence(request.commandSequence())
-            .withEventIndex(request.commandSequence())
-            .build()))
+        connection.keepAlive(KeepAliveRequest.builder()
+          .withSession(request.session())
+          .withCommandSequence(request.commandSequence())
+          .withEventIndex(request.commandSequence())
+          .build()))
         .thenApply(response ->
-          responseBuilder
+          KeepAliveResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withLeader(response.leader())
             .withMembers(response.members())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          KeepAliveResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -258,32 +258,32 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<PublishResponse> onPublish(PublishRequest request, PublishResponse.Builder responseBuilder) {
+  public CompletableFuture<PublishResponse> onPublish(PublishRequest request) {
     context.checkThread();
     logRequest(request);
 
     ServerSession session = context.getStateMachine().context().sessions().getSession(request.session());
     if (session == null || session.getConnection() == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        PublishResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
+          .build()));
     } else {
       CompletableFuture<PublishResponse> future = new CompletableFuture<>();
-      session.getConnection().publish(builder ->
-        builder
-          .withSession(request.session())
-          .withEventIndex(request.eventIndex())
-          .withPreviousIndex(request.previousIndex())
-          .withEvents(request.events())
-          .build())
+      session.getConnection().publish(PublishRequest.builder()
+        .withSession(request.session())
+        .withEventIndex(request.eventIndex())
+        .withPreviousIndex(request.previousIndex())
+        .withEvents(request.events())
+        .build())
         .whenComplete((result, error) -> {
           if (isOpen()) {
             if (error == null) {
               future.complete(result);
             } else {
               future.complete(logResponse(
-                responseBuilder
+                PublishResponse.builder()
                   .withStatus(ProtocolResponse.Status.ERROR)
                   .withError(ProtocolResponse.Error.Type.INTERNAL_ERROR)
                   .build()));
@@ -295,27 +295,28 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder responseBuilder) {
+  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        UnregisterResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
+          .build()));
     } else {
-      return forward(connection -> connection.unregister(builder ->
-        builder
+      return forward(connection -> connection.unregister(
+        UnregisterRequest.builder()
           .withSession(request.session())
           .build()))
         .thenApply(response ->
-          responseBuilder
+          UnregisterResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          UnregisterResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -324,24 +325,23 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<JoinResponse> onJoin(JoinRequest request, JoinResponse.Builder responseBuilder) {
+  public CompletableFuture<JoinResponse> onJoin(JoinRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(
         logResponse(
-          responseBuilder
+          JoinResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build()));
     } else {
-      return forward(connection -> connection.join(builder ->
-        builder
-          .withMember(request.member())
-          .build()))
+      return forward(connection -> connection.join(JoinRequest.builder()
+        .withMember(request.member())
+        .build()))
         .thenApply(response ->
-          responseBuilder
+          JoinResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withIndex(response.index())
@@ -350,7 +350,7 @@ class ReserveState extends InactiveState {
             .withTime(response.timestamp())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          JoinResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -359,25 +359,24 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request, ReconfigureResponse.Builder responseBuilder) {
+  public CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(
-        responseBuilder
+        ReconfigureResponse.builder()
           .withStatus(ProtocolResponse.Status.ERROR)
           .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
           .build()));
     } else {
-      return forward(connection -> connection.reconfigure(builder ->
-        builder
-          .withIndex(request.index())
-          .withTerm(request.term())
-          .withMember(request.member())
-          .build()))
+      return forward(connection -> connection.reconfigure(ReconfigureRequest.builder()
+        .withIndex(request.index())
+        .withTerm(request.term())
+        .withMember(request.member())
+        .build()))
         .thenApply(response ->
-          responseBuilder
+          ReconfigureResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withIndex(response.index())
@@ -386,7 +385,7 @@ class ReserveState extends InactiveState {
             .withTime(response.timestamp())
             .build())
         .exceptionally(error ->
-          responseBuilder
+          ReconfigureResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
             .build())
@@ -395,22 +394,22 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<LeaveResponse> onLeave(LeaveRequest request, LeaveResponse.Builder responseBuilder) {
+  public CompletableFuture<LeaveResponse> onLeave(LeaveRequest request) {
     context.checkThread();
     logRequest(request);
 
     if (context.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        LeaveResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
+          .build()));
     } else {
-      return forward(connection -> connection.leave(builder ->
-        builder
-          .withMember(request.member())
-          .build()))
+      return forward(connection -> connection.leave(LeaveRequest.builder()
+        .withMember(request.member())
+        .build()))
         .thenApply(response ->
-          responseBuilder
+          LeaveResponse.builder()
             .withStatus(response.status())
             .withError(response.error())
             .withIndex(response.index())
@@ -418,23 +417,25 @@ class ReserveState extends InactiveState {
             .withMembers(response.members())
             .withTime(response.timestamp())
             .build())
-        .exceptionally(error -> responseBuilder
-          .withStatus(ProtocolResponse.Status.ERROR)
-          .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
-          .build())
+        .exceptionally(error ->
+          LeaveResponse.builder()
+            .withStatus(ProtocolResponse.Status.ERROR)
+            .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
+            .build())
         .thenApply(this::logResponse);
     }
   }
 
   @Override
-  public CompletableFuture<InstallResponse> onInstall(InstallRequest request, InstallResponse.Builder responseBuilder) {
+  public CompletableFuture<InstallResponse> onInstall(InstallRequest request) {
     context.checkThread();
     logRequest(request);
 
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
-      .withStatus(ProtocolResponse.Status.ERROR)
-      .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
-      .build()));
+    return CompletableFuture.completedFuture(logResponse(
+      InstallResponse.builder()
+        .withStatus(ProtocolResponse.Status.ERROR)
+        .withError(ProtocolResponse.Error.Type.ILLEGAL_MEMBER_STATE_ERROR)
+        .build()));
   }
 
   @Override

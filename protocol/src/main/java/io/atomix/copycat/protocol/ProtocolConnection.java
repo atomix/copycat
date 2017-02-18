@@ -38,7 +38,7 @@ public interface ProtocolConnection {
    * @return The connection.
    * @throws NullPointerException if {@code listener} is null
    */
-  Listener<Throwable> exceptionListener(Consumer<Throwable> listener);
+  Listener<Throwable> onException(Consumer<Throwable> listener);
 
   /**
    * Sets a close listener on the connection.
@@ -51,7 +51,7 @@ public interface ProtocolConnection {
    * @return The connection.
    * @throws NullPointerException if {@code listener} is null
    */
-  Listener<ProtocolConnection> closeListener(Consumer<ProtocolConnection> listener);
+  Listener<ProtocolConnection> onClose(Consumer<ProtocolConnection> listener);
 
   /**
    * Closes the connection.

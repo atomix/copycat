@@ -244,7 +244,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<JoinResponse> onJoin(final JoinRequest request, JoinResponse.Builder responseBuilder) {
+  public CompletableFuture<JoinResponse> onJoin(final JoinRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -253,20 +253,22 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        JoinResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .build()));
     }
 
     // If the member is already a known member of the cluster, complete the join successfully.
     if (context.getCluster().member(request.member().id()) != null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.OK)
-        .withIndex(context.getClusterState().getConfiguration().index())
-        .withTerm(context.getClusterState().getConfiguration().term())
-        .withTime(context.getClusterState().getConfiguration().time())
-        .withMembers(context.getCluster().members())
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        JoinResponse.builder()
+          .withStatus(ProtocolResponse.Status.OK)
+          .withIndex(context.getClusterState().getConfiguration().index())
+          .withTerm(context.getClusterState().getConfiguration().term())
+          .withTime(context.getClusterState().getConfiguration().time())
+          .withMembers(context.getCluster().members())
+          .build()));
     }
 
     Member member = request.member();
@@ -281,18 +283,20 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.OK)
-            .withIndex(index)
-            .withTerm(context.getClusterState().getConfiguration().term())
-            .withTime(context.getClusterState().getConfiguration().time())
-            .withMembers(members)
-            .build()));
+          future.complete(logResponse(
+            JoinResponse.builder()
+              .withStatus(ProtocolResponse.Status.OK)
+              .withIndex(index)
+              .withTerm(context.getClusterState().getConfiguration().term())
+              .withTime(context.getClusterState().getConfiguration().time())
+              .withMembers(members)
+              .build()));
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            JoinResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -300,7 +304,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<ReconfigureResponse> onReconfigure(final ReconfigureRequest request, ReconfigureResponse.Builder responseBuilder) {
+  public CompletableFuture<ReconfigureResponse> onReconfigure(final ReconfigureRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -309,29 +313,32 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(ReconfigureResponse.Error.Type.CONFIGURATION_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        ReconfigureResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(ReconfigureResponse.Error.Type.CONFIGURATION_ERROR)
+          .build()));
     }
 
     // If the member is not a known member of the cluster, fail the promotion.
     ServerMember existingMember = context.getClusterState().member(request.member().id());
     if (existingMember == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        ReconfigureResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
+          .build()));
     }
 
     // If the configuration request index is less than the last known configuration index for
     // the leader, fail the request to ensure servers can't reconfigure an old configuration.
     if (request.index() > 0 && request.index() < context.getClusterState().getConfiguration().index() || request.term() != context.getClusterState().getConfiguration().term()
       && (existingMember.type() != request.member().type() || existingMember.status() != request.member().status())) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(PollResponse.Error.Type.CONFIGURATION_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        ReconfigureResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(PollResponse.Error.Type.CONFIGURATION_ERROR)
+          .build()));
     }
 
     Member member = request.member();
@@ -351,18 +358,20 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.OK)
-            .withIndex(index)
-            .withTerm(context.getClusterState().getConfiguration().term())
-            .withTime(context.getClusterState().getConfiguration().time())
-            .withMembers(members)
-            .build()));
+          future.complete(logResponse(
+            ReconfigureResponse.builder()
+              .withStatus(ProtocolResponse.Status.OK)
+              .withIndex(index)
+              .withTerm(context.getClusterState().getConfiguration().term())
+              .withTime(context.getClusterState().getConfiguration().time())
+              .withMembers(members)
+              .build()));
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            ReconfigureResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -370,7 +379,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<LeaveResponse> onLeave(final LeaveRequest request, LeaveResponse.Builder responseBuilder) {
+  public CompletableFuture<LeaveResponse> onLeave(final LeaveRequest request) {
     context.checkThread();
     logRequest(request);
 
@@ -379,17 +388,19 @@ final class LeaderState extends ActiveState {
     // Configuration changes should not be allowed until the leader has committed a no-op entry.
     // See https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
     if (configuring() || initializing()) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        LeaveResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .build()));
     }
 
     // If the leaving member is not a known member of the cluster, complete the leave successfully.
     if (context.getCluster().member(request.member().id()) == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.OK)
-        .withMembers(context.getCluster().members())
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        LeaveResponse.builder()
+          .withStatus(ProtocolResponse.Status.OK)
+          .withMembers(context.getCluster().members())
+          .build()));
     }
 
     Member member = request.member();
@@ -402,18 +413,20 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.OK)
-            .withIndex(index)
-            .withTerm(context.getClusterState().getConfiguration().term())
-            .withTime(context.getClusterState().getConfiguration().time())
-            .withMembers(members)
-            .build()));
+          future.complete(logResponse(
+            LeaveResponse.builder()
+              .withStatus(ProtocolResponse.Status.OK)
+              .withIndex(index)
+              .withTerm(context.getClusterState().getConfiguration().term())
+              .withTime(context.getClusterState().getConfiguration().time())
+              .withMembers(members)
+              .build()));
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            LeaveResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -421,75 +434,79 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<PollResponse> onPoll(final PollRequest request, PollResponse.Builder responseBuilder) {
+  public CompletableFuture<PollResponse> onPoll(final PollRequest request) {
     logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(responseBuilder
-      .withStatus(ProtocolResponse.Status.OK)
-      .withTerm(context.getTerm())
-      .withAccepted(false)
-      .build()));
+    return CompletableFuture.completedFuture(logResponse(
+      PollResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
+        .withTerm(context.getTerm())
+        .withAccepted(false)
+        .build()));
   }
 
   @Override
-  public CompletableFuture<VoteResponse> onVote(final VoteRequest request, VoteResponse.Builder responseBuilder) {
+  public CompletableFuture<VoteResponse> onVote(final VoteRequest request) {
     if (updateTermAndLeader(request.term(), 0)) {
       LOGGER.debug("{} - Received greater term", context.getCluster().member().address());
       context.transition(CopycatServer.State.FOLLOWER);
-      return super.onVote(request, responseBuilder);
+      return super.onVote(request);
     } else {
       logRequest(request);
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.OK)
-        .withTerm(context.getTerm())
-        .withVoted(false)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        VoteResponse.builder()
+          .withStatus(ProtocolResponse.Status.OK)
+          .withTerm(context.getTerm())
+          .withVoted(false)
+          .build()));
     }
   }
 
   @Override
-  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request, AppendResponse.Builder responseBuilder) {
+  public CompletableFuture<AppendResponse> onAppend(final AppendRequest request) {
     context.checkThread();
     if (updateTermAndLeader(request.term(), request.leader())) {
-      CompletableFuture<AppendResponse> future = super.onAppend(request, responseBuilder);
+      CompletableFuture<AppendResponse> future = super.onAppend(request);
       context.transition(CopycatServer.State.FOLLOWER);
       return future;
     } else if (request.term() < context.getTerm()) {
       logRequest(request);
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLogWriter().lastIndex())
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        AppendResponse.builder()
+          .withStatus(ProtocolResponse.Status.OK)
+          .withTerm(context.getTerm())
+          .withSucceeded(false)
+          .withLogIndex(context.getLogWriter().lastIndex())
+          .build()));
     } else {
       context.setLeader(request.leader()).transition(CopycatServer.State.FOLLOWER);
-      return super.onAppend(request, responseBuilder);
+      return super.onAppend(request);
     }
   }
 
   @Override
-  public CompletableFuture<CommandResponse> onCommand(final CommandRequest request, CommandResponse.Builder responseBuilder) {
+  public CompletableFuture<CommandResponse> onCommand(final CommandRequest request) {
     context.checkThread();
     logRequest(request);
 
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSession session = context.getStateMachine().context().sessions().getSession(request.session());
     if (session == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        CommandResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
+          .build()));
     }
 
     ComposableFuture<CommandResponse> future = new ComposableFuture<>();
-    sequenceCommand(request, responseBuilder, session, future);
+    sequenceCommand(request, session, future);
     return future;
   }
 
   /**
    * Sequences the given command to the log.
    */
-  private void sequenceCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSession session, CompletableFuture<CommandResponse> future) {
+  private void sequenceCommand(CommandRequest request, ServerSession session, CompletableFuture<CommandResponse> future) {
     // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
     // sequence number, queue this request for handling later. We want to handle command requests in the order in which
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
@@ -499,24 +516,24 @@ final class LeaderState extends ActiveState {
       // If the request sequence number is more than 1k requests above the last sequenced request, reject the request.
       // The client should resubmit a request that fails with a COMMAND_ERROR.
       if (request.sequence() - session.getRequestSequence() > MAX_REQUEST_QUEUE_SIZE) {
-        future.complete(responseBuilder
+        future.complete(CommandResponse.builder()
           .withStatus(ProtocolResponse.Status.ERROR)
           .withError(PollResponse.Error.Type.COMMAND_ERROR)
           .build());
       }
       // Register the request in the request queue if it's not too far ahead of the current sequence number.
       else {
-        session.registerRequest(request.sequence(), () -> applyCommand(request, responseBuilder, session, future));
+        session.registerRequest(request.sequence(), () -> applyCommand(request, session, future));
       }
     } else {
-      applyCommand(request, responseBuilder, session, future);
+      applyCommand(request, session, future);
     }
   }
 
   /**
    * Applies the given command to the log.
    */
-  private void applyCommand(CommandRequest request, CommandResponse.Builder responseBuilder, ServerSession session, CompletableFuture<CommandResponse> future) {
+  private void applyCommand(CommandRequest request, ServerSession session, CompletableFuture<CommandResponse> future) {
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<CommandEntry> entry;
@@ -531,7 +548,7 @@ final class LeaderState extends ActiveState {
     }
 
     // Replicate the command to followers.
-    appendCommand(entry.index(), responseBuilder, future);
+    appendCommand(entry.index(), future);
 
     // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
     session.setRequestSequence(request.sequence());
@@ -540,16 +557,17 @@ final class LeaderState extends ActiveState {
   /**
    * Sends append requests for a command to followers.
    */
-  private void appendCommand(long index, CommandResponse.Builder responseBuilder, CompletableFuture<CommandResponse> future) {
+  private void appendCommand(long index, CompletableFuture<CommandResponse> future) {
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       if (isOpen()) {
         if (commitError == null) {
-          applyCommand(index, responseBuilder, future);
+          applyCommand(index, future);
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            CommandResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -558,16 +576,16 @@ final class LeaderState extends ActiveState {
   /**
    * Applies a command to the state machine.
    */
-  private void applyCommand(long index, CommandResponse.Builder responseBuilder, CompletableFuture<CommandResponse> future) {
+  private void applyCommand(long index, CompletableFuture<CommandResponse> future) {
     context.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
       if (isOpen()) {
-        completeOperation(result, responseBuilder, error, future);
+        completeOperation(result, CommandResponse.builder(), error, future);
       }
     });
   }
 
   @Override
-  public CompletableFuture<QueryResponse> onQuery(final QueryRequest request, QueryResponse.Builder responseBuilder) {
+  public CompletableFuture<QueryResponse> onQuery(final QueryRequest request) {
     final long timestamp = System.currentTimeMillis();
 
     context.checkThread();
@@ -585,16 +603,16 @@ final class LeaderState extends ActiveState {
 
     ConsistencyLevel consistency = request.consistency();
     if (consistency == null) {
-      return queryLinearizable(entry, responseBuilder);
+      return queryLinearizable(entry);
     }
 
     switch (consistency) {
       case SEQUENTIAL:
-        return queryLocal(entry, responseBuilder);
+        return queryLocal(entry);
       case LINEARIZABLE_LEASE:
-        return queryBoundedLinearizable(entry, responseBuilder);
+        return queryBoundedLinearizable(entry);
       case LINEARIZABLE:
-        return queryLinearizable(entry, responseBuilder);
+        return queryLinearizable(entry);
       default:
         throw new IllegalStateException("unknown consistency level");
     }
@@ -603,66 +621,69 @@ final class LeaderState extends ActiveState {
   /**
    * Submits a query with lease bounded linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> queryBoundedLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
+  private CompletableFuture<QueryResponse> queryBoundedLinearizable(Indexed<QueryEntry> entry) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        QueryResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
+          .build()));
     }
 
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    sequenceBoundedLinearizableQuery(entry, responseBuilder, session, future);
+    sequenceBoundedLinearizableQuery(entry, session, future);
     return future;
   }
 
   /**
    * Sequences a bounded linearizable query.
    */
-  private void sequenceBoundedLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSession session, CompletableFuture<QueryResponse> future) {
+  private void sequenceBoundedLinearizableQuery(Indexed<QueryEntry> entry, ServerSession session, CompletableFuture<QueryResponse> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
     if (entry.entry().sequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.entry().sequence(), () -> applyQuery(entry, responseBuilder, future));
+      session.registerSequenceQuery(entry.entry().sequence(), () -> applyQuery(entry, future));
     } else {
-      applyQuery(entry, responseBuilder, future);
+      applyQuery(entry, future);
     }
   }
 
   /**
    * Submits a query with strict linearizable consistency.
    */
-  private CompletableFuture<QueryResponse> queryLinearizable(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder) {
+  private CompletableFuture<QueryResponse> queryLinearizable(Indexed<QueryEntry> entry) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
-      return CompletableFuture.completedFuture(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
+      return CompletableFuture.completedFuture(logResponse(
+        QueryResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
+          .build()));
     }
 
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    appendLinearizableQuery(entry, responseBuilder, session, future);
+    appendLinearizableQuery(entry, session, future);
     return future;
   }
 
   /**
    * Sends an append request for the given query entry.
    */
-  private void appendLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, ServerSession session, CompletableFuture<QueryResponse> future) {
+  private void appendLinearizableQuery(Indexed<QueryEntry> entry, ServerSession session, CompletableFuture<QueryResponse> future) {
     appender.appendEntries().whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          sequenceLinearizableQuery(entry, responseBuilder, future);
+          sequenceLinearizableQuery(entry, future);
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.QUERY_ERROR)
-            .build()));
+          future.complete(logResponse(
+            QueryResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.QUERY_ERROR)
+              .build()));
         }
       }
     });
@@ -671,27 +692,28 @@ final class LeaderState extends ActiveState {
   /**
    * Sequences a linearizable query.
    */
-  private void sequenceLinearizableQuery(Indexed<QueryEntry> entry, QueryResponse.Builder responseBuilder, CompletableFuture<QueryResponse> future) {
+  private void sequenceLinearizableQuery(Indexed<QueryEntry> entry, CompletableFuture<QueryResponse> future) {
     // Get the client's server session. If the session doesn't exist, return an unknown session error.
     ServerSession session = context.getStateMachine().context().sessions().getSession(entry.entry().session());
     if (session == null) {
-      future.complete(logResponse(responseBuilder
-        .withStatus(ProtocolResponse.Status.ERROR)
-        .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
+      future.complete(logResponse(
+        QueryResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
+          .withError(PollResponse.Error.Type.UNKNOWN_SESSION_ERROR)
+          .build()));
     } else {
       // If the query's sequence number is greater than the session's current sequence number, queue the request for
       // handling once the state machine is caught up.
       if (entry.entry().sequence() > session.getCommandSequence()) {
-        session.registerSequenceQuery(entry.entry().sequence(), () -> applyQuery(entry, responseBuilder, future));
+        session.registerSequenceQuery(entry.entry().sequence(), () -> applyQuery(entry, future));
       } else {
-        applyQuery(entry, responseBuilder, future);
+        applyQuery(entry, future);
       }
     }
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request, RegisterResponse.Builder responseBuilder) {
+  public CompletableFuture<RegisterResponse> onRegister(RegisterRequest request) {
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<RegisterEntry> entry;
@@ -725,39 +747,44 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(entry.index()).whenComplete((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.OK)
-                  .withSession((Long) sessionId)
-                  .withTimeout(timeout)
-                  .withLeader(context.getCluster().member().clientAddress())
-                  .withMembers(context.getCluster().members().stream()
-                    .map(Member::clientAddress)
-                    .filter(m -> m != null)
-                    .collect(Collectors.toList())).build()));
+                future.complete(logResponse(
+                  RegisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.OK)
+                    .withSession((Long) sessionId)
+                    .withTimeout(timeout)
+                    .withLeader(context.getCluster().member().clientAddress())
+                    .withMembers(context.getCluster().members().stream()
+                      .map(Member::clientAddress)
+                      .filter(m -> m != null)
+                      .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((ProtocolException) sessionError.getCause()).getType())
-                  .build()));
+                future.complete(logResponse(
+                  RegisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(((ProtocolException) sessionError.getCause()).getType())
+                    .build()));
               } else if (sessionError instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((ProtocolException) sessionError).getType())
-                  .build()));
+                future.complete(logResponse(
+                  RegisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(((ProtocolException) sessionError).getType())
+                    .build()));
               } else {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-                  .build()));
+                future.complete(logResponse(
+                  RegisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+                    .build()));
               }
               checkSessions();
             }
           });
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            RegisterResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -766,7 +793,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ConnectResponse.Builder responseBuilder, ProtocolServerConnection connection) {
+  public CompletableFuture<ConnectResponse> onConnect(ConnectRequest request, ProtocolServerConnection connection) {
     context.checkThread();
     logRequest(request);
 
@@ -776,20 +803,21 @@ final class LeaderState extends ActiveState {
       .withClient(request.client())
       .withAddress(context.getCluster().member().serverAddress())
       .build();
-    return onAccept(acceptRequest, new AcceptResponse.Builder())
-      .thenApply(acceptResponse -> responseBuilder
-        .withStatus(ProtocolResponse.Status.OK)
-        .withLeader(context.getCluster().member().clientAddress())
-        .withMembers(context.getCluster().members().stream()
-          .map(Member::clientAddress)
-          .filter(m -> m != null)
-          .collect(Collectors.toList()))
-        .build())
+    return onAccept(acceptRequest)
+      .thenApply(acceptResponse ->
+        ConnectResponse.builder()
+          .withStatus(ProtocolResponse.Status.OK)
+          .withLeader(context.getCluster().member().clientAddress())
+          .withMembers(context.getCluster().members().stream()
+            .map(Member::clientAddress)
+            .filter(m -> m != null)
+            .collect(Collectors.toList()))
+          .build())
       .thenApply(this::logResponse);
   }
 
   @Override
-  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request, AcceptResponse.Builder responseBuilder) {
+  public CompletableFuture<AcceptResponse> onAccept(AcceptRequest request) {
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<ConnectEntry> entry;
@@ -816,33 +844,38 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(entry.index()).whenComplete((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.OK)
-                  .build()));
+                future.complete(logResponse(
+                  AcceptResponse.builder()
+                    .withStatus(ProtocolResponse.Status.OK)
+                    .build()));
               } else if (connectError instanceof CompletionException && connectError.getCause() instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((ProtocolException) connectError.getCause()).getType())
-                  .build()));
+                future.complete(logResponse(
+                  AcceptResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(((ProtocolException) connectError.getCause()).getType())
+                    .build()));
               } else if (connectError instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((ProtocolException) connectError).getType())
-                  .build()));
+                future.complete(logResponse(
+                  AcceptResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(((ProtocolException) connectError).getType())
+                    .build()));
               } else {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-                  .build()));
+                future.complete(logResponse(
+                  AcceptResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+                    .build()));
               }
               checkSessions();
             }
           });
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            AcceptResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -851,7 +884,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request, KeepAliveResponse.Builder responseBuilder) {
+  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request) {
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<KeepAliveEntry> entry;
@@ -875,41 +908,46 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(entry.index()).whenComplete((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.OK)
-                  .withLeader(context.getCluster().member().clientAddress())
-                  .withMembers(context.getCluster().members().stream()
-                    .map(Member::clientAddress)
-                    .filter(m -> m != null)
-                    .collect(Collectors.toList())).build()));
+                future.complete(logResponse(
+                  KeepAliveResponse.builder()
+                    .withStatus(ProtocolResponse.Status.OK)
+                    .withLeader(context.getCluster().member().clientAddress())
+                    .withMembers(context.getCluster().members().stream()
+                      .map(Member::clientAddress)
+                      .filter(m -> m != null)
+                      .collect(Collectors.toList())).build()));
               } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withLeader(context.getCluster().member().clientAddress())
-                  .withError(((ProtocolException) sessionError.getCause()).getType())
-                  .build()));
+                future.complete(logResponse(
+                  KeepAliveResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withLeader(context.getCluster().member().clientAddress())
+                    .withError(((ProtocolException) sessionError.getCause()).getType())
+                    .build()));
               } else if (sessionError instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withLeader(context.getCluster().member().clientAddress())
-                  .withError(((ProtocolException) sessionError).getType())
-                  .build()));
+                future.complete(logResponse(
+                  KeepAliveResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withLeader(context.getCluster().member().clientAddress())
+                    .withError(((ProtocolException) sessionError).getType())
+                    .build()));
               } else {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withLeader(context.getCluster().member().clientAddress())
-                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-                  .build()));
+                future.complete(logResponse(
+                  KeepAliveResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withLeader(context.getCluster().member().clientAddress())
+                    .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+                    .build()));
               }
               checkSessions();
             }
           });
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withLeader(context.getCluster().member().clientAddress())
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            KeepAliveResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withLeader(context.getCluster().member().clientAddress())
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });
@@ -918,7 +956,7 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request, UnregisterResponse.Builder responseBuilder) {
+  public CompletableFuture<UnregisterResponse> onUnregister(UnregisterRequest request) {
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final Indexed<UnregisterEntry> entry;
@@ -942,33 +980,38 @@ final class LeaderState extends ActiveState {
           context.getStateMachine().apply(entry.index()).whenComplete((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.OK)
-                  .build()));
+                future.complete(logResponse(
+                  UnregisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.OK)
+                    .build()));
               } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((ProtocolException) unregisterError.getCause()).getType())
-                  .build()));
+                future.complete(logResponse(
+                  UnregisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(((ProtocolException) unregisterError.getCause()).getType())
+                    .build()));
               } else if (unregisterError instanceof ProtocolException) {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(((ProtocolException) unregisterError).getType())
-                  .build()));
+                future.complete(logResponse(
+                  UnregisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(((ProtocolException) unregisterError).getType())
+                    .build()));
               } else {
-                future.complete(logResponse(responseBuilder
-                  .withStatus(ProtocolResponse.Status.ERROR)
-                  .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-                  .build()));
+                future.complete(logResponse(
+                  UnregisterResponse.builder()
+                    .withStatus(ProtocolResponse.Status.ERROR)
+                    .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+                    .build()));
               }
               checkSessions();
             }
           });
         } else {
-          future.complete(logResponse(responseBuilder
-            .withStatus(ProtocolResponse.Status.ERROR)
-            .withError(PollResponse.Error.Type.INTERNAL_ERROR)
-            .build()));
+          future.complete(logResponse(
+            UnregisterResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(PollResponse.Error.Type.INTERNAL_ERROR)
+              .build()));
         }
       }
     });

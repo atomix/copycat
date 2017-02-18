@@ -33,7 +33,17 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class InstallRequest extends AbstractRequest {
+public class InstallRequest extends AbstractRequest implements RaftProtocolRequest {
+
+  /**
+   * Returns a new install request builder.
+   *
+   * @return A new install request builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long term;
   protected final int leader;
   protected final long index;
@@ -48,6 +58,11 @@ public class InstallRequest extends AbstractRequest {
     this.offset = Assert.argNot(offset, offset < 0, "offset must be positive");
     this.data = Assert.notNull(data, "data");
     this.complete = complete;
+  }
+
+  @Override
+  public RaftProtocolRequest.Type type() {
+    return RaftProtocolRequest.Type.INSTALL;
   }
 
   /**

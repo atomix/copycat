@@ -74,7 +74,7 @@ final class ClientSessionListener {
    * @param request The publish request to handle.
    * @return A completable future to be completed with the publish response.
    */
-  private CompletableFuture<PublishResponse> handlePublish(PublishRequest request, PublishResponse.Builder builder) {
+  private CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
     state.getLogger().debug("{} - Received {}", state.getSessionId(), request);
 
     // If the request is for another session ID, this may be a session that was previously opened
@@ -86,7 +86,8 @@ final class ClientSessionListener {
 
     if (request.eventIndex() <= state.getEventIndex()) {
       return CompletableFuture.completedFuture(
-        builder.withStatus(ProtocolResponse.Status.OK)
+        PublishResponse.builder()
+          .withStatus(ProtocolResponse.Status.OK)
           .withIndex(state.getEventIndex())
           .build());
     }
@@ -97,7 +98,8 @@ final class ClientSessionListener {
     if (request.previousIndex() != state.getEventIndex()) {
       state.getLogger().debug("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
       return CompletableFuture.completedFuture(
-        builder.withStatus(ProtocolResponse.Status.ERROR)
+        PublishResponse.builder()
+          .withStatus(ProtocolResponse.Status.ERROR)
           .withIndex(state.getEventIndex())
           .build());
     }
@@ -114,7 +116,8 @@ final class ClientSessionListener {
     });
 
     return CompletableFuture.completedFuture(
-      builder.withStatus(ProtocolResponse.Status.OK)
+      PublishResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
         .withIndex(request.eventIndex())
         .build());
   }

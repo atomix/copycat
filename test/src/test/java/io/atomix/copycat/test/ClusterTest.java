@@ -18,13 +18,13 @@ package io.atomix.copycat.test;
 import io.atomix.copycat.ConsistencyLevel;
 import io.atomix.copycat.client.*;
 import io.atomix.copycat.protocol.Address;
-import io.atomix.copycat.protocol.websocket.WebSocketProtocol;
+import io.atomix.copycat.protocol.tcp.NettyTcpProtocol;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.net.RaftNetProtocol;
+import io.atomix.copycat.server.protocol.tcp.NettyTcpRaftProtocol;
 import io.atomix.copycat.server.session.Session;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.storage.Storage;
@@ -1185,8 +1185,8 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatServer createServer(Member member) {
     CopycatServer.Builder builder = CopycatServer.builder(member.clientAddress(), member.serverAddress())
       .withType(member.type())
-      .withProtocol(new RaftNetProtocol())
-      .withClientProtocol(new WebSocketProtocol())
+      .withProtocol(new NettyTcpRaftProtocol())
+      .withClientProtocol(new NettyTcpProtocol())
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
@@ -1211,7 +1211,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatClient createClient(RecoveryStrategy strategy) throws Throwable {
     CopycatClient client = CopycatClient.builder()
-      .withProtocol(new WebSocketProtocol())
+      .withProtocol(new NettyTcpProtocol())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(strategy)
       .build();

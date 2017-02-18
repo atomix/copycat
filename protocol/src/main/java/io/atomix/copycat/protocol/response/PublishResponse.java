@@ -31,11 +31,26 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class PublishResponse extends SessionResponse {
+
+  /**
+   * Returns a new publish response builder.
+   *
+   * @return A new publish response builder.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
   protected final long index;
 
-  protected PublishResponse(Status status, ProtocolResponse.Error error, long index) {
+  public PublishResponse(Status status, ProtocolResponse.Error error, long index) {
     super(status, error);
     this.index = Assert.argNot(index, index < 0, "index cannot be less than 0");
+  }
+
+  @Override
+  public Type type() {
+    return Type.PUBLISH;
   }
 
   /**

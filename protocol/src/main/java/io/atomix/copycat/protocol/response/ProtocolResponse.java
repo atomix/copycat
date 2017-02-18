@@ -25,6 +25,93 @@ import io.atomix.copycat.protocol.error.*;
 public interface ProtocolResponse {
 
   /**
+   * Protocol response type.
+   */
+  class Type {
+    public static final Type CONNECT    = new Type(0x10, ConnectResponse.class);
+    public static final Type REGISTER   = new Type(0x11, RegisterResponse.class);
+    public static final Type KEEP_ALIVE = new Type(0x12, KeepAliveResponse.class);
+    public static final Type UNREGISTER = new Type(0x13, UnregisterResponse.class);
+    public static final Type QUERY      = new Type(0x14, QueryResponse.class);
+    public static final Type COMMAND    = new Type(0x15, CommandResponse.class);
+    public static final Type PUBLISH    = new Type(0x16, PublishResponse.class);
+
+    private final int id;
+    private final Class<?> type;
+
+    protected Type(int id, Class<?> type) {
+      this.id = id;
+      this.type = type;
+    }
+
+    /**
+     * Returns the response type ID.
+     *
+     * @return The response type ID.
+     */
+    public int id() {
+      return id;
+    }
+
+    /**
+     * Returns the response class.
+     *
+     * @return The response class.
+     */
+    public Class type() {
+      return type;
+    }
+
+    /**
+     * Returns a boolean indicating whether the given type is a protocol response type.
+     *
+     * @param id The id to check.
+     * @return Indicates whether the given type is a protocol response type.
+     */
+    public static boolean isProtocolResponse(int id) {
+      switch (id) {
+        case 0x00:
+        case 0x01:
+        case 0x02:
+        case 0x03:
+        case 0x04:
+        case 0x05:
+        case 0x06:
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    /**
+     * Returns the response type for the given ID.
+     *
+     * @param id The response type ID.
+     * @return The response type.
+     */
+    public static Type forId(int id) {
+      switch (id) {
+        case 0x00:
+          return CONNECT;
+        case 0x01:
+          return REGISTER;
+        case 0x02:
+          return KEEP_ALIVE;
+        case 0x03:
+          return UNREGISTER;
+        case 0x04:
+          return QUERY;
+        case 0x05:
+          return COMMAND;
+        case 0x06:
+          return PUBLISH;
+        default:
+          throw new IllegalArgumentException("Unknown response type: " + id);
+      }
+    }
+  }
+
+  /**
    * Response status.
    */
   enum Status {
@@ -78,26 +165,42 @@ public interface ProtocolResponse {
   /**
    * Response error.
    */
-  interface Error {
+  class Error {
+    private final Type type;
+    private final String message;
+
+    public Error(Type type, String message) {
+      this.type = type;
+      this.message = message;
+    }
 
     /**
      * Returns the error type.
      *
      * @return The error type.
      */
-    Type type();
+    public Type type() {
+      return type;
+    }
 
     /**
      * Returns the error message.
      *
      * @return The error message.
      */
-    String message();
+    public String message() {
+      return message;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s[type=%s, message=%s]", getClass().getSimpleName(), type.name(), message);
+    }
 
     /**
      * Error type.
      */
-    enum Type {
+    public enum Type {
 
       /**
        * No leader error.
@@ -233,6 +336,13 @@ public interface ProtocolResponse {
     }
 
   }
+
+  /**
+   * Returns the protocol response type.
+   *
+   * @return The protocol response type.
+   */
+  Type type();
 
   /**
    * Returns the response status.

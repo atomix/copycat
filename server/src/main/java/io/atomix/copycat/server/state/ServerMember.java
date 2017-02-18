@@ -18,8 +18,7 @@ package io.atomix.copycat.server.state;
 import io.atomix.copycat.protocol.Address;
 import io.atomix.copycat.protocol.response.ProtocolResponse;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.net.request.NetReconfigureRequest;
-import io.atomix.copycat.server.protocol.net.response.NetReconfigureResponse;
+import io.atomix.copycat.server.protocol.request.ReconfigureRequest;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.util.Assert;
 import io.atomix.copycat.util.concurrent.Listener;
@@ -223,11 +222,11 @@ public final class ServerMember implements Member, AutoCloseable {
     // Attempt to leave the cluster by submitting a LeaveRequest directly to the server state.
     // Non-leader states should forward the request to the leader if there is one. Leader states
     // will log, replicate, and commit the reconfiguration.
-    cluster.getContext().getServerState().onReconfigure(new NetReconfigureRequest.Builder(0)
+    cluster.getContext().getServerState().onReconfigure(ReconfigureRequest.builder()
       .withIndex(cluster.getConfiguration().index())
       .withTerm(cluster.getConfiguration().term())
       .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))
-      .build(), new NetReconfigureResponse.Builder(0)).whenComplete((response, error) -> {
+      .build()).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == ProtocolResponse.Status.OK) {
           cancelConfigureTimer();
