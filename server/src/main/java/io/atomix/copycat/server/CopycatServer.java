@@ -698,7 +698,16 @@ public class CopycatServer {
         }
       }
     }
-    return closeFuture;
+
+    return closeFuture.thenComposeAsync(v -> {
+      if (clientProtocol != null) {
+        return clientProtocol.close();
+      }
+      return CompletableFuture.completedFuture(null);
+    }).thenComposeAsync(v -> raftProtocol.close())
+      .whenCompleteAsync((result, error) -> {
+        started = false;
+      });
   }
 
   /**
