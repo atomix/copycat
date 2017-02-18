@@ -28,6 +28,8 @@ import io.atomix.copycat.server.protocol.serializers.RaftProtocolRequestSerializ
 import io.atomix.copycat.server.protocol.serializers.RaftProtocolResponseSerializer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -37,9 +39,15 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class NettyTcpRaftClientConnection extends NettyTcpClientConnection implements RaftProtocolClientConnection {
+  private static final Logger LOGGER = LoggerFactory.getLogger(NettyTcpRaftClientConnection.class);
 
   public NettyTcpRaftClientConnection(Channel channel, TcpOptions options) {
     super(channel, options);
+  }
+
+  @Override
+  protected Logger logger() {
+    return LOGGER;
   }
 
   @Override

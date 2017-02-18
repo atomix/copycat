@@ -152,14 +152,29 @@ public abstract class NettyTcpConnection implements ProtocolConnection {
   @SuppressWarnings("unchecked")
   protected <T extends ProtocolRequest, U extends ProtocolResponse> CompletableFuture<U> sendRequest(T request) {
     final long id = requestId.incrementAndGet();
-    ResponseFuture<U> future = new ResponseFuture<>(System.currentTimeMillis());
+
+    final ResponseFuture<U> future = new ResponseFuture<>(System.currentTimeMillis());
     responseFutures.put(id, future);
+
     logger().debug("Sending {}", request);
     ByteBuf buffer = channel.alloc().buffer(9)
       .writeLong(id)
       .writeByte(request.type().id());
     writeRequest(request, buffer);
-    channel.writeAndFlush(buffer);
+
+    writeFuture = channel.writeAndFlush(buffer).addListener((channelFuture) -> {
+      if (channelFuture.isSuccess()) {
+        if (closed.get()) {
+          ResponseFuture responseFuture = responseFutures.remove(id);
+          if (responseFuture != null) {
+            responseFuture.completeExceptionally(new ConnectException("connection closed"));
+          }
+        }
+      } else {
+        future.completeExceptionally(channelFuture.cause());
+      }
+    });
+
     return future;
   }
 
@@ -173,7 +188,7 @@ public abstract class NettyTcpConnection implements ProtocolConnection {
       .writeLong(id)
       .writeByte(response.type().id());
     writeResponse(response, buffer);
-    channel.writeAndFlush(buffer);
+    channel.writeAndFlush(buffer, channel.voidPromise());
   }
 
   /**
