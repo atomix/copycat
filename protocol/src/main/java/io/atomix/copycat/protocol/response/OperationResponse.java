@@ -89,7 +89,7 @@ public abstract class OperationResponse extends SessionResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d, eventIndex=%d, result=byte[%d]]", getClass().getSimpleName(), status, index, eventIndex, result.length);
+    return String.format("%s[status=%s, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, index, eventIndex, result != null ? "byte[" + result.length + "]" : "null");
   }
 
   /**

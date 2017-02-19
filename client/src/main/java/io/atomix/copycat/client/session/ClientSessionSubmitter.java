@@ -113,7 +113,7 @@ final class ClientSessionSubmitter {
     if (state.getState() == ClientSession.State.CLOSED || state.getState() == ClientSession.State.EXPIRED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
-      attempt.execute(connection).whenComplete(attempt);
+      attempt.execute(connection).whenCompleteAsync(attempt, context);
       attempt.future.whenComplete((r, e) -> attempts.remove(attempt.id));
     }
   }

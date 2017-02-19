@@ -129,7 +129,7 @@ public class SegmentReader implements Reader {
 
   @Override
   public Indexed<? extends Entry<?>> next() {
-    if (nextEntry == null) {
+    if (!hasNext()) {
       throw new NoSuchElementException();
     }
 

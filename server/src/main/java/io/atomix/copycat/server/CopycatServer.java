@@ -599,14 +599,14 @@ public class CopycatServer {
   private CompletableFuture<Void> listen() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     context.getThreadContext().execute(() -> {
-      raftServer.listen(cluster().member().serverAddress(), context::connectServer).whenComplete((internalResult, internalError) -> {
+      raftServer.listen(cluster().member().serverAddress(), context::connectServer).whenCompleteAsync((internalResult, internalError) -> {
         if (internalError == null) {
           // If the client address is different than the server address, start a separate client server.
           if (clientServer != null) {
-            clientServer.listen(cluster().member().clientAddress(), context::connectClient).whenComplete((clientResult, clientError) -> {
+            clientServer.listen(cluster().member().clientAddress(), context::connectClient).whenCompleteAsync((clientResult, clientError) -> {
               started = true;
               future.complete(null);
-            });
+            }, context.getThreadContext());
           } else {
             started = true;
             future.complete(null);
@@ -614,7 +614,7 @@ public class CopycatServer {
         } else {
           future.completeExceptionally(internalError);
         }
-      });
+      }, context.getThreadContext());
     });
 
     return future;

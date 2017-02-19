@@ -322,7 +322,7 @@ final class ServerStateMachine implements AutoCloseable {
         }
       }
 
-      // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
+      // Read the entry from the log. If the entry is non-null then apply it, otherwise
       // simply update the last applied index and return a null result.
       try {
         Indexed<? extends Entry<?>> entry = reader.next();
@@ -912,7 +912,7 @@ final class ServerStateMachine implements AutoCloseable {
       return Futures.exceptionalFuture(new UnknownSessionException("inactive session: " + entry.entry().session()));
     } else {
       CompletableFuture<Result> future = new CompletableFuture<>();
-      ServerCommit commit = new ServerCommit(Commit.Type.QUERY, new Indexed<>(lastApplied, entry.term(), entry.entry(), entry.size()), session, context.timestamp());
+      ServerCommit commit = new ServerCommit(Commit.Type.QUERY, new Indexed(lastApplied, entry.term(), entry.entry(), entry.size()), session, context.timestamp());
       context.executor.execute(() -> executeQuery(commit, session, future));
       return future;
     }

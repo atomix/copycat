@@ -31,7 +31,7 @@ import java.time.Instant;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-final class ServerCommit<T extends java.io.Serializable> implements Commit {
+final class ServerCommit implements Commit {
   private final Type type;
   private final Indexed<? extends OperationEntry<?>> entry;
   private final ServerSession session;

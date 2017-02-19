@@ -793,7 +793,7 @@ public class ClusterTest extends ConcurrentTestCase {
     client.onEvent(event -> {
       threadAssertEquals(index.get(), event.readLong());
       try {
-        threadAssertTrue(index.get() <= client.submitQuery(HeapBuffer.allocate().flip(), ConsistencyLevel.LINEARIZABLE).get(10, TimeUnit.SECONDS).readLong());
+        threadAssertTrue(index.get() <= client.submitQuery(HeapBuffer.allocate().writeByte(0).flip(), ConsistencyLevel.LINEARIZABLE).get(10, TimeUnit.SECONDS).readLong());
       } catch (InterruptedException | TimeoutException | ExecutionException e) {
         threadFail(e);
       }
@@ -1288,6 +1288,7 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public Buffer apply(Commit commit) {
+      final long index = commit.index();
       switch (commit.buffer().readByte()) {
         case 0:
           break;
@@ -1307,7 +1308,7 @@ public class ClusterTest extends ConcurrentTestCase {
           expire(commit);
           break;
       }
-      return HeapBuffer.allocate(8).writeLong(commit.index()).flip();
+      return HeapBuffer.allocate(8).writeLong(index).flip();
     }
 
     public long command(Commit commit) {

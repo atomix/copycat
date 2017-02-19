@@ -195,7 +195,7 @@ public class ClientConnection implements ProtocolClientConnection {
   /**
    * Connects to the cluster.
    */
-  private CompletableFuture<ProtocolClientConnection> connect() {
+  private synchronized CompletableFuture<ProtocolClientConnection> connect() {
     // If the address selector has been then reset the connection.
     if (selector.state() == AddressSelector.State.RESET && connection != null) {
       if (connectFuture != null)
@@ -226,7 +226,7 @@ public class ClientConnection implements ProtocolClientConnection {
   /**
    * Connects to the cluster using the next connection.
    */
-  private CompletableFuture<ProtocolClientConnection> next() {
+  private synchronized CompletableFuture<ProtocolClientConnection> next() {
     if (connection != null)
       return connection.close().thenRun(() -> connection = null).thenCompose(v -> connect());
     return connect();
@@ -235,7 +235,7 @@ public class ClientConnection implements ProtocolClientConnection {
   /**
    * Attempts to connect to the cluster.
    */
-  private void connect(CompletableFuture<ProtocolClientConnection> future) {
+  private synchronized void connect(CompletableFuture<ProtocolClientConnection> future) {
     if (!selector.hasNext()) {
       LOGGER.debug("Failed to connect to the cluster");
       future.complete(null);
@@ -249,7 +249,7 @@ public class ClientConnection implements ProtocolClientConnection {
   /**
    * Handles a connection to a server.
    */
-  private void handleConnection(Address address, ProtocolClientConnection connection, Throwable error, CompletableFuture<ProtocolClientConnection> future) {
+  private synchronized void handleConnection(Address address, ProtocolClientConnection connection, Throwable error, CompletableFuture<ProtocolClientConnection> future) {
     if (open) {
       if (error == null) {
         setupConnection(address, connection, future);
@@ -263,7 +263,7 @@ public class ClientConnection implements ProtocolClientConnection {
    * Sets up the given connection.
    */
   @SuppressWarnings("unchecked")
-  private void setupConnection(Address address, ProtocolClientConnection connection, CompletableFuture<ProtocolClientConnection> future) {
+  private synchronized void setupConnection(Address address, ProtocolClientConnection connection, CompletableFuture<ProtocolClientConnection> future) {
     LOGGER.debug("Setting up connection to {}", address);
 
     this.connection = connection;
@@ -293,7 +293,7 @@ public class ClientConnection implements ProtocolClientConnection {
   /**
    * Handles a connect response.
    */
-  private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<ProtocolClientConnection> future) {
+  private synchronized void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<ProtocolClientConnection> future) {
     if (open) {
       if (error == null) {
         // If the connection was successfully created, immediately send a keep-alive request

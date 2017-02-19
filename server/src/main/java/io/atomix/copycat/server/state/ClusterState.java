@@ -375,7 +375,7 @@ final class ClusterState implements Cluster, AutoCloseable {
           connection.join(JoinRequest.builder()
             .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
             .build()))
-        .whenComplete((response, error) -> {
+        .whenCompleteAsync((response, error) -> {
           // Cancel the join timer.
           cancelJoinTimer();
 
@@ -410,7 +410,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             LOGGER.debug("{} - Failed to join {}", member().address(), member.getMember().address());
             join(iterator);
           }
-        });
+        }, context.threadContext);
     }
     // If join attempts remain, schedule another attempt after two election timeouts. This allows enough time
     // for servers to potentially timeout and elect a leader.
@@ -445,7 +445,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             .withTerm(configuration.term())
             .withMember(member())
             .build()))
-          .whenComplete((response, error) -> {
+          .whenCompleteAsync((response, error) -> {
             cancelJoinTimer();
             if (error == null) {
               if (response.status() == ProtocolResponse.Status.OK) {
@@ -456,7 +456,7 @@ final class ClusterState implements Cluster, AutoCloseable {
                 joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
               }
             }
-          });
+          }, context.threadContext);
       }
     }
     return joinFuture;
