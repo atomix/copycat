@@ -577,11 +577,11 @@ final class LeaderState extends ActiveState {
    * Applies a command to the state machine.
    */
   private void applyCommand(long index, CompletableFuture<CommandResponse> future) {
-    context.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+    context.getStateMachine().<ServerStateMachine.Result>apply(index).whenCompleteAsync((result, error) -> {
       if (isOpen()) {
         completeOperation(result, CommandResponse.builder(), error, future);
       }
-    });
+    }, context.threadContext);
   }
 
   @Override
@@ -744,7 +744,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(entry.index()).whenComplete((sessionId, sessionError) -> {
+          context.getStateMachine().apply(entry.index()).whenCompleteAsync((sessionId, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(
@@ -778,7 +778,7 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-          });
+          }, context.threadContext);
         } else {
           future.complete(logResponse(
             RegisterResponse.builder()
@@ -841,7 +841,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(entry.index()).whenComplete((connectResult, connectError) -> {
+          context.getStateMachine().apply(entry.index()).whenCompleteAsync((connectResult, connectError) -> {
             if (isOpen()) {
               if (connectError == null) {
                 future.complete(logResponse(
@@ -869,7 +869,7 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-          });
+          }, context.threadContext);
         } else {
           future.complete(logResponse(
             AcceptResponse.builder()
@@ -905,7 +905,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(entry.index()).whenComplete((sessionResult, sessionError) -> {
+          context.getStateMachine().apply(entry.index()).whenCompleteAsync((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(
@@ -940,7 +940,7 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-          });
+          }, context.threadContext);
         } else {
           future.complete(logResponse(
             KeepAliveResponse.builder()
@@ -977,7 +977,7 @@ final class LeaderState extends ActiveState {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(entry.index()).whenComplete((unregisterResult, unregisterError) -> {
+          context.getStateMachine().apply(entry.index()).whenCompleteAsync((unregisterResult, unregisterError) -> {
             if (isOpen()) {
               if (unregisterError == null) {
                 future.complete(logResponse(
@@ -1005,7 +1005,7 @@ final class LeaderState extends ActiveState {
               }
               checkSessions();
             }
-          });
+          }, context.threadContext);
         } else {
           future.complete(logResponse(
             UnregisterResponse.builder()

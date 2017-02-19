@@ -47,7 +47,11 @@ public class ConnectResponse extends AbstractResponse {
   public ConnectResponse(Status status, ProtocolResponse.Error error, Address leader, Collection<Address> members) {
     super(status, error);
     this.leader = leader;
-    this.members = Assert.notNull(members, "members");
+    if (status == Status.OK) {
+      this.members = Assert.notNull(members, "members");
+    } else {
+      this.members = members;
+    }
   }
 
   @Override
