@@ -37,7 +37,6 @@ import io.atomix.copycat.util.concurrent.Futures;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.Arrays;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
@@ -309,35 +308,41 @@ final class ServerStateMachine implements AutoCloseable {
     try {
       // Apply entries prior to this entry.
       while (reader.hasNext()) {
+        long nextIndex = reader.nextIndex();
+
         // If the next index is less than or equal to the given index, read and apply the entry.
-        if (reader.nextIndex() < index) {
+        if (nextIndex < index) {
           Indexed<? extends Entry<?>> entry = reader.next();
           if (!entry.isCompacted()) {
             applyEntry(entry);
             setLastApplied(entry.index());
           }
         }
-        // If the index has been reached, break.
-        else {
-          break;
-        }
-      }
-
-      // Read the entry from the log. If the entry is non-null then apply it, otherwise
-      // simply update the last applied index and return a null result.
-      try {
-        Indexed<? extends Entry<?>> entry = reader.next();
-        if (!entry.isCompacted()) {
-          if (entry.index() != index) {
-            throw new IllegalStateException("inconsistent index applying entry " + index + ": " + entry);
+        // If the next index is equal to the applied index, apply it and return the result.
+        else if (nextIndex == index) {
+          // Read the entry from the log. If the entry is non-null then apply it, otherwise
+          // simply update the last applied index and return a null result.
+          try {
+            Indexed<? extends Entry<?>> entry = reader.next();
+            if (!entry.isCompacted()) {
+              if (entry.index() != index) {
+                throw new IllegalStateException("inconsistent index applying entry " + index + ": " + entry);
+              }
+              return applyEntry(entry);
+            } else {
+              return CompletableFuture.completedFuture(null);
+            }
+          } finally {
+            setLastApplied(index);
           }
-          return applyEntry(entry);
-        } else {
+        }
+        // If the applied index has been passed, return a null result.
+        else {
+          setLastApplied(index);
           return CompletableFuture.completedFuture(null);
         }
-      } finally {
-        setLastApplied(index);
       }
+      return CompletableFuture.completedFuture(null);
     } finally {
       reader.unlock();
     }
