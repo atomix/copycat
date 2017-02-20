@@ -50,8 +50,12 @@ public class JoinResponseSerializer extends RaftProtocolResponseSerializer<JoinR
         output.writeLong(member.updated().toEpochMilli());
       }
     } else {
-      output.writeByte(response.error().type().id());
-      output.writeString(response.error().message());
+      if (response.error() != null) {
+        output.writeByte(response.error().type().id());
+        output.writeString(response.error().message());
+      } else {
+        output.writeByte(0);
+      }
     }
   }
 
@@ -77,8 +81,13 @@ public class JoinResponseSerializer extends RaftProtocolResponseSerializer<JoinR
       }
       return new JoinResponse(status, null, index, term, timestamp, members);
     } else {
-      ProtocolResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
-      return new JoinResponse(status, error, 0, 0, 0, null);
+      int errorType = input.readByte();
+      if (errorType != 0) {
+        ProtocolResponse.Error error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(errorType), input.readString());
+        return new JoinResponse(status, error, 0, 0, 0, null);
+      } else {
+        return new JoinResponse(status, null, 0, 0, 0, null);
+      }
     }
   }
 }

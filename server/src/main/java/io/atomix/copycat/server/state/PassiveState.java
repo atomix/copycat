@@ -32,6 +32,7 @@ import io.atomix.copycat.server.protocol.request.InstallRequest;
 import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.InstallResponse;
 import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogReader;
 import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -189,12 +190,26 @@ class PassiveState extends ReserveState {
         .withLogIndex(context.getLogWriter().lastIndex())
         .build();
     }
-    return appendEntries(request);
+
+    // If the previous entry term doesn't match the local previous term then reject the request.
+    final Indexed<? extends Entry<?>> previousEntry = context.getLogReader().get(request.logIndex());
+    if (previousEntry == null || previousEntry.term() != request.logTerm()) {
+      LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, (previousEntry != null ? previousEntry.term() : null));
+      return AppendResponse.builder()
+        .withStatus(ProtocolResponse.Status.OK)
+        .withTerm(context.getTerm())
+        .withSucceeded(false)
+        .withLogIndex(request.logIndex() <= lastIndex ? request.logIndex() - 1 : lastIndex)
+        .build();
+    } else {
+      return appendEntries(request);
+    }
   }
 
   /**
    * Appends entries to the local log.
    */
+  @SuppressWarnings("unchecked")
   protected AppendResponse appendEntries(AppendRequest request) {
     // Get the last entry index or default to the request log index.
     long lastEntryIndex = request.logIndex();
@@ -203,32 +218,40 @@ class PassiveState extends ReserveState {
     }
 
     // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
-    long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
+    final long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
 
-    // Get the server log writer.
+    // Get the server log reader/writer.
+    final LogReader reader = context.getLogReader();
     final LogWriter writer = context.getLogWriter();
 
     // If the request entries are non-empty, write them to the log.
     long lastIndex;
     if (!request.entries().isEmpty()) {
+      writer.lock();
       try {
-        writer.lock();
-
-        // Append entries to the log starting at the last log index.
+        lastIndex = writer.lastIndex();
         for (Indexed<? extends Entry> entry : request.entries()) {
-          // If the entry index is less than the commit index, append the entry.
-          if (entry.index() <= commitIndex) {
-            writer.append(entry);
-            LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
-          }
-
           // If the entry is a connect entry then immediately configure the connection.
           if (entry.entry().type() == Entry.Type.CONNECT) {
             Indexed<ConnectEntry> connectEntry = (Indexed<ConnectEntry>) entry;
             context.getStateMachine().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
           }
+
+          // If the entry index is greater than the commitIndex, break the loop.
+          if (entry.index() > commitIndex) {
+            break;
+          }
+
+          // Read the existing entry from the log. If the entry does not exist in the log,
+          // append it. If the entry's term is different than the term of the entry in the log,
+          // overwrite the entry in the log. This will force the log to be truncated if necessary.
+          Indexed<? extends Entry> existing = reader.get(entry.index());
+          if (existing == null || existing.term() != entry.term()) {
+            writer.append(entry);
+            LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+            lastIndex = entry.index();
+          }
         }
-        lastIndex = writer.lastIndex();
       } finally {
         writer.unlock();
       }

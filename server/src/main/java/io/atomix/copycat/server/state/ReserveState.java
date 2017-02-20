@@ -340,16 +340,22 @@ class ReserveState extends InactiveState {
       return forward(connection -> connection.join(JoinRequest.builder()
         .withMember(request.member())
         .build()))
-        .thenApply(response ->
-          JoinResponse.builder()
-            .withStatus(response.status())
-            .withError(response.error())
-            .withIndex(response.index())
-            .withTerm(response.term())
-            .withMembers(response.members())
-            .withTime(response.timestamp())
-            .build())
-        .exceptionally(error ->
+        .thenApply(response -> {
+          if (response.status() == ProtocolResponse.Status.OK) {
+            return JoinResponse.builder()
+              .withStatus(ProtocolResponse.Status.OK)
+              .withIndex(response.index())
+              .withTerm(response.term())
+              .withMembers(response.members())
+              .withTime(response.timestamp())
+              .build();
+          } else {
+            return JoinResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(response.error())
+              .build();
+          }
+        }).exceptionally(error ->
           JoinResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
@@ -375,16 +381,22 @@ class ReserveState extends InactiveState {
         .withTerm(request.term())
         .withMember(request.member())
         .build()))
-        .thenApply(response ->
-          ReconfigureResponse.builder()
-            .withStatus(response.status())
-            .withError(response.error())
-            .withIndex(response.index())
-            .withTerm(response.term())
-            .withMembers(response.members())
-            .withTime(response.timestamp())
-            .build())
-        .exceptionally(error ->
+        .thenApply(response -> {
+          if (response.status() == ProtocolResponse.Status.OK) {
+            return ReconfigureResponse.builder()
+              .withStatus(ProtocolResponse.Status.OK)
+              .withIndex(response.index())
+              .withTerm(response.term())
+              .withMembers(response.members())
+              .withTime(response.timestamp())
+              .build();
+          } else {
+            return ReconfigureResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(response.error())
+              .build();
+          }
+        }).exceptionally(error ->
           ReconfigureResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)
@@ -408,16 +420,22 @@ class ReserveState extends InactiveState {
       return forward(connection -> connection.leave(LeaveRequest.builder()
         .withMember(request.member())
         .build()))
-        .thenApply(response ->
-          LeaveResponse.builder()
-            .withStatus(response.status())
-            .withError(response.error())
-            .withIndex(response.index())
-            .withTerm(response.term())
-            .withMembers(response.members())
-            .withTime(response.timestamp())
-            .build())
-        .exceptionally(error ->
+        .thenApply(response -> {
+          if (response.status() == ProtocolResponse.Status.OK) {
+            return LeaveResponse.builder()
+              .withStatus(ProtocolResponse.Status.OK)
+              .withIndex(response.index())
+              .withTerm(response.term())
+              .withMembers(response.members())
+              .withTime(response.timestamp())
+              .build();
+          } else {
+            return LeaveResponse.builder()
+              .withStatus(ProtocolResponse.Status.ERROR)
+              .withError(response.error())
+              .build();
+          }
+        }).exceptionally(error ->
           LeaveResponse.builder()
             .withStatus(ProtocolResponse.Status.ERROR)
             .withError(ProtocolResponse.Error.Type.NO_LEADER_ERROR)

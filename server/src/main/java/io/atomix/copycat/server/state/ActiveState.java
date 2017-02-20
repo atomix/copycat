@@ -25,6 +25,7 @@ import io.atomix.copycat.server.protocol.response.AppendResponse;
 import io.atomix.copycat.server.protocol.response.PollResponse;
 import io.atomix.copycat.server.protocol.response.VoteResponse;
 import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogReader;
 import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.ConnectEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
@@ -63,34 +64,6 @@ abstract class ActiveState extends PassiveState {
   }
 
   @Override
-  protected AppendResponse checkPreviousEntry(AppendRequest request) {
-    final long lastIndex = context.getLogWriter().lastIndex();
-    if (request.logIndex() != 0 && request.logIndex() > lastIndex) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), lastIndex);
-      return AppendResponse.builder()
-        .withStatus(ProtocolResponse.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLogWriter().lastIndex())
-        .build();
-    }
-
-    // If the previous entry term doesn't match the local previous term then reject the request.
-    final Indexed<? extends Entry<?>> previousEntry = context.getLogReader().get(request.logIndex());
-    if (previousEntry == null || previousEntry.term() != request.logTerm()) {
-      LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, (previousEntry != null ? previousEntry.term() : null));
-      return AppendResponse.builder()
-        .withStatus(ProtocolResponse.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(request.logIndex() <= lastIndex ? request.logIndex() - 1 : lastIndex)
-        .build();
-    } else {
-      return appendEntries(request);
-    }
-  }
-
-  @Override
   @SuppressWarnings("unchecked")
   protected AppendResponse appendEntries(AppendRequest request) {
     // Get the last entry index or default to the request log index.
@@ -102,48 +75,52 @@ abstract class ActiveState extends PassiveState {
     // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
     final long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
 
-    // If the log contains entries after the request's previous log index
-    // then remove those entries to be replaced by the request entries.
+    // Get the server log reader/writer.
+    final LogReader reader = context.getLogReader();
+    final LogWriter writer = context.getLogWriter();
+
+    // If the request entries are non-empty, write them to the log.
+    long lastIndex;
     if (!request.entries().isEmpty()) {
-
-      // Get the log writer.
-      final LogWriter writer = context.getLogWriter();
-
+      writer.lock();
       try {
-        // Acquire the writer lock.
-        writer.lock();
-
-        // Iterate through the entries and append them to the log.
+        lastIndex = writer.lastIndex();
         for (Indexed<? extends Entry> entry : request.entries()) {
-          // When the entry is appended, the log will perform consistency checks and truncate
-          // the log as necessary.
-          writer.append(entry);
-          LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
-
           // If the entry is a connect entry then immediately configure the connection.
           if (entry.entry().type() == Entry.Type.CONNECT) {
             Indexed<ConnectEntry> connectEntry = (Indexed<ConnectEntry>) entry;
             context.getStateMachine().context().sessions().registerAddress(connectEntry.entry().client(), connectEntry.entry().address());
           }
+
+          // Read the existing entry from the log. If the entry does not exist in the log,
+          // append it. If the entry's term is different than the term of the entry in the log,
+          // overwrite the entry in the log. This will force the log to be truncated if necessary.
+          Indexed<? extends Entry> existing = reader.get(entry.index());
+          if (existing == null || existing.term() != entry.term()) {
+            writer.append(entry);
+            LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+            lastIndex = entry.index();
+          }
         }
       } finally {
-        // Release the writer lock.
         writer.unlock();
       }
+    } else {
+      lastIndex = writer.lastIndex();
     }
 
-    // If we've made it this far, apply commits and send a successful response.
+    // Update the context commit and global indices.
     context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
 
-    // Apply commits to the local state machine.
+    // Apply commits to the state machine in batch.
     context.getStateMachine().applyAll(context.getCommitIndex());
 
     return AppendResponse.builder()
       .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(context.getLogWriter().lastIndex())
+      .withLogIndex(lastIndex)
       .build();
   }
 
