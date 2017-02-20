@@ -48,6 +48,12 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   }
 
   @Override
+  public BufferInput<SnapshotReader> rewind() {
+    buffer.rewind();
+    return this;
+  }
+
+  @Override
   public long remaining() {
     return buffer.remaining();
   }

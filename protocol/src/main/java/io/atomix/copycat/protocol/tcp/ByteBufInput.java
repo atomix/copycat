@@ -44,6 +44,12 @@ public final class ByteBufInput implements BufferInput<ByteBufInput> {
   }
 
   @Override
+  public BufferInput<ByteBufInput> rewind() {
+    buffer.resetReaderIndex();
+    return this;
+  }
+
+  @Override
   public long remaining() {
     return buffer.readableBytes();
   }

@@ -33,6 +33,13 @@ public interface BufferInput<T extends BufferInput<?>> extends AutoCloseable {
   long position();
 
   /**
+   * Rewinds the input to the beginning.
+   *
+   * @return The rewound input.
+   */
+  BufferInput<T> rewind();
+
+  /**
    * Returns the number of bytes remaining in the input.
    *
    * @return The number of bytes remaining in the input.
