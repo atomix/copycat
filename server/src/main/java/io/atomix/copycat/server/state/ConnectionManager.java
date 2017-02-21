@@ -49,6 +49,7 @@ public final class ConnectionManager {
       CompletableFuture<RaftProtocolClientConnection> future = futures.get(address);
       if (future == null) {
         future = createConnection(address);
+        future.whenComplete((c, e) -> futures.remove(address));
         futures.put(address, future);
       }
       return future;

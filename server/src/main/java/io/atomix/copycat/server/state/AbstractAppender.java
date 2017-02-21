@@ -185,7 +185,6 @@ abstract class AbstractAppender implements AutoCloseable {
     // Start the append to the member.
     member.startAppend();
 
-    LOGGER.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
     context.getConnections().getConnection(member.getMember().address()).whenCompleteAsync((connection, error) -> {
       if (open) {
         if (error == null) {

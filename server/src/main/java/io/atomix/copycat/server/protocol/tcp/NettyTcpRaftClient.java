@@ -42,6 +42,7 @@ public class NettyTcpRaftClient extends NettyTcpClientBase<NettyTcpRaftClientCon
     super(eventLoopGroup, options);
   }
 
+  @Override
   protected NettyTcpHandler createHandler(Consumer<NettyTcpRaftClientConnection> callback) {
     return new NettyTcpHandler<>(c -> new NettyTcpRaftClientConnection(c, options), connections, callback);
   }
