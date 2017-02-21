@@ -450,11 +450,13 @@ final class LeaderAppender extends AbstractAppender {
   protected void succeedAttempt(MemberState member) {
     super.succeedAttempt(member);
 
-    // If the member is currently marked as UNAVAILABLE, change its status to AVAILABLE and update the configuration.
-    if (member.getMember().status() == ServerMember.Status.UNAVAILABLE && !leader.configuring()) {
-      member.getMember().update(ServerMember.Status.AVAILABLE, Instant.now());
-      leader.configure(context.getCluster().members());
-    }
+    context.threadContext.execute(() -> {
+      // If the member is currently marked as UNAVAILABLE, change its status to AVAILABLE and update the configuration.
+      if (member.getMember().status() == ServerMember.Status.UNAVAILABLE && !leader.configuring()) {
+        member.getMember().update(ServerMember.Status.AVAILABLE, Instant.now());
+        leader.configure(context.getCluster().members());
+      }
+    });
   }
 
   @Override

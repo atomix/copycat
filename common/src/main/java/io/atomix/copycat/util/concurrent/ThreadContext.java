@@ -72,7 +72,7 @@ public interface ThreadContext extends Executor, AutoCloseable {
    * Checks that the current thread is the correct context thread.
    */
   default void checkThread() {
-    Assert.state(currentContext() == this, "not on a Catalyst thread");
+    Assert.state(currentContext() == this, "not on the correct Copycat thread");
   }
 
   /**

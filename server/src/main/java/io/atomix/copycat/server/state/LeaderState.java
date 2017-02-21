@@ -220,6 +220,8 @@ final class LeaderState extends ActiveState {
    * Commits the given configuration.
    */
   protected CompletableFuture<Long> configure(Collection<Member> members) {
+    context.checkThread();
+
     final long term = context.getTerm();
 
     final LogWriter writer = context.getLogWriter();
