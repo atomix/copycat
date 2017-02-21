@@ -28,6 +28,7 @@ public class JoinRequestSerializer extends RaftProtocolRequestSerializer<JoinReq
   @Override
   public void writeObject(BufferOutput output, JoinRequest request) {
     output.writeByte(request.member().type().ordinal());
+    output.writeByte(request.member().status().ordinal());
     output.writeString(request.member().serverAddress().host()).writeInt(request.member().serverAddress().port());
     if (request.member().clientAddress() != null) {
       output.writeBoolean(true)
@@ -42,13 +43,14 @@ public class JoinRequestSerializer extends RaftProtocolRequestSerializer<JoinReq
   @Override
   public JoinRequest readObject(BufferInput input, Class<JoinRequest> type) {
     final Member.Type memberType = Member.Type.values()[input.readByte()];
+    final Member.Status memberStatus = Member.Status.values()[input.readByte()];
     final Address serverAddress = new Address(input.readString(), input.readInt());
     Address clientAddress = null;
     if (input.readBoolean()) {
       clientAddress = new Address(input.readString(), input.readInt());
     }
     final Instant updated = Instant.ofEpochMilli(input.readLong());
-    final Member member = new ServerMember(memberType, serverAddress, clientAddress, updated);
+    final Member member = new ServerMember(memberType, memberStatus, serverAddress, clientAddress, updated);
     return new JoinRequest(member);
   }
 }

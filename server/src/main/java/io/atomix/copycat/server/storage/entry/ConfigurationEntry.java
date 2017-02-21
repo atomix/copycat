@@ -74,6 +74,7 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
       output.writeInt(entry.members.size());
       for (Member member : entry.members) {
         output.writeByte(member.type().ordinal());
+        output.writeByte(member.status().ordinal());
         output.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
         if (member.clientAddress() != null) {
           output.writeBoolean(true)
@@ -93,13 +94,14 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
       List<Member> members = new ArrayList<>(size);
       for (int i = 0; i < size; i++) {
         Member.Type memberType = Member.Type.values()[input.readByte()];
+        Member.Status memberStatus = Member.Status.values()[input.readByte()];
         Address serverAddress = new Address(input.readString(), input.readInt());
         Address clientAddress = null;
         if (input.readBoolean()) {
           clientAddress = new Address(input.readString(), input.readInt());
         }
         Instant updated = Instant.ofEpochMilli(input.readLong());
-        members.add(new ServerMember(memberType, serverAddress, clientAddress, updated));
+        members.add(new ServerMember(memberType, memberStatus, serverAddress, clientAddress, updated));
       }
       return new ConfigurationEntry(timestamp, members);
     }

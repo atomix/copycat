@@ -64,7 +64,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
   ClusterState(Member.Type type, Address serverAddress, Address clientAddress, ServerContext context) {
     Instant time = Instant.now();
-    this.member = new ServerMember(type, serverAddress, clientAddress, time).setCluster(this);
+    this.member = new ServerMember(type, Member.Status.AVAILABLE, serverAddress, clientAddress, time).setCluster(this);
     this.context = Assert.notNull(context, "context");
     this.threadFactory = new CopycatThreadFactory("copycat-server-" + serverAddress + "-appender-%d");
 
@@ -80,7 +80,7 @@ final class ClusterState implements Cluster, AutoCloseable {
           this.members.add(this.member);
         } else {
           // If the member state doesn't already exist, create it.
-          MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this, new SingleThreadContext(threadFactory));
+          MemberState state = new MemberState(new ServerMember(member.type(), Member.Status.AVAILABLE, member.serverAddress(), member.clientAddress(), updateTime), this, new SingleThreadContext(threadFactory));
           state.resetState(context.getLog());
           this.members.add(state.getMember());
           this.remoteMembers.add(state);
@@ -295,7 +295,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // Create a set of active members.
         Set<Member> activeMembers = cluster.stream()
           .filter(m -> !m.equals(member.serverAddress()))
-          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, member.updated()))
+          .map(m -> new ServerMember(Member.Type.ACTIVE, Member.Status.AVAILABLE, m, null, member.updated()))
           .collect(Collectors.toSet());
 
         // Add the local member to the set of active members.
@@ -318,7 +318,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       // Create a set of cluster members, excluding the local member which is joining a cluster.
       Set<Member> activeMembers = cluster.stream()
         .filter(m -> !m.equals(member.serverAddress()))
-        .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, member.updated()))
+        .map(m -> new ServerMember(Member.Type.ACTIVE, Member.Status.AVAILABLE, m, null, member.updated()))
         .collect(Collectors.toSet());
 
       // If the set of members in the cluster is empty when the local member is excluded,
@@ -373,7 +373,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       context.getConnections().getConnection(member.getMember().serverAddress())
         .thenCompose(connection ->
           connection.join(JoinRequest.builder()
-            .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
+            .withMember(new ServerMember(member().type(), Member.Status.AVAILABLE, member().serverAddress(), member().clientAddress(), member().updated()))
             .build()))
         .whenCompleteAsync((response, error) -> {
           // Cancel the join timer.
@@ -614,7 +614,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
         if (state == null) {
-          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this, new SingleThreadContext(threadFactory));
+          state = new MemberState(new ServerMember(member.type(), member.status(), member.serverAddress(), member.clientAddress(), time), this, new SingleThreadContext(threadFactory));
           state.resetState(context.getLog());
           this.members.add(state.getMember());
           this.remoteMembers.add(state);

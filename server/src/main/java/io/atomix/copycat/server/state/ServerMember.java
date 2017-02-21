@@ -36,7 +36,7 @@ import java.util.function.Consumer;
  */
 public final class ServerMember implements Member, AutoCloseable {
   private Member.Type type;
-  private Status status = Status.AVAILABLE;
+  private Status status;
   private Instant updated;
   private Address serverAddress;
   private Address clientAddress;
@@ -48,8 +48,9 @@ public final class ServerMember implements Member, AutoCloseable {
   ServerMember() {
   }
 
-  public ServerMember(Member.Type type, Address serverAddress, Address clientAddress, Instant updated) {
+  public ServerMember(Member.Type type, Member.Status status, Address serverAddress, Address clientAddress, Instant updated) {
     this.type = Assert.notNull(type, "type");
+    this.status = Assert.notNull(status, "status");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
     this.updated = Assert.notNull(updated, "updated");
@@ -225,7 +226,7 @@ public final class ServerMember implements Member, AutoCloseable {
     cluster.getContext().getServerState().onReconfigure(ReconfigureRequest.builder()
       .withIndex(cluster.getConfiguration().index())
       .withTerm(cluster.getConfiguration().term())
-      .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))
+      .withMember(new ServerMember(type, status, serverAddress(), clientAddress(), updated))
       .build()).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == ProtocolResponse.Status.OK) {

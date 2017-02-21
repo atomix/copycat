@@ -119,6 +119,7 @@ public class MetaStore implements AutoCloseable {
     buffer.writeInt(configuration.members().size());
     for (Member member : configuration.members()) {
       buffer.writeByte(member.type().ordinal());
+      buffer.writeByte(member.status().ordinal());
       buffer.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
       if (member.clientAddress() != null) {
         buffer.writeBoolean(true)
@@ -150,13 +151,14 @@ public class MetaStore implements AutoCloseable {
       final List<Member> members = new ArrayList<>(size);
       for (int i = 0; i < size; i++) {
         Member.Type memberType = Member.Type.values()[buffer.readByte()];
+        Member.Status memberStatus = Member.Status.values()[buffer.readByte()];
         Address serverAddress = new Address(buffer.readString(), buffer.readInt());
         Address clientAddress = null;
         if (buffer.readBoolean()) {
           clientAddress = new Address(buffer.readString(), buffer.readInt());
         }
         Instant updated = Instant.ofEpochMilli(buffer.readLong());
-        members.add(new ServerMember(memberType, serverAddress, clientAddress, updated));
+        members.add(new ServerMember(memberType, memberStatus, serverAddress, clientAddress, updated));
       }
 
       return new Configuration(index, term, time, members);
