@@ -21,8 +21,10 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.LinkedList;
-import java.util.concurrent.*;
-import java.util.function.Supplier;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Thread pool context.
@@ -108,19 +110,6 @@ public class ThreadPoolContext implements ThreadContext {
   @Override
   public void execute(Runnable callback) {
     executor.execute(callback);
-  }
-
-  @Override
-  public <T> CompletableFuture<T> execute(Supplier<T> callback) {
-    CompletableFuture<T> future = new CompletableFuture<>();
-    executor.execute(() -> {
-      try {
-        future.complete(callback.get());
-      } catch (Throwable t) {
-        future.completeExceptionally(t);
-      }
-    });
-    return future;
   }
 
   @Override

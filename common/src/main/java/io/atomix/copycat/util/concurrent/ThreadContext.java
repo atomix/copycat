@@ -107,15 +107,6 @@ public interface ThreadContext extends Executor, AutoCloseable {
   void execute(Runnable callback);
 
   /**
-   * Executes a callback on the context.
-   *
-   * @param callback The callback to execute.
-   * @param <T> The callback result type.
-   * @return A completable future to be completed with the callback result.
-   */
-  <T> CompletableFuture<T> execute(Supplier<T> callback);
-
-  /**
    * Schedules a runnable on the context.
    *
    * @param callback The callback to schedule.

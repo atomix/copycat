@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -86,14 +87,32 @@ public class ServerContext implements AutoCloseable {
     this.applicationContext = new SingleThreadContext(String.format("copycat-server-%s-%s-application", serverAddress, name));
 
     // Open the meta store.
-    threadContext.execute(() -> this.meta = storage.openMetaStore(name)).join();
+    CountDownLatch metaLatch = new CountDownLatch(1);
+    threadContext.execute(() -> {
+      this.meta = storage.openMetaStore(name);
+      metaLatch.countDown();
+    });
+    try {
+      metaLatch.await();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
 
     // Reset the state machine.
-    threadContext.execute(this::reset).join();
+    CountDownLatch resetLatch = new CountDownLatch(1);
+    threadContext.execute(() -> {
+      reset();
+      resetLatch.countDown();
+    });
+    try {
+      resetLatch.await();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
 
     this.cluster = new ClusterState(type, serverAddress, clientAddress, this);
   }

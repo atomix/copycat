@@ -18,7 +18,6 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.server.StateMachineContext;
 import io.atomix.copycat.util.Assert;
-import io.atomix.copycat.util.concurrent.NonBlockingFuture;
 import io.atomix.copycat.util.concurrent.Scheduled;
 import io.atomix.copycat.util.concurrent.ThreadContext;
 import org.slf4j.Logger;
@@ -196,14 +195,6 @@ class ServerStateMachineContext implements StateMachineContext {
       callback.run();
       return null;
     }, null));
-  }
-
-  @Override
-  public <T> CompletableFuture<T> execute(Supplier<T> callback) {
-    Assert.state(type == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
-    CompletableFuture<T> future = new NonBlockingFuture<>();
-    tasks.add(new ServerTask(callback, future));
-    return future;
   }
 
   @Override
