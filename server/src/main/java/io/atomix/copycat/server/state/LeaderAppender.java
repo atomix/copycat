@@ -416,8 +416,10 @@ final class LeaderAppender extends AbstractAppender {
     }
     // If we've received a greater term, update the term and transition back to follower.
     else if (response.term() > context.getTerm()) {
-      context.setTerm(response.term()).setLeader(0);
-      context.transition(CopycatServer.State.FOLLOWER);
+      context.threadContext.execute(() -> {
+        context.setTerm(response.term()).setLeader(0);
+        context.transition(CopycatServer.State.FOLLOWER);
+      });
     }
     // If the response failed, the follower should have provided the correct last index in their log. This helps
     // us converge on the matchIndex faster than by simply decrementing nextIndex one index at a time.
@@ -438,9 +440,11 @@ final class LeaderAppender extends AbstractAppender {
   protected void handleAppendResponseError(MemberState member, AppendRequest request, AppendResponse response) {
     // If we've received a greater term, update the term and transition back to follower.
     if (response.term() > context.getTerm()) {
-      LOGGER.debug("{} - Received higher term from {}", context.getClusterState().member().address(), member.getMember().serverAddress());
-      context.setTerm(response.term()).setLeader(0);
-      context.transition(CopycatServer.State.FOLLOWER);
+      context.threadContext.execute(() -> {
+        LOGGER.debug("{} - Received higher term from {}", context.getClusterState().member().address(), member.getMember().serverAddress());
+        context.setTerm(response.term()).setLeader(0);
+        context.transition(CopycatServer.State.FOLLOWER);
+      });
     } else {
       super.handleAppendResponseError(member, request, response);
     }
