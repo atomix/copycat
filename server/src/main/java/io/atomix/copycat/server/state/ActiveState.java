@@ -80,11 +80,9 @@ abstract class ActiveState extends PassiveState {
     final LogWriter writer = context.getLogWriter();
 
     // If the request entries are non-empty, write them to the log.
-    long lastIndex;
     if (!request.entries().isEmpty()) {
       writer.lock();
       try {
-        lastIndex = writer.lastIndex();
         for (Indexed<? extends Entry> entry : request.entries()) {
           // If the entry is a connect entry then immediately configure the connection.
           if (entry.entry().type() == Entry.Type.CONNECT) {
@@ -99,14 +97,11 @@ abstract class ActiveState extends PassiveState {
           if (existing == null || existing.term() != entry.term()) {
             writer.append(entry);
             LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
-            lastIndex = entry.index();
           }
         }
       } finally {
         writer.unlock();
       }
-    } else {
-      lastIndex = writer.lastIndex();
     }
 
     // Update the context commit and global indices.
@@ -120,7 +115,7 @@ abstract class ActiveState extends PassiveState {
       .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(lastIndex)
+      .withLogIndex(writer.lastIndex())
       .build();
   }
 
