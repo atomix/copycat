@@ -31,8 +31,13 @@ public class QueryResponseSerializer extends ProtocolResponseSerializer<QueryRes
     }
     output.writeLong(response.index());
     output.writeLong(response.eventIndex());
-    output.writeInt(response.result().length);
-    output.write(response.result());
+    if (response.result() != null) {
+      output.writeBoolean(true);
+      output.writeInt(response.result().length);
+      output.write(response.result());
+    } else {
+      output.writeBoolean(false);
+    }
   }
 
   @Override
@@ -42,6 +47,12 @@ public class QueryResponseSerializer extends ProtocolResponseSerializer<QueryRes
     if (status == ProtocolResponse.Status.ERROR) {
       error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
     }
-    return new QueryResponse(status, error, input.readLong(), input.readLong(), input.readBytes(input.readInt()));
+    final long index = input.readLong();
+    final long eventIndex = input.readLong();
+    byte[] result = null;
+    if (input.readBoolean()) {
+      result = input.readBytes(input.readInt());
+    }
+    return new QueryResponse(status, error, index, eventIndex, result);
   }
 }

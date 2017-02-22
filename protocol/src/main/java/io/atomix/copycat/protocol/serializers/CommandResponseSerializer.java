@@ -31,8 +31,13 @@ public class CommandResponseSerializer extends ProtocolResponseSerializer<Comman
     }
     output.writeLong(response.index());
     output.writeLong(response.eventIndex());
-    output.writeInt(response.result().length);
-    output.write(response.result());
+    if (response.result() != null) {
+      output.writeBoolean(true);
+      output.writeInt(response.result().length);
+      output.write(response.result());
+    } else {
+      output.writeBoolean(false);
+    }
   }
 
   @Override
@@ -42,6 +47,12 @@ public class CommandResponseSerializer extends ProtocolResponseSerializer<Comman
     if (status == ProtocolResponse.Status.ERROR) {
       error = new AbstractResponse.Error(ProtocolResponse.Error.Type.forId(input.readByte()), input.readString());
     }
-    return new CommandResponse(status, error, input.readLong(), input.readLong(), input.readBytes(input.readInt()));
+    final long index = input.readLong();
+    final long eventIndex = input.readLong();
+    byte[] result = null;
+    if (input.readBoolean()) {
+      result = input.readBytes(input.readInt());
+    }
+    return new CommandResponse(status, error, index, eventIndex, result);
   }
 }
