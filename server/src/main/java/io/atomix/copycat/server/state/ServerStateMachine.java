@@ -498,7 +498,22 @@ final class ServerStateMachine implements AutoCloseable {
       executor.executor().execute(() -> keepAliveSession(index, timestamp, commandSequence, eventIndex, session, future, context));
 
       // Update the session keep alive index for log cleaning.
-      session.setKeepAliveIndex(entry.getIndex()).setRequestSequence(commandSequence);
+      session.setKeepAliveIndex(entry.getIndex());
+
+      // Update the session's request sequence number. The command sequence number will be applied
+      // iff the existing request sequence number is less than the command sequence number. This must
+      // be applied to ensure that request sequence numbers are reset after a leader change since leaders
+      // track request sequence numbers in local memory.
+      session.setRequestSequence(commandSequence);
+
+      // Update the sessions' command sequence number. The command sequence number will be applied
+      // iff the existing sequence number is less than the keep-alive command sequence number. This should
+      // not be the case under normal operation since the command sequence number in keep-alive requests
+      // represents the highest sequence for which a client has received a response (the command has already
+      // been completed), but since the log compaction algorithm can exclude individual entries from replication,
+      // the command sequence number must be applied for keep-alive requests to reset the sequence number in
+      // the event the last command for the session was cleaned/compacted from the log.
+      session.setCommandSequence(commandSequence);
     }
 
     return future;
