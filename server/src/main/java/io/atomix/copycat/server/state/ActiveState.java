@@ -106,9 +106,7 @@ abstract class ActiveState extends PassiveState {
       if (context.getLog().lastIndex() < entry.getIndex()) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-      } else if (context.getCommitIndex() >= entry.getIndex()) {
-        continue;
-      } else {
+      } else if (entry.getIndex() > context.getCommitIndex()) {
         // Compare the term of the received entry with the matching entry in the log.
         long term = context.getLog().term(entry.getIndex());
         if (term != 0) {

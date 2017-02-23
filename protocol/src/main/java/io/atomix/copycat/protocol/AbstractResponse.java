@@ -52,7 +52,7 @@ public abstract class AbstractResponse implements Response {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s]", getClass().getCanonicalName(), status);
+    return String.format("%s[status=%s, error=%s]", getClass().getCanonicalName(), status, error);
   }
 
   /**

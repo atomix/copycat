@@ -120,7 +120,7 @@ public class ConnectResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, leader, members);
+    return String.format("%s[status=%s, error=%s, leader=%s, members=%s]", getClass().getSimpleName(), status, error, leader, members);
   }
 
   /**

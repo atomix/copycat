@@ -20,6 +20,7 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.QueryException;
+import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.Session;
 import org.mockito.Mockito;
@@ -228,16 +229,80 @@ public class ClientSessionSubmitterTest {
 
     future1.completeExceptionally(new QueryException("failure"));
     future2.complete(QueryResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withIndex(10)
-        .withResult("Hello world!")
-        .build());
+      .withStatus(Response.Status.OK)
+      .withIndex(10)
+      .withResult("Hello world!")
+      .build());
 
     assertTrue(result1.isCompletedExceptionally());
     assertTrue(result2.isDone());
     assertEquals(result2.get(), "Hello world!");
 
     assertEquals(state.getResponseIndex(), 10);
+  }
+
+  /**
+   * Tests that the client's session is expired when an UnknownSessionException is received from the cluster.
+   */
+  public void testExpireSessionOnCommandFailure() throws Throwable {
+    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+
+    Connection connection = mock(Connection.class);
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+      .thenReturn(future);
+
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
+      .setSessionId(1)
+      .setState(Session.State.OPEN);
+
+    Executor executor = new MockExecutor();
+    ThreadContext context = mock(ThreadContext.class);
+    when(context.executor()).thenReturn(executor);
+
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+
+    CompletableFuture<String> result = submitter.submit(new TestCommand());
+
+    assertEquals(state.getResponseIndex(), 1);
+
+    assertFalse(result.isDone());
+
+    future.completeExceptionally(new UnknownSessionException("unknown session"));
+
+    assertTrue(result.isCompletedExceptionally());
+    assertEquals(ClientSession.State.EXPIRED, state.getState());
+  }
+
+  /**
+   * Tests that the client's session is expired when an UnknownSessionException is received from the cluster.
+   */
+  public void testExpireSessionOnQueryFailure() throws Throwable {
+    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+
+    Connection connection = mock(Connection.class);
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+      .thenReturn(future);
+
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
+      .setSessionId(1)
+      .setState(Session.State.OPEN);
+
+    Executor executor = new MockExecutor();
+    ThreadContext context = mock(ThreadContext.class);
+    when(context.executor()).thenReturn(executor);
+
+    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+
+    CompletableFuture<String> result = submitter.submit(new TestQuery());
+
+    assertEquals(state.getResponseIndex(), 1);
+
+    assertFalse(result.isDone());
+
+    future.completeExceptionally(new UnknownSessionException("unknown session"));
+
+    assertTrue(result.isCompletedExceptionally());
+    assertEquals(ClientSession.State.EXPIRED, state.getState());
   }
 
   /**

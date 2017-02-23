@@ -150,7 +150,7 @@ public class RegisterResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, session=%d, leader=%s, members=%s]", getClass().getSimpleName(), status, session, leader, members);
+    return String.format("%s[status=%s, error=%s, session=%d, leader=%s, members=%s]", getClass().getSimpleName(), status, error, session, leader, members);
   }
 
   /**
