@@ -26,12 +26,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Value client example. Expects at least 1 argument:
- * 
+ * <p>
  * <ul>
  * <li>host:port pairs - the host address and port of cluster members</li>
  * </ul>
@@ -61,6 +59,7 @@ public class ValueClientExample {
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(RecoveryStrategies.RECOVER)
       .withServerSelectionStrategy(ServerSelectionStrategies.LEADER)
+      .withSessionTimeout(Duration.ofSeconds(15))
       .build();
 
     client.serializer().register(SetCommand.class, 1);
@@ -69,22 +68,7 @@ public class ValueClientExample {
 
     client.connect(members).join();
 
-    AtomicInteger counter = new AtomicInteger();
-    AtomicLong timer = new AtomicLong();
-    client.context().schedule(Duration.ofSeconds(1), Duration.ofSeconds(1), () -> {
-      long count = counter.get();
-      long time = System.currentTimeMillis();
-      long previousTime = timer.get();
-      if (previousTime > 0) {
-        System.out.println(String.format("Completed %d writes in %d milliseconds", count, time - previousTime));
-      }
-      counter.set(0);
-      timer.set(time);
-    });
-
-    for (int i = 0; i < 10; i++) {
-      recursiveSet(client, counter);
-    }
+    recursiveSet(client);
 
     while (client.state() != CopycatClient.State.CLOSED) {
       try {
@@ -98,10 +82,9 @@ public class ValueClientExample {
   /**
    * Recursively sets state machine values.
    */
-  private static void recursiveSet(CopycatClient client, AtomicInteger counter) {
-    client.submit(new SetCommand(UUID.randomUUID().toString())).thenRun(() -> {
-      counter.incrementAndGet();
-      recursiveSet(client, counter);
+  private static void recursiveSet(CopycatClient client) {
+    client.submit(new SetCommand(UUID.randomUUID().toString())).whenComplete((result, error) -> {
+      client.context().schedule(Duration.ofSeconds(5), () -> recursiveSet(client));
     });
   }
 

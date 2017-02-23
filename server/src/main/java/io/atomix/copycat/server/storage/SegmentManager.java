@@ -64,6 +64,15 @@ public class SegmentManager implements AutoCloseable {
   }
 
   /**
+   * Returns the storage configuration underlying the segment manager.
+   *
+   * @return The storage configuration.
+   */
+  public Storage storage() {
+    return storage;
+  }
+
+  /**
    * Returns the entry serializer.
    *
    * @return The entry serializer.
@@ -144,7 +153,7 @@ public class SegmentManager implements AutoCloseable {
   /**
    * Resets the current segment, creating a new segment if necessary.
    */
-  private void resetCurrentSegment() {
+  private synchronized void resetCurrentSegment() {
     Segment lastSegment = lastSegment();
     if (lastSegment != null) {
       currentSegment = lastSegment;
@@ -169,7 +178,7 @@ public class SegmentManager implements AutoCloseable {
    * 
    * @throws IllegalStateException if the segment manager is not open
    */
-  public Segment firstSegment() {
+  public synchronized Segment firstSegment() {
     assertOpen();
     Map.Entry<Long, Segment> segment = segments.firstEntry();
     return segment != null ? segment.getValue() : null;
@@ -180,7 +189,7 @@ public class SegmentManager implements AutoCloseable {
    * 
    * @throws IllegalStateException if the segment manager is not open
    */
-  public Segment lastSegment() {
+  public synchronized Segment lastSegment() {
     assertOpen();
     Map.Entry<Long, Segment> segment = segments.lastEntry();
     return segment != null ? segment.getValue() : null;
@@ -192,7 +201,7 @@ public class SegmentManager implements AutoCloseable {
    * @return The next segment.
    * @throws IllegalStateException if the segment manager is not open
    */
-  public Segment nextSegment() {
+  public synchronized Segment nextSegment() {
     assertOpen();
     Segment lastSegment = lastSegment();
     SegmentDescriptor descriptor = SegmentDescriptor.builder()
@@ -234,7 +243,7 @@ public class SegmentManager implements AutoCloseable {
    * @param index The index for which to return the segment.
    * @throws IllegalStateException if the segment manager is not open
    */
-  public Segment segment(long index) {
+  public synchronized Segment segment(long index) {
     assertOpen();
     // Check if the current segment contains the given index first in order to prevent an unnecessary map lookup.
     if (currentSegment != null && currentSegment.validIndex(index))

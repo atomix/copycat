@@ -88,7 +88,7 @@ public class UnregisterResponse extends SessionResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s]", getClass().getSimpleName(), status);
+    return String.format("%s[status=%s, error=%s]", getClass().getSimpleName(), status, error);
   }
 
   /**

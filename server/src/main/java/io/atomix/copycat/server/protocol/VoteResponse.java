@@ -116,7 +116,7 @@ public class VoteResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, term=%d, voted=%b]", getClass().getSimpleName(), status, term, voted);
+    return String.format("%s[status=%s, error=%s, term=%d, voted=%b]", getClass().getSimpleName(), status, error, term, voted);
   }
 
   /**
