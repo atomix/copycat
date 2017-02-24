@@ -85,7 +85,7 @@ class PassiveState extends ReserveState {
 
       return CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
-        .withLeader(context.getCluster().member().clientAddress())
+        .withLeader(context.getLeader().clientAddress())
         .withMembers(context.getCluster().members().stream()
           .map(Member::clientAddress)
           .filter(m -> m != null)
