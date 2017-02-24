@@ -224,4 +224,9 @@ public class Segment implements AutoCloseable {
       ((MappedBuffer) buffer).delete();
     }
   }
+
+  @Override
+  public String toString() {
+    return String.format("%s[id=%d, version=%d]", getClass().getSimpleName(), id(), version());
+  }
 }
