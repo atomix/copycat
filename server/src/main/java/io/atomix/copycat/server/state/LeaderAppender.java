@@ -35,9 +35,11 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class LeaderAppender extends AbstractAppender {
+  private static final long MAX_HEARTBEAT_WAIT = 60000;
   private final LeaderState leader;
   private final long leaderTime;
   private final long leaderIndex;
+  private final long heartbeatInterval;
   private long heartbeatTime;
   private int heartbeatFailures;
   private CompletableFuture<Long> heartbeatFuture;
@@ -50,6 +52,7 @@ final class LeaderAppender extends AbstractAppender {
     this.leaderTime = System.currentTimeMillis();
     this.leaderIndex = context.getLog().nextIndex();
     this.heartbeatTime = leaderTime;
+    this.heartbeatInterval = context.getHeartbeatInterval().toMillis();
   }
 
   /**
@@ -167,7 +170,9 @@ final class LeaderAppender extends AbstractAppender {
     // If prior requests to the member have failed, build an empty append request to send to the member
     // to prevent having to read from disk to configure, install, or append to an unavailable member.
     if (member.getFailureCount() > 0) {
-      if (member.canAppend()) {
+      // To prevent the leader from unnecessarily attempting to connect to a down follower on every heartbeat,
+      // use exponential backoff to back off up to 60 second heartbeat intervals.
+      if (System.currentTimeMillis() - member.getHeartbeatStartTime() > Math.min(heartbeatInterval * Math.pow(2, member.getFailureCount()), MAX_HEARTBEAT_WAIT)) {
         sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }

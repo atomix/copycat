@@ -421,6 +421,16 @@ final class LeaderState extends ActiveState {
   @Override
   public CompletableFuture<PollResponse> poll(final PollRequest request) {
     logRequest(request);
+
+    // If a member sends a PollRequest to the leader, that indicates that it likely healed from
+    // a network partition and may have had its status set to UNAVAILABLE by the leader. In order
+    // to ensure heartbeats are immediately stored to the member, update its status if necessary.
+    ServerMember member = context.getClusterState().getRemoteMember(request.candidate());
+    if (member != null && member.status() == Member.Status.UNAVAILABLE) {
+      member.update(Member.Status.AVAILABLE, Instant.now());
+      configure(context.getCluster().members());
+    }
+
     return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
       .withStatus(Response.Status.OK)
       .withTerm(context.getTerm())
