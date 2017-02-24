@@ -95,9 +95,9 @@ public class LogReader implements Reader {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <T extends Entry<T>> Indexed<T> get(long index) {
-    reset(index);
-    return currentReader.get(index);
+    return (Indexed<T>) reset(index);
   }
 
   @Override

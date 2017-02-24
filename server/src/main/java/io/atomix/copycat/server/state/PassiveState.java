@@ -265,7 +265,7 @@ class PassiveState extends ReserveState {
       .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(writer.lastIndex())
+      .withLogIndex(lastEntryIndex)
       .build();
   }
 

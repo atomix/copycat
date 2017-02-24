@@ -95,8 +95,15 @@ abstract class ActiveState extends PassiveState {
           // overwrite the entry in the log. This will force the log to be truncated if necessary.
           Indexed<? extends Entry> existing = reader.get(entry.index());
           if (existing == null || existing.term() != entry.term()) {
+            if (existing != null) {
+              LOGGER.debug("{} - Entry already exists, but is inconsistent: {} = {}", context.getCluster().member().address(), existing, entry);
+            } else {
+              LOGGER.debug("{} - Entry does not exist: {}", context.getCluster().member().address(), entry);
+            }
             writer.append(entry);
             LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+          } else {
+            LOGGER.debug("{} - Entry already exists: {} = {}", context.getCluster().member().address(), existing, entry);
           }
         }
       } finally {
@@ -115,7 +122,7 @@ abstract class ActiveState extends PassiveState {
       .withStatus(ProtocolResponse.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(writer.lastIndex())
+      .withLogIndex(lastEntryIndex)
       .build();
   }
 

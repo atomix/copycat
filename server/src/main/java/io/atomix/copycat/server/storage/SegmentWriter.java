@@ -256,6 +256,7 @@ public class SegmentWriter implements Writer {
   public SegmentWriter truncate(long index) {
     // If the index is greater than or equal to the last index, skip the truncate.
     if (index >= lastIndex()) {
+      skip -= index - lastIndex();
       return this;
     }
 
@@ -264,6 +265,9 @@ public class SegmentWriter implements Writer {
       buffer.zero().clear();
       return this;
     }
+
+    // Reset skipped entries.
+    skip = 0;
 
     // Clear the write buffer to the beginning of the segment.
     buffer.clear();
