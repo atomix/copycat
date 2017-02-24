@@ -264,6 +264,7 @@ public class SegmentManager implements AutoCloseable {
     // Update the segment descriptor and lock the segment.
     segment.descriptor().update(System.currentTimeMillis());
     segment.descriptor().lock();
+    segment.flush();
 
     // Iterate through old segments and remove them from the segments list.
     for (Segment oldSegment : segments) {
