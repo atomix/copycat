@@ -583,7 +583,7 @@ public class ClusterTest extends ConcurrentTestCase {
     createServers(nodes);
 
     CopycatClient client = createClient();
-    client.submitQuery(HeapBuffer.allocate().flip(), consistency).thenAccept(result -> {
+    client.submitQuery(HeapBuffer.allocate(1).writeByte(0).flip(), consistency).thenAccept(result -> {
       threadAssertNotNull(result);
       resume();
     });
