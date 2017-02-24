@@ -30,8 +30,14 @@ public class ConnectResponseSerializer extends ProtocolResponseSerializer<Connec
   public void writeObject(BufferOutput output, ConnectResponse response) {
     output.writeByte(response.status().id());
     if (response.status() == ProtocolResponse.Status.OK) {
-      output.writeString(response.leader().host()).writeInt(response.leader().port());
-      output.writeInt(response.members().size());
+      if (response.leader() != null) {
+        output.writeBoolean(true);
+        output.writeString(response.leader().host()).writeInt(response.leader().port());
+        output.writeInt(response.members().size());
+      } else {
+        output.writeBoolean(false);
+      }
+
       for (Address address : response.members()) {
         output.writeString(address.host()).writeInt(address.port());
       }
@@ -46,7 +52,13 @@ public class ConnectResponseSerializer extends ProtocolResponseSerializer<Connec
   public ConnectResponse readObject(BufferInput input, Class<ConnectResponse> type) {
     final ProtocolResponse.Status status = ProtocolResponse.Status.forId(input.readByte());
     if (status == ProtocolResponse.Status.OK) {
-      final Address leader = new Address(input.readString(), input.readInt());
+      final Address leader;
+      if (input.readBoolean()) {
+        leader = new Address(input.readString(), input.readInt());
+      } else {
+        leader = null;
+      }
+
       final int size = input.readInt();
       final List<Address> members = new ArrayList<>(size);
       for (int i = 0; i < size; i++) {
