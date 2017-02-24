@@ -74,7 +74,8 @@ class PassiveState extends ReserveState {
     context.checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
+    Member leader = context.getLeader();
+    if (leader == null) {
       return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -85,7 +86,7 @@ class PassiveState extends ReserveState {
 
       return CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
-        .withLeader(context.getCluster().member().clientAddress())
+        .withLeader(leader.clientAddress())
         .withMembers(context.getCluster().members().stream()
           .map(Member::clientAddress)
           .filter(m -> m != null)
