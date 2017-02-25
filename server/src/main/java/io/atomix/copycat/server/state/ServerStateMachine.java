@@ -52,7 +52,7 @@ final class ServerStateMachine implements AutoCloseable {
   private final ServerCommitPool commits;
   private volatile long lastApplied;
   private long lastCompleted;
-  private Snapshot pendingSnapshot;
+  private volatile Snapshot pendingSnapshot;
 
   ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
@@ -78,6 +78,8 @@ final class ServerStateMachine implements AutoCloseable {
    * frequently than will benefit log compaction.
    */
   private void takeSnapshot() {
+    state.checkThread();
+
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
     // index has met the snapshot index. Note that this will be executed in the state machine thread.
     // Snapshots are only taken of the state machine when the log becomes compactable. If the log compactor's
@@ -108,6 +110,8 @@ final class ServerStateMachine implements AutoCloseable {
    * last applied index.
    */
   private void installSnapshot() {
+    state.checkThread();
+
     // If the last stored snapshot has not yet been installed and its index matches the last applied state
     // machine index, install the snapshot. This requires that the state machine see all indexes sequentially
     // even for entries that have been compacted from the log.
@@ -142,10 +146,12 @@ final class ServerStateMachine implements AutoCloseable {
    * prior events have been received.
    */
   private void completeSnapshot() {
+    state.checkThread();
+
     // If a snapshot is pending to be persisted and the last completed index is greater than the
     // waiting snapshot index and no current or newer snapshot exists,
     // persist the snapshot and update the last snapshot index.
-    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.index()) {
+    if (pendingSnapshot != null && lastCompleted > pendingSnapshot.index()) {
       long snapshotIndex = pendingSnapshot.index();
       LOGGER.debug("{} - Completing snapshot {}", state.getCluster().member().address(), snapshotIndex);
       synchronized (pendingSnapshot) {
