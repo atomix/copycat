@@ -51,22 +51,22 @@ public final class SegmentDescriptor implements AutoCloseable {
   public static final int BYTES = 64;
 
   // The lengths of each field in the header.
-  private static final int ID_LENGTH               = Bytes.LONG;    // 64-bit signed integer
-  private static final int VERSION_LENGTH          = Bytes.LONG;    // 64-bit signed integer
-  private static final int INDEX_LENGTH            = Bytes.LONG;    // 64-bit signed integer
-  private static final int MAX_SEGMENT_SIZE_LENGTH = Bytes.INTEGER; // 32-bit unsigned integer
-  private static final int MAX_ENTRIES_LENGTH      = Bytes.INTEGER; // 32-bit signed integer
-  private static final int UPDATED_LENGTH          = Bytes.LONG;    // 64-bit signed integer
-  private static final int LOCKED_LENGTH           = Bytes.BOOLEAN; // 8-bit boolean
+  private static final int          ID_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int     VERSION_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int       INDEX_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int    MAX_SIZE_LENGTH = Bytes.INTEGER; // 32-bit unsigned integer
+  private static final int MAX_ENTRIES_LENGTH = Bytes.INTEGER; // 32-bit signed integer
+  private static final int     UPDATED_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int      LOCKED_LENGTH = Bytes.BOOLEAN; // 8-bit boolean
 
   // The positions of each field in the header.
-  private static final long ID_POSITION               = 0;
-  private static final long VERSION_POSITION          = ID_POSITION + ID_LENGTH;
-  private static final long INDEX_POSITION            = VERSION_POSITION + VERSION_LENGTH;
-  private static final long MAX_SEGMENT_SIZE_POSITION = INDEX_POSITION + INDEX_LENGTH;
-  private static final long MAX_ENTRIES_POSITION      = MAX_SEGMENT_SIZE_POSITION + MAX_SEGMENT_SIZE_LENGTH;
-  private static final long UPDATED_POSITION          = MAX_ENTRIES_POSITION + MAX_ENTRIES_LENGTH;
-  private static final long LOCKED_POSITION           = UPDATED_POSITION + UPDATED_LENGTH;
+  private static final long          ID_POSITION = 0;                                         // 0
+  private static final long     VERSION_POSITION = ID_POSITION + ID_LENGTH;                   // 8
+  private static final long       INDEX_POSITION = VERSION_POSITION + VERSION_LENGTH;         // 16
+  private static final long    MAX_SIZE_POSITION = INDEX_POSITION + INDEX_LENGTH;             // 24
+  private static final long MAX_ENTRIES_POSITION = MAX_SIZE_POSITION + MAX_SIZE_LENGTH;       // 28
+  private static final long     UPDATED_POSITION = MAX_ENTRIES_POSITION + MAX_ENTRIES_LENGTH; // 32
+  private static final long      LOCKED_POSITION = UPDATED_POSITION + UPDATED_LENGTH;         // 40
 
   /**
    * Returns a descriptor builder.
