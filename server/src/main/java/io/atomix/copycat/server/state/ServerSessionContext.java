@@ -641,7 +641,9 @@ class ServerSessionContext implements ServerSession {
     // If no references to session commands are open, release session-related entries.
     if (references == 0) {
       log.release(id);
-      log.release(index);
+      if (index > 0) {
+        log.release(index);
+      }
     } else {
       this.closeIndex = index;
     }
