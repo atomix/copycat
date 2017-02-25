@@ -17,13 +17,14 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.FileBuffer;
-import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+
+import static org.testng.Assert.*;
 
 /**
  * Segment descriptor test.
@@ -46,20 +47,20 @@ public class SegmentDescriptorTest {
       .withMaxEntries(2048)
       .build();
 
-    Assert.assertEquals(descriptor.id(), 2);
-    Assert.assertEquals(descriptor.version(), 3);
-    Assert.assertEquals(descriptor.index(), 1025);
-    Assert.assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
-    Assert.assertEquals(descriptor.maxEntries(), 2048);
+    assertEquals(descriptor.id(), 2);
+    assertEquals(descriptor.version(), 3);
+    assertEquals(descriptor.index(), 1025);
+    assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
+    assertEquals(descriptor.maxEntries(), 2048);
 
-    Assert.assertEquals(descriptor.updated(), 0);
+    assertEquals(descriptor.updated(), 0);
     long time = System.currentTimeMillis();
     descriptor.update(time);
-    Assert.assertEquals(descriptor.updated(), time);
+    assertEquals(descriptor.updated(), time);
 
-    Assert.assertFalse(descriptor.locked());
+    assertFalse(descriptor.locked());
     descriptor.lock();
-    Assert.assertTrue(descriptor.locked());
+    assertTrue(descriptor.locked());
   }
 
   /**
@@ -75,20 +76,34 @@ public class SegmentDescriptorTest {
       .withMaxEntries(2048)
       .build();
 
-    Assert.assertEquals(descriptor.id(), 2);
-    Assert.assertEquals(descriptor.version(), 3);
-    Assert.assertEquals(descriptor.index(), 1025);
-    Assert.assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
-    Assert.assertEquals(descriptor.maxEntries(), 2048);
+    assertEquals(descriptor.id(), 2);
+    assertEquals(descriptor.version(), 3);
+    assertEquals(descriptor.index(), 1025);
+    assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
+    assertEquals(descriptor.maxEntries(), 2048);
 
     buffer.close();
 
     descriptor = new SegmentDescriptor(FileBuffer.allocate(file, SegmentDescriptor.BYTES));
 
-    Assert.assertEquals(descriptor.id(), 2);
-    Assert.assertEquals(descriptor.version(), 3);
-    Assert.assertEquals(descriptor.index(), 1025);
-    Assert.assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
+    assertEquals(descriptor.id(), 2);
+    assertEquals(descriptor.version(), 3);
+    assertEquals(descriptor.index(), 1025);
+    assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
+    assertFalse(descriptor.locked());
+
+    descriptor.lock();
+    assertTrue(descriptor.locked());
+
+    descriptor.close();
+
+    descriptor = new SegmentDescriptor(FileBuffer.allocate(file, SegmentDescriptor.BYTES));
+
+    assertEquals(descriptor.id(), 2);
+    assertEquals(descriptor.version(), 3);
+    assertEquals(descriptor.index(), 1025);
+    assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
+    assertTrue(descriptor.locked());
   }
 
   /**
@@ -109,13 +124,13 @@ public class SegmentDescriptorTest {
 
     descriptor = descriptor.copyTo(FileBuffer.allocate(file, SegmentDescriptor.BYTES));
 
-    Assert.assertEquals(descriptor.id(), 2);
-    Assert.assertEquals(descriptor.version(), 3);
-    Assert.assertEquals(descriptor.index(), 1025);
-    Assert.assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
-    Assert.assertEquals(descriptor.maxEntries(), 2048);
-    Assert.assertEquals(descriptor.updated(), time);
-    Assert.assertTrue(descriptor.locked());
+    assertEquals(descriptor.id(), 2);
+    assertEquals(descriptor.version(), 3);
+    assertEquals(descriptor.index(), 1025);
+    assertEquals(descriptor.maxSegmentSize(), 1024 * 1024);
+    assertEquals(descriptor.maxEntries(), 2048);
+    assertEquals(descriptor.updated(), time);
+    assertTrue(descriptor.locked());
   }
 
   /**

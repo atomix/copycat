@@ -15,45 +15,58 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.buffer.MappedBuffer;
+import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.util.Assert;
 
 /**
  * Stores information about a {@link Segment} of the log.
  * <p>
  * The segment descriptor manages metadata related to a single segment of the log. Descriptors are stored within the
- * first {@code 48} bytes of each segment in the following order:
+ * first {@code 64} bytes of each segment in the following order:
  * <ul>
  *   <li>{@code id} (64-bit signed integer) - A unique segment identifier. This is a monotonically increasing number within
  *   each log. Segments with in-sequence identifiers should contain in-sequence indexes.</li>
  *   <li>{@code index} (64-bit signed integer) - The effective first index of the segment. This indicates the index at which
  *   the first entry should be written to the segment. Indexes are monotonically increasing thereafter.</li>
- *   <li>{@code range} (64-bit signed integer) - The effective length of the segment. Regardless of the actual number of
- *   entries in the segment, the range indicates the total number of allowed entries within each segment. If a segment's
- *   index is {@code 1} and its range is {@code 10} then the next segment should start at index {@code 11}.</li>
  *   <li>{@code version} (64-bit signed integer) - The version of the segment. Versions are monotonically increasing
  *   starting at {@code 1}. Versions will only be incremented whenever the segment is rewritten to another memory/disk
  *   space, e.g. after log compaction.</li>
+ *   <li>{@code maxSegmentSize} (32-bit unsigned integer) - The maximum number of bytes allowed in the segment.</li>
+ *   <li>{@code maxEntries} (32-bit signed integer) - The total number of expected entries in the segment. This is the final
+ *   number of entries allowed within the segment both before and after compaction. This entry count is used to determine
+ *   the count of internal indexing and deduplication facilities.</li>
  *   <li>{@code updated} (64-bit signed integer) - The last update to the segment in terms of milliseconds since the epoch.
  *   When the segment is first constructed, the {@code updated} time is {@code 0}. Once all entries in the segment have
  *   been committed, the {@code updated} time should be set to the current time. Log compaction should not result in a
  *   change to {@code updated}.</li>
- *   <li>{@code maxEntrySize} (32-bit signed integer) - The maximum length in bytes of entry values allowed by the segment.</li>
- *   <li>{@code entries} (32-bit signed integer) - The total number of expected entries in the segment. This is the final
- *   number of entries allowed within the segment both before and after compaction. This entry count is used to determine
- *   the count of internal indexing and deduplication facilities.</li>
  *   <li>{@code locked} (8-bit boolean) - A boolean indicating whether the segment is locked. Segments will be locked once
  *   all entries have been committed to the segment. The lock state of each segment is used to determine log compaction
  *   and recovery behavior.</li>
  * </ul>
+ * The remainder of the 64 segment header bytes are reserved for future metadata.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public final class SegmentDescriptor implements AutoCloseable {
   public static final int BYTES = 64;
+
+  // The lengths of each field in the header.
+  private static final int          ID_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int     VERSION_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int       INDEX_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int    MAX_SIZE_LENGTH = Bytes.INTEGER; // 32-bit unsigned integer
+  private static final int MAX_ENTRIES_LENGTH = Bytes.INTEGER; // 32-bit signed integer
+  private static final int     UPDATED_LENGTH = Bytes.LONG;    // 64-bit signed integer
+  private static final int      LOCKED_LENGTH = Bytes.BOOLEAN; // 8-bit boolean
+
+  // The positions of each field in the header.
+  private static final long          ID_POSITION = 0;                                         // 0
+  private static final long     VERSION_POSITION = ID_POSITION + ID_LENGTH;                   // 8
+  private static final long       INDEX_POSITION = VERSION_POSITION + VERSION_LENGTH;         // 16
+  private static final long    MAX_SIZE_POSITION = INDEX_POSITION + INDEX_LENGTH;             // 24
+  private static final long MAX_ENTRIES_POSITION = MAX_SIZE_POSITION + MAX_SIZE_LENGTH;       // 28
+  private static final long     UPDATED_POSITION = MAX_ENTRIES_POSITION + MAX_ENTRIES_LENGTH; // 32
+  private static final long      LOCKED_POSITION = UPDATED_POSITION + UPDATED_LENGTH;         // 40
 
   /**
    * Returns a descriptor builder.
@@ -79,12 +92,12 @@ public final class SegmentDescriptor implements AutoCloseable {
 
   private Buffer buffer;
   private final long id;
-  private final long index;
   private final long version;
-  private long updated;
+  private final long index;
   private final long maxSegmentSize;
   private final int maxEntries;
-  private boolean locked;
+  private volatile long updated;
+  private volatile boolean locked;
 
   /**
    * @throws NullPointerException if {@code buffer} is null
@@ -98,7 +111,7 @@ public final class SegmentDescriptor implements AutoCloseable {
     this.maxEntries = buffer.readInt();
     this.updated = buffer.readLong();
     this.locked = buffer.readBoolean();
-    buffer.skip(23);
+    buffer.skip(BYTES - buffer.position()); // 64 bytes reserved for the header
   }
 
   /**
@@ -173,7 +186,7 @@ public final class SegmentDescriptor implements AutoCloseable {
    */
   public void update(long timestamp) {
     if (!locked) {
-      buffer.writeLong(35, timestamp);
+      buffer.writeLong(UPDATED_POSITION, timestamp);
       this.updated = timestamp;
     }
   }
@@ -194,7 +207,7 @@ public final class SegmentDescriptor implements AutoCloseable {
    * Locks the segment.
    */
   public void lock() {
-    buffer.writeBoolean(43, true).flush();
+    buffer.writeBoolean(LOCKED_POSITION, true).flush();
     locked = true;
   }
 
@@ -210,7 +223,7 @@ public final class SegmentDescriptor implements AutoCloseable {
       .writeInt(maxEntries)
       .writeLong(updated)
       .writeBoolean(locked)
-      .skip(23)
+      .skip(BYTES - buffer.position())
       .flush();
     return this;
   }
@@ -229,6 +242,11 @@ public final class SegmentDescriptor implements AutoCloseable {
     } else if (buffer instanceof MappedBuffer) {
       ((MappedBuffer) buffer).delete();
     }
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[id=%d, version=%d, index=%d, updated=%d, locked=%b]", getClass().getSimpleName(), id, version, index, updated, locked);
   }
 
   /**
