@@ -15,10 +15,7 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.buffer.Buffer;
-import io.atomix.catalyst.buffer.FileBuffer;
-import io.atomix.catalyst.buffer.HeapBuffer;
-import io.atomix.catalyst.buffer.MappedBuffer;
+import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.util.Assert;
 
 /**
@@ -53,6 +50,24 @@ import io.atomix.catalyst.util.Assert;
 public final class SegmentDescriptor implements AutoCloseable {
   public static final int BYTES = 64;
 
+  // The lengths of each field in the header.
+  private static final int ID_LENGTH               = Bytes.LONG;    // 64-bit signed integer
+  private static final int VERSION_LENGTH          = Bytes.LONG;    // 64-bit signed integer
+  private static final int INDEX_LENGTH            = Bytes.LONG;    // 64-bit signed integer
+  private static final int MAX_SEGMENT_SIZE_LENGTH = Bytes.INTEGER; // 32-bit unsigned integer
+  private static final int MAX_ENTRIES_LENGTH      = Bytes.INTEGER; // 32-bit signed integer
+  private static final int UPDATED_LENGTH          = Bytes.LONG;    // 64-bit signed integer
+  private static final int LOCKED_LENGTH           = Bytes.BOOLEAN; // 8-bit boolean
+
+  // The positions of each field in the header.
+  private static final long ID_POSITION               = 0;
+  private static final long VERSION_POSITION          = ID_POSITION + ID_LENGTH;
+  private static final long INDEX_POSITION            = VERSION_POSITION + VERSION_LENGTH;
+  private static final long MAX_SEGMENT_SIZE_POSITION = INDEX_POSITION + INDEX_LENGTH;
+  private static final long MAX_ENTRIES_POSITION      = MAX_SEGMENT_SIZE_POSITION + MAX_SEGMENT_SIZE_LENGTH;
+  private static final long UPDATED_POSITION          = MAX_ENTRIES_POSITION + MAX_ENTRIES_LENGTH;
+  private static final long LOCKED_POSITION           = UPDATED_POSITION + UPDATED_LENGTH;
+
   /**
    * Returns a descriptor builder.
    * <p>
@@ -75,14 +90,14 @@ public final class SegmentDescriptor implements AutoCloseable {
     return new Builder(buffer);
   }
 
-  private Buffer buffer;             // Position:
-  private final long id;             // 0  - 64-bit signed integer
-  private final long version;        // 8  - 64-bit signed integer
-  private final long index;          // 16 - 64-bit signed integer
-  private final long maxSegmentSize; // 24 - 32-bit unsigned integer
-  private final int maxEntries;      // 28 - 32-bit signed integer
-  private long updated;              // 32 - 64-bit signed integer
-  private boolean locked;            // 40 - 1-byte boolean
+  private Buffer buffer;
+  private final long id;
+  private final long version;
+  private final long index;
+  private final long maxSegmentSize;
+  private final int maxEntries;
+  private long updated;
+  private boolean locked;
 
   /**
    * @throws NullPointerException if {@code buffer} is null
@@ -171,7 +186,7 @@ public final class SegmentDescriptor implements AutoCloseable {
    */
   public void update(long timestamp) {
     if (!locked) {
-      buffer.writeLong(35, timestamp);
+      buffer.writeLong(UPDATED_POSITION, timestamp);
       this.updated = timestamp;
     }
   }
@@ -192,7 +207,7 @@ public final class SegmentDescriptor implements AutoCloseable {
    * Locks the segment.
    */
   public void lock() {
-    buffer.writeBoolean(40, true).flush();
+    buffer.writeBoolean(LOCKED_POSITION, true).flush();
     locked = true;
   }
 
@@ -208,7 +223,8 @@ public final class SegmentDescriptor implements AutoCloseable {
       .writeInt(maxEntries)
       .writeLong(updated)
       .writeBoolean(locked)
-      .skip(23)
+      .skip(BYTES - buffer.position())
+      .flip()
       .flush();
     return this;
   }
@@ -227,6 +243,11 @@ public final class SegmentDescriptor implements AutoCloseable {
     } else if (buffer instanceof MappedBuffer) {
       ((MappedBuffer) buffer).delete();
     }
+  }
+
+  @Override
+  public String toString() {
+    return String.format("%s[id=%d, version=%d, index=%d, updated=%d, locked=%b]", getClass().getSimpleName(), id, version, index, updated, locked);
   }
 
   /**
