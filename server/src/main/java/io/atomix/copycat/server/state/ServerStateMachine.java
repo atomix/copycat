@@ -91,11 +91,13 @@ final class ServerStateMachine implements AutoCloseable {
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
       // of a snapshot is predicated on session events being received by clients up to the snapshot index.
       LOGGER.info("{} - Taking snapshot {}", state.getCluster().member().address(), pendingSnapshot.index());
-      synchronized (pendingSnapshot) {
-        try (SnapshotWriter writer = pendingSnapshot.writer()) {
-          ((Snapshottable) stateMachine).snapshot(writer);
+      executor.executor().execute(() -> {
+        synchronized (pendingSnapshot) {
+          try (SnapshotWriter writer = pendingSnapshot.writer()) {
+            ((Snapshottable) stateMachine).snapshot(writer);
+          }
         }
-      }
+      });
     }
   }
 
@@ -151,7 +153,7 @@ final class ServerStateMachine implements AutoCloseable {
         if (currentSnapshot == null || snapshotIndex > currentSnapshot.index()) {
           pendingSnapshot.complete();
         } else {
-          LOGGER.debug("Discarding pending snapshot at index {} since the current snapshot is at index {}", pendingSnapshot.index(), currentSnapshot.index());
+          LOGGER.debug("{} - Discarding pending snapshot at index {} since the current snapshot is at index {}", state.getCluster().member().address(), pendingSnapshot.index(), currentSnapshot.index());
         }
         pendingSnapshot = null;
       }
