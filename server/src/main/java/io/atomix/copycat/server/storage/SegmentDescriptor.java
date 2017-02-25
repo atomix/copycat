@@ -224,7 +224,6 @@ public final class SegmentDescriptor implements AutoCloseable {
       .writeLong(updated)
       .writeBoolean(locked)
       .skip(BYTES - buffer.position())
-      .flip()
       .flush();
     return this;
   }
