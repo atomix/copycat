@@ -96,7 +96,7 @@ public final class SegmentDescriptor implements AutoCloseable {
     this.maxEntries = buffer.readInt();
     this.updated = buffer.readLong();
     this.locked = buffer.readBoolean();
-    buffer.skip(64 - buffer.position()); // 64 bytes reserved for the header
+    buffer.skip(BYTES - buffer.position()); // 64 bytes reserved for the header
   }
 
   /**
