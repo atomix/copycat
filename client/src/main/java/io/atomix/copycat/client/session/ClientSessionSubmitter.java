@@ -295,12 +295,14 @@ final class ClientSessionSubmitter {
     @Override
     public void fail(Throwable cause) {
       super.fail(cause);
-      CommandRequest request = CommandRequest.builder()
-        .withSession(this.request.session())
-        .withSequence(this.request.sequence())
-        .withCommand(new NoOpCommand())
-        .build();
-      context.executor().execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
+      if (!(cause instanceof UnknownSessionException)) {
+        CommandRequest request = CommandRequest.builder()
+          .withSession(this.request.session())
+          .withSequence(this.request.sequence())
+          .withCommand(new NoOpCommand())
+          .build();
+        context.executor().execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
+      }
     }
 
     @Override
