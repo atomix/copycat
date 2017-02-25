@@ -96,8 +96,8 @@ public final class SegmentDescriptor implements AutoCloseable {
   private final long index;
   private final long maxSegmentSize;
   private final int maxEntries;
-  private long updated;
-  private boolean locked;
+  private volatile long updated;
+  private volatile boolean locked;
 
   /**
    * @throws NullPointerException if {@code buffer} is null
