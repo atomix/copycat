@@ -19,14 +19,10 @@ import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.local.LocalServerRegistry;
-import io.atomix.catalyst.transport.local.LocalTransport;
+import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.ConnectionStrategies;
-import io.atomix.copycat.client.CopycatClient;
-import io.atomix.copycat.client.RecoveryStrategies;
-import io.atomix.copycat.client.RecoveryStrategy;
+import io.atomix.copycat.client.*;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -51,6 +47,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -69,9 +66,9 @@ public class FuzzTest implements Runnable {
   }
 
   private static final int ITERATIONS = 1000;
+  private static final String CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
   private int port = 5000;
-  private LocalServerRegistry registry = new LocalServerRegistry();
   private List<Member> members = new ArrayList<>();
   private List<CopycatClient> clients = new ArrayList<>();
   private List<CopycatServer> servers = new ArrayList<>();
@@ -120,6 +117,18 @@ public class FuzzTest implements Runnable {
   }
 
   /**
+   * Returns a random string up to the given length.
+   */
+  private String randomString(int maxLength) {
+    int length = randomNumber(maxLength) + 1;
+    StringBuilder sb = new StringBuilder(length);
+    for (int i = 0; i < length; i++) {
+      sb.append(CHARS.charAt(random.nextInt(CHARS.length())));
+    }
+    return sb.toString();
+  }
+
+  /**
    * Runs a single fuzz test.
    */
   private void runFuzzTest() throws Exception {
@@ -127,27 +136,98 @@ public class FuzzTest implements Runnable {
 
     createServers(randomNumber(4) + 3);
 
-    int clients = randomNumber(5) + 1;
+    final Object lock = new Object();
+    final AtomicLong index = new AtomicLong();
+    final Map<Integer, Long> indexes = new HashMap<>();
+
+    int clients = randomNumber(100) + 1;
     for (int i = 0; i < clients; i++) {
       CopycatClient client = createClient(RecoveryStrategies.RECOVER);
 
-      client.context().schedule(Duration.ofMillis(100), Duration.ofMillis(100), () -> {
-        int type = (int) (Math.random() * 5);
+      final int clientId = i;
+      client.context().schedule(Duration.ofMillis((100 * clients) + (randomNumber(50) - 25)), Duration.ofMillis((100 * clients) + (randomNumber(50) - 25)), () -> {
+        long lastLinearizableIndex = index.get();
+        int type = randomNumber(4);
         switch (type) {
           case 0:
-            client.submit(new Put(randomKey(), UUID.randomUUID().toString()));
+            client.submit(new Put(randomKey(), randomString(1024 * 16))).thenAccept(result -> {
+              synchronized (lock) {
+                if (result < lastLinearizableIndex) {
+                  System.out.println(result + " is less than last linearizable index " + lastLinearizableIndex);
+                  System.exit(1);
+                } else if (result > index.get()) {
+                  index.set(result);
+                }
+
+                Long lastSequentialIndex = indexes.get(clientId);
+                if (lastSequentialIndex == null) {
+                  indexes.put(clientId, result);
+                } else if (result < lastSequentialIndex) {
+                  System.out.println(result + " is less than last sequential index " + lastSequentialIndex);
+                  System.exit(1);
+                } else {
+                  indexes.put(clientId, lastSequentialIndex);
+                }
+              }
+            });
             break;
           case 1:
             client.submit(new Get(randomKey(), randomConsistency()));
             break;
           case 2:
-            client.submit(new Remove(randomKey()));
+            client.submit(new Remove(randomKey())).thenAccept(result -> {
+              synchronized (lock) {
+                if (result < lastLinearizableIndex) {
+                  System.out.println(result + " is less than last linearizable index " + lastLinearizableIndex);
+                  System.exit(1);
+                } else if (result > index.get()) {
+                  index.set(result);
+                }
+
+                Long lastSequentialIndex = indexes.get(clientId);
+                if (lastSequentialIndex == null) {
+                  indexes.put(clientId, result);
+                } else if (result < lastSequentialIndex) {
+                  System.out.println(result + " is less than last sequential index " + lastSequentialIndex);
+                  System.exit(1);
+                } else {
+                  indexes.put(clientId, lastSequentialIndex);
+                }
+              }
+            });
             break;
+          case 3:
+            Query.ConsistencyLevel consistency = randomConsistency();
+            client.submit(new Index(consistency)).thenAccept(result -> {
+              synchronized (lock) {
+                switch (consistency) {
+                  case LINEARIZABLE:
+                  case LINEARIZABLE_LEASE:
+                    if (result < lastLinearizableIndex) {
+                      System.out.println(result + " is less than last linearizable index " + lastLinearizableIndex);
+                      System.exit(1);
+                    } else if (result > index.get()) {
+                      index.set(result);
+                    }
+                  case SEQUENTIAL:
+                    Long lastSequentialIndex = indexes.get(clientId);
+                    if (lastSequentialIndex == null) {
+                      indexes.put(clientId, result);
+                    } else if (result < lastSequentialIndex) {
+                      System.out.println(result + " is less than last sequential index " + lastSequentialIndex);
+                      System.exit(1);
+                    } else {
+                      indexes.put(clientId, lastSequentialIndex);
+                    }
+                }
+              }
+            });
         }
       });
     }
 
-    scheduleRestarts(this.clients.get(0).context());
+    ThreadContext context = this.clients.get(0).context();
+    scheduleRestarts(context);
 
     Thread.sleep(Duration.ofMinutes(15).toMillis());
   }
@@ -157,9 +237,10 @@ public class FuzzTest implements Runnable {
    */
   private void scheduleRestarts(ThreadContext context) {
     if (shutdownTimers.isEmpty() && restartTimers.isEmpty()) {
-      int shutdownCount = randomNumber(servers.size() - 1);
+      int shutdownCount = randomNumber(servers.size() - 2) + 1;
+      boolean remove = randomNumber(2) == 0;
       for (int i = 0; i < shutdownCount; i++) {
-        scheduleRestart(i, context);
+        scheduleRestart(remove, i, context);
       }
     }
   }
@@ -167,18 +248,32 @@ public class FuzzTest implements Runnable {
   /**
    * Schedules the given server to be shutdown for a period of time and then restarted.
    */
-  private void scheduleRestart(int serverIndex, ThreadContext context) {
+  private void scheduleRestart(boolean remove, int serverIndex, ThreadContext context) {
     shutdownTimers.put(serverIndex, context.schedule(Duration.ofSeconds(randomNumber(120) + 10), () -> {
       shutdownTimers.remove(serverIndex);
       CopycatServer server = servers.get(serverIndex);
-      System.out.println("Shutting down server: " + server.cluster().member().address());
-      server.shutdown().whenComplete((result, error) -> {
+      CompletableFuture<Void> leaveFuture;
+      if (remove) {
+        System.out.println("Removing server: " + server.cluster().member().address());
+        leaveFuture = server.leave();
+      } else {
+        System.out.println("Shutting down server: " + server.cluster().member().address());
+        leaveFuture = server.shutdown();
+      }
+      leaveFuture.whenComplete((result, error) -> {
         restartTimers.put(serverIndex, context.schedule(Duration.ofSeconds(randomNumber(120) + 10), () -> {
           restartTimers.remove(serverIndex);
           CopycatServer newServer = createServer(server.cluster().member());
-          System.out.println("Starting up server: " + newServer.cluster().member().address());
           servers.set(serverIndex, newServer);
-          newServer.bootstrap(members.stream().map(Member::serverAddress).collect(Collectors.toList())).whenComplete((result2, error2) -> {
+          CompletableFuture<CopycatServer> joinFuture;
+          if (remove) {
+            System.out.println("Joining server: " + newServer.cluster().member().address());
+            joinFuture = newServer.join(members.get(members.size() - 1).address());
+          } else {
+            System.out.println("Bootstrapping server: " + newServer.cluster().member().address());
+            joinFuture = newServer.bootstrap(members.stream().map(Member::serverAddress).collect(Collectors.toList()));
+          }
+          joinFuture.whenComplete((result2, error2) -> {
             scheduleRestarts(context);
           });
         }));
@@ -235,7 +330,6 @@ public class FuzzTest implements Runnable {
 
     members = new ArrayList<>();
     port = 5000;
-    registry = new LocalServerRegistry();
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }
@@ -278,12 +372,12 @@ public class FuzzTest implements Runnable {
   private CopycatServer createServer(Member member) {
     CopycatServer.Builder builder = CopycatServer.builder(member.clientAddress(), member.serverAddress())
       .withType(member.type())
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.DISK)
         .withDirectory(new File(String.format("target/fuzz-logs/%d", member.address().hashCode())))
-        .withMaxSegmentSize(randomNumber(1024 * 16) + (1024 * 8))
-        .withMaxEntriesPerSegment(randomNumber(1000) + 100)
+        .withMaxSegmentSize(randomNumber(1024 * 1024) + (1024 * 16))
+        .withMaxEntriesPerSegment(randomNumber(10000) + 1000)
         .withCompactionThreads(randomNumber(4) + 1)
         .withCompactionThreshold(Math.random())
         .withEntryBufferSize(randomNumber(100) + 1)
@@ -304,9 +398,10 @@ public class FuzzTest implements Runnable {
    */
   private CopycatClient createClient(RecoveryStrategy strategy) throws Exception {
     CopycatClient client = CopycatClient.builder()
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withRecoveryStrategy(strategy)
+      .withServerSelectionStrategy(ServerSelectionStrategies.values()[randomNumber(ServerSelectionStrategies.values().length)])
       .build();
     client.serializer().disableWhitelist();
     CountDownLatch latch = new CountDownLatch(1);
@@ -319,7 +414,7 @@ public class FuzzTest implements Runnable {
   /**
    * Fuzz test state machine.
    */
-  public static class FuzzStateMachine extends StateMachine implements SessionListener, Snapshottable {
+  public class FuzzStateMachine extends StateMachine implements SessionListener, Snapshottable {
     private Map<String, Commit<Put>> map = new HashMap<>();
 
     @Override
@@ -344,25 +439,22 @@ public class FuzzTest implements Runnable {
 
     @Override
     public void snapshot(SnapshotWriter writer) {
-      writer.writeLong(10);
+      writer.writeString(randomString(1024 * 1024 * 8));
     }
 
     @Override
     public void install(SnapshotReader reader) {
-      reader.readLong();
+      String string = reader.readString();
+      assert string != null;
     }
 
-    public String put(Commit<Put> commit) {
+    public long put(Commit<Put> commit) {
       try {
         Commit<Put> old = map.put(commit.operation().key, commit);
         if (old != null) {
-          try {
-            return old.operation().value;
-          } finally {
-            old.close();
-          }
+          old.close();
         }
-        return null;
+        return commit.index();
       } catch (Exception e) {
         commit.close();
         throw e;
@@ -378,24 +470,28 @@ public class FuzzTest implements Runnable {
       }
     }
 
-    public String remove(Commit<Remove> commit) {
+    public long remove(Commit<Remove> commit) {
       try {
         Commit<Put> removed = map.remove(commit.operation().key);
         if (removed != null) {
-          try {
-            return removed.operation().value;
-          } finally {
-            removed.close();
-          }
+          removed.close();
         }
-        return null;
+        return commit.index();
+      } finally {
+        commit.close();
+      }
+    }
+
+    public long index(Commit<Index> commit) {
+      try {
+        return commit.index();
       } finally {
         commit.close();
       }
     }
   }
 
-  public static class Put implements Command<String> {
+  public static class Put implements Command<Long> {
     public String key;
     public String value;
 
@@ -425,7 +521,20 @@ public class FuzzTest implements Runnable {
     }
   }
 
-  public static class Remove implements Command<String> {
+  public static class Index implements Query<Long> {
+    private ConsistencyLevel consistency;
+
+    public Index(ConsistencyLevel consistency) {
+      this.consistency = consistency;
+    }
+
+    @Override
+    public ConsistencyLevel consistency() {
+      return consistency;
+    }
+  }
+
+  public static class Remove implements Command<Long> {
     public String key;
 
     public Remove(String key) {
