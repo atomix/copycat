@@ -223,6 +223,13 @@ final class ClientSessionManager {
    */
   private void unregister(boolean retryOnFailure, CompletableFuture<Void> future) {
     long sessionId = state.getSessionId();
+
+    // If the session is already closed, skip the unregister attempt.
+    if (state.getState() == Session.State.CLOSED) {
+      future.complete(null);
+      return;
+    }
+
     state.getLogger().debug("Unregistering session: {}", sessionId);
 
     // If a keep-alive request is already pending, cancel it.
@@ -232,8 +239,9 @@ final class ClientSessionManager {
     }
 
     // If the current sessions state is unstable, reset the connection before sending an unregister request.
-    if (state.getState() == Session.State.UNSTABLE)
+    if (state.getState() == Session.State.UNSTABLE) {
       connection.reset();
+    }
 
     UnregisterRequest request = UnregisterRequest.builder()
       .withSession(sessionId)
