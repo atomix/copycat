@@ -235,9 +235,9 @@ public class Compactor implements AutoCloseable {
   @Override
   public void close() {
     if (minor != null)
-      minor.cancel(false);
+      minor.cancel(true);
     if (major != null)
-      major.cancel(false);
+      major.cancel(true);
 
     executor.shutdown();
     try {
