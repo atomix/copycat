@@ -787,23 +787,33 @@ public class CopycatServer {
     if (closeFuture == null) {
       synchronized (this) {
         if (closeFuture == null) {
+          closeFuture = new CompletableFuture<>();
           if (openFuture == null) {
-            closeFuture = cluster().leave().thenCompose(v -> shutdown()).thenRun(context::delete);
+            cluster().leave().whenComplete((leaveResult, leaveError) -> {
+              shutdown().whenComplete((shutdownResult, shutdownError) -> {
+                context.delete();
+                closeFuture.complete(null);
+              });
+            });
           } else {
-            closeFuture = openFuture.thenCompose(c -> cluster().leave().thenCompose(v -> shutdown()).thenRun(context::delete));
+            openFuture.whenComplete((openResult, openError) -> {
+              if (openError == null) {
+                cluster().leave().whenComplete((leaveResult, leaveError) -> {
+                  shutdown().whenComplete((shutdownResult, shutdownError) -> {
+                    context.delete();
+                    closeFuture.complete(null);
+                  });
+                });
+              } else {
+                closeFuture.complete(null);
+              }
+            });
           }
         }
       }
     }
 
-    return closeFuture.whenCompleteAsync((result, error) -> {
-      if (clientTransport != serverTransport) {
-        clientTransport.close();
-      }
-      serverTransport.close();
-      context.close();
-      started = false;
-    });
+    return closeFuture;
   }
 
   /**
