@@ -199,11 +199,11 @@ public class ClientConnection implements Connection {
    */
   private void connect(CompletableFuture<Connection> future) {
     if (!selector.hasNext()) {
-      LOGGER.debug("Failed to connect to the cluster");
+      LOGGER.debug("{} - Failed to connect to the cluster", id);
       future.complete(null);
     } else {
       Address address = selector.next();
-      LOGGER.debug("Connecting to {}", address);
+      LOGGER.debug("{} - Connecting to {}", id, address);
       client.connect(address).whenComplete((c, e) -> handleConnection(address, c, e, future));
     }
   }
@@ -226,18 +226,18 @@ public class ClientConnection implements Connection {
    */
   @SuppressWarnings("unchecked")
   private void setupConnection(Address address, Connection connection, CompletableFuture<Connection> future) {
-    LOGGER.debug("Setting up connection to {}", address);
+    LOGGER.debug("{} - Setting up connection to {}", id, address);
 
     this.connection = connection;
     connection.closeListener(c -> {
       if (c.equals(this.connection)) {
-        LOGGER.debug("Connection closed");
+        LOGGER.debug("{} - Connection closed", id);
         this.connection = null;
       }
     });
     connection.exceptionListener(c -> {
       if (c.equals(this.connection)) {
-        LOGGER.debug("Connection lost");
+        LOGGER.debug("{} - Connection lost", id);
         this.connection = null;
       }
     });
@@ -252,7 +252,7 @@ public class ClientConnection implements Connection {
       .withClientId(id)
       .build();
 
-    LOGGER.debug("Sending {}", request);
+    LOGGER.debug("{} - Sending {}", id, request);
     connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
   }
 
@@ -262,7 +262,7 @@ public class ClientConnection implements Connection {
   private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<Connection> future) {
     if (open) {
       if (error == null) {
-        LOGGER.debug("Received {}", response);
+        LOGGER.debug("{} - Received {}", id, response);
         // If the connection was successfully created, immediately send a keep-alive request
         // to the server to ensure we maintain our session and get an updated list of server addresses.
         if (response.status() == Response.Status.OK) {

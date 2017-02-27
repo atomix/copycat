@@ -199,9 +199,13 @@ class PassiveState extends ReserveState {
     }
 
     // Update the context commit and global indices.
-    LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    long previousCommitIndex = context.getCommitIndex();
     context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
+
+    if (context.getCommitIndex() > previousCommitIndex) {
+      LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    }
 
     // Apply commits to the state machine in batch.
     context.getStateMachine().applyAll(context.getCommitIndex());

@@ -134,7 +134,7 @@ public class FuzzTest implements Runnable {
   private void runFuzzTest() throws Exception {
     reset();
 
-    createServers(randomNumber(4) + 3);
+    createServers(randomNumber(5) + 3);
 
     final Object lock = new Object();
     final AtomicLong index = new AtomicLong();

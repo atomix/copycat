@@ -125,9 +125,13 @@ abstract class ActiveState extends PassiveState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    long previousCommitIndex = context.getCommitIndex();
     context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
+
+    if (context.getCommitIndex() > previousCommitIndex) {
+      LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    }
 
     // Apply commits to the local state machine.
     context.getStateMachine().applyAll(context.getCommitIndex());

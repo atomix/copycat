@@ -30,11 +30,14 @@
     </encoder>
   </appender>
 
-  <logger name="io.atomix.copycat" level="DEBUG">
+  <logger name="io.atomix.catalyst" level="DEBUG">
     <appender-ref ref="FILE" />
   </logger>
 
-  <root level="INFO">
+  <logger name="io.atomix.copycat" level="DEBUG">
+    <appender-ref ref="FILE" />
     <appender-ref ref="STDOUT" />
-  </root>
+  </logger>
+
+  <root level="INFO" />
 </configuration>
