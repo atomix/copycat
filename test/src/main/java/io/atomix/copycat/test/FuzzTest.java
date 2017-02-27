@@ -117,6 +117,13 @@ public class FuzzTest implements Runnable {
   }
 
   /**
+   * Returns a random boolean.
+   */
+  private boolean randomBoolean() {
+    return randomNumber(2) == 1;
+  }
+
+  /**
    * Returns a random string up to the given length.
    */
   private String randomString(int maxLength) {
@@ -238,7 +245,7 @@ public class FuzzTest implements Runnable {
   private void scheduleRestarts(ThreadContext context) {
     if (shutdownTimers.isEmpty() && restartTimers.isEmpty()) {
       int shutdownCount = randomNumber(servers.size() - 2) + 1;
-      boolean remove = randomNumber(2) == 0;
+      boolean remove = randomBoolean();
       for (int i = 0; i < shutdownCount; i++) {
         scheduleRestart(remove, i, context);
       }
@@ -267,7 +274,7 @@ public class FuzzTest implements Runnable {
           servers.set(serverIndex, newServer);
           CompletableFuture<CopycatServer> joinFuture;
           if (remove) {
-            System.out.println("Joining server: " + newServer.cluster().member().address());
+            System.out.println("Adding server: " + newServer.cluster().member().address());
             joinFuture = newServer.join(members.get(members.size() - 1).address());
           } else {
             System.out.println("Bootstrapping server: " + newServer.cluster().member().address());
@@ -376,12 +383,12 @@ public class FuzzTest implements Runnable {
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.DISK)
         .withDirectory(new File(String.format("target/fuzz-logs/%d", member.address().hashCode())))
-        .withMaxSegmentSize(randomNumber(1024 * 1024) + (1024 * 16))
+        .withMaxSegmentSize(randomNumber(1024 * 1024 * 7) + (1024 * 1024))
         .withMaxEntriesPerSegment(randomNumber(10000) + 1000)
         .withCompactionThreads(randomNumber(4) + 1)
-        .withCompactionThreshold(Math.random())
-        .withEntryBufferSize(randomNumber(100) + 1)
-        .withFlushOnCommit(randomNumber(2) == 1)
+        .withCompactionThreshold(Math.random() / (double) 2)
+        .withEntryBufferSize(randomNumber(10000) + 1)
+        .withFlushOnCommit(randomBoolean())
         .withMinorCompactionInterval(Duration.ofSeconds(randomNumber(30) + 15))
         .withMajorCompactionInterval(Duration.ofSeconds(randomNumber(60) + 60))
         .build())

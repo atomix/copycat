@@ -3,13 +3,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.2.2 - 2017-02-27
+
 ### CRITICAL
 * [#287](https://github.com/atomix/copycat/pull/287) - Fix misaligned lock metadata in segment file headers
 
 ### Bug Fixes
+* [#291](https://github.com/atomix/copycat/pull/291) - Ensure server is shut down if cluster `leave()` fails on `leave()`
+* [#290](https://github.com/atomix/copycat/pull/290) - Allow compactor to interrupt compaction threads on shutdown
+* [#289](https://github.com/atomix/copycat/pull/289) - Complete session unregister if session is already closed
 * [#288](https://github.com/atomix/copycat/pull/288) - Ensure snapshot is taken in the state machine thread
 * [#285](https://github.com/atomix/copycat/pull/285) - Too many connection attempts to unavailable followers
-* [#284](https://github.com/atomix/copycat/pull/284) - Local address is returned as leader by followers in `ConnectRespons`
+* [#284](https://github.com/atomix/copycat/pull/284) - Local address is returned as leader by followers in `ConnectResponse`
 
 ## 1.2.1 - 2017-02-23
 
