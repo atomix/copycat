@@ -65,6 +65,7 @@
     <module>protocol</module>
     <module>server</module>
     <module>client</module>
+    <module>cli</module>
     <module>test</module>
     <module>examples</module>
   </modules>

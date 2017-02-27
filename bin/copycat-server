@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+VERSION=1.2.2-SNAPSHOT
+
+if [ -z "${COPYCAT_HOME}" ]; then
+  export COPYCAT_HOME="$(cd "`dirname "$0"`"/..; pwd)"
+fi
+
+SERVER_JAR="${COPYCAT_HOME}"/cli/target/copycat-server-${VERSION}.jar
+
+# Find the java binary
+if [ -n "${JAVA_HOME}" ]; then
+  RUNNER="${JAVA_HOME}/bin/java"
+else
+  if [ `command -v java` ]; then
+    RUNNER="java"
+  else
+    echo "JAVA_HOME is not set" >&2
+    exit 1
+  fi
+fi
+
+exec "$RUNNER" -jar "$SERVER_JAR" "$@"
