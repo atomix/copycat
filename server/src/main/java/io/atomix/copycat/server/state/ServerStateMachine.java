@@ -295,21 +295,26 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once the commit has been applied.
    */
   public <T> CompletableFuture<T> apply(long index) {
-    // If entries remain to be applied prior to this entry then synchronously apply them.
-    if (index > lastApplied + 1) {
-      applyAll(index - 1);
-    }
-
-    // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
-    // simply update the last applied index and return a null result.
-    try (Entry entry = log.get(index)) {
-      if (entry != null) {
-        return apply(entry);
-      } else {
-        return CompletableFuture.completedFuture(null);
+    try {
+      // If entries remain to be applied prior to this entry then synchronously apply them.
+      if (index > lastApplied + 1) {
+        applyAll(index - 1);
       }
-    } finally {
-      setLastApplied(index);
+
+      // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
+      // simply update the last applied index and return a null result.
+      try (Entry entry = log.get(index)) {
+        if (entry != null) {
+          return apply(entry);
+        } else {
+          return CompletableFuture.completedFuture(null);
+        }
+      } finally {
+        setLastApplied(index);
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      return Futures.exceptionalFuture(e);
     }
   }
 
