@@ -309,12 +309,12 @@ final class ServerStateMachine implements AutoCloseable {
         } else {
           return CompletableFuture.completedFuture(null);
         }
-      } finally {
-        setLastApplied(index);
       }
     } catch (Exception e) {
       e.printStackTrace();
       return Futures.exceptionalFuture(e);
+    } finally {
+      setLastApplied(index);
     }
   }
 
