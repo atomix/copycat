@@ -491,7 +491,7 @@ final class LeaderState extends ActiveState {
 
     ComposableFuture<CommandResponse> future = new ComposableFuture<>();
     sequenceCommand(request, session, future);
-    return future;
+    return future.thenApply(this::logResponse);
   }
 
   /**
@@ -507,10 +507,10 @@ final class LeaderState extends ActiveState {
       // If the request sequence number is more than 1k requests above the last sequenced request, reject the request.
       // The client should resubmit a request that fails with a COMMAND_ERROR.
       if (request.sequence() - session.getRequestSequence() > MAX_REQUEST_QUEUE_SIZE) {
-        future.complete(logResponse(CommandResponse.builder()
+        future.complete(CommandResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.COMMAND_ERROR)
-          .build()));
+          .build());
       }
       // Register the request in the request queue if it's not too far ahead of the current sequence number.
       else {
@@ -559,10 +559,10 @@ final class LeaderState extends ActiveState {
         if (commitError == null) {
           applyCommand(index, future);
         } else {
-          future.complete(logResponse(CommandResponse.builder()
+          future.complete(CommandResponse.builder()
             .withStatus(Response.Status.ERROR)
             .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
+            .build());
         }
       }
     });
