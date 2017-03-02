@@ -17,6 +17,8 @@ package io.atomix.copycat.client.session;
 
 import io.atomix.copycat.protocol.OperationResponse;
 import io.atomix.copycat.protocol.PublishRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -53,6 +55,8 @@ import java.util.Queue;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class ClientSequencer {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ClientSequencer.class);
+
   private final ClientSessionState state;
   private long requestSequence;
   private long responseSequence;
@@ -87,6 +91,7 @@ final class ClientSequencer {
    */
   public void sequenceEvent(PublishRequest request, Runnable callback) {
     if (requestSequence == responseSequence) {
+      LOGGER.debug("{} - Completing event {}", state.getSessionId(), request);
       callback.run();
       eventIndex = request.eventIndex();
     } else {
@@ -145,6 +150,7 @@ final class ClientSequencer {
     if (requestSequence == responseSequence) {
       EventCallback eventCallback = eventCallbacks.poll();
       while (eventCallback != null) {
+        LOGGER.debug("{} - Completing event {}", state.getSessionId(), eventCallback.request);
         eventCallback.run();
         eventIndex = eventCallback.request.eventIndex();
         eventCallback = eventCallbacks.poll();
@@ -159,6 +165,7 @@ final class ClientSequencer {
     // If the response is null, that indicates an exception occurred. The best we can do is complete
     // the response in sequential order.
     if (response == null) {
+      LOGGER.debug("{} - Completing failed request", state.getSessionId());
       callback.run();
       return true;
     }
@@ -171,6 +178,7 @@ final class ClientSequencer {
       EventCallback eventCallback = eventCallbacks.peek();
       while (eventCallback != null && eventCallback.request.eventIndex() <= response.eventIndex()) {
         eventCallbacks.remove();
+        LOGGER.debug("{} - Completing event {}", state.getSessionId(), eventCallback.request);
         eventCallback.run();
         eventIndex = eventCallback.request.eventIndex();
         eventCallback = eventCallbacks.peek();
@@ -180,6 +188,7 @@ final class ClientSequencer {
     // If after completing pending events the eventIndex is greater than or equal to the response's eventIndex, complete the response.
     // Note that the event protocol initializes the eventIndex to the session ID.
     if (response.eventIndex() <= eventIndex || (eventIndex == 0 && response.eventIndex() == state.getSessionId())) {
+      LOGGER.debug("{} - Completing response {}", state.getSessionId(), response);
       callback.run();
       return true;
     } else {
