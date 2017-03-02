@@ -58,9 +58,9 @@ final class ClientSequencer {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClientSequencer.class);
 
   private final ClientSessionState state;
-  private long requestSequence;
-  private long responseSequence;
-  private long eventIndex;
+  long requestSequence;
+  long responseSequence;
+  long eventIndex;
   private final Queue<EventCallback> eventCallbacks = new ArrayDeque<>();
   private final Map<Long, ResponseCallback> responseCallbacks = new HashMap<>();
 

@@ -193,4 +193,37 @@ public class ClientSequencerTest {
     assertTrue(run.get());
   }
 
+  /**
+   * Tests sequencing responses with a missing PublishRequest.
+   */
+  public void testSequenceMissingEvent() throws Throwable {
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
+    state.setSessionId(1);
+    state.setCommandRequest(2);
+    state.setResponseIndex(15);
+    state.setEventIndex(5);
+
+    ClientSequencer sequencer = new ClientSequencer(state);
+    sequencer.requestSequence = 2;
+    sequencer.responseSequence = 1;
+    sequencer.eventIndex = 5;
+
+    CommandResponse commandResponse = CommandResponse.builder()
+      .withStatus(Response.Status.OK)
+      .withIndex(20)
+      .withEventIndex(10)
+      .build();
+
+    PublishRequest publishRequest = PublishRequest.builder()
+      .withSession(1)
+      .withEventIndex(25)
+      .withPreviousIndex(5)
+      .build();
+
+    AtomicInteger run = new AtomicInteger();
+    sequencer.sequenceResponse(2, commandResponse, () -> assertEquals(run.getAndIncrement(), 0));
+    sequencer.sequenceEvent(publishRequest, () -> assertEquals(run.getAndIncrement(), 1));
+    assertEquals(run.get(), 2);
+  }
+
 }
