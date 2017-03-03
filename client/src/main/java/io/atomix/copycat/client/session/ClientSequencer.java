@@ -91,7 +91,7 @@ final class ClientSequencer {
    */
   public void sequenceEvent(PublishRequest request, Runnable callback) {
     if (requestSequence == responseSequence) {
-      LOGGER.debug("{} - Completing event {}", state.getSessionId(), request);
+      LOGGER.debug("{} - Completing {}", state.getSessionId(), request);
       callback.run();
       eventIndex = request.eventIndex();
     } else {
@@ -150,7 +150,7 @@ final class ClientSequencer {
     if (requestSequence == responseSequence) {
       EventCallback eventCallback = eventCallbacks.poll();
       while (eventCallback != null) {
-        LOGGER.debug("{} - Completing event {}", state.getSessionId(), eventCallback.request);
+        LOGGER.debug("{} - Completing {}", state.getSessionId(), eventCallback.request);
         eventCallback.run();
         eventIndex = eventCallback.request.eventIndex();
         eventCallback = eventCallbacks.poll();
@@ -172,23 +172,39 @@ final class ClientSequencer {
 
     // If the response's event index is greater than the current event index, that indicates that events that were
     // published prior to the response have not yet been completed. Attempt to complete pending events.
-    if (response.eventIndex() > eventIndex) {
+    long responseEventIndex = response.eventIndex();
+    if (responseEventIndex > eventIndex) {
       // For each pending event with an eventIndex less than or equal to the response eventIndex, complete the event.
       // This is safe since we know that sequenced responses should see sequential order of events.
       EventCallback eventCallback = eventCallbacks.peek();
-      while (eventCallback != null && eventCallback.request.eventIndex() <= response.eventIndex()) {
+      while (eventCallback != null && eventCallback.request.eventIndex() <= responseEventIndex) {
         eventCallbacks.remove();
-        LOGGER.debug("{} - Completing event {}", state.getSessionId(), eventCallback.request);
+        LOGGER.debug("{} - Completing {}", state.getSessionId(), eventCallback.request);
         eventCallback.run();
         eventIndex = eventCallback.request.eventIndex();
         eventCallback = eventCallbacks.peek();
+      }
+
+      // If the response event index is still greater than the last sequenced event index, check
+      // enqueued events to determine whether any events can be skipped. This is necessary to
+      // ensure that a response with a missing event can still trigger prior events.
+      if (responseEventIndex > eventIndex) {
+        for (EventCallback event : eventCallbacks) {
+          // If the event's previous index is consistent with the current event index and the event
+          // index is greater than the response event index, set the response event index to the
+          // event's previous index.
+          if (event.request.previousIndex() == eventIndex && event.request.eventIndex() >= response.eventIndex()) {
+            responseEventIndex = event.request.previousIndex();
+            break;
+          }
+        }
       }
     }
 
     // If after completing pending events the eventIndex is greater than or equal to the response's eventIndex, complete the response.
     // Note that the event protocol initializes the eventIndex to the session ID.
-    if (response.eventIndex() <= eventIndex || (eventIndex == 0 && response.eventIndex() == state.getSessionId())) {
-      LOGGER.debug("{} - Completing response {}", state.getSessionId(), response);
+    if (responseEventIndex <= eventIndex || (eventIndex == 0 && responseEventIndex == state.getSessionId())) {
+      LOGGER.debug("{} - Completing {}", state.getSessionId(), response);
       callback.run();
       return true;
     } else {
