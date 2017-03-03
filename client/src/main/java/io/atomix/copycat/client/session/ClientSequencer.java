@@ -193,7 +193,7 @@ final class ClientSequencer {
           // If the event's previous index is consistent with the current event index and the event
           // index is greater than the response event index, set the response event index to the
           // event's previous index.
-          if (event.request.previousIndex() == eventIndex && event.request.eventIndex() >= response.eventIndex()) {
+          if (event.request.previousIndex() <= eventIndex && event.request.eventIndex() >= response.eventIndex()) {
             responseEventIndex = event.request.previousIndex();
             break;
           }
