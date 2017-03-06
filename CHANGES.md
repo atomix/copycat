@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.2.3 - 2017-03-03
+
+### Bug Fixes
+* [#293](https://github.com/atomix/copycat/pull/293) - Relax consistency constraints for client sequencer to ensure missing events cannot prevent the client from progressing
+
 ## 1.2.2 - 2017-02-27
 
 ### CRITICAL
