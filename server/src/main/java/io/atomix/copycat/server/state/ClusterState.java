@@ -445,17 +445,23 @@ final class ClusterState implements Cluster, AutoCloseable {
             .withTerm(configuration.term())
             .withMember(member())
             .build();
+          LOGGER.debug("{} - Sent {} to {}", member.address(), request, leader.address());
           return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
         }).whenComplete((response, error) -> {
           cancelJoinTimer();
           if (error == null) {
+            LOGGER.debug("{} - Received {}", member.address(), response);
             if (response.status() == Response.Status.OK) {
-              cancelJoinTimer();
-              if (joinFuture != null)
+              if (joinFuture != null) {
                 joinFuture.complete(null);
+              }
             } else if (response.error() == null || response.error() == CopycatError.Type.CONFIGURATION_ERROR) {
+              LOGGER.debug("{} - Failed to update configuration: configuration change already in progress", member.address());
               joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
             }
+          } else {
+            LOGGER.warn("{} - Failed to update configuration: {}", member.address(), error.getMessage());
+            joinTimeout = context.getThreadContext().schedule(context.getElectionTimeout().multipliedBy(2), this::identify);
           }
         });
       }

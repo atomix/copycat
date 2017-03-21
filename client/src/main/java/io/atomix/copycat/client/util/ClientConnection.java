@@ -216,6 +216,7 @@ public class ClientConnection implements Connection {
       if (error == null) {
         setupConnection(address, connection, future);
       } else {
+        LOGGER.debug("{} - Failed to connect: {}", id, error);
         connect(future);
       }
     }
@@ -272,6 +273,7 @@ public class ClientConnection implements Connection {
           connect(future);
         }
       } else {
+        LOGGER.debug("{} - Failed to connect: {}", id, error);
         connect(future);
       }
     }
