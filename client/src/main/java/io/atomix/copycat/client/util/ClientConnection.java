@@ -16,7 +16,11 @@
 package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.transport.*;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Client;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.MessageHandler;
+import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ConnectRequest;
@@ -100,6 +104,7 @@ public class ClientConnection implements Connection {
   @SuppressWarnings("unchecked")
   public <T, U> CompletableFuture<U> send(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
+    LOGGER.trace("{} - Sending {}", id, request);
     sendRequest((Request) request, (CompletableFuture<Response>) future);
     return future;
   }
@@ -125,6 +130,7 @@ public class ClientConnection implements Connection {
           future.completeExceptionally(new ConnectException("failed to connect"));
         }
       } else {
+        LOGGER.debug("{} - Resetting connection. Reason: {}", id, error);
         this.connection = null;
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       }
@@ -142,13 +148,17 @@ public class ClientConnection implements Connection {
           || response.error() == CopycatError.Type.QUERY_ERROR
           || response.error() == CopycatError.Type.APPLICATION_ERROR
           || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+          LOGGER.trace("{} - Received {}", id, response);
           future.complete(response);
         } else {
+          LOGGER.debug("{} - Resetting connection. Reason: {}", id, response.error().createException());
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
       } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
+        LOGGER.debug("{} - Resetting connection. Reason: {}", id, error);
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       } else {
+        LOGGER.debug("{} - {} failed! Reason: {}", id, request, error);
         future.completeExceptionally(error);
       }
     }
@@ -216,7 +226,7 @@ public class ClientConnection implements Connection {
       if (error == null) {
         setupConnection(address, connection, future);
       } else {
-        LOGGER.debug("{} - Failed to connect: {}", id, error);
+        LOGGER.debug("{} - Failed to connect! Reason: {}", id, error);
         connect(future);
       }
     }
@@ -230,6 +240,7 @@ public class ClientConnection implements Connection {
     LOGGER.debug("{} - Setting up connection to {}", id, address);
 
     this.connection = connection;
+
     connection.closeListener(c -> {
       if (c.equals(this.connection)) {
         LOGGER.debug("{} - Connection closed", id);
@@ -253,7 +264,7 @@ public class ClientConnection implements Connection {
       .withClientId(id)
       .build();
 
-    LOGGER.debug("{} - Sending {}", id, request);
+    LOGGER.trace("{} - Sending {}", id, request);
     connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
   }
 
@@ -263,7 +274,7 @@ public class ClientConnection implements Connection {
   private void handleConnectResponse(ConnectResponse response, Throwable error, CompletableFuture<Connection> future) {
     if (open) {
       if (error == null) {
-        LOGGER.debug("{} - Received {}", id, response);
+        LOGGER.trace("{} - Received {}", id, response);
         // If the connection was successfully created, immediately send a keep-alive request
         // to the server to ensure we maintain our session and get an updated list of server addresses.
         if (response.status() == Response.Status.OK) {
@@ -273,7 +284,7 @@ public class ClientConnection implements Connection {
           connect(future);
         }
       } else {
-        LOGGER.debug("{} - Failed to connect: {}", id, error);
+        LOGGER.debug("{} - Failed to connect! Reason: {}", id, error);
         connect(future);
       }
     }
