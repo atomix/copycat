@@ -166,10 +166,14 @@ final class ClientSessionSubmitter {
         .build();
       state.getLogger().debug("{} - Sending {}", state.getSessionId(), request);
       connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
-        // If the keep-alive is successful, recursively resubmit operations starting
-        // at the submitted response sequence number rather than the command sequence.
-        if (response.status() == Response.Status.OK) {
-          resubmit(responseSequence, version);
+        if (error == null) {
+          state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+
+          // If the keep-alive is successful, recursively resubmit operations starting
+          // at the submitted response sequence number rather than the command sequence.
+          if (response.status() == Response.Status.OK) {
+            resubmit(responseSequence, version);
+          }
         }
       });
     } else {
