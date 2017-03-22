@@ -145,6 +145,24 @@ final class ClientSessionSubmitter {
   }
 
   /**
+   * Resubmits commands starting after the given sequence number.
+   * <p>
+   * The sequence number from which to resend commands is the <em>request</em> sequence number,
+   * not the client-side sequence number. We resend only commands since queries cannot be reliably
+   * resent without losing linearizable semantics. Commands are resent by iterating through all pending
+   * operation attempts and retrying commands where the sequence number is greater than the given
+   * {@code commandSequence} number and the attempt number is less than or equal to the version.
+   */
+  private void resubmit(long commandSequence, int version) {
+    for (Map.Entry<Long, OperationAttempt> entry : attempts.entrySet()) {
+      OperationAttempt attempt = entry.getValue();
+      if (attempt instanceof CommandAttempt && attempt.request.sequence() > commandSequence && attempt.attempt <= version) {
+        attempt.retry();
+      }
+    }
+  }
+
+  /**
    * Closes the submitter.
    *
    * @return A completable future to be completed with a list of pending operations.
@@ -153,6 +171,7 @@ final class ClientSessionSubmitter {
     for (OperationAttempt attempt : new ArrayList<>(attempts.values())) {
       attempt.fail(new ClosedSessionException("session closed"));
     }
+    attempts.clear();
     return CompletableFuture.completedFuture(null);
   }
 
@@ -278,11 +297,23 @@ final class ClientSessionSubmitter {
         state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
-        } else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
+        }
+        // COMMAND_ERROR indicates that the command was received by the leader out of sequential order.
+        // We need to resend commands starting at the provided lastSequence number.
+        else if (response.error() == CopycatError.Type.COMMAND_ERROR) {
+          resubmit(response.lastSequence(), attempt);
+        }
+        // APPLICATION_ERROR indicates that an exception occurred inside the state machine. Complete the command
+        // with an ApplicationException.
+        else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
           complete(response.error().createException());
-        } else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+        }
+        // For all other errors other than UNKNOWN_SESSION_ERROR, use fibonacci backoff to resubmit the command.
+        else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
           retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
-        } else {
+        }
+        // UNKNOWN_SESSION_ERROR indicates that the client's session expired. Fail the command.
+        else {
           complete(response.error().createException());
         }
       } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {

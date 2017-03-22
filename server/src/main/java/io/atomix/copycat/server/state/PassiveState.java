@@ -358,7 +358,7 @@ class PassiveState extends ReserveState {
   /**
    * Completes an operation.
    */
-  protected  <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
+  protected <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
     if (isOpen()) {
       if (result != null) {
         builder.withIndex(result.index);
