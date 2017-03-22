@@ -127,7 +127,7 @@ public class ClientConnection implements Connection {
         if (connection != null) {
           connection.<T, U>send(request).whenComplete((r, e) -> handleResponse(request, r, e, future));
         } else {
-          future.completeExceptionally(new ConnectException("failed to connect"));
+          reset().next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
       } else {
         LOGGER.debug("{} - Resetting connection. Reason: {}", id, error);
