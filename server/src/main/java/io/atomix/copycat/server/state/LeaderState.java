@@ -619,18 +619,9 @@ final class LeaderState extends ActiveState {
 
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
-    // If the query's sequence number is greater than the session's current request sequence number, reject the query
-    // to force the client to resend it in sequential order.
-    if (entry.getSequence() > session.getRequestSequence()) {
-      future.complete(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.QUERY_ERROR)
-        .withLastSequence(session.getRequestSequence())
-        .build());
-    }
     // If the query's sequence number is less than the session's current request sequence number but greater than the
     // session's current applied sequence number, queue the request for handling once the state machine is caught up.
-    else if (entry.getSequence() > session.getCommandSequence()) {
+    if (entry.getSequence() > session.getCommandSequence()) {
       session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, future));
     }
     // If the query is already in sequence then just apply it.
