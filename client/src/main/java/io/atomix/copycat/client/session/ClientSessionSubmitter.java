@@ -154,10 +154,30 @@ final class ClientSessionSubmitter {
    * {@code commandSequence} number and the attempt number is less than or equal to the version.
    */
   private void resubmit(long commandSequence, int version) {
-    for (Map.Entry<Long, OperationAttempt> entry : attempts.entrySet()) {
-      OperationAttempt attempt = entry.getValue();
-      if (attempt instanceof CommandAttempt && attempt.request.sequence() > commandSequence && attempt.attempt <= version) {
-        attempt.retry();
+    // If the client's response sequence number is greater than the given command sequence number,
+    // the cluster likely has a new leader, and we need to reset the sequencing in the leader by
+    // sending a keep-alive request.
+    long responseSequence = state.getCommandResponse();
+    if (commandSequence < responseSequence) {
+      KeepAliveRequest request = KeepAliveRequest.builder()
+        .withSession(state.getSessionId())
+        .withCommandSequence(state.getCommandResponse())
+        .withEventIndex(state.getEventIndex())
+        .build();
+      state.getLogger().debug("{} - Sending {}", state.getSessionId(), request);
+      connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
+        // If the keep-alive is successful, recursively resubmit operations starting
+        // at the submitted response sequence number rather than the command sequence.
+        if (response.status() == Response.Status.OK) {
+          resubmit(responseSequence, version);
+        }
+      });
+    } else {
+      for (Map.Entry<Long, OperationAttempt> entry : attempts.entrySet()) {
+        OperationAttempt attempt = entry.getValue();
+        if (attempt instanceof CommandAttempt && attempt.request.sequence() > commandSequence && attempt.attempt <= version) {
+          attempt.retry();
+        }
       }
     }
   }
