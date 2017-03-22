@@ -867,7 +867,7 @@ public class ClusterTest extends ConcurrentTestCase {
       resume();
     });
 
-    for (int i = 0 ; i < 10; i++) {
+    for (int i = 0; i < 10; i++) {
       client.submit(new TestEvent(true)).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();
@@ -879,7 +879,7 @@ public class ClusterTest extends ConcurrentTestCase {
     CopycatServer leader = servers.stream().filter(s -> s.state() == CopycatServer.State.LEADER).findFirst().get();
     leader.shutdown().get(10, TimeUnit.SECONDS);
 
-    for (int i = 0 ; i < 10; i++) {
+    for (int i = 0; i < 10; i++) {
       client.submit(new TestEvent(true)).thenAccept(result -> {
         threadAssertNotNull(result);
         resume();

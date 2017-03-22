@@ -220,7 +220,9 @@ class ServerSessionContext implements ServerSession {
    */
   boolean setRequestSequence(long requestSequence) {
     if (requestSequence == this.requestSequence + 1) {
-      this.requestSequence++;
+      this.requestSequence = requestSequence;
+      return true;
+    } else if (requestSequence <= this.requestSequence) {
       return true;
     }
     return false;
