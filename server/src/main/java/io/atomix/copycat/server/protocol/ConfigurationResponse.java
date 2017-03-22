@@ -131,7 +131,7 @@ public abstract class ConfigurationResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, index=%d, term=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), status, index, term, timestamp, members);
+    return String.format("%s[status=%s, error=%s, index=%d, term=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), status, error, index, term, timestamp, members);
   }
 
   /**
