@@ -16,11 +16,7 @@
 package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.Client;
-import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.transport.MessageHandler;
-import io.atomix.catalyst.transport.TransportException;
+import io.atomix.catalyst.transport.*;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.ConnectRequest;
@@ -33,7 +29,9 @@ import org.slf4j.LoggerFactory;
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -50,6 +48,7 @@ public class ClientConnection implements Connection {
   private final Client client;
   private final AddressSelector selector;
   private CompletableFuture<Connection> connectFuture;
+  private Queue<CompletableFuture<Connection>> connectFutures;
   private final Map<Class<?>, MessageHandler<?, ?>> handlers = new ConcurrentHashMap<>();
   private Connection connection;
   private boolean open = true;
@@ -104,7 +103,6 @@ public class ClientConnection implements Connection {
   @SuppressWarnings("unchecked")
   public <T, U> CompletableFuture<U> send(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
-    LOGGER.trace("{} - Sending {}", id, request);
     sendRequest((Request) request, (CompletableFuture<Response>) future);
     return future;
   }
@@ -125,9 +123,10 @@ public class ClientConnection implements Connection {
     if (open) {
       if (error == null) {
         if (connection != null) {
+          LOGGER.trace("{} - Sending {}", id, request);
           connection.<T, U>send(request).whenComplete((r, e) -> handleResponse(request, r, e, future));
         } else {
-          reset().next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+          future.completeExceptionally(new ConnectException("Failed to connect to the cluster"));
         }
       } else {
         LOGGER.debug("{} - Resetting connection. Reason: {}", id, error);
@@ -168,15 +167,31 @@ public class ClientConnection implements Connection {
    * Connects to the cluster.
    */
   private CompletableFuture<Connection> connect() {
+    CompletableFuture<Connection> future = new CompletableFuture<>();
+
     // If the address selector has been then reset the connection.
     if (selector.state() == AddressSelector.State.RESET && connection != null) {
-      if (connectFuture != null)
+      if (connectFuture != null) {
+        connectFutures.add(future);
         return connectFuture;
+      }
 
-      CompletableFuture<Connection> future = new CompletableFuture<>();
-      connectFuture = future;
-      connection.close().whenComplete((result, error) -> connect(future));
-      return connectFuture.whenComplete((result, error) -> connectFuture = null);
+      CompletableFuture<Connection> connectFuture = new CompletableFuture<>();
+      this.connectFuture = connectFuture;
+      this.connectFutures = new LinkedList<>();
+      this.connectFutures.add(future);
+
+      connection.close().whenComplete((result, error) -> connect(connectFuture));
+
+      return connectFuture.whenComplete((result, error) -> {
+        this.connectFuture = null;
+        if (error == null) {
+          connectFutures.forEach(f -> f.complete(result));
+        } else {
+          connectFutures.forEach(f -> f.completeExceptionally(error));
+        }
+        connectFutures = null;
+      });
     }
 
     // If a connection was already established then use that connection.
@@ -184,24 +199,51 @@ public class ClientConnection implements Connection {
       return CompletableFuture.completedFuture(connection);
 
     // If a connection is currently being established then piggyback on the connect future.
-    if (connectFuture != null)
+    if (connectFuture != null) {
+      connectFutures.add(future);
       return connectFuture;
+    }
 
     // Create a new connect future and connect to the first server in the cluster.
     connectFuture = new CompletableFuture<>();
-    connect(connectFuture);
+    connectFutures = new LinkedList<>();
+    connectFutures.add(future);
+
+    reset().connect(connectFuture);
 
     // Reset the connect future field once the connection is complete.
-    return connectFuture.whenComplete((result, error) -> connectFuture = null);
+    return connectFuture.whenComplete((result, error) -> {
+      connectFuture = null;
+      if (error == null) {
+        connectFutures.forEach(f -> f.complete(result));
+      } else {
+        connectFutures.forEach(f -> f.completeExceptionally(error));
+      }
+      connectFutures = null;
+    });
   }
 
   /**
    * Connects to the cluster using the next connection.
    */
   private CompletableFuture<Connection> next() {
-    if (connection != null)
-      return connection.close().thenRun(() -> connection = null).thenCompose(v -> connect());
-    return connect();
+    if (connection != null) {
+      return connection.close().thenRun(() -> connection = null).thenCompose(v -> {
+        if (connectFuture == null) {
+          connectFuture = new CompletableFuture<>();
+          connect(connectFuture);
+          return connectFuture.whenComplete((result, error) -> connectFuture = null);
+        }
+        return connectFuture;
+      });
+    } else {
+      if (connectFuture == null) {
+        connectFuture = new CompletableFuture<>();
+        connect(connectFuture);
+        return connectFuture.whenComplete((result, error) -> connectFuture = null);
+      }
+      return connectFuture;
+    }
   }
 
   /**
