@@ -106,9 +106,7 @@ abstract class ActiveState extends PassiveState {
       if (context.getLog().lastIndex() < entry.getIndex()) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
         LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-      } else if (context.getCommitIndex() >= entry.getIndex()) {
-        continue;
-      } else {
+      } else if (entry.getIndex() > context.getCommitIndex()) {
         // Compare the term of the received entry with the matching entry in the log.
         long term = context.getLog().term(entry.getIndex());
         if (term != 0) {
@@ -127,9 +125,13 @@ abstract class ActiveState extends PassiveState {
     }
 
     // If we've made it this far, apply commits and send a successful response.
-    LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    long previousCommitIndex = context.getCommitIndex();
     context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
+
+    if (context.getCommitIndex() > previousCommitIndex) {
+      LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    }
 
     // Apply commits to the local state machine.
     context.getStateMachine().applyAll(context.getCommitIndex());

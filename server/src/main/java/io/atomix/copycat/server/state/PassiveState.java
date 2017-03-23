@@ -74,7 +74,8 @@ class PassiveState extends ReserveState {
     context.checkThread();
     logRequest(request);
 
-    if (context.getLeader() == null) {
+    Member leader = context.getLeader();
+    if (leader == null) {
       return CompletableFuture.completedFuture(logResponse(ConnectResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -85,7 +86,7 @@ class PassiveState extends ReserveState {
 
       return CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
-        .withLeader(context.getCluster().member().clientAddress())
+        .withLeader(leader.clientAddress())
         .withMembers(context.getCluster().members().stream()
           .map(Member::clientAddress)
           .filter(m -> m != null)
@@ -198,9 +199,13 @@ class PassiveState extends ReserveState {
     }
 
     // Update the context commit and global indices.
-    LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    long previousCommitIndex = context.getCommitIndex();
     context.setCommitIndex(commitIndex);
     context.setGlobalIndex(request.globalIndex());
+
+    if (context.getCommitIndex() > previousCommitIndex) {
+      LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+    }
 
     // Apply commits to the state machine in batch.
     context.getStateMachine().applyAll(context.getCommitIndex());
@@ -225,14 +230,14 @@ class PassiveState extends ReserveState {
       // query to the leader. This ensures that a follower does not tell the client its session
       // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
       if (context.getStateMachine().getLastApplied() < request.session()) {
-        LOGGER.debug("{} - State out of sync, forwarding query to leader");
+        LOGGER.debug("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
         return queryForward(request);
       }
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
       if (context.getLog().lastIndex() < context.getCommitIndex()) {
-        LOGGER.debug("{} - State out of sync, forwarding query to leader");
+        LOGGER.debug("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
         return queryForward(request);
       }
 
@@ -244,7 +249,7 @@ class PassiveState extends ReserveState {
         .setSequence(request.sequence())
         .setQuery(request.query());
 
-      return queryLocal(entry);
+      return queryLocal(entry).thenApply(this::logResponse);
     } else {
       return queryForward(request);
     }
@@ -364,21 +369,21 @@ class PassiveState extends ReserveState {
       }
 
       if (error == null) {
-        future.complete(logResponse(builder.withStatus(Response.Status.OK)
+        future.complete(builder.withStatus(Response.Status.OK)
           .withResult(result.result)
-          .build()));
+          .build());
       } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
-        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
+        future.complete(builder.withStatus(Response.Status.ERROR)
           .withError(((CopycatException) error.getCause()).getType())
-          .build()));
+          .build());
       } else if (error instanceof CopycatException) {
-        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
+        future.complete(builder.withStatus(Response.Status.ERROR)
           .withError(((CopycatException) error).getType())
-          .build()));
+          .build());
       } else {
-        future.complete(logResponse(builder.withStatus(Response.Status.ERROR)
+        future.complete(builder.withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.INTERNAL_ERROR)
-          .build()));
+          .build());
       }
     }
   }

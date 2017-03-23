@@ -726,6 +726,8 @@ public class CopycatServer {
 
   /**
    * Shuts down the server without leaving the Copycat cluster.
+   * <p>
+   * When the server is shutdown, the underlying {@link Transport} will be {@link Transport#close() closed}.
    *
    * @return A completable future to be completed once the server has been shutdown.
    */
@@ -762,7 +764,9 @@ public class CopycatServer {
     });
 
     return future.whenCompleteAsync((result, error) -> {
-      clientTransport.close();
+      if (clientTransport != serverTransport) {
+        clientTransport.close();
+      }
       serverTransport.close();
       context.close();
       started = false;
@@ -771,6 +775,8 @@ public class CopycatServer {
 
   /**
    * Leaves the Copycat cluster.
+   * <p>
+   * When the server is stopped, the underlying {@link Transport} will be {@link Transport#close() closed}.
    *
    * @return A completable future to be completed once the server has left the cluster.
    */
@@ -781,14 +787,32 @@ public class CopycatServer {
     if (closeFuture == null) {
       synchronized (this) {
         if (closeFuture == null) {
+          closeFuture = new CompletableFuture<>();
           if (openFuture == null) {
-            closeFuture = cluster().leave().thenCompose(v -> shutdown()).thenRun(context::delete);
+            cluster().leave().whenComplete((leaveResult, leaveError) -> {
+              shutdown().whenComplete((shutdownResult, shutdownError) -> {
+                context.delete();
+                closeFuture.complete(null);
+              });
+            });
           } else {
-            closeFuture = openFuture.thenCompose(c -> cluster().leave().thenCompose(v -> shutdown()).thenRun(context::delete));
+            openFuture.whenComplete((openResult, openError) -> {
+              if (openError == null) {
+                cluster().leave().whenComplete((leaveResult, leaveError) -> {
+                  shutdown().whenComplete((shutdownResult, shutdownError) -> {
+                    context.delete();
+                    closeFuture.complete(null);
+                  });
+                });
+              } else {
+                closeFuture.complete(null);
+              }
+            });
           }
         }
       }
     }
+
     return closeFuture;
   }
 

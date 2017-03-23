@@ -116,7 +116,7 @@ public class PollResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, term=%d, accepted=%b]", getClass().getSimpleName(), status, term, accepted);
+    return String.format("%s[status=%s, error=%s, term=%d, accepted=%b]", getClass().getSimpleName(), status, error, term, accepted);
   }
 
   /**

@@ -52,7 +52,7 @@ final class ServerStateMachine implements AutoCloseable {
   private final ServerCommitPool commits;
   private volatile long lastApplied;
   private long lastCompleted;
-  private Snapshot pendingSnapshot;
+  private volatile Snapshot pendingSnapshot;
 
   ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
@@ -78,6 +78,8 @@ final class ServerStateMachine implements AutoCloseable {
    * frequently than will benefit log compaction.
    */
   private void takeSnapshot() {
+    state.checkThread();
+
     // If no snapshot has been taken, take a snapshot and hold it in memory until the complete
     // index has met the snapshot index. Note that this will be executed in the state machine thread.
     // Snapshots are only taken of the state machine when the log becomes compactable. If the log compactor's
@@ -91,11 +93,13 @@ final class ServerStateMachine implements AutoCloseable {
       // Write the snapshot data. Note that we don't complete the snapshot here since the completion
       // of a snapshot is predicated on session events being received by clients up to the snapshot index.
       LOGGER.info("{} - Taking snapshot {}", state.getCluster().member().address(), pendingSnapshot.index());
-      synchronized (pendingSnapshot) {
-        try (SnapshotWriter writer = pendingSnapshot.writer()) {
-          ((Snapshottable) stateMachine).snapshot(writer);
+      executor.executor().execute(() -> {
+        synchronized (pendingSnapshot) {
+          try (SnapshotWriter writer = pendingSnapshot.writer()) {
+            ((Snapshottable) stateMachine).snapshot(writer);
+          }
         }
-      }
+      });
     }
   }
 
@@ -106,6 +110,8 @@ final class ServerStateMachine implements AutoCloseable {
    * last applied index.
    */
   private void installSnapshot() {
+    state.checkThread();
+
     // If the last stored snapshot has not yet been installed and its index matches the last applied state
     // machine index, install the snapshot. This requires that the state machine see all indexes sequentially
     // even for entries that have been compacted from the log.
@@ -140,10 +146,12 @@ final class ServerStateMachine implements AutoCloseable {
    * prior events have been received.
    */
   private void completeSnapshot() {
+    state.checkThread();
+
     // If a snapshot is pending to be persisted and the last completed index is greater than the
     // waiting snapshot index and no current or newer snapshot exists,
     // persist the snapshot and update the last snapshot index.
-    if (pendingSnapshot != null && lastCompleted >= pendingSnapshot.index()) {
+    if (pendingSnapshot != null && lastCompleted > pendingSnapshot.index()) {
       long snapshotIndex = pendingSnapshot.index();
       LOGGER.debug("{} - Completing snapshot {}", state.getCluster().member().address(), snapshotIndex);
       synchronized (pendingSnapshot) {
@@ -151,7 +159,7 @@ final class ServerStateMachine implements AutoCloseable {
         if (currentSnapshot == null || snapshotIndex > currentSnapshot.index()) {
           pendingSnapshot.complete();
         } else {
-          LOGGER.debug("Discarding pending snapshot at index {} since the current snapshot is at index {}", pendingSnapshot.index(), currentSnapshot.index());
+          LOGGER.debug("{} - Discarding pending snapshot at index {} since the current snapshot is at index {}", state.getCluster().member().address(), pendingSnapshot.index(), currentSnapshot.index());
         }
         pendingSnapshot = null;
       }
@@ -287,19 +295,24 @@ final class ServerStateMachine implements AutoCloseable {
    * @return A completable future to be completed once the commit has been applied.
    */
   public <T> CompletableFuture<T> apply(long index) {
-    // If entries remain to be applied prior to this entry then synchronously apply them.
-    if (index > lastApplied + 1) {
-      applyAll(index - 1);
-    }
-
-    // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
-    // simply update the last applied index and return a null result.
-    try (Entry entry = log.get(index)) {
-      if (entry != null) {
-        return apply(entry);
-      } else {
-        return CompletableFuture.completedFuture(null);
+    try {
+      // If entries remain to be applied prior to this entry then synchronously apply them.
+      if (index > lastApplied + 1) {
+        applyAll(index - 1);
       }
+
+      // Read the entry from the log. If the entry is non-null them apply the entry, otherwise
+      // simply update the last applied index and return a null result.
+      try (Entry entry = log.get(index)) {
+        if (entry != null) {
+          return apply(entry);
+        } else {
+          return CompletableFuture.completedFuture(null);
+        }
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      return Futures.exceptionalFuture(e);
     } finally {
       setLastApplied(index);
     }
@@ -364,7 +377,8 @@ final class ServerStateMachine implements AutoCloseable {
 
     long sessionId = entry.getIndex();
     ServerSessionContext session = new ServerSessionContext(sessionId, entry.getClient(), log, executor.context(), entry.getTimeout());
-    executor.context().sessions().registerSession(session);
+
+    ServerSessionContext oldSession = executor.context().sessions().registerSession(session);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp
     // is guaranteed to be monotonically increasing, whereas the RegisterEntry may have an earlier timestamp
@@ -381,14 +395,14 @@ final class ServerStateMachine implements AutoCloseable {
     // Call the register() method on the user-provided state machine to allow the state machine to react to
     // a new session being registered. User state machine methods are always called in the state machine thread.
     CompletableFuture<Long> future = new ComposableFuture<>();
-    executor.executor().execute(() -> registerSession(index, timestamp, session, future, context));
+    executor.executor().execute(() -> registerSession(index, timestamp, session, oldSession, future, context));
     return future;
   }
 
   /**
    * Registers a session.
    */
-  private void registerSession(long index, long timestamp, ServerSessionContext session, CompletableFuture<Long> future, ThreadContext context) {
+  private void registerSession(long index, long timestamp, ServerSessionContext session, ServerSessionContext oldSession, CompletableFuture<Long> future, ThreadContext context) {
     if (!log.isOpen()) {
       context.executor().execute(() -> future.completeExceptionally(new IllegalStateException("log closed")));
       return;
@@ -403,9 +417,18 @@ final class ServerStateMachine implements AutoCloseable {
     // before the registration is completed.
     executor.init(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
 
+    // If the session overrides a previous session, expire the old session.
+    if (oldSession != null) {
+      oldSession.expire(0);
+    }
+
     // Register the session and then open it. This ensures that state machines cannot publish events to this
     // session before the client has learned of the session ID.
     for (SessionListener listener : executor.context().sessions().listeners) {
+      if (oldSession != null) {
+        listener.expire(oldSession);
+        listener.close(oldSession);
+      }
       listener.register(session);
     }
     session.open();
@@ -498,7 +521,22 @@ final class ServerStateMachine implements AutoCloseable {
       executor.executor().execute(() -> keepAliveSession(index, timestamp, commandSequence, eventIndex, session, future, context));
 
       // Update the session keep alive index for log cleaning.
-      session.setKeepAliveIndex(entry.getIndex()).setRequestSequence(commandSequence);
+      session.setKeepAliveIndex(entry.getIndex());
+
+      // Update the session's request sequence number. The command sequence number will be applied
+      // iff the existing request sequence number is less than the command sequence number. This must
+      // be applied to ensure that request sequence numbers are reset after a leader change since leaders
+      // track request sequence numbers in local memory.
+      session.setRequestSequence(commandSequence);
+
+      // Update the sessions' command sequence number. The command sequence number will be applied
+      // iff the existing sequence number is less than the keep-alive command sequence number. This should
+      // not be the case under normal operation since the command sequence number in keep-alive requests
+      // represents the highest sequence for which a client has received a response (the command has already
+      // been completed), but since the log compaction algorithm can exclude individual entries from replication,
+      // the command sequence number must be applied for keep-alive requests to reset the sequence number in
+      // the event the last command for the session was cleaned/compacted from the log.
+      session.setCommandSequence(commandSequence);
     }
 
     return future;

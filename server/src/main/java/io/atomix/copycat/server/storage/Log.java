@@ -250,11 +250,13 @@ public class Log implements AutoCloseable {
   /**
    * Checks whether we need to roll over to a new segment.
    */
-  private void checkRoll() {
-    if (segments.currentSegment().isFull()) {
+  private Segment currentSegment() {
+    Segment segment = segments.currentSegment();
+    if (segment.isFull()) {
       segments.currentSegment().flush();
-      segments.nextSegment();
+      segment = segments.nextSegment();
     }
+    return segment;
   }
 
   /**
@@ -272,8 +274,7 @@ public class Log implements AutoCloseable {
   public <T extends Entry<T>> T create(Class<T> type) {
     Assert.notNull(type, "type");
     assertIsOpen();
-    checkRoll();
-    return entryPool.acquire(type, segments.currentSegment().nextIndex());
+    return entryPool.acquire(type, currentSegment().nextIndex());
   }
 
   /**
@@ -288,10 +289,9 @@ public class Log implements AutoCloseable {
   public long append(Entry entry) {
     Assert.notNull(entry, "entry");
     assertIsOpen();
-    checkRoll();
 
     // Append the entry to the appropriate segment.
-    long index = segments.currentSegment().append(entry);
+    long index = currentSegment().append(entry);
     entryBuffer.append(entry);
     return index;
   }
@@ -325,7 +325,7 @@ public class Log implements AutoCloseable {
    * If the given index is outside of the bounds of the log then a {@link IndexOutOfBoundsException} will be thrown. If
    * the entry at the given index has been compacted then the returned entry will be {@code null}.
    * <p>
-   * Entries returned by this method are pooled and {@link io.atomix.catalyst.util.ReferenceCounted reference counted}.
+   * Entries returned by this method are pooled and {@link io.atomix.catalyst.util.reference.ReferenceCounted reference counted}.
    * In order to ensure the entry is released back to the internal entry pool call {@link Entry#close()} or load the
    * entry in a try-with-resources statement. <pre>
    *   {@code

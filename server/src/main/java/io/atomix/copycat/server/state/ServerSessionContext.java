@@ -29,7 +29,11 @@ import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.function.Consumer;
 
 /**
@@ -57,12 +61,11 @@ class ServerSessionContext implements ServerSession {
   private long completeIndex;
   private long closeIndex;
   private long timestamp;
-  private final Queue<List<Runnable>> queriesPool = new ArrayDeque<>();
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
   private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, ServerStateMachine.Result> results = new HashMap<>();
-  private final Queue<EventHolder> events = new ArrayDeque<>();
+  private final Queue<EventHolder> events = new LinkedList<>();
   private EventHolder event;
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
@@ -276,8 +279,6 @@ class ServerSessionContext implements ServerSession {
         for (Runnable query : queries) {
           query.run();
         }
-        queries.clear();
-        queriesPool.add(queries);
       }
     }
 
@@ -329,8 +330,6 @@ class ServerSessionContext implements ServerSession {
         for (Runnable query : queries) {
           query.run();
         }
-        queries.clear();
-        queriesPool.add(queries);
       }
     }
 
@@ -358,10 +357,7 @@ class ServerSessionContext implements ServerSession {
    */
   ServerSessionContext registerSequenceQuery(long sequence, Runnable query) {
     // Add a query to be run once the session's sequence number reaches the given sequence number.
-    List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> {
-      List<Runnable> q = queriesPool.poll();
-      return q != null ? q : new ArrayList<>(128);
-    });
+    List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> new LinkedList<Runnable>());
     queries.add(query);
     return this;
   }
@@ -375,10 +371,7 @@ class ServerSessionContext implements ServerSession {
    */
   ServerSessionContext registerIndexQuery(long index, Runnable query) {
     // Add a query to be run once the session's index reaches the given index.
-    List<Runnable> queries = this.indexQueries.computeIfAbsent(index, v -> {
-      List<Runnable> q = queriesPool.poll();
-      return q != null ? q : new ArrayList<>(128);
-    });
+    List<Runnable> queries = this.indexQueries.computeIfAbsent(index, v -> new LinkedList<>());
     queries.add(query);
     return this;
   }
@@ -641,7 +634,9 @@ class ServerSessionContext implements ServerSession {
     // If no references to session commands are open, release session-related entries.
     if (references == 0) {
       log.release(id);
-      log.release(index);
+      if (index > 0) {
+        log.release(index);
+      }
     } else {
       this.closeIndex = index;
     }
@@ -670,7 +665,7 @@ class ServerSessionContext implements ServerSession {
   private static class EventHolder {
     private final long eventIndex;
     private final long previousIndex;
-    private final List<Event<?>> events = new ArrayList<>(8);
+    private final List<Event<?>> events = new LinkedList<>();
 
     private EventHolder(long eventIndex, long previousIndex) {
       this.eventIndex = eventIndex;

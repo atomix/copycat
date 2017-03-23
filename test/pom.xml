@@ -19,7 +19,7 @@
   <parent>
     <groupId>io.atomix.copycat</groupId>
     <artifactId>copycat-parent</artifactId>
-    <version>1.2.1-SNAPSHOT</version>
+    <version>1.2.4-SNAPSHOT</version>
   </parent>
 
   <artifactId>copycat-test</artifactId>
@@ -40,13 +40,16 @@
       <groupId>io.atomix.catalyst</groupId>
       <artifactId>catalyst-netty</artifactId>
       <version>${catalyst.version}</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>io.atomix.catalyst</groupId>
       <artifactId>catalyst-local</artifactId>
       <version>${catalyst.version}</version>
-      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>${logback.version}</version>
     </dependency>
   </dependencies>
 
