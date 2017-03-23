@@ -153,7 +153,7 @@ final class ClientSessionSubmitter {
    * operation attempts and retrying commands where the sequence number is greater than the given
    * {@code commandSequence} number and the attempt number is less than or equal to the version.
    */
-  private void resubmit(long commandSequence, int version) {
+  private void resubmit(long commandSequence, OperationAttempt<?, ?, ?> attempt) {
     // If the client's response sequence number is greater than the given command sequence number,
     // the cluster likely has a new leader, and we need to reset the sequencing in the leader by
     // sending a keep-alive request.
@@ -172,15 +172,19 @@ final class ClientSessionSubmitter {
           // If the keep-alive is successful, recursively resubmit operations starting
           // at the submitted response sequence number rather than the command sequence.
           if (response.status() == Response.Status.OK) {
-            resubmit(responseSequence, version);
+            resubmit(responseSequence, attempt);
+          } else {
+            attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
           }
+        } else {
+          attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
         }
       });
     } else {
       for (Map.Entry<Long, OperationAttempt> entry : attempts.entrySet()) {
-        OperationAttempt attempt = entry.getValue();
-        if (attempt instanceof CommandAttempt && attempt.request.sequence() > commandSequence && attempt.attempt <= version) {
-          attempt.retry();
+        OperationAttempt operation = entry.getValue();
+        if (operation instanceof CommandAttempt && operation.request.sequence() > commandSequence && operation.attempt <= attempt.attempt) {
+          operation.retry();
         }
       }
     }
@@ -325,7 +329,7 @@ final class ClientSessionSubmitter {
         // COMMAND_ERROR indicates that the command was received by the leader out of sequential order.
         // We need to resend commands starting at the provided lastSequence number.
         else if (response.error() == CopycatError.Type.COMMAND_ERROR) {
-          resubmit(response.lastSequence(), attempt);
+          resubmit(response.lastSequence(), this);
         }
         // APPLICATION_ERROR indicates that an exception occurred inside the state machine. Complete the command
         // with an ApplicationException.
