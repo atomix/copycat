@@ -93,6 +93,8 @@ public interface Session {
      */
     UNSTABLE(true),
 
+    UNSTABLE_PLUS(true),
+    
     /**
      * Indicates that the session is expired.
      * <p>

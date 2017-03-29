@@ -559,6 +559,7 @@ public interface CopycatClient {
     private Transport transport;
     private Serializer serializer;
     private Duration sessionTimeout = Duration.ZERO;
+    private Duration unstableTimeout = Duration.ZERO;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
@@ -622,6 +623,10 @@ public interface CopycatClient {
       return this;
     }
 
+    public Builder withUnstableTimeout(Duration unstableTimeout) {
+      this.unstableTimeout = Assert.arg(Assert.notNull(unstableTimeout, "unstableTimeout"), unstableTimeout.toMillis() > 0, "unstable timeout must be positive");
+      return this;
+    }
     /**
      * Sets the client connection strategy.
      *
@@ -690,7 +695,8 @@ public interface CopycatClient {
         serverSelectionStrategy,
         connectionStrategy,
         recoveryStrategy,
-        sessionTimeout);
+        sessionTimeout,
+        unstableTimeout);
     }
   }
 
