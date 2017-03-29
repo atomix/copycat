@@ -15,17 +15,6 @@
  */
 package io.atomix.copycat.client.util;
 
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.transport.*;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.protocol.ConnectRequest;
-import io.atomix.copycat.protocol.ConnectResponse;
-import io.atomix.copycat.protocol.Request;
-import io.atomix.copycat.protocol.Response;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
@@ -36,6 +25,21 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.transport.Client;
+import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.transport.MessageHandler;
+import io.atomix.catalyst.transport.TransportException;
+import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.Request;
+import io.atomix.copycat.protocol.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Client connection that recursively connects to servers in the cluster and attempts to submit requests.
@@ -48,7 +52,7 @@ public class ClientConnection implements Connection {
   private final Client client;
   private final AddressSelector selector;
   private CompletableFuture<Connection> connectFuture;
-  private Queue<CompletableFuture<Connection>> connectFutures;
+  private Queue<CompletableFuture<Connection>> connectFutures = new LinkedList<>();
   private final Map<Class<?>, MessageHandler<?, ?>> handlers = new ConcurrentHashMap<>();
   private Connection connection;
   private boolean open = true;
@@ -178,25 +182,26 @@ public class ClientConnection implements Connection {
 
       CompletableFuture<Connection> connectFuture = new CompletableFuture<>();
       this.connectFuture = connectFuture;
-      this.connectFutures = new LinkedList<>();
       this.connectFutures.add(future);
 
       connection.close().whenComplete((result, error) -> connect(connectFuture));
 
       return connectFuture.whenComplete((result, error) -> {
+        Queue<CompletableFuture<Connection>> futures = this.connectFutures;
         this.connectFuture = null;
+        this.connectFutures = new LinkedList<>();
         if (error == null) {
-          connectFutures.forEach(f -> f.complete(result));
+          futures.forEach(f -> f.complete(result));
         } else {
-          connectFutures.forEach(f -> f.completeExceptionally(error));
+          futures.forEach(f -> f.completeExceptionally(error));
         }
-        connectFutures = null;
       });
     }
 
     // If a connection was already established then use that connection.
-    if (connection != null)
+    if (connection != null) {
       return CompletableFuture.completedFuture(connection);
+    }
 
     // If a connection is currently being established then piggyback on the connect future.
     if (connectFuture != null) {
@@ -206,20 +211,20 @@ public class ClientConnection implements Connection {
 
     // Create a new connect future and connect to the first server in the cluster.
     connectFuture = new CompletableFuture<>();
-    connectFutures = new LinkedList<>();
     connectFutures.add(future);
 
     reset().connect(connectFuture);
 
     // Reset the connect future field once the connection is complete.
     return connectFuture.whenComplete((result, error) -> {
+      Queue<CompletableFuture<Connection>> futures = this.connectFutures;
       connectFuture = null;
+      connectFutures = new LinkedList<>();
       if (error == null) {
-        connectFutures.forEach(f -> f.complete(result));
+        futures.forEach(f -> f.complete(result));
       } else {
-        connectFutures.forEach(f -> f.completeExceptionally(error));
+        futures.forEach(f -> f.completeExceptionally(error));
       }
-      connectFutures = null;
     });
   }
 
