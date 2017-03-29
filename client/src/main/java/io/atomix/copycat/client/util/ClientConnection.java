@@ -180,16 +180,16 @@ public class ClientConnection implements Connection {
         return connectFuture;
       }
 
-      CompletableFuture<Connection> connectFuture = new CompletableFuture<>();
-      this.connectFuture = connectFuture;
-      this.connectFutures.add(future);
+      CompletableFuture<Connection> newConnectFuture = new CompletableFuture<>();
+      connectFuture = newConnectFuture;
+      connectFutures.add(future);
 
-      connection.close().whenComplete((result, error) -> connect(connectFuture));
+      connection.close().whenComplete((result, error) -> connect(newConnectFuture));
 
-      return connectFuture.whenComplete((result, error) -> {
-        Queue<CompletableFuture<Connection>> futures = this.connectFutures;
-        this.connectFuture = null;
-        this.connectFutures = new LinkedList<>();
+      return newConnectFuture.whenComplete((result, error) -> {
+        Queue<CompletableFuture<Connection>> futures = connectFutures;
+        connectFuture = null;
+        connectFutures = new LinkedList<>();
         if (error == null) {
           futures.forEach(f -> f.complete(result));
         } else {
@@ -217,7 +217,7 @@ public class ClientConnection implements Connection {
 
     // Reset the connect future field once the connection is complete.
     return connectFuture.whenComplete((result, error) -> {
-      Queue<CompletableFuture<Connection>> futures = this.connectFutures;
+      Queue<CompletableFuture<Connection>> futures = connectFutures;
       connectFuture = null;
       connectFutures = new LinkedList<>();
       if (error == null) {
