@@ -186,16 +186,7 @@ public class ClientConnection implements Connection {
 
       connection.close().whenComplete((result, error) -> connect(newConnectFuture));
 
-      return newConnectFuture.whenComplete((result, error) -> {
-        Queue<CompletableFuture<Connection>> futures = connectFutures;
-        connectFuture = null;
-        connectFutures = new LinkedList<>();
-        if (error == null) {
-          futures.forEach(f -> f.complete(result));
-        } else {
-          futures.forEach(f -> f.completeExceptionally(error));
-        }
-      });
+      return awaitConnect(newConnectFuture);
     }
 
     // If a connection was already established then use that connection.
@@ -216,14 +207,21 @@ public class ClientConnection implements Connection {
     reset().connect(connectFuture);
 
     // Reset the connect future field once the connection is complete.
-    return connectFuture.whenComplete((result, error) -> {
-      Queue<CompletableFuture<Connection>> futures = connectFutures;
+    return awaitConnect(connectFuture);
+  }
+
+  /**
+   * Awaits the completion of a connection and triggers connect futures in creation order once complete.
+   */
+  private CompletableFuture<Connection> awaitConnect(CompletableFuture<Connection> future) {
+    return future.whenComplete((result, error) -> {
+      Queue<CompletableFuture<Connection>> connectedFutures = connectFutures;
       connectFuture = null;
       connectFutures = new LinkedList<>();
       if (error == null) {
-        futures.forEach(f -> f.complete(result));
+        connectedFutures.forEach(f -> f.complete(result));
       } else {
-        futures.forEach(f -> f.completeExceptionally(error));
+        connectedFutures.forEach(f -> f.completeExceptionally(error));
       }
     });
   }
