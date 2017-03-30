@@ -29,11 +29,7 @@ import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -63,7 +59,6 @@ class ServerSessionContext implements ServerSession {
   private long timestamp;
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
-  private final Map<Long, Runnable> commands = new HashMap<>();
   private final Map<Long, ServerStateMachine.Result> results = new HashMap<>();
   private final Queue<EventHolder> events = new LinkedList<>();
   private EventHolder event;
@@ -218,31 +213,29 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
-   * Returns the next session request number.
+   * Checks and sets the current request sequence number.
    *
-   * @return The next session request number.
+   * @param requestSequence The request sequence number to set.
+   * @return Indicates whether the given {@code requestSequence} number is the next sequence number.
    */
-  long nextRequestSequence() {
-    return requestSequence + 1;
+  boolean setRequestSequence(long requestSequence) {
+    if (requestSequence == this.requestSequence + 1) {
+      this.requestSequence = requestSequence;
+      return true;
+    } else if (requestSequence <= this.requestSequence) {
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Sets the session request number.
+   * Resets the current request sequence number.
    *
-   * @param request The session request number.
-   * @return The server session.
+   * @param requestSequence The request sequence number.
+   * @return The server session context.
    */
-  ServerSessionContext setRequestSequence(long request) {
-    if (request > this.requestSequence) {
-      this.requestSequence = request;
-
-      // When the request sequence number is incremented, get the next queued request callback and call it.
-      // This will allow the command request to be evaluated in sequence.
-      Runnable command = this.commands.remove(nextRequestSequence());
-      if (command != null) {
-        command.run();
-      }
-    }
+  ServerSessionContext resetRequestSequence(long requestSequence) {
+    this.requestSequence = requestSequence;
     return this;
   }
 
@@ -286,19 +279,7 @@ class ServerSessionContext implements ServerSession {
     // sequence number. This is necessary to ensure that if the local server is a follower that is
     // later elected leader, its sequences are consistent for commands.
     if (sequence > requestSequence) {
-      // Only attempt to trigger command callbacks if any are registered.
-      if (!this.commands.isEmpty()) {
-        // For each request sequence number, a command callback completing the command submission may exist.
-        for (long i = this.requestSequence + 1; i <= requestSequence; i++) {
-          this.requestSequence = i;
-          Runnable command = this.commands.remove(i);
-          if (command != null) {
-            command.run();
-          }
-        }
-      } else {
-        this.requestSequence = sequence;
-      }
+      this.requestSequence = sequence;
     }
 
     return this;
@@ -333,18 +314,6 @@ class ServerSessionContext implements ServerSession {
       }
     }
 
-    return this;
-  }
-
-  /**
-   * Adds a command to be executed in sequence.
-   *
-   * @param sequence The command sequence number.
-   * @param runnable The command to execute.
-   * @return The server session.
-   */
-  ServerSessionContext registerRequest(long sequence, Runnable runnable) {
-    commands.put(sequence, runnable);
     return this;
   }
 
@@ -556,10 +525,10 @@ class ServerSessionContext implements ServerSession {
       .withEvents(event.events)
       .build();
 
-    LOGGER.debug("{} - Sending {}", id, request);
+    LOGGER.trace("{} - Sending {}", id, request);
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
-        LOGGER.debug("{} - Received {}", id, response);
+        LOGGER.trace("{} - Received {}", id, response);
         // If the event was received successfully, clear events up to the event index.
         if (response.status() == Response.Status.OK) {
           clearEvents(response.index());

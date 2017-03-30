@@ -102,7 +102,7 @@ final class CandidateState extends ActiveState {
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
-      LOGGER.debug("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
+      LOGGER.trace("{} - Single member cluster. Transitioning directly to leader.", context.getCluster().member().address());
       context.transition(CopycatServer.State.LEADER);
       return;
     }
@@ -155,18 +155,18 @@ final class CandidateState extends ActiveState {
               quorum.fail();
             } else {
               if (response.term() > context.getTerm()) {
-                LOGGER.debug("{} - Received greater term from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received greater term from {}", context.getCluster().member().address(), member);
                 context.setTerm(response.term());
                 complete.set(true);
                 context.transition(CopycatServer.State.FOLLOWER);
               } else if (!response.voted()) {
-                LOGGER.debug("{} - Received rejected vote from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received rejected vote from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received successful vote for a different term from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received successful vote for a different term from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received successful vote from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received successful vote from {}", context.getCluster().member().address(), member);
                 quorum.succeed();
               }
             }

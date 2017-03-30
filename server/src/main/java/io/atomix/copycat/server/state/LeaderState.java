@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.concurrent.ComposableFuture;
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
@@ -44,9 +43,6 @@ import java.util.stream.Collectors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class LeaderState extends ActiveState {
-  // Max request queue size *per session* - necessary to limit the stack size
-  private static final int MAX_REQUEST_QUEUE_SIZE = 100;
-
   private final LeaderAppender appender;
   private Scheduled appendTimer;
   private long configuring;
@@ -96,7 +92,7 @@ final class LeaderState extends ActiveState {
       entry.setTerm(term)
         .setTimestamp(appender.time());
       Assert.state(context.getLog().append(entry) == appender.index(), "Initialize entry not appended at the start of the leader's term");
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
@@ -134,7 +130,7 @@ final class LeaderState extends ActiveState {
     // Set a timer that will be used to periodically synchronize with other nodes
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
-    LOGGER.debug("{} - Starting append timer", context.getCluster().member().address());
+    LOGGER.trace("{} - Starting append timer", context.getCluster().member().address());
     appendTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::appendMembers);
   }
 
@@ -177,7 +173,7 @@ final class LeaderState extends ActiveState {
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+          LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
         }
 
         // Commit the unregister entry and apply it to the state machine.
@@ -225,7 +221,7 @@ final class LeaderState extends ActiveState {
         .setTimestamp(System.currentTimeMillis())
         .setMembers(members);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
@@ -489,44 +485,22 @@ final class LeaderState extends ActiveState {
         .build()));
     }
 
-    ComposableFuture<CommandResponse> future = new ComposableFuture<>();
-    sequenceCommand(request, session, future);
-    return future.thenApply(this::logResponse);
-  }
-
-  /**
-   * Sequences the given command to the log.
-   */
-  private void sequenceCommand(CommandRequest request, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
     // If the command is LINEARIZABLE and the session's current sequence number is less then one prior to the request
     // sequence number, queue this request for handling later. We want to handle command requests in the order in which
     // they were sent by the client. Note that it's possible for the session sequence number to be greater than the request
     // sequence number. In that case, it's likely that the command was submitted more than once to the
     // cluster, and the command will be deduplicated once applied to the state machine.
-    if (request.sequence() > session.nextRequestSequence()) {
-      // If the request sequence number is more than 1k requests above the last sequenced request, reject the request.
-      // The client should resubmit a request that fails with a COMMAND_ERROR.
-      if (request.sequence() - session.getRequestSequence() > MAX_REQUEST_QUEUE_SIZE) {
-        future.complete(CommandResponse.builder()
-          .withStatus(Response.Status.ERROR)
-          .withError(CopycatError.Type.COMMAND_ERROR)
-          .build());
-      }
-      // Register the request in the request queue if it's not too far ahead of the current sequence number.
-      else {
-        session.registerRequest(request.sequence(), () -> applyCommand(request, session, future));
-      }
-    } else {
-      applyCommand(request, session, future);
+    if (!session.setRequestSequence(request.sequence())) {
+      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.COMMAND_ERROR)
+        .withLastSequence(session.getRequestSequence())
+        .build()));
     }
-  }
 
-  /**
-   * Applies the given command to the log.
-   */
-  private void applyCommand(CommandRequest request, ServerSessionContext session, CompletableFuture<CommandResponse> future) {
+    final CompletableFuture<CommandResponse> future = new CompletableFuture<>();
+
     final Command command = request.command();
-
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
     final long index;
@@ -539,25 +513,20 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     // Replicate the command to followers.
-    appendCommand(index, future);
-
-    // Set the last processed request for the session. This will cause sequential command callbacks to be executed.
-    session.setRequestSequence(request.sequence());
-  }
-
-  /**
-   * Sends append requests for a command to followers.
-   */
-  private void appendCommand(long index, CompletableFuture<CommandResponse> future) {
     appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
+        // If the command was successfully committed, apply it to the state machine.
         if (commitError == null) {
-          applyCommand(index, future);
+          context.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
+            if (isOpen()) {
+              completeOperation(result, CommandResponse.builder(), error, future);
+            }
+          });
         } else {
           future.complete(CommandResponse.builder()
             .withStatus(Response.Status.ERROR)
@@ -566,17 +535,7 @@ final class LeaderState extends ActiveState {
         }
       }
     });
-  }
-
-  /**
-   * Applies a command to the state machine.
-   */
-  private void applyCommand(long index, CompletableFuture<CommandResponse> future) {
-    context.getStateMachine().<ServerStateMachine.Result>apply(index).whenComplete((result, error) -> {
-      if (isOpen()) {
-        completeOperation(result, CommandResponse.builder(), error, future);
-      }
-    });
+    return future.thenApply(this::logResponse);
   }
 
   @Override
@@ -660,11 +619,13 @@ final class LeaderState extends ActiveState {
 
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
-    // If the query's sequence number is greater than the session's current sequence number, queue the request for
-    // handling once the state machine is caught up.
+    // If the query's sequence number is less than the session's current request sequence number but greater than the
+    // session's current applied sequence number, queue the request for handling once the state machine is caught up.
     if (entry.getSequence() > session.getCommandSequence()) {
       session.registerSequenceQuery(entry.getSequence(), () -> applyQuery(entry, future));
-    } else {
+    }
+    // If the query is already in sequence then just apply it.
+    else {
       applyQuery(entry, future);
     }
     return future;
@@ -694,7 +655,7 @@ final class LeaderState extends ActiveState {
         .setClient(request.client())
         .setTimeout(timeout);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
@@ -846,7 +807,7 @@ final class LeaderState extends ActiveState {
         .setExpired(false)
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
@@ -896,7 +857,7 @@ final class LeaderState extends ActiveState {
    */
   private void cancelAppendTimer() {
     if (appendTimer != null) {
-      LOGGER.debug("{} - Cancelling append timer", context.getCluster().member().address());
+      LOGGER.trace("{} - Cancelling append timer", context.getCluster().member().address());
       appendTimer.cancel();
     }
   }

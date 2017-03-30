@@ -194,7 +194,7 @@ class PassiveState extends ReserveState {
       // We perform no additional consistency checks here since passive members may only receive committed entries.
       if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
         context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-        LOGGER.debug("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
+        LOGGER.trace("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
       }
     }
 
@@ -204,7 +204,7 @@ class PassiveState extends ReserveState {
     context.setGlobalIndex(request.globalIndex());
 
     if (context.getCommitIndex() > previousCommitIndex) {
-      LOGGER.debug("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
+      LOGGER.trace("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
     }
 
     // Apply commits to the state machine in batch.
@@ -230,14 +230,14 @@ class PassiveState extends ReserveState {
       // query to the leader. This ensures that a follower does not tell the client its session
       // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
       if (context.getStateMachine().getLastApplied() < request.session()) {
-        LOGGER.debug("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
+        LOGGER.trace("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
         return queryForward(request);
       }
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
       if (context.getLog().lastIndex() < context.getCommitIndex()) {
-        LOGGER.debug("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
+        LOGGER.trace("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
         return queryForward(request);
       }
 
@@ -266,7 +266,7 @@ class PassiveState extends ReserveState {
         .build()));
     }
 
-    LOGGER.debug("{} - Forwarded {}", context.getCluster().member().address(), request);
+    LOGGER.trace("{} - Forwarding {}", context.getCluster().member().address(), request);
     return this.<QueryRequest, QueryResponse>forward(request)
       .exceptionally(error -> QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
@@ -358,7 +358,7 @@ class PassiveState extends ReserveState {
   /**
    * Completes an operation.
    */
-  protected  <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
+  protected <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
     if (isOpen()) {
       if (result != null) {
         builder.withIndex(result.index);

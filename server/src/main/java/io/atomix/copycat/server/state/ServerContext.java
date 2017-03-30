@@ -342,7 +342,7 @@ public class ServerContext implements AutoCloseable {
     if (candidate != 0) {
       LOGGER.debug("{} - Voted for {}", cluster.member().address(), member.address());
     } else {
-      LOGGER.debug("{} - Reset last voted for", cluster.member().address());
+      LOGGER.trace("{} - Reset last voted for", cluster.member().address());
     }
     return this;
   }

@@ -445,12 +445,12 @@ final class ClusterState implements Cluster, AutoCloseable {
             .withTerm(configuration.term())
             .withMember(member())
             .build();
-          LOGGER.debug("{} - Sent {} to {}", member.address(), request, leader.address());
+          LOGGER.trace("{} - Sending {} to {}", member.address(), request, leader.address());
           return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
         }).whenComplete((response, error) -> {
           cancelJoinTimer();
           if (error == null) {
-            LOGGER.debug("{} - Received {}", member.address(), response);
+            LOGGER.trace("{} - Received {}", member.address(), response);
             if (response.status() == Response.Status.OK) {
               if (joinFuture != null) {
                 joinFuture.complete(null);
@@ -484,7 +484,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    */
   private void cancelJoinTimer() {
     if (joinTimeout != null) {
-      LOGGER.debug("{} - Cancelling join timeout", member().address());
+      LOGGER.trace("{} - Cancelling join timeout", member().address());
       joinTimeout.cancel();
       joinTimeout = null;
     }
@@ -509,7 +509,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       // If there are no remote members to leave, simply transition the server to INACTIVE.
       if (getActiveMemberStates().isEmpty() && configuration.index() <= context.getCommitIndex()) {
-        LOGGER.debug("{} - Single member cluster. Transitioning directly to inactive.", member().address());
+        LOGGER.trace("{} - Single member cluster. Transitioning directly to inactive.", member().address());
         context.transition(CopycatServer.State.INACTIVE);
         leaveFuture.complete(null);
       } else {
@@ -559,7 +559,7 @@ final class ClusterState implements Cluster, AutoCloseable {
    */
   private void cancelLeaveTimer() {
     if (leaveTimeout != null) {
-      LOGGER.debug("{} - Cancelling leave timeout", member().address());
+      LOGGER.trace("{} - Cancelling leave timeout", member().address());
       leaveTimeout.cancel();
       leaveTimeout = null;
     }

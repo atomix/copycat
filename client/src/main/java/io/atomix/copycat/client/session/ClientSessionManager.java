@@ -89,10 +89,10 @@ final class ClientSessionManager {
       .withTimeout(sessionTimeout.toMillis())
       .build();
 
-    state.getLogger().debug("Sending {}", request);
+    state.getLogger().trace("Sending {}", request);
     connection.reset().<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
-        state.getLogger().debug("Received {}", response);
+        state.getLogger().trace("Received {}", response);
         if (response.status() == Response.Status.OK) {
           interval = Duration.ofMillis(response.timeout()).dividedBy(2);
           connection.reset(response.leader(), response.members());
@@ -133,11 +133,11 @@ final class ClientSessionManager {
       .withEventIndex(state.getEventIndex())
       .build();
 
-    state.getLogger().debug("{} - Sending {}", sessionId, request);
+    state.getLogger().trace("{} - Sending {}", sessionId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
-          state.getLogger().debug("{} - Received {}", sessionId, response);
+          state.getLogger().trace("{} - Received {}", sessionId, response);
           // If the request was successful, update the address selector and schedule the next keep-alive.
           if (response.status() == Response.Status.OK) {
             connection.reset(response.leader(), response.members());
@@ -247,11 +247,11 @@ final class ClientSessionManager {
       .withSession(sessionId)
       .build();
 
-    state.getLogger().debug("{} - Sending {}", sessionId, request);
+    state.getLogger().trace("{} - Sending {}", sessionId, request);
     connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
-          state.getLogger().debug("{} - Received {}", sessionId, response);
+          state.getLogger().trace("{} - Received {}", sessionId, response);
           // If the request was successful, update the session state and complete the close future.
           if (response.status() == Response.Status.OK) {
             state.setState(Session.State.CLOSED);

@@ -48,7 +48,7 @@ public abstract class AbstractState implements ServerState {
    * Logs a request.
    */
   protected final <R extends Request> R logRequest(R request) {
-    LOGGER.debug("{} - Received {}", context.getCluster().member().address(), request);
+    LOGGER.trace("{} - Received {}", context.getCluster().member().address(), request);
     return request;
   }
 
@@ -56,7 +56,7 @@ public abstract class AbstractState implements ServerState {
    * Logs a response.
    */
   protected final <R extends Response> R logResponse(R response) {
-    LOGGER.debug("{} - Sent {}", context.getCluster().member().address(), response);
+    LOGGER.trace("{} - Sending {}", context.getCluster().member().address(), response);
     return response;
   }
 

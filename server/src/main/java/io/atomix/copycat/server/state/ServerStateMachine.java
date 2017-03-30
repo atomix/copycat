@@ -329,7 +329,7 @@ final class ServerStateMachine implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   public <T> CompletableFuture<T> apply(Entry entry) {
-    LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
+    LOGGER.trace("{} - Applying {}", state.getCluster().member().address(), entry);
     if (entry instanceof QueryEntry) {
       return (CompletableFuture<T>) apply((QueryEntry) entry);
     } else if (entry instanceof CommandEntry) {
@@ -527,7 +527,7 @@ final class ServerStateMachine implements AutoCloseable {
       // iff the existing request sequence number is less than the command sequence number. This must
       // be applied to ensure that request sequence numbers are reset after a leader change since leaders
       // track request sequence numbers in local memory.
-      session.setRequestSequence(commandSequence);
+      session.resetRequestSequence(commandSequence);
 
       // Update the sessions' command sequence number. The command sequence number will be applied
       // iff the existing sequence number is less than the keep-alive command sequence number. This should
