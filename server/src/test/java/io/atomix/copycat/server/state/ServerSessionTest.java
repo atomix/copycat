@@ -44,20 +44,6 @@ public class ServerSessionTest {
   }
 
   /**
-   * Tests sequencing commands through the session.
-   */
-  public void testSequenceCommand() throws Throwable {
-    ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, UUID.randomUUID().toString(), mock(Log.class), context, 1000);
-    assertEquals(session.getRequestSequence(), 0);
-    AtomicBoolean complete = new AtomicBoolean();
-    session.registerRequest(2, () -> complete.set(true));
-    assertFalse(complete.get());
-    session.setRequestSequence(1);
-    assertTrue(complete.get());
-  }
-
-  /**
    * Tests sequencing an index query.
    */
   public void testSequenceIndexQuery() throws Throwable {

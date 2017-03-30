@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
+import io.atomix.copycat.error.OperationException;
 
 import java.util.Objects;
 
@@ -36,6 +37,7 @@ public abstract class OperationResponse extends SessionResponse {
   protected long index;
   protected long eventIndex;
   protected Object result;
+  protected long lastSequence;
 
   /**
    * Returns the operation index.
@@ -64,6 +66,17 @@ public abstract class OperationResponse extends SessionResponse {
     return result;
   }
 
+  /**
+   * Returns the last in sequence command.
+   * <p>
+   * This argument is only populated if the command request failed.
+   *
+   * @return The last command sequence number.
+   */
+  public long lastSequence() {
+    return lastSequence;
+  }
+
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
@@ -74,6 +87,9 @@ public abstract class OperationResponse extends SessionResponse {
       result = serializer.readObject(buffer);
     } else {
       error = CopycatError.forId(buffer.readByte());
+      if (error instanceof OperationException) {
+        lastSequence = buffer.readLong();
+      }
     }
   }
 
@@ -86,6 +102,9 @@ public abstract class OperationResponse extends SessionResponse {
       serializer.writeObject(result, buffer);
     } else {
       buffer.writeByte(error.id());
+      if (error instanceof OperationException) {
+        buffer.writeLong(lastSequence);
+      }
     }
   }
 
@@ -101,6 +120,7 @@ public abstract class OperationResponse extends SessionResponse {
       return response.status == status
         && response.index == index
         && response.eventIndex == eventIndex
+        && response.lastSequence == lastSequence
         && ((response.result == null && result == null)
         || response.result != null && result != null && response.result.equals(result));
     }
@@ -109,7 +129,7 @@ public abstract class OperationResponse extends SessionResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, error=%s, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, error, index, eventIndex, result);
+    return String.format("%s[status=%s, error=%s, sequence=%d, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, error, lastSequence, index, eventIndex, result);
   }
 
   /**
@@ -156,6 +176,18 @@ public abstract class OperationResponse extends SessionResponse {
     @SuppressWarnings("unchecked")
     public T withResult(Object result) {
       response.result = result;
+      return (T) this;
+    }
+
+    /**
+     * Sets the last sequence number.
+     *
+     * @param lastSequence The last sequence number.
+     * @return The command response builder.
+     */
+    @SuppressWarnings("unchecked")
+    public T withLastSequence(long lastSequence) {
+      response.lastSequence = Assert.arg(lastSequence, lastSequence >= 0, "lastSequence must be positive");
       return (T) this;
     }
 
