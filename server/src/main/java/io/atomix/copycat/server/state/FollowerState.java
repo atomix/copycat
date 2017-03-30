@@ -58,7 +58,7 @@ final class FollowerState extends ActiveState {
    * Starts the heartbeat timer.
    */
   private void startHeartbeatTimeout() {
-    LOGGER.debug("{} - Starting heartbeat timer", context.getCluster().member().address());
+    LOGGER.trace("{} - Starting heartbeat timer", context.getCluster().member().address());
     resetHeartbeatTimeout();
   }
 
@@ -136,7 +136,7 @@ final class FollowerState extends ActiveState {
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
     for (ServerMember member : votingMembers) {
-      LOGGER.debug("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
+      LOGGER.trace("{} - Polling {} for next term {}", context.getCluster().member().address(), member, context.getTerm() + 1);
       PollRequest request = PollRequest.builder()
         .withTerm(context.getTerm())
         .withCandidate(context.getCluster().member().id())
@@ -156,13 +156,13 @@ final class FollowerState extends ActiveState {
               }
 
               if (!response.accepted()) {
-                LOGGER.debug("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received rejected poll from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else if (response.term() != context.getTerm()) {
-                LOGGER.debug("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received accepted poll for a different term from {}", context.getCluster().member().address(), member);
                 quorum.fail();
               } else {
-                LOGGER.debug("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
+                LOGGER.trace("{} - Received accepted poll from {}", context.getCluster().member().address(), member);
                 quorum.succeed();
               }
             }
@@ -213,7 +213,7 @@ final class FollowerState extends ActiveState {
    */
   private void cancelHeartbeatTimeout() {
     if (heartbeatTimer != null) {
-      LOGGER.debug("{} - Cancelling heartbeat timer", context.getCluster().member().address());
+      LOGGER.trace("{} - Cancelling heartbeat timer", context.getCluster().member().address());
       heartbeatTimer.cancel();
     }
   }

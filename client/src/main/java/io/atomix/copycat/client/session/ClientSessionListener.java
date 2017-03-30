@@ -86,12 +86,12 @@ final class ClientSessionListener {
    */
   @SuppressWarnings("unchecked")
   private CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
-    state.getLogger().debug("{} - Received {}", state.getSessionId(), request);
+    state.getLogger().trace("{} - Received {}", state.getSessionId(), request);
 
     // If the request is for another session ID, this may be a session that was previously opened
     // for this client.
     if (request.session() != state.getSessionId()) {
-      state.getLogger().debug("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
+      state.getLogger().trace("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
       return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
     }
 
@@ -106,7 +106,7 @@ final class ClientSessionListener {
     // respond with an undefined error and the last index received. This will cause the cluster
     // to resend events starting at eventIndex + 1.
     if (request.previousIndex() != state.getEventIndex()) {
-      state.getLogger().debug("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
+      state.getLogger().trace("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
       return CompletableFuture.completedFuture(PublishResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withIndex(state.getEventIndex())

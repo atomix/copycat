@@ -92,7 +92,7 @@ final class LeaderState extends ActiveState {
       entry.setTerm(term)
         .setTimestamp(appender.time());
       Assert.state(context.getLog().append(entry) == appender.index(), "Initialize entry not appended at the start of the leader's term");
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
@@ -130,7 +130,7 @@ final class LeaderState extends ActiveState {
     // Set a timer that will be used to periodically synchronize with other nodes
     // in the cluster. This timer acts as a heartbeat to ensure this node remains
     // the leader.
-    LOGGER.debug("{} - Starting append timer", context.getCluster().member().address());
+    LOGGER.trace("{} - Starting append timer", context.getCluster().member().address());
     appendTimer = context.getThreadContext().schedule(Duration.ZERO, context.getHeartbeatInterval(), this::appendMembers);
   }
 
@@ -173,7 +173,7 @@ final class LeaderState extends ActiveState {
             .setExpired(true)
             .setTimestamp(System.currentTimeMillis());
           index = context.getLog().append(entry);
-          LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+          LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
         }
 
         // Commit the unregister entry and apply it to the state machine.
@@ -221,7 +221,7 @@ final class LeaderState extends ActiveState {
         .setTimestamp(System.currentTimeMillis())
         .setMembers(members);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
 
       // Store the index of the configuration entry in order to prevent other configurations from
       // being logged and committed concurrently. This is an important safety property of Raft.
@@ -513,7 +513,7 @@ final class LeaderState extends ActiveState {
         .setSequence(request.sequence())
         .setCommand(command);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     // Replicate the command to followers.
@@ -655,7 +655,7 @@ final class LeaderState extends ActiveState {
         .setClient(request.client())
         .setTimeout(timeout);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
@@ -807,7 +807,7 @@ final class LeaderState extends ActiveState {
         .setExpired(false)
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
@@ -857,7 +857,7 @@ final class LeaderState extends ActiveState {
    */
   private void cancelAppendTimer() {
     if (appendTimer != null) {
-      LOGGER.debug("{} - Cancelling append timer", context.getCluster().member().address());
+      LOGGER.trace("{} - Cancelling append timer", context.getCluster().member().address());
       appendTimer.cancel();
     }
   }

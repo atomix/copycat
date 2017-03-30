@@ -133,7 +133,7 @@ public class ClientConnection implements Connection {
           future.completeExceptionally(new ConnectException("Failed to connect to the cluster"));
         }
       } else {
-        LOGGER.debug("{} - Resetting connection. Reason: {}", id, error);
+        LOGGER.trace("{} - Resetting connection. Reason: {}", id, error);
         this.connection = null;
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       }
@@ -154,11 +154,11 @@ public class ClientConnection implements Connection {
           LOGGER.trace("{} - Received {}", id, response);
           future.complete(response);
         } else {
-          LOGGER.debug("{} - Resetting connection. Reason: {}", id, response.error().createException());
+          LOGGER.trace("{} - Resetting connection. Reason: {}", id, response.error().createException());
           next().whenComplete((c, e) -> sendRequest(request, c, e, future));
         }
       } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
-        LOGGER.debug("{} - Resetting connection. Reason: {}", id, error);
+        LOGGER.trace("{} - Resetting connection. Reason: {}", id, error);
         next().whenComplete((c, e) -> sendRequest(request, c, e, future));
       } else {
         LOGGER.debug("{} - {} failed! Reason: {}", id, request, error);

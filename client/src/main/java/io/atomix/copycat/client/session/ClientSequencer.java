@@ -91,7 +91,7 @@ final class ClientSequencer {
    */
   public void sequenceEvent(PublishRequest request, Runnable callback) {
     if (requestSequence == responseSequence) {
-      LOGGER.debug("{} - Completing {}", state.getSessionId(), request);
+      LOGGER.trace("{} - Completing {}", state.getSessionId(), request);
       callback.run();
       eventIndex = request.eventIndex();
     } else {
@@ -150,7 +150,7 @@ final class ClientSequencer {
     if (requestSequence == responseSequence) {
       EventCallback eventCallback = eventCallbacks.poll();
       while (eventCallback != null) {
-        LOGGER.debug("{} - Completing {}", state.getSessionId(), eventCallback.request);
+        LOGGER.trace("{} - Completing {}", state.getSessionId(), eventCallback.request);
         eventCallback.run();
         eventIndex = eventCallback.request.eventIndex();
         eventCallback = eventCallbacks.poll();
@@ -165,7 +165,7 @@ final class ClientSequencer {
     // If the response is null, that indicates an exception occurred. The best we can do is complete
     // the response in sequential order.
     if (response == null) {
-      LOGGER.debug("{} - Completing failed request", state.getSessionId());
+      LOGGER.trace("{} - Completing failed request", state.getSessionId());
       callback.run();
       return true;
     }
@@ -179,7 +179,7 @@ final class ClientSequencer {
       EventCallback eventCallback = eventCallbacks.peek();
       while (eventCallback != null && eventCallback.request.eventIndex() <= responseEventIndex) {
         eventCallbacks.remove();
-        LOGGER.debug("{} - Completing {}", state.getSessionId(), eventCallback.request);
+        LOGGER.trace("{} - Completing {}", state.getSessionId(), eventCallback.request);
         eventCallback.run();
         eventIndex = eventCallback.request.eventIndex();
         eventCallback = eventCallbacks.peek();
@@ -204,7 +204,7 @@ final class ClientSequencer {
     // If after completing pending events the eventIndex is greater than or equal to the response's eventIndex, complete the response.
     // Note that the event protocol initializes the eventIndex to the session ID.
     if (responseEventIndex <= eventIndex || (eventIndex == 0 && responseEventIndex == state.getSessionId())) {
-      LOGGER.debug("{} - Completing {}", state.getSessionId(), response);
+      LOGGER.trace("{} - Completing {}", state.getSessionId(), response);
       callback.run();
       return true;
     } else {

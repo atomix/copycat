@@ -507,7 +507,7 @@ public class SegmentManager implements AutoCloseable {
   @Override
   public void close() {
     segments.values().forEach(s -> {
-      LOGGER.debug("Closing segment: {}", s.descriptor().id());
+      LOGGER.trace("Closing segment: {}", s.descriptor().id());
       s.close();
     });
     currentSegment = null;

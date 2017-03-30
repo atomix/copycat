@@ -70,7 +70,7 @@ final class ServerCommitPool implements AutoCloseable {
    * @param commit The commit that was garbage collected.
    */
   public void warn(ServerCommit commit) {
-    LOGGER.warn("Server commit " + commit + " was garbage collected!\nCommit log is dirty!");
+    LOGGER.trace("Server commit " + commit + " was garbage collected!\nCommit log is dirty!");
   }
 
   @Override

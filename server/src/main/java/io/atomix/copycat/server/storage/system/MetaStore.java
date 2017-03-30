@@ -72,7 +72,7 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public synchronized MetaStore storeTerm(long term) {
-    LOGGER.debug("Store term {}", term);
+    LOGGER.trace("Store term {}", term);
     buffer.writeLong(0, term).flush();
     return this;
   }
@@ -93,7 +93,7 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public synchronized MetaStore storeVote(int vote) {
-    LOGGER.debug("Store vote {}", vote);
+    LOGGER.trace("Store vote {}", vote);
     buffer.writeInt(8, vote).flush();
     return this;
   }
@@ -114,7 +114,7 @@ public class MetaStore implements AutoCloseable {
    * @return The metastore.
    */
   public synchronized MetaStore storeConfiguration(Configuration configuration) {
-    LOGGER.debug("Store configuration {}", configuration);
+    LOGGER.trace("Store configuration {}", configuration);
     serializer.writeObject(configuration.members(), buffer.position(12)
       .writeByte(1)
       .writeLong(configuration.index())
