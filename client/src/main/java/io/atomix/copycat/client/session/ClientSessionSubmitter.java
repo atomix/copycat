@@ -137,7 +137,7 @@ final class ClientSessionSubmitter {
     if (state.getState() == Session.State.CLOSED || state.getState() == Session.State.EXPIRED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
-      state.getLogger().debug("{} - Sending {}", state.getSessionId(), attempt.request);
+      state.getLogger().trace("{} - Sending {}", state.getSessionId(), attempt.request);
       attempts.put(attempt.sequence, attempt);
       connection.<T, U>send(attempt.request).whenComplete(attempt);
       attempt.future.whenComplete((r, e) -> attempts.remove(attempt.sequence));
@@ -164,10 +164,10 @@ final class ClientSessionSubmitter {
         .withCommandSequence(state.getCommandResponse())
         .withEventIndex(state.getEventIndex())
         .build();
-      state.getLogger().debug("{} - Sending {}", state.getSessionId(), request);
+      state.getLogger().trace("{} - Sending {}", state.getSessionId(), request);
       connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
         if (error == null) {
-          state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+          state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
 
           // If the keep-alive is successful, recursively resubmit operations starting
           // at the submitted response sequence number rather than the command sequence.
@@ -322,7 +322,7 @@ final class ClientSessionSubmitter {
     @Override
     public void accept(CommandResponse response, Throwable error) {
       if (error == null) {
-        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+        state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
         }
@@ -400,7 +400,7 @@ final class ClientSessionSubmitter {
     @Override
     public void accept(QueryResponse response, Throwable error) {
       if (error == null) {
-        state.getLogger().debug("{} - Received {}", state.getSessionId(), response);
+        state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
         } else {

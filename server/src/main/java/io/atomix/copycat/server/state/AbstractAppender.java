@@ -192,7 +192,7 @@ abstract class AbstractAppender implements AutoCloseable {
   protected void sendAppendRequest(Connection connection, MemberState member, AppendRequest request) {
     long timestamp = System.nanoTime();
 
-    logger.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().address());
+    logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().address());
     connection.<AppendRequest, AppendResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
@@ -205,7 +205,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          logger.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().address());
+          logger.trace("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().address());
           handleAppendResponse(member, request, response);
         } else {
           handleAppendResponseFailure(member, request, error);
@@ -345,7 +345,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void resetMatchIndex(MemberState member, AppendResponse response) {
     member.setMatchIndex(response.logIndex());
-    logger.debug("{} - Reset match index for {} to {}", context.getCluster().member().address(), member, member.getMatchIndex());
+    logger.trace("{} - Reset match index for {} to {}", context.getCluster().member().address(), member, member.getMatchIndex());
   }
 
   /**
@@ -357,7 +357,7 @@ abstract class AbstractAppender implements AutoCloseable {
     } else {
       member.setNextIndex(context.getLog().firstIndex());
     }
-    logger.debug("{} - Reset next index for {} to {}", context.getCluster().member().address(), member, member.getNextIndex());
+    logger.trace("{} - Reset next index for {} to {}", context.getCluster().member().address(), member, member.getNextIndex());
   }
 
   /**
@@ -404,7 +404,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a configuration message.
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
-    logger.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
+    logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.<ConfigureRequest, ConfigureResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
@@ -413,7 +413,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          logger.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
+          logger.trace("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
           handleConfigureResponse(member, request, response);
         } else {
           logger.warn("{} - Failed to configure {}", context.getCluster().member().address(), member.getMember().serverAddress());
@@ -537,7 +537,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Sends a snapshot message.
    */
   protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
-    logger.debug("{} - Sent {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
+    logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
     connection.<InstallRequest, InstallResponse>send(request).whenComplete((response, error) -> {
       context.checkThread();
 
@@ -546,7 +546,7 @@ abstract class AbstractAppender implements AutoCloseable {
 
       if (open) {
         if (error == null) {
-          logger.debug("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
+          logger.trace("{} - Received {} from {}", context.getCluster().member().address(), response, member.getMember().serverAddress());
           handleInstallResponse(member, request, response);
         } else {
           logger.warn("{} - Failed to install {}", context.getCluster().member().address(), member.getMember().serverAddress());

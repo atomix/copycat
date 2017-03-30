@@ -329,7 +329,7 @@ final class ServerStateMachine implements AutoCloseable {
    */
   @SuppressWarnings("unchecked")
   public <T> CompletableFuture<T> apply(Entry entry) {
-    LOGGER.debug("{} - Applying {}", state.getCluster().member().address(), entry);
+    LOGGER.trace("{} - Applying {}", state.getCluster().member().address(), entry);
     if (entry instanceof QueryEntry) {
       return (CompletableFuture<T>) apply((QueryEntry) entry);
     } else if (entry instanceof CommandEntry) {

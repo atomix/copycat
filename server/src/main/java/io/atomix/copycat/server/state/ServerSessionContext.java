@@ -525,10 +525,10 @@ class ServerSessionContext implements ServerSession {
       .withEvents(event.events)
       .build();
 
-    LOGGER.debug("{} - Sending {}", id, request);
+    LOGGER.trace("{} - Sending {}", id, request);
     connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
       if (error == null) {
-        LOGGER.debug("{} - Received {}", id, response);
+        LOGGER.trace("{} - Received {}", id, response);
         // If the event was received successfully, clear events up to the event index.
         if (response.status() == Response.Status.OK) {
           clearEvents(response.index());
