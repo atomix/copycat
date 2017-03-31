@@ -41,16 +41,16 @@ final class ClientSessionState {
   private long responseIndex;
   private long eventIndex;
   private long unstableSince;
-  private long unstableTimeout;
+  private long unstabilityTimeout;
   private final Set<Listener<Session.State>> changeListeners = new CopyOnWriteArraySet<>();
 
   ClientSessionState(String clientId) {
     this(clientId, Duration.ZERO);
   }
 
-  ClientSessionState(String clientId, Duration unstableTimeout) {
+  ClientSessionState(String clientId, Duration unstabilityTimeout) {
     this.clientId = Assert.notNull(clientId, "clientId");
-    this.unstableTimeout = Assert.notNull(unstableTimeout, "unstableTimeout").toMillis();
+    this.unstabilityTimeout = Assert.notNull(unstabilityTimeout, "unstabilityTimeout").toMillis();
   }
 
   /**
@@ -115,10 +115,10 @@ final class ClientSessionState {
       }
     } else {
       if (this.state == Session.State.UNSTABLE) {
-        if (unstableTimeout > 0 && (System.currentTimeMillis() - unstableSince) > unstableTimeout) {
-          return setStateAndCallListeners(Session.State.UNSTABLE_PLUS);
+        if (unstabilityTimeout > 0 && (System.currentTimeMillis() - unstableSince) > unstabilityTimeout) {
+          return setStateAndCallListeners(Session.State.STALE);
         }
-      } else if (this.state != Session.State.UNSTABLE_PLUS) {
+      } else if (this.state != Session.State.STALE) {
         unstableSince = System.currentTimeMillis();
         return setStateAndCallListeners(state);
       }

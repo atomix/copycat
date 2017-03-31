@@ -19,11 +19,14 @@ import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.session.Session;
 import org.testng.annotations.Test;
 
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Client session state test.
@@ -93,4 +96,48 @@ public class ClientSessionStateTest {
     assertFalse(changed.get());
   }
 
+  public void testStaleStateTransition() throws InterruptedException {
+    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString(), Duration.ofMillis(1));
+    AtomicBoolean changed = new AtomicBoolean();
+    AtomicReference<Session.State> change = new AtomicReference<>();
+    Listener<Session.State> listener = state.onStateChange(
+        s -> {
+          changed.set(true);
+          change.set(s);
+        }
+    );
+
+    state.setState(Session.State.OPEN);
+    assertEquals(state.getState(), Session.State.OPEN);
+    assertEquals(change.get(), Session.State.OPEN);
+    assertTrue(changed.get());
+
+    changed.set(false);
+    state.setState(Session.State.UNSTABLE);
+    assertEquals(state.getState(), Session.State.UNSTABLE);
+    assertEquals(change.get(), Session.State.UNSTABLE);
+    assertTrue(changed.get());
+
+    Thread.sleep(10);
+
+    changed.set(false);
+    state.setState(Session.State.UNSTABLE);
+    assertEquals(state.getState(), Session.State.STALE);
+    assertEquals(change.get(), Session.State.STALE);
+    assertTrue(changed.get());
+
+    changed.set(false);
+    state.setState(Session.State.UNSTABLE);
+    assertEquals(state.getState(), Session.State.STALE);
+    assertEquals(change.get(), Session.State.STALE);
+    assertFalse(changed.get());
+
+
+    state.setState(Session.State.CLOSED);
+    assertEquals(state.getState(), Session.State.CLOSED);
+    assertEquals(change.get(), Session.State.CLOSED);
+    assertTrue(changed.get());
+
+    listener.close();
+  }
 }
