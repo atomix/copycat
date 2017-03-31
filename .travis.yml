@@ -1,8 +1,11 @@
 language: java
 sudo: false
+os: linux
+dist: trusty
 
 jdk:
   - oraclejdk8
+  - openjdk8
 
 notifications:
   email: false
