@@ -127,8 +127,7 @@ final class ClientSessionState {
     return this;
   }
 
-  private ClientSessionState setStateAndCallListeners(Session.State state)
-  {
+  private ClientSessionState setStateAndCallListeners(Session.State state) {
     this.state = state;
     changeListeners.forEach(l -> l.accept(state));
     return this;
