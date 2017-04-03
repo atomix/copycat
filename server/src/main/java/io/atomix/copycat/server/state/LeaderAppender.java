@@ -313,7 +313,7 @@ final class LeaderAppender extends AbstractAppender {
     // to the replica. This will allow us to determine the median index
     // for all known replicated entries across all cluster members.
     List<MemberState> members = context.getClusterState().getActiveMemberStates((m1, m2) ->
-      Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0l, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0l));
+      Long.compare(m2.getMatchIndex() != 0 ? m2.getMatchIndex() : 0L, m1.getMatchIndex() != 0 ? m1.getMatchIndex() : 0L));
 
     // If the active members list is empty (a configuration change occurred between an append request/response)
     // ensure all commit futures are completed and cleared.

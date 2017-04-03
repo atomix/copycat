@@ -37,9 +37,9 @@ import java.util.Objects;
  * Query requests should always be submitted to the server to which the client is connected. The provided
  * query's {@link Query#consistency() consistency level} will be used to determine how the query should be
  * handled. If the query is received by a follower, it may be evaluated on that node if the consistency level
- * if {@link Query.ConsistencyLevel#CAUSAL} or {@link Query.ConsistencyLevel#SEQUENTIAL},
- * otherwise it will be forwarded to the cluster leader. Queries are always guaranteed to see state progress
- * monotonically within a single {@link #session()} even when switching servers.
+ * is {@link Query.ConsistencyLevel#SEQUENTIAL}, otherwise it will be forwarded to the cluster leader.
+ * Queries are always guaranteed to see state progress monotonically within a single {@link #session()}
+ * even when switching servers.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

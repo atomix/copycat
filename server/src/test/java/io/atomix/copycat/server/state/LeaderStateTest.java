@@ -15,16 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.protocol.CommandRequest;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.TestStateMachine.TestCommand;
 import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.VoteResponse;
-import io.atomix.copycat.server.storage.entry.CommandEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-
-import java.util.UUID;
 
 /**
  * Leader state test.

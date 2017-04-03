@@ -36,12 +36,12 @@ public class OffsetPredicateTest {
     assertEquals(cleaner.count(), 0);
     cleaner.release(10);
     assertEquals(cleaner.count(), 1);
-    assertTrue(cleaner.test(0l));
-    assertFalse(cleaner.test(10l));
-    assertTrue(cleaner.test(11l));
+    assertTrue(cleaner.test(0L));
+    assertFalse(cleaner.test(10L));
+    assertTrue(cleaner.test(11L));
     cleaner.release(2048);
     assertEquals(cleaner.count(), 2);
-    assertFalse(cleaner.test(2048l));
+    assertFalse(cleaner.test(2048L));
   }
 
 }

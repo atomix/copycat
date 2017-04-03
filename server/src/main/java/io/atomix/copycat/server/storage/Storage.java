@@ -591,7 +591,7 @@ public class Storage {
      *
      * @param threshold The segment compact threshold.
      * @return The storage builder.
-     * @throws IllegalArgumentException if the threashold is not positive
+     * @throws IllegalArgumentException if the threshold is not positive
      */
     public Builder withCompactionThreshold(double threshold) {
       storage.compactionThreshold = Assert.argNot(threshold, threshold <= 0, "threshold must be positive");

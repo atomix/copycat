@@ -122,12 +122,13 @@ import java.util.function.Function;
  *   }
  *   }
  * </pre>
- * Attempts to {@link Session#publish(String, Object) publish} events during the execution will result in an
- * {@link IllegalStateException}.
+ * Attempts to {@link io.atomix.copycat.server.session.ServerSession#publish(String, Object) publish}
+ * events during the execution will result in an {@link IllegalStateException}.
  * <p>
  * As with other operations, state machines should ensure that the publishing of session events is deterministic.
  * Messages published via a {@link Session} will be managed according to the {@link Command.ConsistencyLevel}
- * of the command being executed at the time the event was {@link Session#publish(String, Object) published}. Each command may
+ * of the command being executed at the time the event was
+ * {@link io.atomix.copycat.server.session.ServerSession#publish(String, Object)} ) published}. Each command may
  * publish zero or many events. For events published during the execution of a {@link Command.ConsistencyLevel#LINEARIZABLE}
  * command, the state machine executor will transparently await responses from the client(s) before completing the command.
  * For commands with lower consistency levels, command responses will be immediately sent. Session events are always guaranteed
@@ -169,8 +170,9 @@ import java.util.function.Function;
  * commit log. Copycat will guarantee that {@link Commit}s are persisted in the underlying
  * {@link io.atomix.copycat.server.storage.Log} as long as is necessary (even after a commit is closed) to
  * ensure all operations are applied to a majority of servers and to guarantee delivery of
- * {@link Session#publish(String, Object) session events} published as a result of specific operations.
- * State machines only need to specify when it's safe to remove each commit from the log.
+ * {@link io.atomix.copycat.server.session.ServerSession#publish(String, Object)}  session events}
+ * published as a result of specific operations. State machines only need to specify when it's safe to
+ * remove each commit from the log.
  * <p>
  * Note that if commits are not properly closed and are instead garbage collected, a warning will be logged.
  * Failure to {@link Commit#close() close} a command commit should be considered a critical bug since instances of the
