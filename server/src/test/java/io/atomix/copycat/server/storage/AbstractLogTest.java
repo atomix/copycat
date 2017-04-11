@@ -15,24 +15,33 @@
  */
 package io.atomix.copycat.server.storage;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.DirectBuffer;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.util.StorageSerialization;
-import org.testng.annotations.*;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.AfterTest;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Abstract log test.
@@ -141,28 +150,21 @@ public abstract class AbstractLogTest {
    * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log.
    */
   protected List<Long> appendEntries(int numEntries) {
-    return appendEntries(numEntries, (int) log.length() + 1, Compaction.Mode.QUORUM);
+    return appendEntries(numEntries, Compaction.Mode.QUORUM);
   }
 
   /**
    * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log.
    */
   protected List<Long> appendEntries(int numEntries, Compaction.Mode mode) {
-    return appendEntries(numEntries, (int) log.length() + 1, mode);
-  }
-
-  /**
-   * Appends {@code numEntries} increasingly numbered ByteBuffer wrapped entries to the log, starting at the
-   * {@code startingId}.
-   */
-  protected List<Long> appendEntries(int numEntries, int startingId, Compaction.Mode mode) {
-    List<Integer> entryIds = IntStream.range(startingId, startingId + numEntries).boxed().collect(Collectors.toList());
-    return entryIds.stream().map(entryId -> {
+    List<Long> indexes = new ArrayList<>(numEntries);
+    for (int i = 0; i < numEntries; i++) {
       try (TestEntry entry = log.create(TestEntry.class)) {
         entry.setTerm(1).setCompactionMode(mode).setPadding(entryPadding);
-        return log.append(entry);
+        indexes.add(log.append(entry));
       }
-    }).collect(Collectors.toList());
+    }
+    return indexes;
   }
 
   protected static void assertIndexes(List<Long> indexes, int start, int end) {

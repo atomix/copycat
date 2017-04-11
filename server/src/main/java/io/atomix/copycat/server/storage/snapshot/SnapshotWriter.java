@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
+import java.nio.charset.Charset;
+
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.buffer.Bytes;
@@ -167,6 +169,12 @@ public class SnapshotWriter implements BufferOutput<SnapshotWriter> {
   @Override
   public SnapshotWriter writeString(String s) {
     buffer.writeString(s);
+    return this;
+  }
+
+  @Override
+  public SnapshotWriter writeString(String s, Charset charset) {
+    buffer.writeString(s, charset);
     return this;
   }
 
