@@ -15,6 +15,9 @@
  */
 package io.atomix.copycat.server.storage;
 
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
+
 import io.atomix.catalyst.buffer.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
@@ -22,6 +25,10 @@ import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.index.OffsetIndex;
 import io.atomix.copycat.server.storage.util.OffsetPredicate;
 import io.atomix.copycat.server.storage.util.TermIndex;
+
+import static io.atomix.catalyst.buffer.Bytes.BOOLEAN;
+import static io.atomix.catalyst.buffer.Bytes.INTEGER;
+import static io.atomix.catalyst.buffer.Bytes.LONG;
 
 /**
  * Stores a sequence of entries with monotonically increasing indexes in a {@link Buffer}.
@@ -48,8 +55,9 @@ import io.atomix.copycat.server.storage.util.TermIndex;
  * <p>
  * An entry in the log is written in binary format. The binary format of an entry is as follows:
  * <ul>
- *   <li>Required 32-bit entry length</li>
- *   <li>Required 64-bit offset</li>
+ *   <li>Required 32-bit signed entry length</li>
+ *   <li>Required 32-bit unsigned entry checksum</li>
+ *   <li>Required 64-bit signed offset</li>
  *   <li>Required 8-bit term flag</li>
  *   <li>Optional 64-bit term</li>
  * </ul>
@@ -61,6 +69,7 @@ public class Segment implements AutoCloseable {
   private final SegmentDescriptor descriptor;
   private final Serializer serializer;
   private final Buffer buffer;
+  private final HeapBuffer memory = HeapBuffer.allocate();
   private final OffsetIndex offsetIndex;
   private final OffsetPredicate offsetPredicate;
   private final TermIndex termIndex = new TermIndex();
@@ -79,19 +88,59 @@ public class Segment implements AutoCloseable {
     this.offsetIndex = Assert.notNull(offsetIndex, "offsetIndex");
     this.offsetPredicate = Assert.notNull(offsetPredicate, "offsetPredicate");
     this.manager = Assert.notNull(manager, "manager");
+    buildIndex();
+  }
 
-    // Rebuild the index from the segment data.
+  /**
+   * Builds the index from the segment bytes.
+   */
+  private void buildIndex() {
+    // Read the current buffer position.
     long position = buffer.mark().position();
+
+    // Read the first entry length.
     int length = buffer.readInt();
+
+    // While the length is non-zero...
     while (length != 0) {
+      // Read the 64-bit entry checksum.
+      long checksum = buffer.readUnsignedInt();
+
+      // Read the 64-bit entry offset.
       long offset = buffer.readLong();
-      if (buffer.readBoolean()) {
-        termIndex.index(offset, buffer.readLong());
+
+      // If the term is set on the entry, read the term.
+      Long term = buffer.readBoolean() ? buffer.readLong() : null;
+
+      // Read the entry bytes into memory.
+      buffer.read(memory.clear().limit(length));
+      memory.flip();
+
+      // Compute the checksum for the entry bytes.
+      Checksum crc32 = new CRC32();
+      crc32.update(memory.array(), 0, (int) memory.limit());
+
+      // If the computed checksum equals the stored checksum...
+      if (checksum == crc32.getValue()) {
+        // If the entry contained a term, index the term.
+        if (term != null) {
+          termIndex.index(offset, term);
+        }
+
+        // Index the entry offset.
+        offsetIndex.index(offset, position);
+      } else {
+        break;
       }
-      offsetIndex.index(offset, position);
-      position = buffer.skip(length).position();
+
+      // Store the next entry start position.
+      position = buffer.position();
+
+      // Read the next entry length.
       length = buffer.mark().readInt();
     }
+
+    // Reset the buffer back to the start of the next entry.
     buffer.reset();
   }
 
@@ -305,26 +354,38 @@ public class Segment implements AutoCloseable {
     boolean skipTerm = term == lastTerm;
 
     // Calculate the length of the entry header bytes.
-    int headerLength = Bytes.INTEGER + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG);
+    int headerLength = INTEGER + INTEGER + LONG + BOOLEAN + (skipTerm ? 0 : LONG);
 
-    // Serialize the object into the segment buffer.
-    serializer.writeObject(entry, buffer.skip(headerLength));
+    // Serialize the object into the in-memory buffer.
+    serializer.writeObject(entry, memory.clear());
+    memory.flip();
 
     // Calculate the length of the serialized bytes based on the resulting buffer position and the starting position.
-    int length = (int) (buffer.position() - (position + headerLength));
+    int length = (int) memory.limit();
 
     // Set the entry size.
-    entry.setSize(length);
+    entry.setSize(length + headerLength);
 
-    // Write the length of the entry for indexing.
-    buffer.reset().writeInt(length).writeLong(offset);
+    // Compute the checksum for the entry.
+    Checksum crc32 = new CRC32();
+    crc32.update(memory.array(), 0, (int) memory.limit());
+    long checksum = crc32.getValue();
+
+    // Write the length, checksum, and offset of the entry.
+    buffer.reset()
+      .writeInt(length)
+      .writeUnsignedInt(checksum)
+      .writeLong(offset);
 
     // If the term has not yet been written, write the term to this entry.
     if (skipTerm) {
-      buffer.writeBoolean(false).skip(length);
+      buffer.writeBoolean(false);
     } else {
-      buffer.writeBoolean(true).writeLong(entry.getTerm()).skip(length);
+      buffer.writeBoolean(true).writeLong(entry.getTerm());
     }
+
+    // Write the entry to the segment.
+    buffer.write(memory);
 
     // Index the offset, position, and length.
     offsetIndex.index(offset, position);
@@ -381,18 +442,32 @@ public class Segment implements AutoCloseable {
       // Read the length of the entry.
       int length = buffer.readInt(position);
 
+      // Read the checksum of the entry.
+      long checksum = buffer.readUnsignedInt(position + INTEGER);
+
       // Verify that the entry at the given offset matches.
-      long entryOffset = buffer.readLong(position + Bytes.INTEGER);
+      long entryOffset = buffer.readLong(position + INTEGER + INTEGER);
       Assert.state(entryOffset == offset, "inconsistent index: %s", index);
 
       // Determine whether to skip reading the term from this entry.
-      boolean skipTerm = !buffer.readBoolean(position + Bytes.INTEGER + Bytes.LONG);
+      boolean skipTerm = !buffer.readBoolean(position + INTEGER + INTEGER + LONG);
 
       // Read the entry buffer and deserialize the entry.
-      try (Buffer value = buffer.slice(position + Bytes.INTEGER + Bytes.LONG + Bytes.BOOLEAN + (skipTerm ? 0 : Bytes.LONG), length)) {
-        T entry = serializer.readObject(value);
-        entry.setIndex(index).setTerm(termIndex.lookup(offset)).setSize(length);
-        return entry;
+      try (Buffer value = buffer.slice(position + INTEGER + INTEGER + LONG + BOOLEAN + (skipTerm ? 0 : LONG), length)) {
+        // Read the entry into the in-memory buffer.
+        value.read(memory.clear().limit(length));
+        memory.flip();
+
+        // Compute the checksum for the entry bytes.
+        Checksum crc32 = new CRC32();
+        crc32.update(memory.array(), 0, (int) memory.limit());
+
+        // If the stored checksum equals the computed checksum, return the entry.
+        if (checksum == crc32.getValue()) {
+          T entry = serializer.readObject(memory);
+          entry.setIndex(index).setTerm(termIndex.lookup(offset)).setSize(length);
+          return entry;
+        }
       }
     }
     return null;

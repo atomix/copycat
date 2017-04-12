@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
+import java.nio.charset.Charset;
+
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.Bytes;
@@ -169,6 +171,11 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   @Override
   public String readString() {
     return buffer.readString();
+  }
+
+  @Override
+  public String readString(Charset charset) {
+    return buffer.readString(charset);
   }
 
   @Override
