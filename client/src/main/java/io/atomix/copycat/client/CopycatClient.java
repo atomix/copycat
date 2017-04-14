@@ -559,6 +559,7 @@ public interface CopycatClient {
     private Transport transport;
     private Serializer serializer;
     private Duration sessionTimeout = Duration.ZERO;
+    private Duration unstabilityTimeout = Duration.ZERO;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
@@ -619,6 +620,25 @@ public interface CopycatClient {
      */
     public Builder withSessionTimeout(Duration sessionTimeout) {
       this.sessionTimeout = Assert.arg(Assert.notNull(sessionTimeout, "sessionTimeout"), sessionTimeout.toMillis() >= -1, "session timeout must be positive or -1");
+      return this;
+    }
+
+    /**
+     * Sets the timeout for session unstability. Client is automatically closed if it can not reach servers within
+     * the given timeout.
+     *
+     * @param unstabilityTimeout The client's unstability timeout.
+     * @return The client builder.
+     * @throws NullPointerException if the unstability timeout is null
+     * @throws IllegalArgumentException if the unstability timeout is not positive
+     */
+    public Builder withUnstabilityTimeout(Duration unstabilityTimeout)
+    {
+      this.unstabilityTimeout = Assert.arg(
+          Assert.notNull(unstabilityTimeout, "unstabilityTimeout"),
+          unstabilityTimeout.toMillis() > 0,
+          "unstability timeout must be positive"
+      );
       return this;
     }
 
@@ -690,7 +710,9 @@ public interface CopycatClient {
         serverSelectionStrategy,
         connectionStrategy,
         recoveryStrategy,
-        sessionTimeout);
+        sessionTimeout,
+        unstabilityTimeout
+      );
     }
   }
 

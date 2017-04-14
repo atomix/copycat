@@ -56,6 +56,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final ThreadContext eventContext;
   private final AddressSelector selector;
   private final Duration sessionTimeout;
+  private final Duration unstabilityTimeout;
   private final ConnectionStrategy connectionStrategy;
   private final RecoveryStrategy recoveryStrategy;
   private ClientSession session;
@@ -67,7 +68,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout) {
+  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout, Duration unstabilityTimeout) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.cluster = Assert.notNull(cluster, "cluster");
     this.transport = Assert.notNull(transport, "transport");
@@ -77,6 +78,7 @@ public class DefaultCopycatClient implements CopycatClient {
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
     this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
+    this.unstabilityTimeout = Assert.notNull(unstabilityTimeout, "unstabilityTimeout");;
   }
 
   @Override
@@ -125,7 +127,9 @@ public class DefaultCopycatClient implements CopycatClient {
    * Creates a new child session.
    */
   private ClientSession newSession() {
-    ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy, sessionTimeout);
+    ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy, sessionTimeout,
+                                              unstabilityTimeout
+    );
 
     // Update the session change listener.
     if (changeListener != null)
@@ -149,6 +153,10 @@ public class DefaultCopycatClient implements CopycatClient {
       // When the session becomes unstable, transition the state to SUSPENDED.
       case UNSTABLE:
         setState(State.SUSPENDED);
+        break;
+      case STALE:
+        setState(State.SUSPENDED);
+        this.close();
         break;
       // When the session is expired, transition the state to SUSPENDED if necessary. The recovery strategy
       // must determine whether to attempt to recover the client.

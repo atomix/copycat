@@ -94,6 +94,14 @@ public interface Session {
     UNSTABLE(true),
 
     /**
+     * Indicates that the session has been in unstable state for sometime and may or may not be {@link #EXPIRED}.
+     * <p>
+     * The stale state has same semantics as that of unstable state.
+     * </p>
+     */
+    STALE(true),
+    
+    /**
      * Indicates that the session is expired.
      * <p>
      * Once an {@link #UNSTABLE} client re-establishes communication with the cluster, the cluster may indicate to

@@ -21,6 +21,7 @@ import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
@@ -39,10 +40,17 @@ final class ClientSessionState {
   private long commandResponse;
   private long responseIndex;
   private long eventIndex;
+  private long unstableSince;
+  private long unstabilityTimeout;
   private final Set<Listener<Session.State>> changeListeners = new CopyOnWriteArraySet<>();
 
   ClientSessionState(String clientId) {
+    this(clientId, Duration.ZERO);
+  }
+
+  ClientSessionState(String clientId, Duration unstabilityTimeout) {
     this.clientId = Assert.notNull(clientId, "clientId");
+    this.unstabilityTimeout = Assert.notNull(unstabilityTimeout, "unstabilityTimeout").toMillis();
   }
 
   /**
@@ -101,10 +109,27 @@ final class ClientSessionState {
    * @return The session state.
    */
   public ClientSessionState setState(Session.State state) {
-    if (this.state != state) {
-      this.state = state;
-      changeListeners.forEach(l -> l.accept(state));
+    if (state != Session.State.UNSTABLE) {
+      if (this.state != state) {
+        return setStateAndCallListeners(state);
+      }
+    } else {
+      if (this.state == Session.State.UNSTABLE) {
+        if (unstabilityTimeout > 0 && (System.currentTimeMillis() - unstableSince) > unstabilityTimeout) {
+          return setStateAndCallListeners(Session.State.STALE);
+        }
+      } else if (this.state != Session.State.STALE) {
+        unstableSince = System.currentTimeMillis();
+        return setStateAndCallListeners(state);
+      }
     }
+
+    return this;
+  }
+
+  private ClientSessionState setStateAndCallListeners(Session.State state) {
+    this.state = state;
+    changeListeners.forEach(l -> l.accept(state));
     return this;
   }
 
