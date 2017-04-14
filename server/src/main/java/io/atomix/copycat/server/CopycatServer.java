@@ -125,7 +125,7 @@ import java.util.function.Supplier;
  *   }
  * </pre>
  * However, for more efficient serialization, users should explicitly register serializable classes and binary
- * {@link io.atomix.catalyst.serializer.TypeSerializer serializers}. Explicit registration of serializable typs allows
+ * {@link io.atomix.catalyst.serializer.TypeSerializer serializers}. Explicit registration of serializable types allows
  * types to be serialized using more compact 8- 16- 24- and 32-bit serialization IDs rather than serializing complete
  * class names. Thus, serializable type registration is strongly recommended for production systems.
  * <pre>

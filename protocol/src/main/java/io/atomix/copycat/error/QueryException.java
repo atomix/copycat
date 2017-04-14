@@ -16,7 +16,7 @@
 package io.atomix.copycat.error;
 
 /**
- * Indicates that an error occurred while attempting to acheive a quorum for a read-only query.
+ * Indicates that an error occurred while attempting to achieve a quorum for a read-only query.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */

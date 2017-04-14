@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.nio.ByteOrder;
 import java.util.Collection;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -128,7 +129,7 @@ public class SegmentManager implements AutoCloseable {
       currentSegment.descriptor().update(System.currentTimeMillis());
       currentSegment.descriptor().lock();
 
-      segments.put(1l, currentSegment);
+      segments.put(1L, currentSegment);
     }
   }
 
