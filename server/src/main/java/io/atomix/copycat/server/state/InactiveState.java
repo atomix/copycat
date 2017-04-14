@@ -85,8 +85,7 @@ class InactiveState extends AbstractState {
   }
 
   @Override
-  public CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  public void reset(ResetRequest request) {
   }
 
   @Override

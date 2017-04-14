@@ -20,8 +20,6 @@ import io.atomix.catalyst.concurrent.Listeners;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.PublishRequest;
-import io.atomix.copycat.protocol.PublishResponse;
-import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.session.Event;
@@ -526,19 +524,7 @@ class ServerSessionContext implements ServerSession {
       .build();
 
     LOGGER.trace("{} - Sending {}", id, request);
-    connection.<PublishRequest, PublishResponse>send(request).whenComplete((response, error) -> {
-      if (error == null) {
-        LOGGER.trace("{} - Received {}", id, response);
-        // If the event was received successfully, clear events up to the event index.
-        if (response.status() == Response.Status.OK) {
-          clearEvents(response.index());
-        }
-        // If the event failed and the response index is non-null, resend all events from the response index.
-        else if (response.error() == null && response.index() > 0) {
-          resendEvents(response.index());
-        }
-      }
-    });
+    connection.send(request);
   }
 
   /**

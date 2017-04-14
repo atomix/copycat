@@ -98,7 +98,7 @@ public class ServerContextTest extends AbstractStateTest<AbstractState> {
    */
   private <T extends Request, U extends Response> void test(T request, Consumer<U> callback) throws Throwable {
     clientCtx.execute(() -> {
-      connection.<T, U>send(request).whenComplete((response, error) -> {
+      connection.<T, U>sendAndReceive(request).whenComplete((response, error) -> {
         threadAssertNull(error);
         callback.accept(response);
         resume();

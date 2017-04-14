@@ -32,7 +32,7 @@ public final class ClientResponseTypeResolver implements SerializableTypeResolve
     put(CommandResponse.class, -10);
     put(ConnectResponse.class, -11);
     put(KeepAliveResponse.class, -12);
-    put(PublishResponse.class, -13);
+    put(ResetRequest.class, -13);
     put(QueryResponse.class, -14);
     put(RegisterResponse.class, -15);
     put(UnregisterResponse.class, -16);

@@ -70,12 +70,11 @@ public interface ServerState extends Managed<ServerState> {
   CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
 
   /**
-   * Handles a publish request.
+   * Handles a reset request.
    *
-   * @param request The request to handle.
-   * @return A completable future to be completed with the request response.
+   * @param request The request to handle
    */
-  CompletableFuture<PublishResponse> publish(PublishRequest request);
+  void reset(ResetRequest request);
 
   /**
    * Handles a configure request.

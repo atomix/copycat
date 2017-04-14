@@ -46,7 +46,7 @@ public class ClientSessionSubmitterTest {
    */
   public void testSubmitCommand() throws Throwable {
     Connection connection = mock(Connection.class);
-    when(connection.send(any(CommandRequest.class)))
+    when(connection.sendAndReceive(any(CommandRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
         .withStatus(Response.Status.OK)
         .withIndex(10)
@@ -76,7 +76,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<CommandResponse> future2 = new CompletableFuture<>();
 
     Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<CommandResponse>>when(connection.send(any(CommandRequest.class)))
+    Mockito.<CompletableFuture<CommandResponse>>when(connection.sendAndReceive(any(CommandRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -127,7 +127,7 @@ public class ClientSessionSubmitterTest {
    */
   public void testSubmitQuery() throws Throwable {
     Connection connection = mock(Connection.class);
-    when(connection.send(any(QueryRequest.class)))
+    when(connection.sendAndReceive(any(QueryRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
         .withStatus(Response.Status.OK)
         .withIndex(10)
@@ -155,7 +155,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
     Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -205,7 +205,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
     Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
@@ -248,7 +248,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
     Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
       .thenReturn(future);
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
@@ -280,7 +280,7 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
     Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.send(any(QueryRequest.class)))
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
       .thenReturn(future);
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())

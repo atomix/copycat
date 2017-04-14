@@ -67,7 +67,7 @@ public final class ConnectionManager {
    */
   private CompletableFuture<Connection> createConnection(Address address) {
     return client.connect(address).thenApply(connection -> {
-      connection.closeListener(c -> {
+      connection.onClose(c -> {
         if (connections.get(address) == c) {
           connections.remove(address);
         }

@@ -15,15 +15,12 @@
  */
 package io.atomix.copycat.client.session;
 
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.PublishRequest;
-import io.atomix.copycat.protocol.PublishResponse;
-import io.atomix.copycat.protocol.Response;
+import io.atomix.copycat.protocol.ResetRequest;
 import io.atomix.copycat.session.Event;
 
 import java.util.Map;
@@ -39,12 +36,14 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 final class ClientSessionListener {
+  private final Connection connection;
   private final ClientSessionState state;
   private final ThreadContext context;
   private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
   private final ClientSequencer sequencer;
 
   public ClientSessionListener(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
+    this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.sequencer = Assert.notNull(sequencer, "sequencer");
@@ -85,21 +84,19 @@ final class ClientSessionListener {
    * @return A completable future to be completed with the publish response.
    */
   @SuppressWarnings("unchecked")
-  private CompletableFuture<PublishResponse> handlePublish(PublishRequest request) {
+  private void handlePublish(PublishRequest request) {
     state.getLogger().trace("{} - Received {}", state.getSessionId(), request);
 
     // If the request is for another session ID, this may be a session that was previously opened
     // for this client.
     if (request.session() != state.getSessionId()) {
       state.getLogger().trace("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
-      return Futures.exceptionalFuture(new UnknownSessionException("incorrect session ID"));
+      return;
     }
 
+    // If the request event index has already been processed, return.
     if (request.eventIndex() <= state.getEventIndex()) {
-      return CompletableFuture.completedFuture(PublishResponse.builder()
-          .withStatus(Response.Status.OK)
-          .withIndex(state.getEventIndex())
-          .build());
+      return;
     }
 
     // If the request's previous event index doesn't equal the previous received event index,
@@ -107,10 +104,11 @@ final class ClientSessionListener {
     // to resend events starting at eventIndex + 1.
     if (request.previousIndex() != state.getEventIndex()) {
       state.getLogger().trace("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
-      return CompletableFuture.completedFuture(PublishResponse.builder()
-        .withStatus(Response.Status.ERROR)
+      connection.send(ResetRequest.builder()
+        .withSession(state.getSessionId())
         .withIndex(state.getEventIndex())
         .build());
+      return;
     }
 
     // Store the event index. This will be used to verify that events are received in sequential order.
@@ -126,11 +124,6 @@ final class ClientSessionListener {
         }
       }
     });
-
-    return CompletableFuture.completedFuture(PublishResponse.builder()
-      .withStatus(Response.Status.OK)
-      .withIndex(request.eventIndex())
-      .build());
   }
 
   /**

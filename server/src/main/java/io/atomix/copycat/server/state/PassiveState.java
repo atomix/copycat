@@ -26,6 +26,7 @@ import io.atomix.copycat.server.protocol.AppendRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;
 import io.atomix.copycat.server.protocol.InstallRequest;
 import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -66,6 +67,14 @@ class PassiveState extends ReserveState {
   private void truncateUncommittedEntries() {
     if (type() == CopycatServer.State.PASSIVE) {
       context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+    }
+  }
+
+  @Override
+  public void reset(ResetRequest request) {
+    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    if (session != null) {
+      context.getStateMachine().executor().executor().execute(() -> session.resendEvents(request.index()));
     }
   }
 

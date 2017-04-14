@@ -90,7 +90,7 @@ final class ClientSessionManager {
       .build();
 
     state.getLogger().trace("Sending {}", request);
-    connection.reset().<RegisterRequest, RegisterResponse>send(request).whenComplete((response, error) -> {
+    connection.reset().<RegisterRequest, RegisterResponse>sendAndReceive(request).whenComplete((response, error) -> {
       if (error == null) {
         state.getLogger().trace("Received {}", response);
         if (response.status() == Response.Status.OK) {
@@ -134,7 +134,7 @@ final class ClientSessionManager {
       .build();
 
     state.getLogger().trace("{} - Sending {}", sessionId, request);
-    connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
+    connection.<KeepAliveRequest, KeepAliveResponse>sendAndReceive(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
           state.getLogger().trace("{} - Received {}", sessionId, response);
@@ -248,7 +248,7 @@ final class ClientSessionManager {
       .build();
 
     state.getLogger().trace("{} - Sending {}", sessionId, request);
-    connection.<UnregisterRequest, UnregisterResponse>send(request).whenComplete((response, error) -> {
+    connection.<UnregisterRequest, UnregisterResponse>sendAndReceive(request).whenComplete((response, error) -> {
       if (state.getState() != Session.State.CLOSED) {
         if (error == null) {
           state.getLogger().trace("{} - Received {}", sessionId, response);
