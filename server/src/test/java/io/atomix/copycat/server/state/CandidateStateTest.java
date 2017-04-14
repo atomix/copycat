@@ -18,7 +18,6 @@ package io.atomix.copycat.server.state;
 import io.atomix.catalyst.transport.Server;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.AppendRequest;
 import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;

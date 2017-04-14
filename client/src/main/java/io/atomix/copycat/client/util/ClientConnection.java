@@ -187,7 +187,7 @@ public class ClientConnection implements Connection {
   private CompletableFuture<Connection> connect() {
     CompletableFuture<Connection> future = new CompletableFuture<>();
 
-    // If the address selector has been then reset the connection.
+    // If the address selector has been reset then reset the connection.
     if (selector.state() == AddressSelector.State.RESET && connection != null) {
       if (connectFuture != null) {
         connectFutures.add(future);

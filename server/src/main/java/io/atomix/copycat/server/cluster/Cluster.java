@@ -46,7 +46,7 @@ import java.util.function.Consumer;
  * membership list is on the {@link #leader() leader} node.
  * <h2>Cluster management</h2>
  * Users can use the {@code Cluster} to manage the Copycat cluster membership. Typically, servers join the
- * cluster by calling {@link CopycatServer#open()} or {@link #join()}, but in the event that a server fails
+ * cluster by calling {@link CopycatServer#bootstrap(Address...)}  or {@link #join(Address...)}, but in the event that a server fails
  * permanently and thus cannot remove itself, other nodes can remove arbitrary servers.
  * <p>
  * <pre>
