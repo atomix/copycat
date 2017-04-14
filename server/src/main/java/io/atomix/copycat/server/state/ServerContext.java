@@ -39,8 +39,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -516,14 +518,15 @@ public class ServerContext implements AutoCloseable {
 
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    connection.handler(RegisterRequest.class, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
+    connection.handler(ConnectRequest.class, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
+    connection.handler(KeepAliveRequest.class, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
+    connection.handler(UnregisterRequest.class, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
+    connection.handler(ResetRequest.class, (Consumer<ResetRequest>) request -> state.reset(request));
+    connection.handler(CommandRequest.class, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
+    connection.handler(QueryRequest.class, (Function<QueryRequest, CompletableFuture<QueryResponse>>) request -> state.query(request));
 
-    connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+    connection.onClose(stateMachine.executor().context().sessions()::unregisterConnection);
   }
 
   /**
@@ -535,23 +538,23 @@ public class ServerContext implements AutoCloseable {
     // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, request -> state.register(request));
-    connection.handler(ConnectRequest.class, request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, request -> state.unregister(request));
-    connection.handler(PublishRequest.class, request -> state.publish(request));
-    connection.handler(ConfigureRequest.class, request -> state.configure(request));
-    connection.handler(InstallRequest.class, request -> state.install(request));
-    connection.handler(JoinRequest.class, request -> state.join(request));
-    connection.handler(ReconfigureRequest.class, request -> state.reconfigure(request));
-    connection.handler(LeaveRequest.class, request -> state.leave(request));
-    connection.handler(AppendRequest.class, request -> state.append(request));
-    connection.handler(PollRequest.class, request -> state.poll(request));
-    connection.handler(VoteRequest.class, request -> state.vote(request));
-    connection.handler(CommandRequest.class, request -> state.command(request));
-    connection.handler(QueryRequest.class, request -> state.query(request));
+    connection.handler(RegisterRequest.class, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
+    connection.handler(ConnectRequest.class, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
+    connection.handler(KeepAliveRequest.class, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
+    connection.handler(UnregisterRequest.class, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
+    connection.handler(ResetRequest.class, (Consumer<ResetRequest>) request -> state.reset(request));
+    connection.handler(ConfigureRequest.class, (Function<ConfigureRequest, CompletableFuture<ConfigureResponse>>) request -> state.configure(request));
+    connection.handler(InstallRequest.class, (Function<InstallRequest, CompletableFuture<InstallResponse>>) request -> state.install(request));
+    connection.handler(JoinRequest.class, (Function<JoinRequest, CompletableFuture<JoinResponse>>) request -> state.join(request));
+    connection.handler(ReconfigureRequest.class, (Function<ReconfigureRequest, CompletableFuture<ReconfigureResponse>>) request -> state.reconfigure(request));
+    connection.handler(LeaveRequest.class, (Function<LeaveRequest, CompletableFuture<LeaveResponse>>) request -> state.leave(request));
+    connection.handler(AppendRequest.class, (Function<AppendRequest, CompletableFuture<AppendResponse>>) request -> state.append(request));
+    connection.handler(PollRequest.class, (Function<PollRequest, CompletableFuture<PollResponse>>) request -> state.poll(request));
+    connection.handler(VoteRequest.class, (Function<VoteRequest, CompletableFuture<VoteResponse>>) request -> state.vote(request));
+    connection.handler(CommandRequest.class, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
+    connection.handler(QueryRequest.class, (Function<QueryRequest, CompletableFuture<QueryResponse>>) request -> state.query(request));
 
-    connection.closeListener(stateMachine.executor().context().sessions()::unregisterConnection);
+    connection.onClose(stateMachine.executor().context().sessions()::unregisterConnection);
   }
 
   /**

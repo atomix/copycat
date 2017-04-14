@@ -15,22 +15,10 @@
  */
 package io.atomix.copycat.client.util;
 
-import java.net.ConnectException;
-import java.nio.channels.ClosedChannelException;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
-
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.transport.MessageHandler;
 import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
@@ -40,6 +28,19 @@ import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.ConnectException;
+import java.nio.channels.ClosedChannelException;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Client connection that recursively connects to servers in the cluster and attempts to submit requests.
@@ -53,7 +54,7 @@ public class ClientConnection implements Connection {
   private final AddressSelector selector;
   private CompletableFuture<Connection> connectFuture;
   private Queue<CompletableFuture<Connection>> connectFutures = new LinkedList<>();
-  private final Map<Class<?>, MessageHandler<?, ?>> handlers = new ConcurrentHashMap<>();
+  private final Map<Class<?>, Function> handlers = new ConcurrentHashMap<>();
   private Connection connection;
   private boolean open = true;
 
@@ -104,38 +105,50 @@ public class ClientConnection implements Connection {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public <T, U> CompletableFuture<U> send(T request) {
+  public CompletableFuture<Void> send(Object request) {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    sendRequest((Request) request, (r, c) -> c.send(r), future);
+    return future;
+  }
+
+  @Override
+  public <T, U> CompletableFuture<U> sendAndReceive(T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
-    sendRequest((Request) request, (CompletableFuture<Response>) future);
+    sendRequest((Request) request, (r, c) -> c.sendAndReceive(r), future);
     return future;
   }
 
   /**
    * Sends the given request attempt to the cluster.
    */
-  private <T extends Request, U extends Response> void sendRequest(T request, CompletableFuture<U> future) {
+  private <T extends Request, U> void sendRequest(T request, BiFunction<Request, Connection, CompletableFuture<U>> sender, CompletableFuture<U> future) {
     if (open) {
-      connect().whenComplete((c, e) -> sendRequest(request, c, e, future));
+      connect().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
     }
   }
 
   /**
    * Sends the given request attempt to the cluster via the given connection if connected.
    */
-  private <T extends Request, U extends Response> void sendRequest(T request, Connection connection, Throwable error, CompletableFuture<U> future) {
+  private <T extends Request, U> void sendRequest(T request, BiFunction<Request, Connection, CompletableFuture<U>> sender, Connection connection, Throwable error, CompletableFuture<U> future) {
     if (open) {
       if (error == null) {
         if (connection != null) {
           LOGGER.trace("{} - Sending {}", id, request);
-          connection.<T, U>send(request).whenComplete((r, e) -> handleResponse(request, r, e, future));
+          sender.apply(request, connection).whenComplete((r, e) -> {
+            if (e != null || r != null) {
+              handleResponse(request, sender, (Response) r, e, future);
+            } else {
+              future.complete(null);
+            }
+          });
         } else {
           future.completeExceptionally(new ConnectException("Failed to connect to the cluster"));
         }
       } else {
         LOGGER.trace("{} - Resetting connection. Reason: {}", id, error);
         this.connection = null;
-        next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+        next().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
       }
     }
   }
@@ -143,7 +156,8 @@ public class ClientConnection implements Connection {
   /**
    * Handles a response from the cluster.
    */
-  private <T extends Request, U extends Response> void handleResponse(T request, U response, Throwable error, CompletableFuture<U> future) {
+  @SuppressWarnings("unchecked")
+  private <T extends Request, U extends Response> void handleResponse(T request, BiFunction sender, Response response, Throwable error, CompletableFuture future) {
     if (open) {
       if (error == null) {
         if (response.status() == Response.Status.OK
@@ -155,11 +169,11 @@ public class ClientConnection implements Connection {
           future.complete(response);
         } else {
           LOGGER.trace("{} - Resetting connection. Reason: {}", id, response.error().createException());
-          next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+          next().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
         }
       } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
         LOGGER.trace("{} - Resetting connection. Reason: {}", id, error);
-        next().whenComplete((c, e) -> sendRequest(request, c, e, future));
+        next().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
       } else {
         LOGGER.debug("{} - {} failed! Reason: {}", id, request, error);
         future.completeExceptionally(error);
@@ -286,21 +300,21 @@ public class ClientConnection implements Connection {
 
     this.connection = connection;
 
-    connection.closeListener(c -> {
+    connection.onClose(c -> {
       if (c.equals(this.connection)) {
         LOGGER.debug("{} - Connection closed", id);
         this.connection = null;
       }
     });
-    connection.exceptionListener(c -> {
+    connection.onException(c -> {
       if (c.equals(this.connection)) {
         LOGGER.debug("{} - Connection lost", id);
         this.connection = null;
       }
     });
 
-    for (Map.Entry<Class<?>, MessageHandler<?, ?>> entry : handlers.entrySet()) {
-      connection.handler((Class) entry.getKey(), entry.getValue());
+    for (Map.Entry<Class<?>, Function> entry : handlers.entrySet()) {
+      connection.handler(entry.getKey(), entry.getValue());
     }
 
     // When we first connect to a new server, first send a ConnectRequest to the server to establish
@@ -310,7 +324,7 @@ public class ClientConnection implements Connection {
       .build();
 
     LOGGER.trace("{} - Sending {}", id, request);
-    connection.<ConnectRequest, ConnectResponse>send(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
+    connection.<ConnectRequest, ConnectResponse>sendAndReceive(request).whenComplete((r, e) -> handleConnectResponse(r, e, future));
   }
 
   /**
@@ -336,7 +350,15 @@ public class ClientConnection implements Connection {
   }
 
   @Override
-  public <T, U> Connection handler(Class<T> type, MessageHandler<T, U> handler) {
+  public <T, U> Connection handler(Class<T> type, Consumer<T> handler) {
+    return handler(type, r -> {
+      handler.accept(r);
+      return null;
+    });
+  }
+
+  @Override
+  public <T, U> Connection handler(Class<T> type, Function<T, CompletableFuture<U>> handler) {
     Assert.notNull(type, "type");
     Assert.notNull(handler, "handler");
     handlers.put(type, handler);
@@ -346,12 +368,12 @@ public class ClientConnection implements Connection {
   }
 
   @Override
-  public Listener<Throwable> exceptionListener(Consumer<Throwable> listener) {
+  public Listener<Throwable> onException(Consumer<Throwable> listener) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public Listener<Connection> closeListener(Consumer<Connection> listener) {
+  public Listener<Connection> onClose(Consumer<Connection> listener) {
     throw new UnsupportedOperationException();
   }
 

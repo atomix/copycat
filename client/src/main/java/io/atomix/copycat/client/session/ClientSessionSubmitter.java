@@ -139,7 +139,7 @@ final class ClientSessionSubmitter {
     } else {
       state.getLogger().trace("{} - Sending {}", state.getSessionId(), attempt.request);
       attempts.put(attempt.sequence, attempt);
-      connection.<T, U>send(attempt.request).whenComplete(attempt);
+      connection.<T, U>sendAndReceive(attempt.request).whenComplete(attempt);
       attempt.future.whenComplete((r, e) -> attempts.remove(attempt.sequence));
     }
   }
@@ -165,7 +165,7 @@ final class ClientSessionSubmitter {
         .withEventIndex(state.getEventIndex())
         .build();
       state.getLogger().trace("{} - Sending {}", state.getSessionId(), request);
-      connection.<KeepAliveRequest, KeepAliveResponse>send(request).whenComplete((response, error) -> {
+      connection.<KeepAliveRequest, KeepAliveResponse>sendAndReceive(request).whenComplete((response, error) -> {
         if (error == null) {
           state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
 

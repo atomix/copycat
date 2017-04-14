@@ -20,7 +20,7 @@ io.atomix.copycat.protocol.CommandResponse
 io.atomix.copycat.protocol.KeepAliveRequest
 io.atomix.copycat.protocol.KeepAliveResponse
 io.atomix.copycat.protocol.PublishRequest
-io.atomix.copycat.protocol.PublishResponse
+io.atomix.copycat.protocol.ResetRequest
 io.atomix.copycat.protocol.QueryRequest
 io.atomix.copycat.protocol.QueryResponse
 io.atomix.copycat.protocol.RegisterRequest

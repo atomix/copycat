@@ -144,7 +144,7 @@ final class FollowerState extends ActiveState {
         .withLogTerm(lastTerm)
         .build();
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.<PollRequest, PollResponse>send(request).whenCompleteAsync((response, error) -> {
+        connection.<PollRequest, PollResponse>sendAndReceive(request).whenCompleteAsync((response, error) -> {
           context.checkThread();
           if (isOpen() && !complete.get()) {
             if (error != null) {

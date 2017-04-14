@@ -181,35 +181,6 @@ class ReserveState extends InactiveState {
   }
 
   @Override
-  public CompletableFuture<PublishResponse> publish(PublishRequest request) {
-    context.checkThread();
-    logRequest(request);
-
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
-    if (session == null || session.getConnection() == null) {
-      return CompletableFuture.completedFuture(logResponse(PublishResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.ILLEGAL_MEMBER_STATE_ERROR)
-        .build()));
-    } else {
-      CompletableFuture<PublishResponse> future = new CompletableFuture<>();
-      session.getConnection().<PublishRequest, PublishResponse>send(request).whenComplete((result, error) -> {
-        if (isOpen()) {
-          if (error == null) {
-            future.complete(result);
-          } else {
-            future.complete(logResponse(PublishResponse.builder()
-              .withStatus(Response.Status.ERROR)
-              .withError(CopycatError.Type.INTERNAL_ERROR)
-              .build()));
-          }
-        }
-      });
-      return future;
-    }
-  }
-
-  @Override
   public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     context.checkThread();
     logRequest(request);
