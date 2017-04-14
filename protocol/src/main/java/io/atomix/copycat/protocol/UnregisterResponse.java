@@ -27,7 +27,7 @@ import java.util.Objects;
  * <p>
  * Session unregister responses are sent in response to a {@link UnregisterRequest}.
  * If the response is successful, that indicates the session was successfully unregistered. For unsuccessful
- * unregister requests, sessions can still be expired by simply haulting {@link KeepAliveRequest}s
+ * unregister requests, sessions can still be expired by simply halting {@link KeepAliveRequest}s
  * to the cluster.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>

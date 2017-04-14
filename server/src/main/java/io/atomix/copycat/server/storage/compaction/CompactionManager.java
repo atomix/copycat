@@ -19,7 +19,6 @@ import io.atomix.copycat.server.storage.SegmentManager;
 import io.atomix.copycat.server.storage.Storage;
 
 import java.util.Collection;
-import java.util.List;
 
 /**
  * Manages a single compaction process.
