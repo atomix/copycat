@@ -79,7 +79,7 @@ public abstract class AbstractState implements ServerState {
     CompletableFuture<U> future = new CompletableFuture<>();
     context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
-        connection.<T, U>send(request).whenComplete((response, responseError) -> {
+        connection.<T, U>sendAndReceive(request).whenComplete((response, responseError) -> {
           if (responseError == null) {
             future.complete(response);
           } else {

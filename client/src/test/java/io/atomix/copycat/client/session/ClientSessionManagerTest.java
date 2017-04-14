@@ -48,7 +48,7 @@ public class ClientSessionManagerTest {
     ClientConnection connection = mock(ClientConnection.class);
     when(connection.reset()).thenReturn(connection);
     when(connection.servers()).thenReturn(Collections.singletonList(new Address("localhost", 5000)));
-    when(connection.send(any(RegisterRequest.class)))
+    when(connection.sendAndReceive(any(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withSession(1)
         .withLeader(new Address("localhost", 5000))
@@ -77,7 +77,7 @@ public class ClientSessionManagerTest {
       new Address("localhost", 5002)
     ));
 
-    when(connection.send(any(UnregisterRequest.class)))
+    when(connection.sendAndReceive(any(UnregisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(UnregisterResponse.builder()
         .withStatus(Response.Status.OK)
         .build()));

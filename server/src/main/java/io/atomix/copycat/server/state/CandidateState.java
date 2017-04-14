@@ -147,7 +147,7 @@ final class CandidateState extends ActiveState {
         .build();
 
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.<VoteRequest, VoteResponse>send(request).whenCompleteAsync((response, error) -> {
+        connection.<VoteRequest, VoteResponse>sendAndReceive(request).whenCompleteAsync((response, error) -> {
           context.checkThread();
           if (isOpen() && !complete.get()) {
             if (error != null) {

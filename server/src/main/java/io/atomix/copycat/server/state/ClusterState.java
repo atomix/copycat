@@ -374,7 +374,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         JoinRequest request = JoinRequest.builder()
           .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
           .build();
-        return connection.<JoinRequest, JoinResponse>send(request);
+        return connection.<JoinRequest, JoinResponse>sendAndReceive(request);
       }).whenComplete((response, error) -> {
         // Cancel the join timer.
         cancelJoinTimer();
@@ -446,7 +446,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             .withMember(member())
             .build();
           LOGGER.trace("{} - Sending {} to {}", member.address(), request, leader.address());
-          return connection.<ConfigurationRequest, ConfigurationResponse>send(request);
+          return connection.<ConfigurationRequest, ConfigurationResponse>sendAndReceive(request);
         }).whenComplete((response, error) -> {
           cancelJoinTimer();
           if (error == null) {

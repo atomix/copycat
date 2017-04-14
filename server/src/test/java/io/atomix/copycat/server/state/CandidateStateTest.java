@@ -27,6 +27,7 @@ import org.testng.annotations.Test;
 
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 import static org.testng.Assert.*;
 
@@ -161,6 +162,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     });
   }
 
+  @SuppressWarnings("unchecked")
   public void testCandidateTransitionsToLeaderOnElection() throws Throwable {
     serverContext.onStateChange(state -> {
       if (state == CopycatServer.State.LEADER)
@@ -171,7 +173,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       for (MemberState member : serverContext.getClusterState().getRemoteMemberStates()) {
         Server server = transport.server();
         server.listen(member.getMember().serverAddress(), c -> {
-          c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
+          c.handler(VoteRequest.class, (Function) request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(true)
             .build()));
@@ -191,6 +193,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
     await(1000);
   }
 
+  @SuppressWarnings("unchecked")
   public void testCandidateTransitionsToFollowerOnRejection() throws Throwable {
     serverContext.onStateChange(state -> {
       if (state == CopycatServer.State.FOLLOWER)
@@ -201,7 +204,7 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
       for (MemberState member : serverContext.getClusterState().getRemoteMemberStates()) {
         Server server = transport.server();
         server.listen(member.getMember().serverAddress(), c -> {
-          c.handler(VoteRequest.class, request -> CompletableFuture.completedFuture(VoteResponse.builder()
+          c.handler(VoteRequest.class, (Function) request -> CompletableFuture.completedFuture(VoteResponse.builder()
             .withTerm(2)
             .withVoted(false)
             .build()));

@@ -68,7 +68,7 @@ public class DefaultCopycatClientTest {
     when(transport.client()).thenReturn(client);
 
     // Handle connect requests.
-    when(connection.send(isA(ConnectRequest.class)))
+    when(connection.sendAndReceive(isA(ConnectRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -76,7 +76,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle register requests.
-    when(connection.send(isA(RegisterRequest.class)))
+    when(connection.sendAndReceive(isA(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withStatus(Response.Status.OK)
         .withSession(1)
@@ -86,7 +86,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle keep-alive requests.
-    Mockito.when(connection.send(isA(KeepAliveRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(KeepAliveRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -94,7 +94,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Fail the first request and succeed on the second.
-    Mockito.when(connection.send(isA(CommandRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(CommandRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -129,7 +129,7 @@ public class DefaultCopycatClientTest {
     when(transport.client()).thenReturn(client);
 
     // Handle connect requests.
-    when(connection.send(isA(ConnectRequest.class)))
+    when(connection.sendAndReceive(isA(ConnectRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -137,7 +137,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle register requests.
-    when(connection.send(isA(RegisterRequest.class)))
+    when(connection.sendAndReceive(isA(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withStatus(Response.Status.OK)
         .withSession(1)
@@ -147,7 +147,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle keep-alive requests.
-    Mockito.when(connection.send(isA(KeepAliveRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(KeepAliveRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -155,7 +155,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Fail command requests.
-    Mockito.when(connection.send(isA(CommandRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(CommandRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
@@ -190,7 +190,7 @@ public class DefaultCopycatClientTest {
     when(transport.client()).thenReturn(client);
 
     // Handle connect requests.
-    when(connection.send(isA(ConnectRequest.class)))
+    when(connection.sendAndReceive(isA(ConnectRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -198,7 +198,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle register requests.
-    when(connection.send(isA(RegisterRequest.class)))
+    when(connection.sendAndReceive(isA(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withStatus(Response.Status.OK)
         .withSession(1)
@@ -208,7 +208,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle keep-alive requests.
-    Mockito.when(connection.send(isA(KeepAliveRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(KeepAliveRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -216,7 +216,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Fail query requests.
-    Mockito.when(connection.send(isA(QueryRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(QueryRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
@@ -251,7 +251,7 @@ public class DefaultCopycatClientTest {
     when(transport.client()).thenReturn(client);
 
     // Handle connect requests.
-    when(connection.send(isA(ConnectRequest.class)))
+    when(connection.sendAndReceive(isA(ConnectRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -259,7 +259,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle register requests.
-    when(connection.send(isA(RegisterRequest.class)))
+    when(connection.sendAndReceive(isA(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withStatus(Response.Status.OK)
         .withSession(1)
@@ -276,7 +276,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle keep-alive requests.
-    Mockito.when(connection.send(isA(KeepAliveRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(KeepAliveRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -284,7 +284,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Fail command requests.
-    Mockito.when(connection.send(isA(CommandRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(CommandRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
@@ -338,7 +338,7 @@ public class DefaultCopycatClientTest {
     when(transport.client()).thenReturn(client);
 
     // Handle connect requests.
-    when(connection.send(isA(ConnectRequest.class)))
+    when(connection.sendAndReceive(isA(ConnectRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -346,7 +346,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle register requests.
-    when(connection.send(isA(RegisterRequest.class)))
+    when(connection.sendAndReceive(isA(RegisterRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(RegisterResponse.builder()
         .withStatus(Response.Status.OK)
         .withSession(1)
@@ -363,7 +363,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Handle keep-alive requests.
-    Mockito.when(connection.send(isA(KeepAliveRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(KeepAliveRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
         .withStatus(Response.Status.OK)
         .withLeader(LEADER)
@@ -371,7 +371,7 @@ public class DefaultCopycatClientTest {
         .build()));
 
     // Fail command requests.
-    Mockito.when(connection.send(isA(QueryRequest.class)))
+    Mockito.when(connection.sendAndReceive(isA(QueryRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
