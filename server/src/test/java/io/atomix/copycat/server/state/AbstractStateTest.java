@@ -42,6 +42,8 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +60,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   protected LocalTransport transport;
   protected ServerContext serverContext;
   protected List<Member> members;
+  protected Path storageDir;
 
   /**
    * Sets up a server state.
@@ -73,7 +76,8 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
       new StorageSerialization()
     ).disableWhitelist();
 
-    storage = new Storage(StorageLevel.MEMORY);
+    storageDir = Files.createTempDirectory("copycat-test");
+    storage = Storage.builder().withStorageLevel(StorageLevel.MEMORY).withDirectory(storageDir.toFile()).build();
 
     members = createMembers(3);
     transport = new LocalTransport(new LocalServerRegistry());
@@ -94,6 +98,8 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    */
   @AfterMethod
   void afterMethod() throws Throwable {
+    storage.deleteMetaStore("test");
+    Files.delete(storageDir);
     serverCtx.close();
   }
 
