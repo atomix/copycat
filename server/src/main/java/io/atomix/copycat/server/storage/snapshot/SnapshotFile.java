@@ -34,6 +34,13 @@ public final class SnapshotFile {
   private final File file;
 
   /**
+   * @throws IllegalArgumentException if {@code file} is not a valid snapshot file
+   */
+  SnapshotFile(File file) {
+    this.file = file;
+  }
+
+  /**
    * Returns a boolean value indicating whether the given file appears to be a parsable snapshot file.
    *
    * @throws NullPointerException if {@code file} is null
@@ -68,13 +75,6 @@ public final class SnapshotFile {
    */
   static File createSnapshotFile(String name, File directory, long index, long timestamp) {
     return new File(directory, String.format("%s-%d-%s.snapshot", Assert.notNull(name, "name"), index, TIMESTAMP_FORMAT.format(new Date(timestamp))));
-  }
-
-  /**
-   * @throws IllegalArgumentException if {@code file} is not a valid snapshot file
-   */
-  SnapshotFile(File file) {
-    this.file = file;
   }
 
   /**
