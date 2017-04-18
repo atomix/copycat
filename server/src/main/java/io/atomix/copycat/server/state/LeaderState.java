@@ -740,7 +740,7 @@ final class LeaderState extends ActiveState {
         .setEventIndex(request.eventIndex())
         .setTimestamp(timestamp);
       index = context.getLog().append(entry);
-      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
     }
 
     CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();

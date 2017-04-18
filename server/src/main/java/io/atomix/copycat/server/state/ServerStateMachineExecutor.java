@@ -143,6 +143,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       try {
         return (U) function.apply(commit);
       } catch (Exception e) {
+        LOGGER.warn("State machine operation failed: {}", e.getMessage());
         throw new ApplicationException(e, "An application error occurred");
       }
     }

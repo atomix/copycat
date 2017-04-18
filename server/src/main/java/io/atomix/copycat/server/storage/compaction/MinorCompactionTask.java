@@ -179,7 +179,7 @@ public final class MinorCompactionTask implements CompactionTask {
    */
   private void compactEntry(long index, Segment segment, Segment compactSegment) {
     compactSegment.skip(1);
-    LOGGER.debug("Compacted entry {} from segment {}", index, segment.descriptor().id());
+    LOGGER.trace("Compacted entry {} from segment {}", index, segment.descriptor().id());
   }
 
   /**

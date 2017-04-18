@@ -133,7 +133,7 @@ final class CandidateState extends ActiveState {
       lastTerm = 0;
     }
 
-    LOGGER.info("{} - Requesting votes from {}", context.getCluster().member().address(), votingMembers);
+    LOGGER.debug("{} - Requesting votes for term {}", context.getCluster().member().address(), context.getTerm());
 
     // Once we got the last log term, iterate through each current member
     // of the cluster and vote each member for a vote.
