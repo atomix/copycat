@@ -32,9 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -53,7 +51,6 @@ public class ClientConnection implements Connection {
   private final Client client;
   private final AddressSelector selector;
   private CompletableFuture<Connection> connectFuture;
-  private Queue<CompletableFuture<Connection>> connectFutures = new LinkedList<>();
   private final Map<Class<?>, Function> handlers = new ConcurrentHashMap<>();
   private Connection connection;
   private boolean open = true;
@@ -198,22 +195,19 @@ public class ClientConnection implements Connection {
    * Connects to the cluster.
    */
   private CompletableFuture<Connection> connect() {
-    CompletableFuture<Connection> future = new CompletableFuture<>();
-
     // If the address selector has been reset then reset the connection.
     if (selector.state() == AddressSelector.State.RESET && connection != null) {
       if (connectFuture != null) {
-        connectFutures.add(future);
         return connectFuture;
       }
 
-      CompletableFuture<Connection> newConnectFuture = new CompletableFuture<>();
-      connectFuture = newConnectFuture;
-      connectFutures.add(future);
+      connectFuture = new OrderedCompletableFuture<>();
 
-      connection.close().whenComplete((result, error) -> connect(newConnectFuture));
-
-      return awaitConnect(newConnectFuture);
+      Connection oldConnection = this.connection;
+      this.connection = null;
+      oldConnection.close();
+      connect(connectFuture);
+      return connectFuture;
     }
 
     // If a connection was already established then use that connection.
@@ -223,34 +217,13 @@ public class ClientConnection implements Connection {
 
     // If a connection is currently being established then piggyback on the connect future.
     if (connectFuture != null) {
-      connectFutures.add(future);
       return connectFuture;
     }
 
     // Create a new connect future and connect to the first server in the cluster.
-    connectFuture = new CompletableFuture<>();
-    connectFutures.add(future);
-
+    connectFuture = new OrderedCompletableFuture<>();
     reset().connect(connectFuture);
-
-    // Reset the connect future field once the connection is complete.
-    return awaitConnect(connectFuture);
-  }
-
-  /**
-   * Awaits the completion of a connection and triggers connect futures in creation order once complete.
-   */
-  private CompletableFuture<Connection> awaitConnect(CompletableFuture<Connection> future) {
-    return future.whenComplete((result, error) -> {
-      Queue<CompletableFuture<Connection>> connectedFutures = connectFutures;
-      connectFuture = null;
-      connectFutures = new LinkedList<>();
-      if (error == null) {
-        connectedFutures.forEach(f -> f.complete(result));
-      } else {
-        connectedFutures.forEach(f -> f.completeExceptionally(error));
-      }
-    });
+    return connectFuture;
   }
 
   /**
