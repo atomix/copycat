@@ -137,7 +137,7 @@ public class ClientConnection implements Connection {
           LOGGER.trace("{} - Sending {}", id, request);
           sender.apply(request, connection).whenComplete((r, e) -> {
             if (e != null || r != null) {
-              handleResponse(request, sender, (Response) r, e, future);
+              handleResponse(request, sender, connection, (Response) r, e, future);
             } else {
               future.complete(null);
             }
@@ -146,18 +146,33 @@ public class ClientConnection implements Connection {
           future.completeExceptionally(new ConnectException("Failed to connect to the cluster"));
         }
       } else {
-        LOGGER.trace("{} - Resetting connection. Reason: {}", id, error);
-        this.connection = null;
-        next().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
+        resendRequest(error, request, sender, connection, future);
       }
     }
+  }
+
+  /**
+   * Resends a request due to a request failure, resetting the connection if necessary.
+   */
+  @SuppressWarnings("unchecked")
+  private <T extends Request> void resendRequest(Throwable cause, T request, BiFunction sender, Connection connection, CompletableFuture future) {
+    // If the connection has not changed, reset it and connect to the next server.
+    if (this.connection == connection) {
+      LOGGER.trace("{} - Resetting connection. Reason: {}", id, cause);
+      this.connection = null;
+      connection.close();
+    }
+
+    // Create a new connection and resend the request. This will force retries to piggyback on any existing
+    // connect attempts.
+    connect().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
   }
 
   /**
    * Handles a response from the cluster.
    */
   @SuppressWarnings("unchecked")
-  private <T extends Request, U extends Response> void handleResponse(T request, BiFunction sender, Response response, Throwable error, CompletableFuture future) {
+  private <T extends Request> void handleResponse(T request, BiFunction sender, Connection connection, Response response, Throwable error, CompletableFuture future) {
     if (open) {
       if (error == null) {
         if (response.status() == Response.Status.OK
@@ -168,12 +183,10 @@ public class ClientConnection implements Connection {
           LOGGER.trace("{} - Received {}", id, response);
           future.complete(response);
         } else {
-          LOGGER.trace("{} - Resetting connection. Reason: {}", id, response.error().createException());
-          next().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
+          resendRequest(response.error().createException(), request, sender, connection, future);
         }
       } else if (error instanceof ConnectException || error instanceof TimeoutException || error instanceof TransportException || error instanceof ClosedChannelException) {
-        LOGGER.trace("{} - Resetting connection. Reason: {}", id, error);
-        next().whenComplete((c, e) -> sendRequest(request, sender, c, e, future));
+        resendRequest(error, request, sender, connection, future);
       } else {
         LOGGER.debug("{} - {} failed! Reason: {}", id, request, error);
         future.completeExceptionally(error);
@@ -238,29 +251,6 @@ public class ClientConnection implements Connection {
         connectedFutures.forEach(f -> f.completeExceptionally(error));
       }
     });
-  }
-
-  /**
-   * Connects to the cluster using the next connection.
-   */
-  private CompletableFuture<Connection> next() {
-    if (connection != null) {
-      return connection.close().thenRun(() -> connection = null).thenCompose(v -> {
-        if (connectFuture == null) {
-          connectFuture = new CompletableFuture<>();
-          connect(connectFuture);
-          return connectFuture.whenComplete((result, error) -> connectFuture = null);
-        }
-        return connectFuture;
-      });
-    } else {
-      if (connectFuture == null) {
-        connectFuture = new CompletableFuture<>();
-        connect(connectFuture);
-        return connectFuture.whenComplete((result, error) -> connectFuture = null);
-      }
-      return connectFuture;
-    }
   }
 
   /**
