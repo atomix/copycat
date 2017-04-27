@@ -202,6 +202,7 @@ public class ClientConnection implements Connection {
       }
 
       connectFuture = new OrderedCompletableFuture<>();
+      connectFuture.whenComplete((r, e) -> connectFuture = null);
 
       Connection oldConnection = this.connection;
       this.connection = null;
@@ -222,6 +223,7 @@ public class ClientConnection implements Connection {
 
     // Create a new connect future and connect to the first server in the cluster.
     connectFuture = new OrderedCompletableFuture<>();
+    connectFuture.whenComplete((r, e) -> connectFuture = null);
     reset().connect(connectFuture);
     return connectFuture;
   }

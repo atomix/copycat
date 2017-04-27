@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
@@ -55,6 +56,7 @@ final class ClientSessionSubmitter {
   private final ClientSequencer sequencer;
   private final ThreadContext context;
   private final Map<Long, OperationAttempt> attempts = new LinkedHashMap<>();
+  private final AtomicLong keepAliveIndex = new AtomicLong();
 
   public ClientSessionSubmitter(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
@@ -157,8 +159,11 @@ final class ClientSessionSubmitter {
     // If the client's response sequence number is greater than the given command sequence number,
     // the cluster likely has a new leader, and we need to reset the sequencing in the leader by
     // sending a keep-alive request.
+    // Ensure that the client doesn't resubmit many concurrent KeepAliveRequests by tracking the last
+    // keep-alive response sequence number and only resubmitting if the sequence number has changed.
     long responseSequence = state.getCommandResponse();
-    if (commandSequence < responseSequence) {
+    if (commandSequence < responseSequence && keepAliveIndex.get() != responseSequence) {
+      keepAliveIndex.set(responseSequence);
       KeepAliveRequest request = KeepAliveRequest.builder()
         .withSession(state.getSessionId())
         .withCommandSequence(state.getCommandResponse())
@@ -177,6 +182,7 @@ final class ClientSessionSubmitter {
             attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
           }
         } else {
+          keepAliveIndex.set(0);
           attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
         }
       });
