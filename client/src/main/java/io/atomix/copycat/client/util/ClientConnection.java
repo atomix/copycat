@@ -143,6 +143,7 @@ public class ClientConnection implements Connection {
           future.completeExceptionally(new ConnectException("Failed to connect to the cluster"));
         }
       } else {
+        LOGGER.trace("{} - Resending {}: {}", id, request, error);
         resendRequest(error, request, sender, connection, future);
       }
     }
