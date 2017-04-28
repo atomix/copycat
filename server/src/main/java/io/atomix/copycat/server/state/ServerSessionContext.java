@@ -233,7 +233,12 @@ class ServerSessionContext implements ServerSession {
    * @return The server session context.
    */
   ServerSessionContext resetRequestSequence(long requestSequence) {
-    this.requestSequence = requestSequence;
+    // If the request sequence number is less than the applied sequence number, update the request
+    // sequence number. This is necessary to ensure that if the local server is a follower that is
+    // later elected leader, its sequences are consistent for commands.
+    if (requestSequence > this.requestSequence) {
+      this.requestSequence = requestSequence;
+    }
     return this;
   }
 
@@ -272,14 +277,6 @@ class ServerSessionContext implements ServerSession {
         }
       }
     }
-
-    // If the request sequence number is less than the applied sequence number, update the request
-    // sequence number. This is necessary to ensure that if the local server is a follower that is
-    // later elected leader, its sequences are consistent for commands.
-    if (sequence > requestSequence) {
-      this.requestSequence = sequence;
-    }
-
     return this;
   }
 
