@@ -50,7 +50,11 @@ import java.util.function.Predicate;
  */
 final class ClientSessionSubmitter {
   private static final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
-  private static final Predicate<Throwable> EXCEPTION_PREDICATE = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
+  private static final Predicate<Throwable> EXCEPTION_PREDICATE = e ->
+    e instanceof ConnectException
+      || e instanceof TimeoutException
+      || e instanceof TransportException
+      || e instanceof ClosedChannelException;
   private final Connection connection;
   private final ClientSessionState state;
   private final ClientSequencer sequencer;
@@ -337,18 +341,15 @@ final class ClientSessionSubmitter {
         else if (response.error() == CopycatError.Type.COMMAND_ERROR) {
           resubmit(response.lastSequence(), this);
         }
-        // APPLICATION_ERROR indicates that an exception occurred inside the state machine. Complete the command
-        // with an ApplicationException.
-        else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
+        // The following exceptions need to be handled at a higher level by the client or the user.
+        else if (response.error() == CopycatError.Type.APPLICATION_ERROR
+          || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR
+          || response.error() == CopycatError.Type.INTERNAL_ERROR) {
           complete(response.error().createException());
         }
         // For all other errors other than UNKNOWN_SESSION_ERROR, use fibonacci backoff to resubmit the command.
-        else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
-          retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
-        }
-        // UNKNOWN_SESSION_ERROR indicates that the client's session expired. Fail the command.
         else {
-          complete(response.error().createException());
+          retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
         }
       } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
         retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));

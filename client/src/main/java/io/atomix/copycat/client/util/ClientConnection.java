@@ -177,7 +177,8 @@ public class ClientConnection implements Connection {
           || response.error() == CopycatError.Type.COMMAND_ERROR
           || response.error() == CopycatError.Type.QUERY_ERROR
           || response.error() == CopycatError.Type.APPLICATION_ERROR
-          || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR) {
+          || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR
+          || response.error() == CopycatError.Type.INTERNAL_ERROR) {
           LOGGER.trace("{} - Received {}", id, response);
           future.complete(response);
         } else {
