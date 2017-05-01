@@ -203,14 +203,15 @@ public class ClientConnection implements Connection {
         return connectFuture;
       }
 
-      connectFuture = new OrderedCompletableFuture<>();
-      connectFuture.whenComplete((r, e) -> connectFuture = null);
+      CompletableFuture<Connection> future = new OrderedCompletableFuture<>();
+      connectFuture.whenComplete((r, e) -> this.connectFuture = null);
+      this.connectFuture = future;
 
       Connection oldConnection = this.connection;
       this.connection = null;
       oldConnection.close();
-      connect(connectFuture);
-      return connectFuture;
+      connect(future);
+      return future;
     }
 
     // If a connection was already established then use that connection.
@@ -224,10 +225,11 @@ public class ClientConnection implements Connection {
     }
 
     // Create a new connect future and connect to the first server in the cluster.
-    connectFuture = new OrderedCompletableFuture<>();
-    connectFuture.whenComplete((r, e) -> connectFuture = null);
-    reset().connect(connectFuture);
-    return connectFuture;
+    CompletableFuture<Connection> future = new OrderedCompletableFuture<>();
+    future.whenComplete((r, e) -> this.connectFuture = null);
+    this.connectFuture = future;
+    reset().connect(future);
+    return future;
   }
 
   /**
