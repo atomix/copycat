@@ -14,7 +14,7 @@ import java.util.function.Function;
  * A {@link CompletableFuture} that ensures callbacks are called in FIFO order.
  * <p>
  * The default {@link CompletableFuture} does not guarantee the ordering of callbacks, and indeed appears to
- * execute then in LIFO order.
+ * execute them in LIFO order.
  */
 public class OrderedCompletableFuture<T> extends CompletableFuture<T> {
   private final Queue<CompletableFuture<T>> orderedFutures = new LinkedList<>();

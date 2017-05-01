@@ -347,7 +347,7 @@ final class ClientSessionSubmitter {
           || response.error() == CopycatError.Type.INTERNAL_ERROR) {
           complete(response.error().createException());
         }
-        // For all other errors other than UNKNOWN_SESSION_ERROR, use fibonacci backoff to resubmit the command.
+        // For all other errors, use fibonacci backoff to resubmit the command.
         else {
           retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
         }
