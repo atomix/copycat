@@ -87,9 +87,7 @@ public abstract class OperationResponse extends SessionResponse {
       result = serializer.readObject(buffer);
     } else {
       error = CopycatError.forId(buffer.readByte());
-      if (error instanceof OperationException) {
-        lastSequence = buffer.readLong();
-      }
+      lastSequence = buffer.readLong();
     }
   }
 
@@ -102,9 +100,7 @@ public abstract class OperationResponse extends SessionResponse {
       serializer.writeObject(result, buffer);
     } else {
       buffer.writeByte(error.id());
-      if (error instanceof OperationException) {
-        buffer.writeLong(lastSequence);
-      }
+      buffer.writeLong(lastSequence);
     }
   }
 
@@ -129,7 +125,11 @@ public abstract class OperationResponse extends SessionResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, error=%s, sequence=%d, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, error, lastSequence, index, eventIndex, result);
+    if (error == null) {
+      return String.format("%s[status=%s, index=%d, eventIndex=%d, result=%s]", getClass().getSimpleName(), status, index, eventIndex, result);
+    } else {
+      return String.format("%s[status=%s, error=%s, lastSequence=%d]", getClass().getSimpleName(), status, error, lastSequence);
+    }
   }
 
   /**

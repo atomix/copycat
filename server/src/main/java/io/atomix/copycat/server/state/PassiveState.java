@@ -390,6 +390,7 @@ class PassiveState extends ReserveState {
           .withError(((CopycatException) error).getType())
           .build());
       } else {
+        LOGGER.warn("An unexpected error occurred: {}", error);
         future.complete(builder.withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.INTERNAL_ERROR)
           .build());

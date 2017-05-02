@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
@@ -49,12 +50,17 @@ import java.util.function.Predicate;
  */
 final class ClientSessionSubmitter {
   private static final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
-  private static final Predicate<Throwable> EXCEPTION_PREDICATE = e -> e instanceof ConnectException || e instanceof TimeoutException || e instanceof TransportException || e instanceof ClosedChannelException;
+  private static final Predicate<Throwable> EXCEPTION_PREDICATE = e ->
+    e instanceof ConnectException
+      || e instanceof TimeoutException
+      || e instanceof TransportException
+      || e instanceof ClosedChannelException;
   private final Connection connection;
   private final ClientSessionState state;
   private final ClientSequencer sequencer;
   private final ThreadContext context;
   private final Map<Long, OperationAttempt> attempts = new LinkedHashMap<>();
+  private final AtomicLong keepAliveIndex = new AtomicLong();
 
   public ClientSessionSubmitter(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
@@ -157,8 +163,11 @@ final class ClientSessionSubmitter {
     // If the client's response sequence number is greater than the given command sequence number,
     // the cluster likely has a new leader, and we need to reset the sequencing in the leader by
     // sending a keep-alive request.
+    // Ensure that the client doesn't resubmit many concurrent KeepAliveRequests by tracking the last
+    // keep-alive response sequence number and only resubmitting if the sequence number has changed.
     long responseSequence = state.getCommandResponse();
-    if (commandSequence < responseSequence) {
+    if (commandSequence < responseSequence && keepAliveIndex.get() != responseSequence) {
+      keepAliveIndex.set(responseSequence);
       KeepAliveRequest request = KeepAliveRequest.builder()
         .withSession(state.getSessionId())
         .withCommandSequence(state.getCommandResponse())
@@ -177,6 +186,7 @@ final class ClientSessionSubmitter {
             attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
           }
         } else {
+          keepAliveIndex.set(0);
           attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
         }
       });
@@ -331,18 +341,15 @@ final class ClientSessionSubmitter {
         else if (response.error() == CopycatError.Type.COMMAND_ERROR) {
           resubmit(response.lastSequence(), this);
         }
-        // APPLICATION_ERROR indicates that an exception occurred inside the state machine. Complete the command
-        // with an ApplicationException.
-        else if (response.error() == CopycatError.Type.APPLICATION_ERROR) {
+        // The following exceptions need to be handled at a higher level by the client or the user.
+        else if (response.error() == CopycatError.Type.APPLICATION_ERROR
+          || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR
+          || response.error() == CopycatError.Type.INTERNAL_ERROR) {
           complete(response.error().createException());
         }
-        // For all other errors other than UNKNOWN_SESSION_ERROR, use fibonacci backoff to resubmit the command.
-        else if (response.error() != CopycatError.Type.UNKNOWN_SESSION_ERROR) {
-          retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
-        }
-        // UNKNOWN_SESSION_ERROR indicates that the client's session expired. Fail the command.
+        // For all other errors, use fibonacci backoff to resubmit the command.
         else {
-          complete(response.error().createException());
+          retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
         }
       } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
         retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt-1, FIBONACCI.length-1)]));
