@@ -58,7 +58,15 @@ public class ClientSessionManagerTest {
           new Address("localhost", 5002)
         ))
         .withTimeout(1000)
-        .build()));
+        .build()))
+      .thenReturn(CompletableFuture.completedFuture(KeepAliveResponse.builder()
+        .withStatus(Response.Status.OK)
+        .withLeader(new Address("localhost", 5000))
+        .withMembers(Arrays.asList(
+          new Address("localhost", 5000),
+          new Address("localhost", 5001),
+          new Address("localhost", 5002)
+        )).build()));
 
     ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
     ThreadContext context = mock(ThreadContext.class);
@@ -71,7 +79,7 @@ public class ClientSessionManagerTest {
     assertEquals(state.getSessionId(), 1);
     assertEquals(state.getState(), Session.State.OPEN);
 
-    verify(connection).reset(new Address("localhost", 5000), Arrays.asList(
+    verify(connection, times(2)).reset(new Address("localhost", 5000), Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5001),
       new Address("localhost", 5002)
