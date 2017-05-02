@@ -204,7 +204,7 @@ public class ClientConnection implements Connection {
       }
 
       CompletableFuture<Connection> future = new OrderedCompletableFuture<>();
-      connectFuture.whenComplete((r, e) -> this.connectFuture = null);
+      future.whenComplete((r, e) -> this.connectFuture = null);
       this.connectFuture = future;
 
       Connection oldConnection = this.connection;

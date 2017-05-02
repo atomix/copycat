@@ -1,5 +1,7 @@
 package io.atomix.copycat.client.util;
 
+import io.atomix.catalyst.concurrent.Futures;
+
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -18,34 +20,46 @@ import java.util.function.Function;
  */
 public class OrderedCompletableFuture<T> extends CompletableFuture<T> {
   private final Queue<CompletableFuture<T>> orderedFutures = new LinkedList<>();
+  private boolean complete;
+  private T result;
+  private Throwable error;
+
+  public OrderedCompletableFuture() {
+    super.whenComplete(this::complete);
+  }
 
   /**
    * Adds a new ordered future.
    */
   private CompletableFuture<T> orderedFuture() {
     synchronized (orderedFutures) {
-      if (orderedFutures.isEmpty()) {
-        super.whenComplete(this::completeFutures);
+      if (complete) {
+        if (error == null) {
+          return CompletableFuture.completedFuture(result);
+        } else {
+          return Futures.exceptionalFuture(error);
+        }
+      } else {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        orderedFutures.add(future);
+        return future;
       }
-
-      CompletableFuture<T> future = new CompletableFuture<T>();
-      orderedFutures.add(future);
-      return future;
     }
   }
 
   /**
    * Completes futures in FIFO order.
    */
-  private void completeFutures(T result, Throwable error) {
-    if (error == null) {
-      synchronized (orderedFutures) {
+  private void complete(T result, Throwable error) {
+    synchronized (orderedFutures) {
+      this.complete = true;
+      this.result = result;
+      this.error = error;
+      if (error == null) {
         for (CompletableFuture<T> future : orderedFutures) {
           future.complete(result);
         }
-      }
-    } else {
-      synchronized (orderedFutures) {
+      } else {
         for (CompletableFuture<T> future : orderedFutures) {
           future.completeExceptionally(error);
         }
