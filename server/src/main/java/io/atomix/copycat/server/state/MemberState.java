@@ -36,6 +36,7 @@ final class MemberState {
   private long heartbeatTime;
   private long heartbeatStartTime;
   private int appending;
+  private boolean appendSucceeded;
   private long appendTime;
   private boolean configuring;
   private boolean installing;
@@ -60,6 +61,7 @@ final class MemberState {
     timeBuffer.reset();
     configuring = false;
     installing = false;
+    appendSucceeded = false;
     failures = 0;
   }
 
@@ -218,7 +220,36 @@ final class MemberState {
    * @return Indicates whether an append request can be sent to the member.
    */
   boolean canAppend() {
-    return appending == 0 || (appending < MAX_APPENDS && System.nanoTime() - (timeBuffer.average() / MAX_APPENDS) >= appendTime);
+    return appending == 0 || (appendSucceeded && appending < MAX_APPENDS && System.nanoTime() - (timeBuffer.average() / MAX_APPENDS) >= appendTime);
+  }
+
+  /**
+   * Flags the last append to the member as successful.
+   *
+   * @return The member state.
+   */
+  MemberState appendSucceeded() {
+    return appendSucceeded(true);
+  }
+
+  /**
+   * Flags the last append to the member is failed.
+   *
+   * @return The member state.
+   */
+  MemberState appendFailed() {
+    return appendSucceeded(false);
+  }
+
+  /**
+   * Sets whether the last append to the member succeeded.
+   *
+   * @param succeeded Whether the last append to the member succeeded.
+   * @return The member state.
+   */
+  private MemberState appendSucceeded(boolean succeeded) {
+    this.appendSucceeded = succeeded;
+    return this;
   }
 
   /**
