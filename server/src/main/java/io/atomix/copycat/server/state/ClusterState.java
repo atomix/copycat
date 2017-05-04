@@ -181,6 +181,16 @@ final class ClusterState implements Cluster, AutoCloseable {
   }
 
   /**
+   * Returns a member state by ID.
+   *
+   * @param id The member ID.
+   * @return The member state.
+   */
+  public MemberState getMemberState(int id) {
+    return membersMap.get(id);
+  }
+
+  /**
    * Returns a member by ID.
    *
    * @param id The member ID.
