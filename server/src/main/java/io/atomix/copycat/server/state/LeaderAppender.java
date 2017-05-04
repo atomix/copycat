@@ -402,6 +402,7 @@ final class LeaderAppender extends AbstractAppender {
 
     // If replication succeeded then trigger commit futures.
     if (response.succeeded()) {
+      member.appendSucceeded();
       updateMatchIndex(member, response);
 
       // If entries were committed to the replica then check commit indexes.
@@ -422,6 +423,7 @@ final class LeaderAppender extends AbstractAppender {
     // If the response failed, the follower should have provided the correct last index in their log. This helps
     // us converge on the matchIndex faster than by simply decrementing nextIndex one index at a time.
     else {
+      member.appendFailed();
       resetMatchIndex(member, response);
       resetNextIndex(member);
 
