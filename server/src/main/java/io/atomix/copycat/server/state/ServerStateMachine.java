@@ -822,10 +822,9 @@ final class ServerStateMachine implements AutoCloseable {
 
     Result result = session.getResult(sequence);
     if (result == null) {
-      context.executor().execute(() -> future.completeExceptionally(new RuntimeException("missing result")));
-    } else {
-      context.executor().execute(() -> future.complete(result));
+      LOGGER.debug("Missing command result for {}:{}", session.id(), sequence);
     }
+    context.executor().execute(() -> future.complete(result));
   }
 
   /**

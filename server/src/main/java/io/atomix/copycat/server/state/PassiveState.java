@@ -379,7 +379,7 @@ class PassiveState extends ReserveState {
 
       if (error == null) {
         future.complete(builder.withStatus(Response.Status.OK)
-          .withResult(result.result)
+          .withResult(result != null ? result.result : null)
           .build());
       } else if (error instanceof CompletionException && error.getCause() instanceof CopycatException) {
         future.complete(builder.withStatus(Response.Status.ERROR)
