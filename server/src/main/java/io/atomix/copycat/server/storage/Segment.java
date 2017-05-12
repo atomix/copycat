@@ -103,22 +103,28 @@ public class Segment implements AutoCloseable {
 
     // While the length is non-zero...
     while (length != 0) {
+      // Read the full entry into memory.
+      buffer.read(memory.clear().limit(length));
+
+      // Flip the in-memory buffer.
+      memory.flip();
+
       // Read the 64-bit entry checksum.
-      long checksum = buffer.readUnsignedInt();
+      long checksum = memory.readUnsignedInt();
 
       // Read the 64-bit entry offset.
-      long offset = buffer.readLong();
+      long offset = memory.readLong();
 
       // If the term is set on the entry, read the term.
-      Long term = buffer.readBoolean() ? buffer.readLong() : null;
+      Long term = memory.readBoolean() ? memory.readLong() : null;
 
-      // Read the entry bytes into memory.
-      buffer.read(memory.clear().limit(length));
-      memory.flip();
+      // Calculate the entry position and length.
+      int entryPosition = (int) memory.position();
+      int entryLength = length - entryPosition;
 
       // Compute the checksum for the entry bytes.
       Checksum crc32 = new CRC32();
-      crc32.update(memory.array(), 0, (int) memory.limit());
+      crc32.update(memory.array(), entryPosition, entryLength);
 
       // If the computed checksum equals the stored checksum...
       if (checksum == crc32.getValue()) {
@@ -348,44 +354,52 @@ public class Segment implements AutoCloseable {
     Assert.arg(term > 0 && term >= lastTerm, "term must be monotonically increasing");
 
     // Mark the starting position of the record and record the starting position of the new entry.
-    long position = buffer.mark().position();
+    long position = buffer.position();
 
     // Determine whether to skip writing the term to the segment.
     boolean skipTerm = term == lastTerm;
 
     // Calculate the length of the entry header bytes.
-    int headerLength = INTEGER + INTEGER + LONG + BOOLEAN + (skipTerm ? 0 : LONG);
+    int headerLength = INTEGER + LONG + BOOLEAN + (skipTerm ? 0 : LONG);
+
+    // Clear the memory and skip the size and header.
+    memory.clear().skip(headerLength);
 
     // Serialize the object into the in-memory buffer.
-    serializer.writeObject(entry, memory.clear());
+    serializer.writeObject(entry, memory);
+
+    // Flip the in-memory buffer indexes.
     memory.flip();
 
-    // Calculate the length of the serialized bytes based on the resulting buffer position and the starting position.
-    int length = (int) memory.limit();
+    // The total length of the entry is the in-memory buffer limit.
+    int totalLength = (int) memory.limit();
+
+    // Calculate the length of the serialized bytes based on the in-memory buffer limit and header length.
+    int entryLength = totalLength - headerLength;
 
     // Set the entry size.
-    entry.setSize(length + headerLength);
+    entry.setSize(totalLength);
 
     // Compute the checksum for the entry.
     Checksum crc32 = new CRC32();
-    crc32.update(memory.array(), 0, (int) memory.limit());
+    crc32.update(memory.array(), headerLength, entryLength);
     long checksum = crc32.getValue();
 
-    // Write the length, checksum, and offset of the entry.
-    buffer.reset()
-      .writeInt(length)
+    // Rewind the in-memory buffer and write the length, checksum, and offset.
+    memory.rewind()
       .writeUnsignedInt(checksum)
       .writeLong(offset);
 
     // If the term has not yet been written, write the term to this entry.
     if (skipTerm) {
-      buffer.writeBoolean(false);
+      memory.writeBoolean(false);
     } else {
-      buffer.writeBoolean(true).writeLong(entry.getTerm());
+      memory.writeBoolean(true).writeLong(term);
     }
 
-    // Write the entry to the segment.
-    buffer.write(memory);
+    // Write the entry length and entry to the segment.
+    buffer.writeInt(totalLength)
+      .write(memory.rewind());
 
     // Index the offset, position, and length.
     offsetIndex.index(offset, position);
@@ -442,32 +456,37 @@ public class Segment implements AutoCloseable {
       // Read the length of the entry.
       int length = buffer.readInt(position);
 
+      // Read the entry into memory.
+      try (Buffer slice = buffer.slice(position + INTEGER, length)) {
+        slice.read(memory.clear().limit(length));
+        memory.flip();
+      }
+
       // Read the checksum of the entry.
-      long checksum = buffer.readUnsignedInt(position + INTEGER);
+      long checksum = memory.readUnsignedInt();
 
       // Verify that the entry at the given offset matches.
-      long entryOffset = buffer.readLong(position + INTEGER + INTEGER);
+      long entryOffset = memory.readLong();
       Assert.state(entryOffset == offset, "inconsistent index: %s", index);
 
-      // Determine whether to skip reading the term from this entry.
-      boolean skipTerm = !buffer.readBoolean(position + INTEGER + INTEGER + LONG);
+      // Skip the term if necessary.
+      if (memory.readBoolean()) {
+        memory.skip(LONG);
+      }
 
-      // Read the entry buffer and deserialize the entry.
-      try (Buffer value = buffer.slice(position + INTEGER + INTEGER + LONG + BOOLEAN + (skipTerm ? 0 : LONG), length)) {
-        // Read the entry into the in-memory buffer.
-        value.read(memory.clear().limit(length));
-        memory.flip();
+      // Calculate the entry position and length.
+      int entryPosition = (int) memory.position();
+      int entryLength = length - entryPosition;
 
-        // Compute the checksum for the entry bytes.
-        Checksum crc32 = new CRC32();
-        crc32.update(memory.array(), 0, (int) memory.limit());
+      // Compute the checksum for the entry bytes.
+      Checksum crc32 = new CRC32();
+      crc32.update(memory.array(), entryPosition, entryLength);
 
-        // If the stored checksum equals the computed checksum, return the entry.
-        if (checksum == crc32.getValue()) {
-          T entry = serializer.readObject(memory);
-          entry.setIndex(index).setTerm(termIndex.lookup(offset)).setSize(length);
-          return entry;
-        }
+      // If the stored checksum equals the computed checksum, return the entry.
+      if (checksum == crc32.getValue()) {
+        T entry = serializer.readObject(memory);
+        entry.setIndex(index).setTerm(termIndex.lookup(offset)).setSize(length);
+        return entry;
       }
     }
     return null;
