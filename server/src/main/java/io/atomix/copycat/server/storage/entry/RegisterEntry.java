@@ -34,7 +34,6 @@ import io.atomix.copycat.protocol.RegisterRequest;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
-  private String client;
   private long timeout;
 
   public RegisterEntry() {
@@ -42,27 +41,6 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
 
   public RegisterEntry(ReferenceManager<Entry<?>> referenceManager) {
     super(referenceManager);
-  }
-
-  /**
-   * Returns the entry client ID.
-   *
-   * @return The entry client ID.
-   */
-  public String getClient() {
-    return client;
-  }
-
-  /**
-   * Sets the entry client ID.
-   *
-   * @param client The entry client ID.
-   * @return The register entry.
-   * @throws NullPointerException if {@code client} is null
-   */
-  public RegisterEntry setClient(String client) {
-    this.client = Assert.notNull(client, "client");
-    return this;
   }
 
   /**
@@ -88,20 +66,18 @@ public class RegisterEntry extends TimestampedEntry<RegisterEntry> {
   @Override
   public void writeObject(BufferOutput buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client);
     buffer.writeLong(timeout);
   }
 
   @Override
   public void readObject(BufferInput buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = buffer.readString();
     timeout = buffer.readLong();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, client=%s, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, timeout=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getTimeout());
   }
 
 }

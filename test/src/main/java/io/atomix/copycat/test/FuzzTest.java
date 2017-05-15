@@ -22,7 +22,10 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.*;
+import io.atomix.copycat.client.CommunicationStrategies;
+import io.atomix.copycat.client.ConnectionStrategies;
+import io.atomix.copycat.client.CopycatClient;
+import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -149,7 +152,8 @@ public class FuzzTest implements Runnable {
 
     int clients = randomNumber(100) + 1;
     for (int i = 0; i < clients; i++) {
-      CopycatClient client = createClient(RecoveryStrategies.RECOVER);
+      CopycatClient client = createClient();
+      CopycatSession session = createSession(client);
 
       final int clientId = i;
       client.context().schedule(Duration.ofMillis((100 * clients) + (randomNumber(50) - 25)), Duration.ofMillis((100 * clients) + (randomNumber(50) - 25)), () -> {
@@ -157,7 +161,7 @@ public class FuzzTest implements Runnable {
         int type = randomNumber(4);
         switch (type) {
           case 0:
-            client.submit(new Put(randomKey(), randomString(1024 * 16))).thenAccept(result -> {
+            session.submit(new Put(randomKey(), randomString(1024 * 16))).thenAccept(result -> {
               synchronized (lock) {
                 if (result < lastLinearizableIndex) {
                   System.out.println(result + " is less than last linearizable index " + lastLinearizableIndex);
@@ -179,10 +183,10 @@ public class FuzzTest implements Runnable {
             });
             break;
           case 1:
-            client.submit(new Get(randomKey(), randomConsistency()));
+            session.submit(new Get(randomKey(), randomConsistency()));
             break;
           case 2:
-            client.submit(new Remove(randomKey())).thenAccept(result -> {
+            session.submit(new Remove(randomKey())).thenAccept(result -> {
               synchronized (lock) {
                 if (result < lastLinearizableIndex) {
                   System.out.println(result + " is less than last linearizable index " + lastLinearizableIndex);
@@ -205,7 +209,7 @@ public class FuzzTest implements Runnable {
             break;
           case 3:
             Query.ConsistencyLevel consistency = randomConsistency();
-            client.submit(new Index(consistency)).thenAccept(result -> {
+            session.submit(new Index(consistency)).thenAccept(result -> {
               synchronized (lock) {
                 switch (consistency) {
                   case LINEARIZABLE:
@@ -392,7 +396,7 @@ public class FuzzTest implements Runnable {
         .withMinorCompactionInterval(Duration.ofSeconds(randomNumber(30) + 15))
         .withMajorCompactionInterval(Duration.ofSeconds(randomNumber(60) + 60))
         .build())
-      .withStateMachine(FuzzStateMachine::new);
+      .addStateMachine("test", FuzzStateMachine::new);
 
     CopycatServer server = builder.build();
     server.serializer().disableWhitelist();
@@ -403,12 +407,11 @@ public class FuzzTest implements Runnable {
   /**
    * Creates a Copycat client.
    */
-  private CopycatClient createClient(RecoveryStrategy strategy) throws Exception {
+  private CopycatClient createClient() throws Exception {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withRecoveryStrategy(strategy)
-      .withServerSelectionStrategy(ServerSelectionStrategies.values()[randomNumber(ServerSelectionStrategies.values().length)])
+      .withServerSelectionStrategy(CommunicationStrategies.values()[randomNumber(CommunicationStrategies.values().length)])
       .build();
     client.serializer().disableWhitelist();
     CountDownLatch latch = new CountDownLatch(1);
@@ -416,6 +419,16 @@ public class FuzzTest implements Runnable {
     latch.await(30, TimeUnit.SECONDS);
     clients.add(client);
     return client;
+  }
+
+  /**
+   * Creates a test session.
+   */
+  private CopycatSession createSession(CopycatClient client) {
+    return client.sessionBuilder()
+      .withName("test")
+      .withType("test")
+      .build();
   }
 
   /**

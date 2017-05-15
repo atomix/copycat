@@ -34,7 +34,7 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
+public class UnregisterEntry extends ClientEntry<UnregisterEntry> {
   private boolean expired;
 
   public UnregisterEntry() {
@@ -83,7 +83,7 @@ public class UnregisterEntry extends SessionEntry<UnregisterEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, expired=%b, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), isExpired(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, client=%s, expired=%b, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), isExpired(), getTimestamp());
   }
 
 }

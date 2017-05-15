@@ -125,9 +125,19 @@ public interface CopycatError {
     },
 
     /**
+     * Unknown client error.
+     */
+    UNKNOWN_CLIENT_ERROR(6) {
+      @Override
+      public CopycatException createException() {
+        return new UnknownClientException("Unknown client");
+      }
+    },
+
+    /**
      * Unknown session error.
      */
-    UNKNOWN_SESSION_ERROR(6) {
+    UNKNOWN_SESSION_ERROR(7) {
       @Override
       public CopycatException createException() {
         return new UnknownSessionException("unknown member session");
@@ -135,9 +145,19 @@ public interface CopycatError {
     },
 
     /**
+     * Unknown state machine error.
+     */
+    UNKNOWN_STATE_MACHINE_ERROR(8) {
+      @Override
+      public CopycatException createException() {
+        return new UnknownStateMachineException("Unknown state machine");
+      }
+    },
+
+    /**
      * Internal error.
      */
-    INTERNAL_ERROR(7) {
+    INTERNAL_ERROR(9) {
       @Override
       public CopycatException createException() {
         return new InternalException("internal Raft error");
@@ -147,7 +167,7 @@ public interface CopycatError {
     /**
      * Configuration error.
      */
-    CONFIGURATION_ERROR(8) {
+    CONFIGURATION_ERROR(10) {
       @Override
       public CopycatException createException() {
         return new ConfigurationException("configuration failed");

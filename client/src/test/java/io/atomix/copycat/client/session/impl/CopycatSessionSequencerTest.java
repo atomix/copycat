@@ -1,19 +1,19 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
-package io.atomix.copycat.client.session;
+package io.atomix.copycat.client.session.impl;
 
 import io.atomix.copycat.protocol.CommandResponse;
 import io.atomix.copycat.protocol.PublishRequest;
@@ -33,13 +33,13 @@ import static org.testng.Assert.*;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class ClientSequencerTest {
+public class CopycatSessionSequencerTest {
 
   /**
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventBeforeCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -64,7 +64,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAfterCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -89,7 +89,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAtCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -114,7 +114,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAfterAllCommands() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request1 = PublishRequest.builder()
@@ -146,7 +146,7 @@ public class ClientSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAbsentCommand() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
 
     PublishRequest request1 = PublishRequest.builder()
       .withSession(1)
@@ -170,7 +170,7 @@ public class ClientSequencerTest {
    * Tests sequencing callbacks with the sequencer.
    */
   public void testSequenceResponses() throws Throwable {
-    ClientSequencer sequencer = new ClientSequencer(new ClientSessionState(UUID.randomUUID().toString()));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
     long sequence1 = sequencer.nextRequest();
     long sequence2 = sequencer.nextRequest();
     assertTrue(sequence2 == sequence1 + 1);
@@ -197,15 +197,14 @@ public class ClientSequencerTest {
    * Tests sequencing responses with a missing PublishRequest.
    */
   public void testSequenceMissingEvent() throws Throwable {
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
-    state.setSessionId(1)
-      .setCommandRequest(2)
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    state.setCommandRequest(2)
       .setResponseIndex(15)
       .setEventIndex(5);
 
     AtomicInteger run = new AtomicInteger();
 
-    ClientSequencer sequencer = new ClientSequencer(state);
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(state);
     sequencer.requestSequence = 2;
     sequencer.responseSequence = 1;
     sequencer.eventIndex = 5;
@@ -231,15 +230,14 @@ public class ClientSequencerTest {
    * Tests sequencing multiple responses that indicate missing events.
    */
   public void testSequenceMultipleMissingEvents() throws Throwable {
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString());
-    state.setSessionId(1)
-      .setCommandRequest(2)
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    state.setCommandRequest(2)
       .setResponseIndex(15)
       .setEventIndex(5);
 
     AtomicInteger run = new AtomicInteger();
 
-    ClientSequencer sequencer = new ClientSequencer(state);
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(state);
     sequencer.requestSequence = 3;
     sequencer.responseSequence = 1;
     sequencer.eventIndex = 5;

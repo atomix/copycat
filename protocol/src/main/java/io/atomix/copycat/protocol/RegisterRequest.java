@@ -34,6 +34,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class RegisterRequest extends AbstractRequest {
+  public static final String NAME = "register";
 
   /**
    * Returns a new register client request builder.

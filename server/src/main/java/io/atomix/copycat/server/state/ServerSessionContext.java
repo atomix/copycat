@@ -38,15 +38,13 @@ import java.util.function.Consumer;
 class ServerSessionContext implements ServerSession {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
   private final long id;
-  private final String client;
+  private final long client;
   private final Log log;
-  private final ServerStateMachineContext context;
-  private boolean open;
+  private final ServerStateMachineExecutor executor;
   private volatile State state = State.OPEN;
-  private final long timeout;
   private Connection connection;
+  private final String messageType;
   private volatile long references;
-  private long keepAliveIndex;
   private long requestSequence;
   private long commandSequence;
   private long lastApplied;
@@ -54,24 +52,23 @@ class ServerSessionContext implements ServerSession {
   private long eventIndex;
   private long completeIndex;
   private long closeIndex;
-  private long timestamp;
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
-  private final Map<Long, ServerStateMachine.Result> results = new HashMap<>();
+  private final Map<Long, OperationResult> results = new HashMap<>();
   private final Queue<EventHolder> events = new LinkedList<>();
   private EventHolder event;
   private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, String client, Log log, ServerStateMachineContext context, long timeout) {
+  ServerSessionContext(long id, long client, Log log, ServerStateMachineExecutor executor) {
     this.id = id;
-    this.client = Assert.notNull(client, "client");
+    this.client = client;
     this.log = Assert.notNull(log, "log");
     this.eventIndex = id;
     this.completeIndex = id;
-    this.lastApplied = id - 1;
-    this.context = context;
-    this.timeout = timeout;
+    this.lastApplied = id;
+    this.executor = executor;
+    this.messageType = String.valueOf(id);
   }
 
   @Override
@@ -84,15 +81,17 @@ class ServerSessionContext implements ServerSession {
    *
    * @return The session client ID.
    */
-  public String client() {
+  public long client() {
     return client;
   }
 
   /**
-   * Opens the session.
+   * Returns the state machine executor associated with the session.
+   *
+   * @return The state machine executor associated with the session.
    */
-  void open() {
-    open = true;
+  ServerStateMachineExecutor getStateMachineExecutor() {
+    return executor;
   }
 
   @Override
@@ -116,89 +115,6 @@ class ServerSessionContext implements ServerSession {
   @Override
   public Listener<State> onStateChange(Consumer<State> callback) {
     return changeListeners.add(callback);
-  }
-
-  /**
-   * Acquires a reference to the session.
-   */
-  void acquire() {
-    references++;
-  }
-
-  /**
-   * Releases a reference to the session.
-   */
-  void release() {
-    long references = --this.references;
-    if (!state.active() && references == 0) {
-      context.sessions().unregisterSession(id);
-      log.release(id);
-      if (closeIndex > 0) {
-        log.release(closeIndex);
-      }
-    }
-  }
-
-  /**
-   * Returns the number of open command references for the session.
-   *
-   * @return The number of open command references for the session.
-   */
-  long references() {
-    return references;
-  }
-
-  /**
-   * Returns the session timeout.
-   *
-   * @return The session timeout.
-   */
-  long timeout() {
-    return timeout;
-  }
-
-  /**
-   * Returns the session timestamp.
-   *
-   * @return The session timestamp.
-   */
-  long getTimestamp() {
-    return timestamp;
-  }
-
-  /**
-   * Sets the session timestamp.
-   *
-   * @param timestamp The session timestamp.
-   * @return The server session.
-   */
-  ServerSessionContext setTimestamp(long timestamp) {
-    this.timestamp = Math.max(this.timestamp, timestamp);
-    return this;
-  }
-
-  /**
-   * Returns the current session keep alive index.
-   *
-   * @return The current session keep alive index.
-   */
-  long getKeepAliveIndex() {
-    return keepAliveIndex;
-  }
-
-  /**
-   * Sets the current session keep alive index.
-   *
-   * @param keepAliveIndex The current session keep alive index.
-   * @return The server session.
-   */
-  ServerSessionContext setKeepAliveIndex(long keepAliveIndex) {
-    long previousKeepAliveIndex = this.keepAliveIndex;
-    this.keepAliveIndex = keepAliveIndex;
-    if (previousKeepAliveIndex > 0) {
-      log.release(previousKeepAliveIndex);
-    }
-    return this;
   }
 
   /**
@@ -351,7 +267,7 @@ class ServerSessionContext implements ServerSession {
    * @param result The result.
    * @return The server session.
    */
-  ServerSessionContext registerResult(long sequence, ServerStateMachine.Result result) {
+  ServerSessionContext registerResult(long sequence, OperationResult result) {
     results.put(sequence, result);
     return this;
   }
@@ -382,7 +298,7 @@ class ServerSessionContext implements ServerSession {
    * @param sequence The response sequence.
    * @return The response.
    */
-  ServerStateMachine.Result getResult(long sequence) {
+  OperationResult getResult(long sequence) {
     return results.get(sequence);
   }
 
@@ -419,20 +335,22 @@ class ServerSessionContext implements ServerSession {
 
   @Override
   public Session publish(String event, Object message) {
-    Assert.state(open, "cannot publish events during session registration");
+    // Store volatile state in a local variable.
+    State state = this.state;
     Assert.stateNot(state == State.CLOSED, "session is closed");
     Assert.stateNot(state == State.EXPIRED, "session is expired");
-    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "session events can only be published during command execution");
+    Assert.state(executor.context().type() == ServerStateMachineContext.Type.COMMAND, "session events can only be published during command execution");
 
     // If the client acked an index greater than the current event sequence number since we know the
     // client must have received it from another server.
-    if (completeIndex > context.index())
+    if (completeIndex > executor.context().index()) {
       return this;
+    }
 
     // If no event has been published for this index yet, create a new event holder.
-    if (this.event == null || this.event.eventIndex != context.index()) {
+    if (this.event == null || this.event.eventIndex != executor.context().index()) {
       long previousIndex = eventIndex;
-      eventIndex = context.index();
+      eventIndex = executor.context().index();
       this.event = new EventHolder(eventIndex, previousIndex);
     }
 
@@ -450,6 +368,7 @@ class ServerSessionContext implements ServerSession {
       events.add(event);
       sendEvent(event);
     }
+    setLastApplied(index);
   }
 
   /**
@@ -521,77 +440,7 @@ class ServerSessionContext implements ServerSession {
       .build();
 
     LOGGER.trace("{} - Sending {}", id, request);
-    connection.send(request);
-  }
-
-  /**
-   * Sets the session as suspect.
-   */
-  void suspect() {
-    setState(State.UNSTABLE);
-  }
-
-  /**
-   * Sets the session as trusted.
-   */
-  void trust() {
-    setState(State.OPEN);
-  }
-
-  /**
-   * Sets the session as being unregistered.
-   */
-  void unregister() {
-    unregistering = true;
-  }
-
-  /**
-   * Indicates whether the session is being unregistered.
-   */
-  boolean isUnregistering() {
-    return unregistering;
-  }
-
-  /**
-   * Expires the session.
-   *
-   * @param index The index at which to expire the session.
-   */
-  void expire(long index) {
-    setState(State.EXPIRED);
-    cleanState(index);
-  }
-
-  /**
-   * Closes the session.
-   *
-   * @param index The index at which to close the session.
-   */
-  void close(long index) {
-    setState(State.CLOSED);
-    cleanState(index);
-  }
-
-  /**
-   * Cleans session entries on close.
-   */
-  private void cleanState(long index) {
-    // If the keep alive index is set, release the entry.
-    if (keepAliveIndex > 0) {
-      log.release(keepAliveIndex);
-    }
-
-    context.sessions().unregisterSession(id);
-
-    // If no references to session commands are open, release session-related entries.
-    if (references == 0) {
-      log.release(id);
-      if (index > 0) {
-        log.release(index);
-      }
-    } else {
-      this.closeIndex = index;
-    }
+    connection.send(messageType, request);
   }
 
   @Override

@@ -20,8 +20,9 @@ import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.entry.OperationEntry;
+import io.atomix.copycat.server.storage.LogCleaner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,35 +33,20 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 final class ServerCommit implements Commit<Operation<?>> {
-  private final ServerCommitPool pool;
-  private final Log log;
-  private final AtomicInteger references = new AtomicInteger();
-  private volatile long index;
-  private volatile ServerSessionContext session;
-  private volatile Instant instant;
-  private volatile Operation operation;
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerCommit.class);
+  private final LogCleaner cleaner;
+  private final AtomicInteger references = new AtomicInteger(1);
+  private final long index;
+  private final ServerSessionContext session;
+  private final Instant instant;
+  private final Operation operation;
 
-  public ServerCommit(ServerCommitPool pool, Log log) {
-    this.pool = pool;
-    this.log = log;
-  }
-
-  /**
-   * Resets the commit.
-   *
-   * @param entry The entry.
-   */
-  void reset(OperationEntry<?> entry, ServerSessionContext session, long timestamp) {
-    if (references.compareAndSet(0, 1)) {
-      this.index = entry.getIndex();
-      this.session = session;
-      this.instant = Instant.ofEpochMilli(timestamp);
-      this.operation = entry.getOperation();
-      session.acquire();
-      references.set(1);
-    } else {
-      throw new IllegalStateException("Cannot recycle commit with " + references.get() + " references");
-    }
+  public ServerCommit(long index, Operation operation, ServerSessionContext session, long timestamp, LogCleaner cleaner) {
+    this.index = index;
+    this.session = session;
+    this.instant = Instant.ofEpochMilli(timestamp);
+    this.operation = operation;
+    this.cleaner = cleaner;
   }
 
   /**
@@ -133,36 +119,22 @@ final class ServerCommit implements Commit<Operation<?>> {
    * Cleans up the commit.
    */
   private void cleanup() {
-    if (operation instanceof Command && log.isOpen()) {
-      try {
-        log.release(index);
-      } catch (IllegalStateException e) {
-      }
+    if (operation instanceof Command) {
+      cleaner.clean(index);
     }
-
-    session.release();
-
-    index = 0;
-    session = null;
-    instant = null;
-    operation = null;
-
-    pool.release(this);
   }
 
   @Override
   protected void finalize() throws Throwable {
-    pool.warn(this);
+    if (references.get() > 0) {
+      LOGGER.warn("An unreleased commit was garbage collected");
+    }
     super.finalize();
   }
 
   @Override
   public String toString() {
-    if (references() > 0) {
-      return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
-    } else {
-      return String.format("%s[index=unknown]", getClass().getSimpleName());
-    }
+    return String.format("%s[index=%d, session=%s, time=%s, operation=%s]", getClass().getSimpleName(), index(), session(), time(), operation());
   }
 
 }

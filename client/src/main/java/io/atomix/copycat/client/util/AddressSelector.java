@@ -17,18 +17,19 @@ package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.ServerSelectionStrategy;
+import io.atomix.copycat.client.CommunicationStrategy;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 /**
  * Client address selector.
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class AddressSelector implements Iterator<Address> {
+public final class AddressSelector implements Iterator<Address>, AutoCloseable {
 
   /**
    * Address selector state.
@@ -52,14 +53,20 @@ public class AddressSelector implements Iterator<Address> {
 
   }
 
+  private final AddressSelectorManager selectors;
   private Address leader;
-  private Collection<Address> servers = new ArrayList<>();
-  private final ServerSelectionStrategy strategy;
-  private Collection<Address> selections = new ArrayList<>();
+  private Collection<Address> servers = new LinkedList<>();
+  private volatile Address selection;
+  private final CommunicationStrategy strategy;
+  private Collection<Address> selections = new LinkedList<>();
   private Iterator<Address> selectionsIterator;
 
-  public AddressSelector(ServerSelectionStrategy strategy) {
+  public AddressSelector(Address leader, Collection<Address> servers, CommunicationStrategy strategy, AddressSelectorManager selectors) {
+    this.leader = leader;
+    this.servers = Assert.notNull(servers, "servers");
     this.strategy = Assert.notNull(strategy, "strategy");
+    this.selectors = Assert.notNull(selectors, "selectors");
+    this.selections = strategy.selectConnections(leader, new ArrayList<>(servers));
   }
 
   /**
@@ -75,6 +82,15 @@ public class AddressSelector implements Iterator<Address> {
     } else {
       return State.COMPLETE;
     }
+  }
+
+  /**
+   * Returns the current address selection.
+   *
+   * @return The current address selection.
+   */
+  public Address current() {
+    return selection;
   }
 
   /**
@@ -166,9 +182,17 @@ public class AddressSelector implements Iterator<Address> {
 
   @Override
   public Address next() {
-    if (selectionsIterator == null)
+    if (selectionsIterator == null) {
       selectionsIterator = selections.iterator();
-    return selectionsIterator.next();
+    }
+    Address selection = selectionsIterator.next();
+    this.selection = selection;
+    return selection;
+  }
+
+  @Override
+  public void close() {
+    selectors.remove(this);
   }
 
   @Override

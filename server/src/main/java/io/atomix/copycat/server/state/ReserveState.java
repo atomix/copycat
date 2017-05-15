@@ -101,7 +101,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<CommandRequest, CommandResponse>forward(request)
+      return this.<CommandRequest, CommandResponse>forward(CommandRequest.NAME, request)
         .exceptionally(error -> CommandResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -121,7 +121,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<QueryRequest, QueryResponse>forward(request)
+      return this.<QueryRequest, QueryResponse>forward(QueryRequest.NAME, request)
         .exceptionally(error -> QueryResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -141,7 +141,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<RegisterRequest, RegisterResponse>forward(request)
+      return this.<RegisterRequest, RegisterResponse>forward(RegisterRequest.NAME, request)
         .exceptionally(error -> RegisterResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -171,7 +171,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<KeepAliveRequest, KeepAliveResponse>forward(request)
+      return this.<KeepAliveRequest, KeepAliveResponse>forward(KeepAliveRequest.NAME, request)
         .exceptionally(error -> KeepAliveResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -191,8 +191,48 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<UnregisterRequest, UnregisterResponse>forward(request)
+      return this.<UnregisterRequest, UnregisterResponse>forward(UnregisterRequest.NAME, request)
         .exceptionally(error -> UnregisterResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(OpenSessionResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<OpenSessionRequest, OpenSessionResponse>forward(OpenSessionRequest.NAME, request)
+        .exceptionally(error -> OpenSessionResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<CloseSessionResponse> closeSession(CloseSessionRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(CloseSessionResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<CloseSessionRequest, CloseSessionResponse>forward(CloseSessionRequest.NAME, request)
+        .exceptionally(error -> CloseSessionResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
           .build())
@@ -211,7 +251,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<JoinRequest, JoinResponse>forward(request)
+      return this.<JoinRequest, JoinResponse>forward(JoinRequest.NAME, request)
         .exceptionally(error -> JoinResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -231,7 +271,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<ReconfigureRequest, ReconfigureResponse>forward(request)
+      return this.<ReconfigureRequest, ReconfigureResponse>forward(ReconfigureRequest.NAME, request)
         .exceptionally(error -> ReconfigureResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -251,7 +291,7 @@ class ReserveState extends InactiveState {
         .withError(CopycatError.Type.NO_LEADER_ERROR)
         .build()));
     } else {
-      return this.<LeaveRequest, LeaveResponse>forward(request)
+      return this.<LeaveRequest, LeaveResponse>forward(LeaveRequest.NAME, request)
         .exceptionally(error -> LeaveResponse.builder()
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.NO_LEADER_ERROR)

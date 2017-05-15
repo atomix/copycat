@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.client;
 
+import io.atomix.catalyst.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
@@ -24,8 +24,9 @@ import io.atomix.catalyst.transport.Transport;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.ConfigurationException;
 import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
+import io.atomix.copycat.client.impl.DefaultCopycatClient;
+import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
 import io.atomix.copycat.session.Session;
@@ -37,6 +38,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 /**
@@ -58,7 +61,7 @@ import java.util.function.Consumer;
  * greater than the cluster's session timeout.
  * <p>
  * Clients communicate with the distributed state machine by submitting {@link Command commands} and {@link Query queries} to
- * the cluster through the {@link #submit(Command)} and {@link #submit(Query)} methods respectively:
+ * the cluster through the {@link CopycatSession#submit(Command)} and {@link CopycatSession#submit(Query)} methods respectively:
  * <pre>
  *   {@code
  *   client.submit(new PutCommand("foo", "Hello world!")).thenAccept(result -> {
@@ -82,7 +85,7 @@ import java.util.function.Consumer;
  * {@link Query.ConsistencyLevel} documentation for more info.
  * <p>
  * Throughout the lifetime of a client, the client may operate on the cluster via multiple sessions according to the configured
- * {@link RecoveryStrategy}. In the event that the client's session expires, the client may register a new session and continue
+ * recovery strategy. In the event that the client's session expires, the client may register a new session and continue
  * to submit operations under the recovered session. The client will always attempt to ensure commands submitted are eventually
  * committed to the cluster even across sessions. If a command is submitted under one session but is not completed before the
  * session is lost and a new session is established, the client will resubmit pending commands from the prior session under
@@ -107,9 +110,9 @@ import java.util.function.Consumer;
  * by the cluster may be lost.
  * <h3>Session events</h3>
  * Clients can receive arbitrary event notifications from the cluster by registering an event listener via
- * {@link #onEvent(String, Consumer)}. When a command is applied to a state machine, the state machine may publish any number
+ * {@link CopycatSession#onEvent(String, Consumer)}. When a command is applied to a state machine, the state machine may publish any number
  * of events to any open session. Events will be sent to the client by the server to which the client is connected as dictated
- * by the configured {@link ServerSelectionStrategy}. In the event a client is disconnected from a server, events will be
+ * by the configured {@link CommunicationStrategy}. In the event a client is disconnected from a server, events will be
  * retained in memory on all servers until the client reconnects to another server or its session expires. Once a client
  * reconnects to a new server, the new server will resume sending session events to the client.
  * <pre>
@@ -131,7 +134,7 @@ import java.util.function.Consumer;
  * be received by the client in sequential order. This means the {@link CompletableFuture}s returned when submitting
  * operations through the client are guaranteed to be completed in the order in which they were created.
  * <p>
- * Sequential consistency is also guaranteed for {@link #onEvent(String, Consumer) events} received by a client, and events
+ * Sequential consistency is also guaranteed for {@link CopycatSession#onEvent(String, Consumer) events} received by a client, and events
  * are sequenced with command and query responses. If a client submits a command that publishes an event and then immediately
  * submits a concurrent query, the client will first receive the command response, then the event message, then the query
  * response.
@@ -140,7 +143,7 @@ import java.util.function.Consumer;
  * thread, it is critical that clients not block the event thread. If clients need to perform blocking actions on response to
  * an event or response, do so on another thread.
  * <h3>Serialization</h3>
- * All {@link Command commands}, {@link Query queries}, and session {@link #onEvent(String, Consumer) events} must be
+ * All {@link Command commands}, {@link Query queries}, and session {@link CopycatSession#onEvent(String, Consumer) events} must be
  * serializable by the {@link Serializer} associated with the client. Serializable types can be registered at any time.
  * To register a serializable type and serializer, use the {@link Serializer#register(Class) register} methods.
  * <pre>
@@ -194,43 +197,16 @@ public interface CopycatClient {
 
     /**
      * Indicates that the client is connected and its session is open.
-     * <p>
-     * The {@code CONNECTED} state indicates that the client is healthy and operating normally. {@link Command commands}
-     * and {@link Query queries} submitted and completed while the client is in this state are guaranteed to adhere to
-     * consistency guarantees.
-     * {@link Query.ConsistencyLevel levels}.
      */
     CONNECTED,
 
     /**
      * Indicates that the client is suspended and its session may or may not be expired.
-     * <p>
-     * The {@code SUSPENDED} state is indicative of an inability to communicate with the cluster within the context of
-     * the client's {@link Session}. Operations submitted to or completed by clients in this state should be considered
-     * unsafe. An operation submitted to a {@link #CONNECTED} client that transitions to the {@code SUSPENDED} state
-     * prior to the operation's completion may be committed multiple times in the event that the underlying session
-     * is ultimately {@link Session.State#EXPIRED expired}, thus breaking linearizability. Additionally, state machines
-     * may see the session expire while the client is in this state.
-     * <p>
-     * If the client is configured with a {@link RecoveryStrategy} that recovers the client's session upon expiration,
-     * the client will transition back to the {@link #CONNECTED} state once a new session is registered, otherwise the
-     * client will transition either to the {@link #CONNECTED} or {@link #CLOSED} state based on whether its session
-     * is expired as determined once it re-establishes communication with the cluster.
-     * <p>
-     * If the client is configured with a {@link RecoveryStrategy} that <em>does not</em> recover the client's session
-     * upon a session expiration, all guarantees will be maintained by the client even for operations submitted in this
-     * state. If linearizability guarantees are essential, users should use the {@link RecoveryStrategies#CLOSE} strategy
-     * and allow the client to fail when its session is lost.
      */
     SUSPENDED,
 
     /**
      * Indicates that the client is closed.
-     * <p>
-     * A client may transition to this state as a result of an expired session or an explicit {@link CopycatClient#close() close}
-     * by the user. In the event that the client's {@link Session} is lost, if the configured {@link RecoveryStrategy}
-     * forces the client to close upon failure, the client will immediately be closed. If the {@link RecoveryStrategy}
-     * attempts to recover the client's session, the client still may close if it is unable to register a new session.
      */
     CLOSED
 
@@ -312,17 +288,6 @@ public interface CopycatClient {
   ThreadContext context();
 
   /**
-   * Returns the client transport.
-   * <p>
-   * The transport is the mechanism through which the client communicates with the cluster. The transport cannot
-   * be used to access client internals, but it serves only as a mechanism for providing users with the same
-   * transport/protocol used by the client.
-   *
-   * @return The client transport.
-   */
-  Transport transport();
-
-  /**
    * Returns the client serializer.
    * <p>
    * The serializer can be used to manually register serializable types for submitted {@link Command commands} and
@@ -339,115 +304,11 @@ public interface CopycatClient {
   Serializer serializer();
 
   /**
-   * Returns the client session.
-   * <p>
-   * The returned {@link Session} instance will remain constant as long as the client maintains its session with the cluster.
-   * Maintaining the client's session requires that the client be able to communicate with one server that can communicate
-   * with the leader at any given time. During periods where the cluster is electing a new leader, the client's session will
-   * not timeout but will resume once a new leader is elected.
+   * Returns a new session builder.
    *
-   * @return The client session or {@code null} if no session is register.
+   * @return A new session builder.
    */
-  Session session();
-
-  /**
-   * Submits an operation to the Copycat cluster.
-   * <p>
-   * This method is provided for convenience. The submitted {@link Operation} must be an instance
-   * of {@link Command} or {@link Query}.
-   *
-   * @param operation The operation to submit.
-   * @param <T> The operation result type.
-   * @return A completable future to be completed with the operation result.
-   * @throws IllegalArgumentException If the {@link Operation} is not an instance of {@link Command} or {@link Query}.
-   * @throws NullPointerException if {@code operation} is null
-   */
-  default <T> CompletableFuture<T> submit(Operation<T> operation) {
-    Assert.notNull(operation, "operation");
-    if (operation instanceof Command) {
-      return submit((Command<T>) operation);
-    } else if (operation instanceof Query) {
-      return submit((Query<T>) operation);
-    } else {
-      throw new IllegalArgumentException("unknown operation type");
-    }
-  }
-
-  /**
-   * Submits a command to the Copycat cluster.
-   * <p>
-   * Commands are used to alter state machine state. All commands will be forwarded to the current cluster leader.
-   * Once a leader receives the command, it will write the command to its internal {@code Log} and replicate it to a majority
-   * of the cluster. Once the command has been replicated to a majority of the cluster, it will apply the command to its
-   * {@code StateMachine} and respond with the result.
-   * <p>
-   * Once the command has been applied to a server state machine, the returned {@link CompletableFuture}
-   * will be completed with the state machine output.
-   * <p>
-   * Note that all client submissions are guaranteed to be completed in the same order in which they were sent (program order)
-   * and on the same thread. This does not, however, mean that they'll be applied to the server-side replicated state machine
-   * in that order.
-   *
-   * @param command The command to submit.
-   * @param <T> The command result type.
-   * @return A completable future to be completed with the command result. The future is guaranteed to be completed after all
-   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
-   * @throws NullPointerException if {@code command} is null
-   */
-  <T> CompletableFuture<T> submit(Command<T> command);
-
-  /**
-   * Submits a query to the Copycat cluster.
-   * <p>
-   * Queries are used to read state machine state. The behavior of query submissions is primarily dependent on the
-   * query's {@link Query.ConsistencyLevel}. For {@link Query.ConsistencyLevel#LINEARIZABLE}
-   * and {@link Query.ConsistencyLevel#LINEARIZABLE_LEASE} consistency levels, queries will be forwarded
-   * to the cluster leader. For lower consistency levels, queries are allowed to read from followers. All queries are executed
-   * by applying queries to an internal server state machine.
-   * <p>
-   * Once the query has been applied to a server state machine, the returned {@link CompletableFuture}
-   * will be completed with the state machine output.
-   *
-   * @param query The query to submit.
-   * @param <T> The query result type.
-   * @return A completable future to be completed with the query result. The future is guaranteed to be completed after all
-   * {@link Command} or {@link Query} submission futures that preceded it. The future will always be completed on the
-   * @throws NullPointerException if {@code query} is null
-   */
-  <T> CompletableFuture<T> submit(Query<T> query);
-
-  /**
-   * Registers a void event listener.
-   * <p>
-   * The registered {@link Runnable} will be {@link Runnable#run() called} when an event is received
-   * from the Raft cluster for the client. {@link CopycatClient} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
-   *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @return The listener context.
-   * @throws NullPointerException if {@code event} or {@code callback} is null
-   */
-  Listener<Void> onEvent(String event, Runnable callback);
-
-  /**
-   * Registers an event listener.
-   * <p>
-   * The registered {@link Consumer} will be {@link Consumer#accept(Object) called} when an event is received
-   * from the Raft cluster for the session. {@link CopycatClient} implementations must guarantee that consumers are
-   * always called in the same thread for the session. Therefore, no two events will be received concurrently
-   * by the session. Additionally, events are guaranteed to be received in the order in which they were sent by
-   * the state machine.
-   *
-   * @param event The event to which to listen.
-   * @param callback The session receive callback.
-   * @param <T> The session event type.
-   * @return The listener context.
-   * @throws NullPointerException if {@code event} or {@code callback} is null
-   */
-  <T> Listener<T> onEvent(String event, Consumer<T> callback);
+  CopycatSession.Builder sessionBuilder();
 
   /**
    * Connects the client to Copycat cluster via the default server address.
@@ -460,13 +321,13 @@ public interface CopycatClient {
    * returned {@link CompletableFuture} will be completed.
    * <p>
    * The client will connect to servers in the cluster according to the pattern specified by the configured
-   * {@link ServerSelectionStrategy}.
+   * {@link CommunicationStrategy}.
    * <p>
    * In the event that the client is unable to register a session through any of the servers listed in the provided
    * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
    * to retry the registration attempt.
    *
-   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   * @return A completable future to be completed once the client is registered.
    */
   default CompletableFuture<CopycatClient> connect() {
     return connect((Collection<Address>) null);
@@ -480,14 +341,14 @@ public interface CopycatClient {
    * returned {@link CompletableFuture} will be completed.
    * <p>
    * The client will connect to servers in the cluster according to the pattern specified by the configured
-   * {@link ServerSelectionStrategy}.
+   * {@link CommunicationStrategy}.
    * <p>
    * In the event that the client is unable to register a session through any of the servers listed in the provided
    * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
    * to retry the registration attempt.
    *
    * @param members A set of server addresses to which to connect.
-   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   * @return A completable future to be completed once the client is registered.
    */
   default CompletableFuture<CopycatClient> connect(Address... members) {
     if (members == null || members.length == 0) {
@@ -505,28 +366,16 @@ public interface CopycatClient {
    * returned {@link CompletableFuture} will be completed.
    * <p>
    * The client will connect to servers in the cluster according to the pattern specified by the configured
-   * {@link ServerSelectionStrategy}.
+   * {@link CommunicationStrategy}.
    * <p>
    * In the event that the client is unable to register a session through any of the servers listed in the provided
    * {@link Address} list, the client will use the configured {@link ConnectionStrategy} to determine whether and when
    * to retry the registration attempt.
    *
    * @param members A set of server addresses to which to connect.
-   * @return A completable future to be completed once the client's {@link #session()} is registered.
+   * @return A completable future to be completed once the client is registered.
    */
   CompletableFuture<CopycatClient> connect(Collection<Address> members);
-
-  /**
-   * Recovers the client session.
-   * <p>
-   * When a client is recovered, the client will create and register a new {@link Session}. Once the session is
-   * recovered, the client will transition to the {@link State#CONNECTED} state and resubmit pending operations
-   * from the previous session. Pending operations are guaranteed to be submitted to the new session in the same
-   * order in which they were submitted to the prior session and prior to submitting any new operations.
-   *
-   * @return A completable future to be completed once the client's session is recovered.
-   */
-  CompletableFuture<CopycatClient> recover();
 
   /**
    * Closes the client.
@@ -559,10 +408,10 @@ public interface CopycatClient {
     private Transport transport;
     private Serializer serializer;
     private Duration sessionTimeout = Duration.ZERO;
-    private Duration unstabilityTimeout = Duration.ZERO;
+    private Duration unsableTimeout = Duration.ZERO;
+    private int threadPoolSize = Runtime.getRuntime().availableProcessors();
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
-    private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
-    private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
+    private CommunicationStrategy communicationStrategy = CommunicationStrategies.ANY;
 
     private Builder(Collection<Address> cluster) {
       this.cluster = Assert.notNull(cluster, "cluster");
@@ -611,6 +460,18 @@ public interface CopycatClient {
     }
 
     /**
+     * Sets the client thread pool size.
+     *
+     * @param threadPoolSize The client thread pool size.
+     * @return The client builder.
+     * @throws IllegalArgumentException if the thread pool size is not positive
+     */
+    public Builder withThreadPoolSize(int threadPoolSize) {
+      this.threadPoolSize = Assert.argNot(threadPoolSize, threadPoolSize <= 0, "threadPoolSize must be positive");
+      return this;
+    }
+
+    /**
      * Sets the client session timeout.
      *
      * @param sessionTimeout The client's session timeout.
@@ -632,9 +493,8 @@ public interface CopycatClient {
      * @throws NullPointerException if the unstability timeout is null
      * @throws IllegalArgumentException if the unstability timeout is not positive
      */
-    public Builder withUnstabilityTimeout(Duration unstabilityTimeout)
-    {
-      this.unstabilityTimeout = Assert.arg(
+    public Builder withUnstableTimeout(Duration unstabilityTimeout) {
+      this.unsableTimeout = Assert.arg(
           Assert.notNull(unstabilityTimeout, "unstabilityTimeout"),
           unstabilityTimeout.toMillis() > 0,
           "unstability timeout must be positive"
@@ -657,22 +517,11 @@ public interface CopycatClient {
     /**
      * Sets the server selection strategy.
      *
-     * @param serverSelectionStrategy The server selection strategy.
+     * @param communicationStrategy The server selection strategy.
      * @return The client builder.
      */
-    public Builder withServerSelectionStrategy(ServerSelectionStrategy serverSelectionStrategy) {
-      this.serverSelectionStrategy = Assert.notNull(serverSelectionStrategy, "serverSelectionStrategy");
-      return this;
-    }
-
-    /**
-     * Sets the client recovery strategy.
-     *
-     * @param recoveryStrategy The client recovery strategy.
-     * @return The client builder.
-     */
-    public Builder withRecoveryStrategy(RecoveryStrategy recoveryStrategy) {
-      this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
+    public Builder withServerSelectionStrategy(CommunicationStrategy communicationStrategy) {
+      this.communicationStrategy = Assert.notNull(communicationStrategy, "serverSelectionStrategy");
       return this;
     }
 
@@ -696,6 +545,8 @@ public interface CopycatClient {
         serializer = new Serializer();
       }
 
+      ScheduledExecutorService executor = Executors.newScheduledThreadPool(threadPoolSize, new CatalystThreadFactory("copycat-client-%d"));
+
       // Add service loader types to the primary serializer.
       serializer.resolve(new ClientRequestTypeResolver());
       serializer.resolve(new ClientResponseTypeResolver());
@@ -704,14 +555,12 @@ public interface CopycatClient {
       return new DefaultCopycatClient(
         clientId,
         cluster,
-        transport,
-        new SingleThreadContext("copycat-client-io-%d", serializer.clone()),
-        new SingleThreadContext("copycat-client-event-%d", serializer.clone()),
-        serverSelectionStrategy,
+        transport.client(),
+        executor,
+        serializer,
         connectionStrategy,
-        recoveryStrategy,
         sessionTimeout,
-        unstabilityTimeout
+        unsableTimeout
       );
     }
   }

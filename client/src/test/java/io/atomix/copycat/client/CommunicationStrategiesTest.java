@@ -32,7 +32,7 @@ import static org.testng.Assert.assertTrue;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class ServerSelectionStrategiesTest {
+public class CommunicationStrategiesTest {
   private final List<Address> servers = Arrays.asList(
     new Address("localhost", 5000),
     new Address("localhost", 5001),
@@ -43,7 +43,7 @@ public class ServerSelectionStrategiesTest {
    * Tests the ANY server selection strategy.
    */
   public void testAnySelectionStrategy() throws Throwable {
-    List<Address> results = (List<Address>) ServerSelectionStrategies.ANY.selectConnections(null, servers);
+    List<Address> results = (List<Address>) CommunicationStrategies.ANY.selectConnections(null, servers);
     assertTrue(listsEqual(results, servers));
   }
 
@@ -51,7 +51,7 @@ public class ServerSelectionStrategiesTest {
    * Tests the LEADER server selection strategy.
    */
   public void testLeaderSelectionStrategy() throws Throwable {
-    List<Address> results = (List<Address>) ServerSelectionStrategies.LEADER.selectConnections(new Address("localhost", 5000), servers);
+    List<Address> results = (List<Address>) CommunicationStrategies.LEADER.selectConnections(new Address("localhost", 5000), servers);
     assertEquals(results.size(), 1);
     assertEquals(results.get(0), new Address("localhost", 5000));
   }
@@ -60,7 +60,7 @@ public class ServerSelectionStrategiesTest {
    * Tests the LEADER server selection strategy.
    */
   public void testNoLeaderSelectionStrategy() throws Throwable {
-    List<Address> results = (List<Address>) ServerSelectionStrategies.LEADER.selectConnections(null, servers);
+    List<Address> results = (List<Address>) CommunicationStrategies.LEADER.selectConnections(null, servers);
     assertTrue(listsEqual(results, servers));
   }
 
@@ -68,7 +68,7 @@ public class ServerSelectionStrategiesTest {
    * Tests the FOLLOWERS server selection strategy.
    */
   public void testFollowersNoLeaderSelectionStrategy() throws Throwable {
-    List<Address> results = (List<Address>) ServerSelectionStrategies.FOLLOWERS.selectConnections(null, servers);
+    List<Address> results = (List<Address>) CommunicationStrategies.FOLLOWERS.selectConnections(null, servers);
     assertTrue(listsEqual(results, servers));
   }
 
@@ -76,7 +76,7 @@ public class ServerSelectionStrategiesTest {
    * Tests the FOLLOWERS server selection strategy.
    */
   public void testFollowersSelectionStrategy() throws Throwable {
-    List<Address> results = (List<Address>) ServerSelectionStrategies.FOLLOWERS.selectConnections(new Address("localhost", 5000), servers);
+    List<Address> results = (List<Address>) CommunicationStrategies.FOLLOWERS.selectConnections(new Address("localhost", 5000), servers);
     assertEquals(results.size(), servers.size() - 1);
     assertFalse(results.contains(new Address("localhost", 5000)));
   }

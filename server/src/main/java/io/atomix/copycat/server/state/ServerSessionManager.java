@@ -16,15 +16,10 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.server.session.SessionListener;
-import io.atomix.copycat.server.session.Sessions;
 
-import java.util.HashSet;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -32,88 +27,68 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-class ServerSessionManager implements Sessions {
-  private final Map<String, Connection> connections = new ConcurrentHashMap<>();
-  final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
-  final Map<String, ServerSessionContext> clients = new ConcurrentHashMap<>();
-  final Set<SessionListener> listeners = new HashSet<>();
-  private final ServerContext context;
+class ServerSessionManager {
+  private final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
+  private final Map<Long, TimestampedConnection> connections = new ConcurrentHashMap<>();
 
-  public ServerSessionManager(ServerContext context) {
-    this.context = Assert.notNull(context, "context");
-  }
-
-  @Override
-  public ServerSession session(long sessionId) {
-    return sessions.get(sessionId);
-  }
-
-  @Override
-  public Sessions addListener(SessionListener listener) {
-    listeners.add(Assert.notNull(listener, "listener"));
-    return this;
-  }
-
-  @Override
-  public Sessions removeListener(SessionListener listener) {
-    listeners.remove(Assert.notNull(listener, "listener"));
-    return this;
+  /**
+   * Registers a connection.
+   */
+  void registerConnection(long sessionId, long connectionId, Connection connection) {
+    ServerSessionContext session = sessions.get(sessionId);
+    TimestampedConnection existingConnection = connections.get(sessionId);
+    if (existingConnection == null || existingConnection.id < connectionId) {
+      connections.put(sessionId, new TimestampedConnection(connectionId, connection));
+      if (session != null) {
+        session.setConnection(connection);
+      }
+    }
   }
 
   /**
    * Registers a connection.
    */
-  ServerSessionManager registerConnection(String client, Connection connection) {
-    ServerSessionContext session = clients.get(client);
-    if (session != null) {
-      session.setConnection(connection);
+  void registerConnection(long sessionId, long connectionId) {
+    TimestampedConnection connection = connections.get(sessionId);
+    if (connection != null && connection.id < connectionId) {
+      connections.remove(sessionId, connection);
     }
-    connections.put(client, connection);
-    return this;
   }
 
   /**
    * Unregisters a connection.
    */
-  ServerSessionManager unregisterConnection(Connection connection) {
-    Iterator<Map.Entry<String, Connection>> iterator = connections.entrySet().iterator();
+  void unregisterConnection(Connection connection) {
+    Iterator<Map.Entry<Long, TimestampedConnection>> iterator = connections.entrySet().iterator();
     while (iterator.hasNext()) {
-      Map.Entry<String, Connection> entry = iterator.next();
-      if (entry.getValue().equals(connection)) {
-        ServerSessionContext session = clients.get(entry.getKey());
+      Map.Entry<Long, TimestampedConnection> entry = iterator.next();
+      if (entry.getValue().connection.equals(connection)) {
+        ServerSessionContext session = sessions.get(entry.getKey());
         if (session != null) {
           session.setConnection(null);
         }
         iterator.remove();
       }
     }
-    return this;
   }
 
   /**
    * Registers a session.
    */
-  ServerSessionContext registerSession(ServerSessionContext session) {
-    ServerSessionContext oldSession = clients.remove(session.client());
-    if (oldSession != null) {
-      sessions.remove(oldSession.id());
-    }
-    session.setConnection(connections.get(session.client()));
+  void registerSession(ServerSessionContext session) {
     sessions.put(session.id(), session);
-    clients.put(session.client(), session);
-    return oldSession;
+    TimestampedConnection connection = connections.get(session.id());
+    if (connection != null) {
+      session.setConnection(connection.connection);
+    }
   }
 
   /**
    * Unregisters a session.
    */
-  ServerSessionContext unregisterSession(long sessionId) {
-    ServerSessionContext session = sessions.remove(sessionId);
-    if (session != null) {
-      clients.remove(session.client(), session);
-      connections.remove(session.client(), session.getConnection());
-    }
-    return session;
+  void unregisterSession(long sessionId) {
+    sessions.remove(sessionId);
+    connections.remove(sessionId);
   }
 
   /**
@@ -127,19 +102,25 @@ class ServerSessionManager implements Sessions {
   }
 
   /**
-   * Gets a session by client ID.
+   * Returns the collection of registered sessions.
    *
-   * @param clientId The client ID.
-   * @return The session or {@code null} if the session doesn't exist.
+   * @return The collection of registered sessions.
    */
-  ServerSessionContext getSession(String clientId) {
-    return clients.get(clientId);
+  Collection<ServerSessionContext> getSessions() {
+    return sessions.values();
   }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public Iterator<ServerSession> iterator() {
-    return (Iterator) sessions.values().iterator();
+  /**
+   * Connection ID/connection holder.
+   */
+  private static class TimestampedConnection {
+    private final long id;
+    private final Connection connection;
+
+    TimestampedConnection(long id, Connection connection) {
+      this.id = id;
+      this.connection = connection;
+    }
   }
 
 }

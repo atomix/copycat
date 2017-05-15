@@ -211,7 +211,7 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
    */
   CompletableFuture<Void> configure(Member.Type type) {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    cluster.getContext().getThreadContext().executor().execute(() -> configure(type, future));
+    cluster.getContext().getThreadContext().execute(() -> configure(type, future));
     return future;
   }
 

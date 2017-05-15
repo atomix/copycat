@@ -147,7 +147,7 @@ final class CandidateState extends ActiveState {
         .build();
 
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {
-        connection.<VoteRequest, VoteResponse>sendAndReceive(request).whenCompleteAsync((response, error) -> {
+        connection.<VoteRequest, VoteResponse>sendAndReceive(VoteRequest.NAME, request).whenCompleteAsync((response, error) -> {
           context.checkThread();
           if (isOpen() && !complete.get()) {
             if (error != null) {
@@ -171,7 +171,7 @@ final class CandidateState extends ActiveState {
               }
             }
           }
-        }, context.getThreadContext().executor());
+        }, context.getThreadContext());
       });
     }
   }

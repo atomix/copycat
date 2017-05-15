@@ -1,22 +1,21 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
-package io.atomix.copycat.client.session;
+package io.atomix.copycat.client.session.impl;
 
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
@@ -28,7 +27,8 @@ import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.session.ClosedSessionException;
-import io.atomix.copycat.session.Session;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
@@ -48,24 +48,32 @@ import java.util.function.Predicate;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class ClientSessionSubmitter {
+final class CopycatSessionSubmitter {
+  private static final Logger LOG = LoggerFactory.getLogger(CopycatSessionSubmitter.class);
   private static final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
   private static final Predicate<Throwable> EXCEPTION_PREDICATE = e ->
     e instanceof ConnectException
       || e instanceof TimeoutException
       || e instanceof TransportException
       || e instanceof ClosedChannelException;
-  private final Connection connection;
-  private final ClientSessionState state;
-  private final ClientSequencer sequencer;
+  private static final Predicate<Throwable> CLOSED_PREDICATE = e ->
+    e instanceof ClosedSessionException
+      || e instanceof UnknownSessionException;
+  private final CopycatConnection leaderConnection;
+  private final CopycatConnection sessionConnection;
+  private final CopycatSessionState state;
+  private final CopycatSessionSequencer sequencer;
+  private final CopycatSessionManager manager;
   private final ThreadContext context;
   private final Map<Long, OperationAttempt> attempts = new LinkedHashMap<>();
   private final AtomicLong keepAliveIndex = new AtomicLong();
 
-  public ClientSessionSubmitter(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
-    this.connection = Assert.notNull(connection, "connection");
+  public CopycatSessionSubmitter(CopycatConnection leaderConnection, CopycatConnection sessionConnection, CopycatSessionState state, CopycatSessionSequencer sequencer, CopycatSessionManager manager, ThreadContext context) {
+    this.leaderConnection = Assert.notNull(leaderConnection, "leaderConnection");
+    this.sessionConnection = Assert.notNull(sessionConnection, "sessionConnection");
     this.state = Assert.notNull(state, "state");
     this.sequencer = Assert.notNull(sequencer, "sequencer");
+    this.manager = Assert.notNull(manager, "manager");
     this.context = Assert.notNull(context, "context");
   }
 
@@ -78,7 +86,7 @@ final class ClientSessionSubmitter {
    */
   public <T> CompletableFuture<T> submit(Command<T> command) {
     CompletableFuture<T> future = new CompletableFuture<>();
-    context.executor().execute(() -> submitCommand(command, future));
+    context.execute(() -> submitCommand(command, future));
     return future;
   }
 
@@ -110,7 +118,7 @@ final class ClientSessionSubmitter {
    */
   public <T> CompletableFuture<T> submit(Query<T> query) {
     CompletableFuture<T> future = new CompletableFuture<>();
-    context.executor().execute(() -> submitQuery(query, future));
+    context.execute(() -> submitQuery(query, future));
     return future;
   }
 
@@ -140,12 +148,12 @@ final class ClientSessionSubmitter {
    * @param attempt The attempt to submit.
    */
   private <T extends OperationRequest, U extends OperationResponse, V> void submit(OperationAttempt<T, U, V> attempt) {
-    if (state.getState() == Session.State.CLOSED || state.getState() == Session.State.EXPIRED) {
+    if (!state.isOpen()) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
-      state.getLogger().trace("{} - Sending {}", state.getSessionId(), attempt.request);
+      LOG.trace("{} - Sending {}", state.getSessionId(), attempt.request);
       attempts.put(attempt.sequence, attempt);
-      connection.<T, U>sendAndReceive(attempt.request).whenComplete(attempt);
+      attempt.send();
       attempt.future.whenComplete((r, e) -> attempts.remove(attempt.sequence));
     }
   }
@@ -168,28 +176,13 @@ final class ClientSessionSubmitter {
     long responseSequence = state.getCommandResponse();
     if (commandSequence < responseSequence && keepAliveIndex.get() != responseSequence) {
       keepAliveIndex.set(responseSequence);
-      KeepAliveRequest request = KeepAliveRequest.builder()
-        .withSession(state.getSessionId())
-        .withCommandSequence(state.getCommandResponse())
-        .withEventIndex(state.getEventIndex())
-        .build();
-      state.getLogger().trace("{} - Sending {}", state.getSessionId(), request);
-      connection.<KeepAliveRequest, KeepAliveResponse>sendAndReceive(request).whenComplete((response, error) -> {
+      manager.resetIndexes(state.getSessionId()).whenCompleteAsync((result, error) -> {
         if (error == null) {
-          state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
-
-          // If the keep-alive is successful, recursively resubmit operations starting
-          // at the submitted response sequence number rather than the command sequence.
-          if (response.status() == Response.Status.OK) {
-            resubmit(responseSequence, attempt);
-          } else {
-            attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
-          }
+          resubmit(responseSequence, attempt);
         } else {
-          keepAliveIndex.set(0);
           attempt.retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt.attempt-1, FIBONACCI.length-1)]));
         }
-      });
+      }, context);
     } else {
       for (Map.Entry<Long, OperationAttempt> entry : attempts.entrySet()) {
         OperationAttempt operation = entry.getValue();
@@ -230,6 +223,11 @@ final class ClientSessionSubmitter {
     }
 
     /**
+     * Sends the attempt.
+     */
+    protected abstract void send();
+
+    /**
      * Returns the next instance of the attempt.
      *
      * @return The next instance of the attempt.
@@ -256,10 +254,6 @@ final class ClientSessionSubmitter {
      * @param error The completion exception.
      */
     protected void complete(Throwable error) {
-      // If the exception is an UnknownSessionException, expire the session.
-      if (error instanceof UnknownSessionException) {
-        state.setState(Session.State.EXPIRED);
-      }
       sequence(null, () -> future.completeExceptionally(error));
     }
 
@@ -293,7 +287,7 @@ final class ClientSessionSubmitter {
      * Immediately retries the attempt.
      */
     public void retry() {
-      context.executor().execute(() -> submit(next()));
+      context.execute(() -> submit(next()));
     }
 
     /**
@@ -320,6 +314,11 @@ final class ClientSessionSubmitter {
     }
 
     @Override
+    protected void send() {
+      leaderConnection.<CommandRequest, CommandResponse>sendAndReceive(CommandRequest.NAME, request).whenComplete(this);
+    }
+
+    @Override
     protected OperationAttempt<CommandRequest, CommandResponse, T> next() {
       return new CommandAttempt<>(sequence, this.attempt + 1, request, future);
     }
@@ -332,7 +331,7 @@ final class ClientSessionSubmitter {
     @Override
     public void accept(CommandResponse response, Throwable error) {
       if (error == null) {
-        state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
+        LOG.trace("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
         }
@@ -343,7 +342,9 @@ final class ClientSessionSubmitter {
         }
         // The following exceptions need to be handled at a higher level by the client or the user.
         else if (response.error() == CopycatError.Type.APPLICATION_ERROR
+          || response.error() == CopycatError.Type.UNKNOWN_CLIENT_ERROR
           || response.error() == CopycatError.Type.UNKNOWN_SESSION_ERROR
+          || response.error() == CopycatError.Type.UNKNOWN_STATE_MACHINE_ERROR
           || response.error() == CopycatError.Type.INTERNAL_ERROR) {
           complete(response.error().createException());
         }
@@ -361,13 +362,13 @@ final class ClientSessionSubmitter {
     @Override
     public void fail(Throwable cause) {
       super.fail(cause);
-      if (!(cause instanceof UnknownSessionException)) {
+      if (!CLOSED_PREDICATE.test(cause)) {
         CommandRequest request = CommandRequest.builder()
           .withSession(this.request.session())
           .withSequence(this.request.sequence())
           .withCommand(new NoOpCommand())
           .build();
-        context.executor().execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
+        context.execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
       }
     }
 
@@ -395,6 +396,11 @@ final class ClientSessionSubmitter {
     }
 
     @Override
+    protected void send() {
+      sessionConnection.<QueryRequest, QueryResponse>sendAndReceive(QueryRequest.NAME, request).whenComplete(this);
+    }
+
+    @Override
     protected OperationAttempt<QueryRequest, QueryResponse, T> next() {
       return new QueryAttempt<>(sequence, this.attempt + 1, request, future);
     }
@@ -407,7 +413,7 @@ final class ClientSessionSubmitter {
     @Override
     public void accept(QueryResponse response, Throwable error) {
       if (error == null) {
-        state.getLogger().trace("{} - Received {}", state.getSessionId(), response);
+        LOG.trace("{} - Received {}", state.getSessionId(), response);
         if (response.status() == Response.Status.OK) {
           complete(response);
         } else {

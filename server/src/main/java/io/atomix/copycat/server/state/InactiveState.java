@@ -85,6 +85,16 @@ class InactiveState extends AbstractState {
   }
 
   @Override
+  public CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
+  public CompletableFuture<CloseSessionResponse> closeSession(CloseSessionRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
   public void reset(ResetRequest request) {
   }
 

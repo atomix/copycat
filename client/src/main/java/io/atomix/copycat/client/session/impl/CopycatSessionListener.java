@@ -1,27 +1,28 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
-package io.atomix.copycat.client.session;
+package io.atomix.copycat.client.session.impl;
 
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.protocol.ResetRequest;
 import io.atomix.copycat.session.Event;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Set;
@@ -35,19 +36,23 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-final class ClientSessionListener {
-  private final Connection connection;
-  private final ClientSessionState state;
+final class CopycatSessionListener {
+  private static final Logger LOG = LoggerFactory.getLogger(CopycatSessionListener.class);
+
+  private final CopycatConnection connection;
+  private final CopycatSessionState state;
+  private final String eventType;
   private final ThreadContext context;
   private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
-  private final ClientSequencer sequencer;
+  private final CopycatSessionSequencer sequencer;
 
-  public ClientSessionListener(Connection connection, ClientSessionState state, ClientSequencer sequencer, ThreadContext context) {
+  public CopycatSessionListener(CopycatConnection connection, CopycatSessionState state, CopycatSessionSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
+    this.eventType = String.valueOf(state.getSessionId());
     this.context = Assert.notNull(context, "context");
     this.sequencer = Assert.notNull(sequencer, "sequencer");
-    connection.handler(PublishRequest.class, this::handlePublish);
+    connection.registerHandler(eventType, this::handlePublish);
   }
 
   /**
@@ -85,12 +90,12 @@ final class ClientSessionListener {
    */
   @SuppressWarnings("unchecked")
   private void handlePublish(PublishRequest request) {
-    state.getLogger().trace("{} - Received {}", state.getSessionId(), request);
+    LOG.trace("{} - Received {}", state.getSessionId(), request);
 
     // If the request is for another session ID, this may be a session that was previously opened
     // for this client.
     if (request.session() != state.getSessionId()) {
-      state.getLogger().trace("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
+      LOG.trace("{} - Inconsistent session ID: {}", state.getSessionId(), request.session());
       return;
     }
 
@@ -103,8 +108,8 @@ final class ClientSessionListener {
     // respond with an undefined error and the last index received. This will cause the cluster
     // to resend events starting at eventIndex + 1.
     if (request.previousIndex() != state.getEventIndex()) {
-      state.getLogger().trace("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
-      connection.send(ResetRequest.builder()
+      LOG.trace("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
+      connection.send(eventType, ResetRequest.builder()
         .withSession(state.getSessionId())
         .withIndex(state.getEventIndex())
         .build());

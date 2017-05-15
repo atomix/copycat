@@ -1,34 +1,35 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
-package io.atomix.copycat.client.session;
+package io.atomix.copycat.client.session.impl;
 
+import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Connection;
+import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.protocol.*;
-import io.atomix.copycat.session.Session;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
 import org.testng.annotations.Test;
 
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 import static org.mockito.Mockito.*;
 import static org.testng.Assert.*;
@@ -39,29 +40,25 @@ import static org.testng.Assert.*;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 @Test
-public class ClientSessionSubmitterTest {
+public class CopycatSessionSubmitterTest {
 
   /**
    * Tests submitting a command to the cluster.
    */
   public void testSubmitCommand() throws Throwable {
-    Connection connection = mock(Connection.class);
-    when(connection.sendAndReceive(any(CommandRequest.class)))
+    CopycatConnection connection = mock(CopycatLeaderConnection.class);
+    when(connection.sendAndReceive(CommandRequest.NAME, any(CommandRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(CommandResponse.builder()
         .withStatus(Response.Status.OK)
         .withIndex(10)
         .withResult("Hello world!")
         .build()));
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(connection, mock(CopycatSessionConnection.class), state, new CopycatSessionSequencer(state), manager, threadContext);
     assertEquals(submitter.submit(new TestCommand()).get(), "Hello world!");
     assertEquals(state.getCommandRequest(), 1);
     assertEquals(state.getCommandResponse(), 1);
@@ -75,20 +72,16 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<CommandResponse> future1 = new CompletableFuture<>();
     CompletableFuture<CommandResponse> future2 = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<CommandResponse>>when(connection.sendAndReceive(any(CommandRequest.class)))
+    CopycatConnection connection = mock(CopycatLeaderConnection.class);
+    Mockito.<CompletableFuture<CommandResponse>>when(connection.sendAndReceive(CommandRequest.NAME, any(CommandRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(connection, mock(CopycatSessionConnection.class), state, new CopycatSessionSequencer(state), manager, threadContext);
 
     CompletableFuture<String> result1 = submitter.submit(new TestCommand());
     CompletableFuture<String> result2 = submitter.submit(new TestCommand());
@@ -126,23 +119,19 @@ public class ClientSessionSubmitterTest {
    * Tests submitting a query to the cluster.
    */
   public void testSubmitQuery() throws Throwable {
-    Connection connection = mock(Connection.class);
-    when(connection.sendAndReceive(any(QueryRequest.class)))
+    CopycatConnection connection = mock(CopycatSessionConnection.class);
+    when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(CompletableFuture.completedFuture(QueryResponse.builder()
         .withStatus(Response.Status.OK)
         .withIndex(10)
         .withResult("Hello world!")
         .build()));
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(mock(CopycatLeaderConnection.class), connection, state, new CopycatSessionSequencer(state), manager, threadContext);
     assertEquals(submitter.submit(new TestQuery()).get(), "Hello world!");
     assertEquals(state.getResponseIndex(), 10);
   }
@@ -154,20 +143,16 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future1 = new CompletableFuture<>();
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
+    CopycatConnection connection = mock(CopycatSessionConnection.class);
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(mock(CopycatLeaderConnection.class), connection, state, new CopycatSessionSequencer(state), manager, threadContext);
 
     CompletableFuture<String> result1 = submitter.submit(new TestQuery());
     CompletableFuture<String> result2 = submitter.submit(new TestQuery());
@@ -204,20 +189,16 @@ public class ClientSessionSubmitterTest {
     CompletableFuture<QueryResponse> future1 = new CompletableFuture<>();
     CompletableFuture<QueryResponse> future2 = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
+    CopycatConnection connection = mock(CopycatSessionConnection.class);
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(future1)
       .thenReturn(future2);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(mock(CopycatLeaderConnection.class), connection, state, new CopycatSessionSequencer(state), manager, threadContext);
 
     CompletableFuture<String> result1 = submitter.submit(new TestQuery());
     CompletableFuture<String> result2 = submitter.submit(new TestQuery());
@@ -247,19 +228,15 @@ public class ClientSessionSubmitterTest {
   public void testExpireSessionOnCommandFailure() throws Throwable {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
+    CopycatConnection connection = mock(CopycatLeaderConnection.class);
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(future);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(connection, mock(CopycatSessionConnection.class), state, new CopycatSessionSequencer(state), manager, threadContext);
 
     CompletableFuture<String> result = submitter.submit(new TestCommand());
 
@@ -270,7 +247,6 @@ public class ClientSessionSubmitterTest {
     future.completeExceptionally(new UnknownSessionException("unknown session"));
 
     assertTrue(result.isCompletedExceptionally());
-    assertEquals(ClientSession.State.EXPIRED, state.getState());
   }
 
   /**
@@ -279,19 +255,15 @@ public class ClientSessionSubmitterTest {
   public void testExpireSessionOnQueryFailure() throws Throwable {
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
 
-    Connection connection = mock(Connection.class);
-    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(any(QueryRequest.class)))
+    CopycatConnection connection = mock(CopycatSessionConnection.class);
+    Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(future);
 
-    ClientSessionState state = new ClientSessionState(UUID.randomUUID().toString())
-      .setSessionId(1)
-      .setState(Session.State.OPEN);
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionManager manager = mock(CopycatSessionManager.class);
+    ThreadContext threadContext = new TestContext();
 
-    Executor executor = new MockExecutor();
-    ThreadContext context = mock(ThreadContext.class);
-    when(context.executor()).thenReturn(executor);
-
-    ClientSessionSubmitter submitter = new ClientSessionSubmitter(connection, state, new ClientSequencer(state), context);
+    CopycatSessionSubmitter submitter = new CopycatSessionSubmitter(mock(CopycatLeaderConnection.class), connection, state, new CopycatSessionSequencer(state), manager, threadContext);
 
     CompletableFuture<String> result = submitter.submit(new TestQuery());
 
@@ -302,7 +274,6 @@ public class ClientSessionSubmitterTest {
     future.completeExceptionally(new UnknownSessionException("unknown session"));
 
     assertTrue(result.isCompletedExceptionally());
-    assertEquals(ClientSession.State.EXPIRED, state.getState());
   }
 
   /**
@@ -318,9 +289,49 @@ public class ClientSessionSubmitterTest {
   }
 
   /**
-   * Mock executor.
+   * Test thread context.
    */
-  private static class MockExecutor implements Executor {
+  private static class TestContext implements ThreadContext {
+    @Override
+    public Logger logger() {
+      return null;
+    }
+
+    @Override
+    public Serializer serializer() {
+      return null;
+    }
+
+    @Override
+    public boolean isBlocked() {
+      return false;
+    }
+
+    @Override
+    public void block() {
+
+    }
+
+    @Override
+    public void unblock() {
+
+    }
+
+    @Override
+    public Scheduled schedule(Duration delay, Runnable callback) {
+      return null;
+    }
+
+    @Override
+    public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
+      return null;
+    }
+
+    @Override
+    public void close() {
+
+    }
+
     @Override
     public void execute(Runnable command) {
       command.run();

@@ -36,6 +36,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConfigureRequest extends AbstractRequest {
+  public static final String NAME = "configure";
 
   /**
    * Returns a new configuration request builder.

@@ -70,6 +70,22 @@ public interface ServerState extends Managed<ServerState> {
   CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
 
   /**
+   * Handles an open session request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request);
+
+  /**
+   * Handles a close session request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<CloseSessionResponse> closeSession(CloseSessionRequest request);
+
+  /**
    * Handles a reset request.
    *
    * @param request The request to handle

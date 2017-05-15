@@ -18,15 +18,12 @@ package io.atomix.copycat.protocol;
 import java.util.Objects;
 
 /**
- * Session unregister request.
- * <p>
- * The unregister request is sent by a client with an open session to the cluster to explicitly
- * unregister its session. Note that if a client does not send an unregister request, its session will
- * eventually expire. The unregister request simply provides a more orderly method for closing client sessions.
+ * Client unregister request.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class UnregisterRequest extends SessionRequest {
+public class UnregisterRequest extends ClientRequest {
+  public static final String NAME = "unregister";
 
   /**
    * Returns a new unregister request builder.
@@ -50,27 +47,27 @@ public class UnregisterRequest extends SessionRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session);
+    return Objects.hash(getClass(), client);
   }
 
   @Override
   public boolean equals(Object object) {
     if (object instanceof UnregisterRequest) {
       UnregisterRequest request = (UnregisterRequest) object;
-      return request.session == session;
+      return request.client == client;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d]", getClass().getSimpleName(), session);
+    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
   }
 
   /**
    * Unregister request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, UnregisterRequest> {
+  public static class Builder extends ClientRequest.Builder<Builder, UnregisterRequest> {
     protected Builder(UnregisterRequest request) {
       super(request);
     }

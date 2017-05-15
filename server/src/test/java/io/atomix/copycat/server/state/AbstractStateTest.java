@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.concurrent.CatalystThreadFactory;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.local.LocalServerRegistry;
@@ -45,6 +46,7 @@ import org.testng.annotations.Test;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 /**
  * Abstract state test.
@@ -79,9 +81,19 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
     transport = new LocalTransport(new LocalServerRegistry());
 
     serverCtx = new SingleThreadContext("test-server", serializer);
-    new SingleThreadContext("test", serializer.clone()).executor().execute(() -> {
-      serverContext = new ServerContext("test", members.get(0).type(), members.get(0).serverAddress(), members.get(0).clientAddress(), storage, serializer, TestStateMachine::new, new ConnectionManager(transport.client()), serverCtx);
-      serverContext.getThreadContext().executor().execute(() -> {
+    new SingleThreadContext("test", serializer.clone()).execute(() -> {
+      serverContext = new ServerContext(
+        "test",
+        members.get(0).type(),
+        members.get(0).serverAddress(),
+        members.get(0).clientAddress(),
+        storage,
+        serializer,
+        new StateMachineRegistry().register("test", TestStateMachine::new),
+        new ConnectionManager(transport.client()),
+        Executors.newScheduledThreadPool(2, new CatalystThreadFactory("test-%d")),
+        serverCtx);
+      serverContext.getThreadContext().execute(() -> {
         serverContext.getClusterState().configure(new Configuration(0, 0, Instant.now().toEpochMilli(), members));
         resume();
       });

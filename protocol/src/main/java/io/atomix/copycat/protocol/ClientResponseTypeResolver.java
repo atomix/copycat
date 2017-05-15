@@ -29,13 +29,15 @@ import java.util.Map;
 public final class ClientResponseTypeResolver implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Response>, Integer> TYPES = new HashMap() {{
-    put(CommandResponse.class, -10);
-    put(ConnectResponse.class, -11);
-    put(KeepAliveResponse.class, -12);
-    put(ResetRequest.class, -13);
-    put(QueryResponse.class, -14);
-    put(RegisterResponse.class, -15);
-    put(UnregisterResponse.class, -16);
+    put(CommandResponse.class, -12);
+    put(ConnectResponse.class, -13);
+    put(KeepAliveResponse.class, -14);
+    put(ResetRequest.class, -15);
+    put(QueryResponse.class, -16);
+    put(RegisterResponse.class, -17);
+    put(UnregisterResponse.class, -18);
+    put(OpenSessionResponse.class, -19);
+    put(CloseSessionResponse.class, -20);
   }};
 
   @Override

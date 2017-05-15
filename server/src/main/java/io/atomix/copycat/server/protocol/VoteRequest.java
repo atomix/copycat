@@ -33,6 +33,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class VoteRequest extends AbstractRequest {
+  public static final String NAME = "vote";
 
   /**
    * Returns a new vote request builder.

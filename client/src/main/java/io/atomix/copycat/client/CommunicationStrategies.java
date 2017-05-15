@@ -32,7 +32,7 @@ import java.util.List;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public enum ServerSelectionStrategies implements ServerSelectionStrategy {
+public enum CommunicationStrategies implements CommunicationStrategy {
 
   /**
    * The {@code ANY} selection strategy allows the client to connect to any server in the cluster. Clients

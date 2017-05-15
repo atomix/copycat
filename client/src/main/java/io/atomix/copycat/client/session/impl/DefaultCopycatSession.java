@@ -1,35 +1,29 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
-package io.atomix.copycat.client.session;
+package io.atomix.copycat.client.session.impl;
 
-import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
-import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.ConnectionStrategy;
-import io.atomix.copycat.client.util.AddressSelector;
-import io.atomix.copycat.client.util.ClientConnection;
-import io.atomix.copycat.session.ClosedSessionException;
+import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.session.Session;
 
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -52,24 +46,18 @@ import java.util.function.Consumer;
  *
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
-public class ClientSession implements Session {
-  private final ClientSessionState state;
-  private final ClientConnection connection;
-  private final ClientSessionManager manager;
-  private final ClientSessionListener listener;
-  private final ClientSessionSubmitter submitter;
+public class DefaultCopycatSession implements CopycatSession {
+  private final CopycatSessionState state;
+  private final CopycatSessionManager sessionManager;
+  private final CopycatSessionListener sessionListener;
+  private final CopycatSessionSubmitter sessionSubmitter;
 
-  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout, Duration unstabilityTimeout) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id, unstabilityTimeout), context, connectionStrategy, sessionTimeout);
-  }
-
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
-    this.connection = Assert.notNull(connection, "connection");
+  public DefaultCopycatSession(CopycatSessionState state, CopycatConnection leaderConnection, CopycatConnection sessionConnection, ThreadContext threadContext, CopycatSessionManager sessionManager) {
     this.state = Assert.notNull(state, "state");
-    this.manager = new ClientSessionManager(connection, state, context, connectionStrategy, sessionTimeout);
-    ClientSequencer sequencer = new ClientSequencer(state);
-    this.listener = new ClientSessionListener(connection, state, sequencer, context);
-    this.submitter = new ClientSessionSubmitter(connection, state, sequencer, context);
+    this.sessionManager = Assert.notNull(sessionManager, "sessionManager");
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(state);
+    this.sessionListener = new CopycatSessionListener(sessionConnection, state, sequencer, threadContext);
+    this.sessionSubmitter = new CopycatSessionSubmitter(leaderConnection, sessionConnection, state, sequencer, sessionManager, threadContext);
   }
 
   @Override
@@ -78,13 +66,13 @@ public class ClientSession implements Session {
   }
 
   @Override
-  public State state() {
-    return state.getState();
+  public String name() {
+    return state.getSessionName();
   }
 
   @Override
-  public Listener<State> onStateChange(Consumer<State> callback) {
-    return state.onStateChange(callback);
+  public String type() {
+    return state.getSessionType();
   }
 
   /**
@@ -112,11 +100,7 @@ public class ClientSession implements Session {
    * @return A completable future to be completed with the command result.
    */
   public <T> CompletableFuture<T> submit(Command<T> command) {
-    State state = state();
-    if (state == State.CLOSED || state == State.EXPIRED) {
-      return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
-    }
-    return submitter.submit(command);
+    return sessionSubmitter.submit(command);
   }
 
   /**
@@ -127,20 +111,7 @@ public class ClientSession implements Session {
    * @return A completable future to be completed with the query result.
    */
   public <T> CompletableFuture<T> submit(Query<T> query) {
-    State state = state();
-    if (state == State.CLOSED || state == State.EXPIRED) {
-      return Futures.exceptionalFuture(new ClosedSessionException("session closed"));
-    }
-    return submitter.submit(query);
-  }
-
-  /**
-   * Opens the session.
-   *
-   * @return A completable future to be completed once the session is opened.
-   */
-  public CompletableFuture<Session> register() {
-    return manager.open().thenApply(v -> this);
+    return sessionSubmitter.submit(query);
   }
 
   /**
@@ -158,7 +129,7 @@ public class ClientSession implements Session {
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
   public Listener<Void> onEvent(String event, Runnable callback) {
-    return listener.onEvent(event, callback);
+    return sessionListener.onEvent(event, callback);
   }
 
   /**
@@ -177,52 +148,17 @@ public class ClientSession implements Session {
    * @throws NullPointerException if {@code event} or {@code callback} is null
    */
   public <T> Listener<T> onEvent(String event, Consumer<T> callback) {
-    return listener.onEvent(event, callback);
+    return sessionListener.onEvent(event, callback);
   }
 
-  /**
-   * Closes the session.
-   *
-   * @return A completable future to be completed once the session is closed.
-   */
+  @Override
+  public boolean isOpen() {
+    return state.isOpen();
+  }
+
+  @Override
   public CompletableFuture<Void> close() {
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    submitter.close()
-      .thenCompose(v -> listener.close())
-      .thenCompose(v -> manager.close())
-      .whenComplete((managerResult, managerError) -> {
-        connection.close().whenComplete((connectionResult, connectionError) -> {
-          if (managerError != null) {
-            future.completeExceptionally(managerError);
-          } else if (connectionError != null) {
-            future.completeExceptionally(connectionError);
-          } else {
-            future.complete(null);
-          }
-        });
-      });
-    return future;
-  }
-
-  /**
-   * Expires the session.
-   *
-   * @return A completable future to be completed once the session has been expired.
-   */
-  public CompletableFuture<Void> expire() {
-    return manager.expire();
-  }
-
-  /**
-   * Kills the session.
-   *
-   * @return A completable future to be completed once the session has been killed.
-   */
-  public CompletableFuture<Void> kill() {
-    return submitter.close()
-      .thenCompose(v -> listener.close())
-      .thenCompose(v -> manager.kill())
-      .thenCompose(v -> connection.close());
+    return sessionManager.closeSession(state.getSessionId()).whenComplete((result, error) -> state.close());
   }
 
   @Override
@@ -235,7 +171,7 @@ public class ClientSession implements Session {
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof ClientSession && ((ClientSession) object).id() == id();
+    return object instanceof DefaultCopycatSession && ((DefaultCopycatSession) object).id() == id();
   }
 
   @Override

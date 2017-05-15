@@ -350,7 +350,7 @@ final class ClusterState implements Cluster, AutoCloseable {
   private synchronized CompletableFuture<Void> join() {
     joinFuture = new CompletableFuture<>();
 
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       // Transition the server to the appropriate state for the local member type.
       context.transition(member.type());
 
@@ -384,7 +384,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         JoinRequest request = JoinRequest.builder()
           .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
           .build();
-        return connection.<JoinRequest, JoinResponse>sendAndReceive(request);
+        return connection.<JoinRequest, JoinResponse>sendAndReceive(JoinRequest.NAME, request);
       }).whenComplete((response, error) -> {
         // Cancel the join timer.
         cancelJoinTimer();
@@ -456,7 +456,7 @@ final class ClusterState implements Cluster, AutoCloseable {
             .withMember(member())
             .build();
           LOGGER.trace("{} - Sending {} to {}", member.address(), request, leader.address());
-          return connection.<ConfigurationRequest, ConfigurationResponse>sendAndReceive(request);
+          return connection.<ReconfigureRequest, ReconfigureResponse>sendAndReceive(ReconfigureRequest.NAME, request);
         }).whenComplete((response, error) -> {
           cancelJoinTimer();
           if (error == null) {
@@ -510,7 +510,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
     leaveFuture = new CompletableFuture<>();
 
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       // If a join attempt is still underway, cancel the join and complete the join future exceptionally.
       // The join future will be set to null once completed.
       cancelJoinTimer();

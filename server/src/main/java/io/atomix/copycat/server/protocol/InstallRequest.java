@@ -37,6 +37,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class InstallRequest extends AbstractRequest {
+  public static final String NAME = "install";
 
   /**
    * Returns a new install request builder.

@@ -31,6 +31,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ResetRequest extends SessionRequest {
+  public static final String NAME = "reset";
 
   /**
    * Returns a new publish response builder.

@@ -25,22 +25,23 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.*;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.*;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -59,14 +60,15 @@ public class ServerContext implements AutoCloseable {
   private final Listeners<Member> electionListeners = new Listeners<>();
   protected final String name;
   protected final ThreadContext threadContext;
-  protected final Supplier<StateMachine> stateMachineFactory;
+  protected final StateMachineRegistry registry;
   protected final ClusterState cluster;
   protected final Storage storage;
   protected final Serializer serializer;
   private MetaStore meta;
   private Log log;
   private SnapshotStore snapshot;
-  private ServerStateMachine stateMachine;
+  private ServerStateMachineManager stateMachine;
+  protected final ScheduledExecutorService threadPool;
   protected final ThreadContext stateContext;
   protected final ConnectionManager connections;
   protected ServerState state = new InactiveState(this);
@@ -81,24 +83,43 @@ public class ServerContext implements AutoCloseable {
   private long globalIndex;
 
   @SuppressWarnings("unchecked")
-  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Storage storage, Serializer serializer, Supplier<StateMachine> stateMachineFactory, ConnectionManager connections, ThreadContext threadContext) {
+  public ServerContext(String name, Member.Type type, Address serverAddress, Address clientAddress, Storage storage, Serializer serializer, StateMachineRegistry registry, ConnectionManager connections, ScheduledExecutorService threadPool, ThreadContext threadContext) {
     this.name = Assert.notNull(name, "name");
     this.storage = Assert.notNull(storage, "storage");
     this.serializer = Assert.notNull(serializer, "serializer");
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.connections = Assert.notNull(connections, "connections");
-    this.stateMachineFactory = Assert.notNull(stateMachineFactory, "stateMachineFactory");
+    this.registry = Assert.notNull(registry, "registry");
     this.stateContext = new SingleThreadContext(String.format("copycat-server-%s-%s-state", serverAddress, name), threadContext.serializer().clone());
+    this.threadPool = Assert.notNull(threadPool, "threadPool");
 
     // Open the meta store.
-    threadContext.execute(() -> this.meta = storage.openMetaStore(name)).join();
+    CountDownLatch metaLatch = new CountDownLatch(1);
+    threadContext.execute(() -> {
+      this.meta = storage.openMetaStore(name);
+      metaLatch.countDown();
+    });
+
+    try {
+      metaLatch.await();
+    } catch (InterruptedException e) {
+    }
 
     // Load the current term and last vote from disk.
     this.term = meta.loadTerm();
     this.lastVotedFor = meta.loadVote();
 
     // Reset the state machine.
-    threadContext.execute(this::reset).join();
+    CountDownLatch resetLatch = new CountDownLatch(1);
+    threadContext.execute(() -> {
+      reset();
+      resetLatch.countDown();
+    });
+
+    try {
+      resetLatch.await();
+    } catch (InterruptedException e) {
+    }
 
     this.cluster = new ClusterState(type, serverAddress, clientAddress, this);
   }
@@ -414,8 +435,17 @@ public class ServerContext implements AutoCloseable {
    *
    * @return The server state machine.
    */
-  public ServerStateMachine getStateMachine() {
+  public ServerStateMachineManager getStateMachine() {
     return stateMachine;
+  }
+
+  /**
+   * Returns the server state machine registry.
+   *
+   * @return The server state machine registry.
+   */
+  public StateMachineRegistry getStateMachineRegistry() {
+    return registry;
   }
 
   /**
@@ -478,19 +508,8 @@ public class ServerContext implements AutoCloseable {
     // Open the snapshot store.
     snapshot = storage.openSnapshotStore(name);
 
-    // Create a new user state machine.
-    StateMachine stateMachine = stateMachineFactory.get();
-
-    // Configure the log compaction mode. If the state machine supports snapshotting, the default
-    // compaction mode is SNAPSHOT, otherwise the default is SEQUENTIAL.
-    if (stateMachine instanceof Snapshottable) {
-      log.compactor().withDefaultCompactionMode(Compaction.Mode.SNAPSHOT);
-    } else {
-      log.compactor().withDefaultCompactionMode(Compaction.Mode.SEQUENTIAL);
-    }
-
     // Create a new internal server state machine.
-    this.stateMachine = new ServerStateMachine(stateMachine, this, stateContext);
+    this.stateMachine = new ServerStateMachineManager(this, threadPool, stateContext);
     return this;
   }
 
@@ -518,15 +537,17 @@ public class ServerContext implements AutoCloseable {
 
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
-    connection.handler(ConnectRequest.class, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
-    connection.handler(ResetRequest.class, (Consumer<ResetRequest>) request -> state.reset(request));
-    connection.handler(CommandRequest.class, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
-    connection.handler(QueryRequest.class, (Function<QueryRequest, CompletableFuture<QueryResponse>>) request -> state.query(request));
+    connection.registerHandler(RegisterRequest.NAME, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
+    connection.registerHandler(ConnectRequest.NAME, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
+    connection.registerHandler(KeepAliveRequest.NAME, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
+    connection.registerHandler(UnregisterRequest.NAME, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
+    connection.registerHandler(OpenSessionRequest.NAME, (Function<OpenSessionRequest, CompletableFuture<OpenSessionResponse>>) request -> state.openSession(request));
+    connection.registerHandler(CloseSessionRequest.NAME, (Function<CloseSessionRequest, CompletableFuture<CloseSessionResponse>>) request -> state.closeSession(request));
+    connection.registerHandler(ResetRequest.NAME, (Consumer<ResetRequest>) request -> state.reset(request));
+    connection.registerHandler(CommandRequest.NAME, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
+    connection.registerHandler(QueryRequest.NAME, (Function<QueryRequest, CompletableFuture<QueryResponse>>) request -> state.query(request));
 
-    connection.onClose(stateMachine.executor().context().sessions()::unregisterConnection);
+    connection.onClose(stateMachine.getSessions()::unregisterConnection);
   }
 
   /**
@@ -538,23 +559,25 @@ public class ServerContext implements AutoCloseable {
     // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.handler(RegisterRequest.class, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
-    connection.handler(ConnectRequest.class, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
-    connection.handler(KeepAliveRequest.class, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
-    connection.handler(UnregisterRequest.class, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
-    connection.handler(ResetRequest.class, (Consumer<ResetRequest>) request -> state.reset(request));
-    connection.handler(ConfigureRequest.class, (Function<ConfigureRequest, CompletableFuture<ConfigureResponse>>) request -> state.configure(request));
-    connection.handler(InstallRequest.class, (Function<InstallRequest, CompletableFuture<InstallResponse>>) request -> state.install(request));
-    connection.handler(JoinRequest.class, (Function<JoinRequest, CompletableFuture<JoinResponse>>) request -> state.join(request));
-    connection.handler(ReconfigureRequest.class, (Function<ReconfigureRequest, CompletableFuture<ReconfigureResponse>>) request -> state.reconfigure(request));
-    connection.handler(LeaveRequest.class, (Function<LeaveRequest, CompletableFuture<LeaveResponse>>) request -> state.leave(request));
-    connection.handler(AppendRequest.class, (Function<AppendRequest, CompletableFuture<AppendResponse>>) request -> state.append(request));
-    connection.handler(PollRequest.class, (Function<PollRequest, CompletableFuture<PollResponse>>) request -> state.poll(request));
-    connection.handler(VoteRequest.class, (Function<VoteRequest, CompletableFuture<VoteResponse>>) request -> state.vote(request));
-    connection.handler(CommandRequest.class, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
-    connection.handler(QueryRequest.class, (Function<QueryRequest, CompletableFuture<QueryResponse>>) request -> state.query(request));
+    connection.registerHandler(RegisterRequest.NAME, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
+    connection.registerHandler(ConnectRequest.NAME, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
+    connection.registerHandler(KeepAliveRequest.NAME, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
+    connection.registerHandler(UnregisterRequest.NAME, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
+    connection.registerHandler(OpenSessionRequest.NAME, (Function<OpenSessionRequest, CompletableFuture<OpenSessionResponse>>) request -> state.openSession(request));
+    connection.registerHandler(CloseSessionRequest.NAME, (Function<CloseSessionRequest, CompletableFuture<CloseSessionResponse>>) request -> state.closeSession(request));
+    connection.registerHandler(ResetRequest.NAME, (Consumer<ResetRequest>) request -> state.reset(request));
+    connection.registerHandler(ConfigureRequest.NAME, (Function<ConfigureRequest, CompletableFuture<ConfigureResponse>>) request -> state.configure(request));
+    connection.registerHandler(InstallRequest.NAME, (Function<InstallRequest, CompletableFuture<InstallResponse>>) request -> state.install(request));
+    connection.registerHandler(JoinRequest.NAME, (Function<JoinRequest, CompletableFuture<JoinResponse>>) request -> state.join(request));
+    connection.registerHandler(ReconfigureRequest.NAME, (Function<ReconfigureRequest, CompletableFuture<ReconfigureResponse>>) request -> state.reconfigure(request));
+    connection.registerHandler(LeaveRequest.NAME, (Function<LeaveRequest, CompletableFuture<LeaveResponse>>) request -> state.leave(request));
+    connection.registerHandler(AppendRequest.NAME, (Function<AppendRequest, CompletableFuture<AppendResponse>>) request -> state.append(request));
+    connection.registerHandler(PollRequest.NAME, (Function<PollRequest, CompletableFuture<PollResponse>>) request -> state.poll(request));
+    connection.registerHandler(VoteRequest.NAME, (Function<VoteRequest, CompletableFuture<VoteResponse>>) request -> state.vote(request));
+    connection.registerHandler(CommandRequest.NAME, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
+    connection.registerHandler(QueryRequest.NAME, (Function<QueryRequest, CompletableFuture<QueryResponse>>) request -> state.query(request));
 
-    connection.onClose(stateMachine.executor().context().sessions()::unregisterConnection);
+    connection.onClose(stateMachine.getSessions()::unregisterConnection);
   }
 
   /**

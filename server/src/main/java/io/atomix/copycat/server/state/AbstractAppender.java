@@ -193,7 +193,7 @@ abstract class AbstractAppender implements AutoCloseable {
     long timestamp = System.nanoTime();
 
     logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().address());
-    connection.<AppendRequest, AppendResponse>sendAndReceive(request).whenComplete((response, error) -> {
+    connection.<AppendRequest, AppendResponse>sendAndReceive(AppendRequest.NAME, request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the append to the member.
@@ -405,7 +405,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
     logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<ConfigureRequest, ConfigureResponse>sendAndReceive(request).whenComplete((response, error) -> {
+    connection.<ConfigureRequest, ConfigureResponse>sendAndReceive(ConfigureRequest.NAME, request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the configure to the member.
@@ -538,7 +538,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
     logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<InstallRequest, InstallResponse>sendAndReceive(request).whenComplete((response, error) -> {
+    connection.<InstallRequest, InstallResponse>sendAndReceive(InstallRequest.NAME, request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the install to the member.
