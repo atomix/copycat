@@ -1,5 +1,7 @@
 # Copycat
 
+[![Join the chat at https://gitter.im/atomix/copycat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/atomix/copycat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 [![Build Status](https://travis-ci.org/atomix/copycat.svg)](https://travis-ci.org/atomix/copycat)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.atomix.copycat/copycat-server/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.atomix.copycat%22) 
 [![Gitter](https://img.shields.io/badge/GITTER-join%20chat-green.svg)](https://gitter.im/atomix/atomix)
