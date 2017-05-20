@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -45,7 +46,7 @@ class ServerSessionContext implements ServerSession {
   private volatile State state = State.OPEN;
   private final long timeout;
   private Connection connection;
-  private volatile long references;
+  private final AtomicLong references = new AtomicLong();
   private long keepAliveIndex;
   private long requestSequence;
   private long commandSequence;
@@ -54,6 +55,8 @@ class ServerSessionContext implements ServerSession {
   private long eventIndex;
   private long completeIndex;
   private long closeIndex;
+  private boolean releaseClose;
+  private boolean closed;
   private long timestamp;
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
@@ -122,30 +125,20 @@ class ServerSessionContext implements ServerSession {
    * Acquires a reference to the session.
    */
   void acquire() {
-    references++;
+    references.incrementAndGet();
   }
 
   /**
    * Releases a reference to the session.
    */
   void release() {
-    long references = --this.references;
-    if (!state.active() && references == 0) {
-      context.sessions().unregisterSession(id);
+    long references = this.references.decrementAndGet();
+    if (closed && references == 0) {
       log.release(id);
-      if (closeIndex > 0) {
+      if (releaseClose) {
         log.release(closeIndex);
       }
     }
-  }
-
-  /**
-   * Returns the number of open command references for the session.
-   *
-   * @return The number of open command references for the session.
-   */
-  long references() {
-    return references;
   }
 
   /**
@@ -559,6 +552,18 @@ class ServerSessionContext implements ServerSession {
    */
   void expire(long index) {
     setState(State.EXPIRED);
+    releaseClose = true;
+    cleanState(index);
+  }
+
+  /**
+   * Supersedes the session.
+   *
+   * @param index The index at which the session was superseded by a register entry from the same client.
+   */
+  void supersede(long index) {
+    setState(State.EXPIRED);
+    releaseClose = false;
     cleanState(index);
   }
 
@@ -569,6 +574,7 @@ class ServerSessionContext implements ServerSession {
    */
   void close(long index) {
     setState(State.CLOSED);
+    releaseClose = true;
     cleanState(index);
   }
 
@@ -581,17 +587,21 @@ class ServerSessionContext implements ServerSession {
       log.release(keepAliveIndex);
     }
 
-    context.sessions().unregisterSession(id);
+    this.closeIndex = index;
+  }
 
-    // If no references to session commands are open, release session-related entries.
+  /**
+   * Closes the session, indicating that a snapshot has been taken for all entries within the session.
+   */
+  void close() {
+    long references = this.references.get();
     if (references == 0) {
       log.release(id);
-      if (index > 0) {
-        log.release(index);
+      if (releaseClose) {
+        log.release(closeIndex);
       }
-    } else {
-      this.closeIndex = index;
     }
+    closed = true;
   }
 
   @Override

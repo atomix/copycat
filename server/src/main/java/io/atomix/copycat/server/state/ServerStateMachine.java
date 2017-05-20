@@ -33,6 +33,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -53,6 +56,7 @@ final class ServerStateMachine implements AutoCloseable {
   private volatile long lastApplied;
   private long lastCompleted;
   private volatile Snapshot pendingSnapshot;
+  private final SortedMap<Long, ServerSessionContext> closedSessions = new TreeMap<>();
 
   ServerStateMachine(StateMachine stateMachine, ServerContext state, ThreadContext executor) {
     this.stateMachine = Assert.notNull(stateMachine, "stateMachine");
@@ -167,6 +171,14 @@ final class ServerStateMachine implements AutoCloseable {
       // Once the snapshot has been completed, snapshot dependent entries can be cleaned from the log.
       log.compactor().snapshotIndex(snapshotIndex);
       log.compactor().compact();
+
+      synchronized (closedSessions) {
+        Map<Long, ServerSessionContext> snapshottedSessions = closedSessions.headMap(pendingSnapshot.index());
+        for (ServerSessionContext session : snapshottedSessions.values()) {
+          session.close();
+        }
+        snapshottedSessions.clear();
+      }
     }
   }
 
@@ -419,7 +431,10 @@ final class ServerStateMachine implements AutoCloseable {
 
     // If the session overrides a previous session, expire the old session.
     if (oldSession != null) {
-      oldSession.expire(0);
+      oldSession.supersede(index);
+      synchronized (closedSessions) {
+        closedSessions.put(index, oldSession);
+      }
     }
 
     // Register the session and then open it. This ensures that state machines cannot publish events to this
@@ -662,6 +677,14 @@ final class ServerStateMachine implements AutoCloseable {
       return;
     }
 
+    // Unregister the session.
+    executor.context().sessions().unregisterSession(session.id());
+
+    // Add the session to the closed sessions map to ensure entries are released after the next snapshot.
+    synchronized (closedSessions) {
+      closedSessions.put(index, session);
+    }
+
     // Trigger scheduled callbacks in the state machine.
     executor.tick(index, timestamp);
 
@@ -705,6 +728,14 @@ final class ServerStateMachine implements AutoCloseable {
     if (!session.state().active()) {
       context.executor().execute(() -> future.completeExceptionally(new UnknownSessionException("inactive session: " + session.id())));
       return;
+    }
+
+    // Unregister the session.
+    executor.context().sessions().unregisterSession(session.id());
+
+    // Add the session to the closed sessions map to ensure entries are released after the next snapshot.
+    synchronized (closedSessions) {
+      closedSessions.put(index, session);
     }
 
     // Trigger scheduled callbacks in the state machine.
