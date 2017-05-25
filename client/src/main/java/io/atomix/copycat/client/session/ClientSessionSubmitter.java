@@ -55,6 +55,9 @@ final class ClientSessionSubmitter {
       || e instanceof TimeoutException
       || e instanceof TransportException
       || e instanceof ClosedChannelException;
+  private static final Predicate<Throwable> CLOSED_PREDICATE = e ->
+    e instanceof ClosedSessionException
+      || e instanceof UnknownSessionException;
   private final Connection connection;
   private final ClientSessionState state;
   private final ClientSequencer sequencer;
@@ -361,7 +364,7 @@ final class ClientSessionSubmitter {
     @Override
     public void fail(Throwable cause) {
       super.fail(cause);
-      if (!(cause instanceof UnknownSessionException)) {
+      if (!CLOSED_PREDICATE.test(cause)) {
         CommandRequest request = CommandRequest.builder()
           .withSession(this.request.session())
           .withSequence(this.request.sequence())
