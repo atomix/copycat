@@ -15,8 +15,8 @@
  */
 package io.atomix.copycat.server.storage;
 
-import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.snapshot.SnapshotFile;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -275,7 +275,9 @@ public class Storage {
    */
   public void deleteMetaStore(String name) {
     StorageCleaner cleaner = new StorageCleaner(this);
-    cleaner.cleanFiles(f -> f.getName().equals(String.format("%s.meta", name)));
+    cleaner.cleanFiles(f -> f.getName().equals(String.format("%s.meta", name)) ||
+      f.getName().equals(String.format("%s.conf", name))
+    );
   }
 
   /**
