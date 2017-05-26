@@ -123,7 +123,10 @@ final class ClientSequencer {
       } else {
         responseCallbacks.put(sequence, new ResponseCallback(response, callback));
       }
-    } else {
+    }
+    // If the response has not yet been sequenced, store it in the response callbacks map.
+    // Otherwise, the response for the operation with this sequence number has already been handled.
+    else if (sequence > responseSequence) {
       responseCallbacks.put(sequence, new ResponseCallback(response, callback));
     }
   }
