@@ -16,6 +16,7 @@
 package io.atomix.copycat.client.session;
 
 import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.catalyst.util.Builder;
 import io.atomix.copycat.Command;
@@ -53,6 +54,13 @@ public interface CopycatSession {
    * @return The client proxy type.
    */
   String type();
+
+  /**
+   * Returns the session thread context.
+   *
+   * @return The session thread context.
+   */
+  ThreadContext context();
 
   /**
    * Submits an operation to the Copycat cluster.

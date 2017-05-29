@@ -21,6 +21,7 @@ import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.*;
+import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.Snapshottable;
@@ -68,7 +69,7 @@ public class PerformanceTest implements Runnable {
   private static final int NUM_CLIENTS = 5;
 
   private static final Query.ConsistencyLevel QUERY_CONSISTENCY = Query.ConsistencyLevel.LINEARIZABLE;
-  private static final ServerSelectionStrategy SERVER_SELECTION_STRATEGY = ServerSelectionStrategies.ANY;
+  private static final CommunicationStrategy SERVER_SELECTION_STRATEGY = CommunicationStrategies.ANY;
 
   private int port = 5000;
   private List<Member> members = new ArrayList<>();
@@ -121,13 +122,17 @@ public class PerformanceTest implements Runnable {
     CopycatClient[] clients = new CopycatClient[NUM_CLIENTS];
     for (int i = 0; i < NUM_CLIENTS; i++) {
       CompletableFuture<Void> future = new CompletableFuture<>();
-      clients[i] = createClient(RecoveryStrategies.RECOVER);
+      clients[i] = createClient();
       futures[i] = future;
     }
 
     long startTime = System.currentTimeMillis();
     for (int i = 0; i < clients.length; i++) {
-      runClient(clients[i], futures[i]);
+      CopycatSession session = clients[i].sessionBuilder()
+        .withType("test")
+        .withName("test")
+        .build();
+      runSession(session, futures[i]);
     }
     CompletableFuture.allOf(futures).join();
     long endTime = System.currentTimeMillis();
@@ -142,25 +147,25 @@ public class PerformanceTest implements Runnable {
   }
 
   /**
-   * Runs operations for a single client.
+   * Runs operations for a single session.
    */
-  private void runClient(CopycatClient client, CompletableFuture<Void> future) {
+  private void runSession(CopycatSession session, CompletableFuture<Void> future) {
     int count = totalOperations.incrementAndGet();
     if (count > TOTAL_OPERATIONS) {
       future.complete(null);
     } else if (count % 10 < WRITE_RATIO) {
-      client.submit(new Put(randomKey(), UUID.randomUUID().toString())).whenComplete((result, error) -> {
+      session.submit(new Put(randomKey(), UUID.randomUUID().toString())).whenComplete((result, error) -> {
         if (error == null) {
           writeCount.incrementAndGet();
         }
-        runClient(client, future);
+        runSession(session, future);
       });
     } else {
-      client.submit(new Get(randomKey(), QUERY_CONSISTENCY)).whenComplete((result, error) -> {
+      session.submit(new Get(randomKey(), QUERY_CONSISTENCY)).whenComplete((result, error) -> {
         if (error == null) {
           readCount.incrementAndGet();
         }
-        runClient(client, future);
+        runSession(session, future);
       });
     }
   }
@@ -277,7 +282,7 @@ public class PerformanceTest implements Runnable {
         .withDirectory(new File(String.format("target/performance-logs/%d", member.address().hashCode())))
         .withCompactionThreads(1)
         .build())
-      .withStateMachine(PerformanceStateMachine::new);
+      .addStateMachine("test", PerformanceStateMachine::new);
 
     CopycatServer server = builder.build();
     server.serializer().disableWhitelist();
@@ -288,11 +293,10 @@ public class PerformanceTest implements Runnable {
   /**
    * Creates a Copycat client.
    */
-  private CopycatClient createClient(RecoveryStrategy strategy) throws Exception {
+  private CopycatClient createClient() throws Exception {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
       .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withRecoveryStrategy(strategy)
       .withServerSelectionStrategy(SERVER_SELECTION_STRATEGY)
       .build();
     client.serializer().disableWhitelist();

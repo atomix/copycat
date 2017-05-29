@@ -33,7 +33,7 @@ import java.util.function.Consumer;
  * The client session is responsible for maintaining a client's connection to a Copycat cluster and coordinating
  * the submission of {@link Command commands} and {@link Query queries} to various nodes in the cluster. Client
  * sessions are single-use objects that represent the context within which a cluster can guarantee linearizable
- * semantics for state machine operations. When a session is {@link #register() opened}, the session will register
+ * semantics for state machine operations. When a session is opened, the session will register
  * itself with the cluster by attempting to contact each of the known servers. Once the session has been successfully
  * registered, kee-alive requests will be periodically sent to keep the session alive.
  * <p>
@@ -51,6 +51,7 @@ public class DefaultCopycatSession implements CopycatSession {
   private final CopycatSessionManager sessionManager;
   private final CopycatSessionListener sessionListener;
   private final CopycatSessionSubmitter sessionSubmitter;
+  private final ThreadContext context;
 
   public DefaultCopycatSession(CopycatSessionState state, CopycatConnection leaderConnection, CopycatConnection sessionConnection, ThreadContext threadContext, CopycatSessionManager sessionManager) {
     this.state = Assert.notNull(state, "state");
@@ -58,6 +59,7 @@ public class DefaultCopycatSession implements CopycatSession {
     CopycatSessionSequencer sequencer = new CopycatSessionSequencer(state);
     this.sessionListener = new CopycatSessionListener(sessionConnection, state, sequencer, threadContext);
     this.sessionSubmitter = new CopycatSessionSubmitter(leaderConnection, sessionConnection, state, sequencer, sessionManager, threadContext);
+    this.context = threadContext;
   }
 
   @Override
@@ -73,6 +75,11 @@ public class DefaultCopycatSession implements CopycatSession {
   @Override
   public String type() {
     return state.getSessionType();
+  }
+
+  @Override
+  public ThreadContext context() {
+    return context;
   }
 
   /**

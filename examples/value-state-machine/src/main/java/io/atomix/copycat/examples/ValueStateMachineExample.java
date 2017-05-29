@@ -57,7 +57,7 @@ public class ValueStateMachineExample {
     }
 
     CopycatServer server = CopycatServer.builder(address)
-      .withStateMachine(ValueStateMachine::new)
+      .addStateMachine("value", ValueStateMachine::new)
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withDirectory(args[0])
