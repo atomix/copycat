@@ -165,7 +165,7 @@ public class CopycatSessionManager {
           CopycatSessionState state = new CopycatSessionState(response.session(), name, type);
           sessions.put(state.getSessionId(), state);
           CopycatConnection leaderConnection = new CopycatLeaderConnection(state, connectionManager, selectorManager.createSelector(CommunicationStrategies.LEADER));
-          CopycatConnection sessionConnection = new CopycatSessionConnection(state, connectionManager, selectorManager.createSelector(communicationStrategy));
+          CopycatConnection sessionConnection = new CopycatSessionConnection(state, connectionManager, selectorManager.createSelector(communicationStrategy), threadContext);
           leaderConnection.open().thenCompose(v -> sessionConnection.open()).whenComplete((connectResult, connectError) -> {
             if (connectError == null) {
               future.complete(new DefaultCopycatSession(state, leaderConnection, sessionConnection, threadContext, this));

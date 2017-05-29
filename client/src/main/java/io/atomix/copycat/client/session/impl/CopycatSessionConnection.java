@@ -15,6 +15,7 @@
  */
 package io.atomix.copycat.client.session.impl;
 
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.client.util.AddressSelector;
@@ -25,6 +26,7 @@ import io.atomix.copycat.protocol.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -34,13 +36,20 @@ import java.util.function.Function;
  */
 public class CopycatSessionConnection extends CopycatConnection {
   private static final Logger LOGGER = LoggerFactory.getLogger(CopycatSessionConnection.class);
+
+  private static final long BASE_RECONNECT_INTERVAL = 10;
+  private static final long MAX_RECONNECT_INTERVAL = 1000;
+
   private final CopycatSessionState state;
   private final String sessionString;
+  private final ThreadContext context;
+  private long reconnectInterval;
 
-  public CopycatSessionConnection(CopycatSessionState state, ClientConnectionManager connections, AddressSelector selector) {
+  public CopycatSessionConnection(CopycatSessionState state, ClientConnectionManager connections, AddressSelector selector, ThreadContext context) {
     super(connections, selector);
     this.state = state;
     this.sessionString = String.valueOf(state.getSessionId());
+    this.context = context;
   }
 
   @Override
@@ -53,6 +62,22 @@ public class CopycatSessionConnection extends CopycatConnection {
     return LOGGER;
   }
 
+  /**
+   * Reconnects to the cluster.
+   */
+  private void reconnect() {
+    if (open) {
+      reset().connect().whenComplete((connection, error) -> {
+        if (connection == null || error != null) {
+          reconnectInterval = Math.max(reconnectInterval * 2, MAX_RECONNECT_INTERVAL);
+          context.schedule(Duration.ofMillis(reconnectInterval), this::reconnect);
+        } else {
+          reconnectInterval = BASE_RECONNECT_INTERVAL;
+        }
+      });
+    }
+  }
+
   @Override
   @SuppressWarnings("unchecked")
   protected void setupConnection(Address address, Connection connection, CompletableFuture<Connection> future) {
@@ -61,17 +86,17 @@ public class CopycatSessionConnection extends CopycatConnection {
     this.connection = connection;
 
     connection.onClose(c -> {
-      if (c.equals(this.connection)) {
+      if (c == this.connection) {
         logger().debug("{} - Connection closed", name());
         this.connection = null;
-        connect();
+        reconnect();
       }
     });
     connection.onException(c -> {
-      if (c.equals(this.connection)) {
+      if (c == this.connection) {
         logger().debug("{} - Connection lost", name());
         this.connection = null;
-        connect();
+        reconnect();
       }
     });
 
