@@ -282,7 +282,7 @@ public class ServerStateMachineManager implements AutoCloseable {
     long index = entry.getIndex();
     long timestamp = updateTimestamp(entry);
 
-    ClientContext client = new ClientContext(entry.getIndex(), entry.getTimeout(), new LogCleaner(log));
+    ClientContext client = new ClientContext(entry.getIndex(), entry.getTimeout(), log::release);
     clientManager.registerClient(client);
 
     // Update the session timestamp *after* executing any scheduled operations. The executor's timestamp

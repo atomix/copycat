@@ -146,16 +146,14 @@ class ServerSessionContext implements ServerSession {
    * Resets the current request sequence number.
    *
    * @param requestSequence The request sequence number.
-   * @return The server session context.
    */
-  ServerSessionContext resetRequestSequence(long requestSequence) {
+  void resetRequestSequence(long requestSequence) {
     // If the request sequence number is less than the applied sequence number, update the request
     // sequence number. This is necessary to ensure that if the local server is a follower that is
     // later elected leader, its sequences are consistent for commands.
     if (requestSequence > this.requestSequence) {
       this.requestSequence = requestSequence;
     }
-    return this;
   }
 
   /**
@@ -180,9 +178,8 @@ class ServerSessionContext implements ServerSession {
    * Sets the session operation sequence number.
    *
    * @param sequence The session operation sequence number.
-   * @return The server session.
    */
-  ServerSessionContext setCommandSequence(long sequence) {
+  void setCommandSequence(long sequence) {
     // For each increment of the sequence number, trigger query callbacks that are dependent on the specific sequence.
     for (long i = commandSequence + 1; i <= sequence; i++) {
       commandSequence = i;
@@ -193,7 +190,6 @@ class ServerSessionContext implements ServerSession {
         }
       }
     }
-    return this;
   }
 
   /**
@@ -209,9 +205,8 @@ class ServerSessionContext implements ServerSession {
    * Sets the session index.
    *
    * @param index The session index.
-   * @return The server session.
    */
-  ServerSessionContext setLastApplied(long index) {
+  void setLastApplied(long index) {
     // Query callbacks for this session are added to the indexQueries map to be executed once the required index
     // for the query is reached. For each increment of the index, trigger query callbacks that are dependent
     // on the specific index.
@@ -224,8 +219,6 @@ class ServerSessionContext implements ServerSession {
         }
       }
     }
-
-    return this;
   }
 
   /**
@@ -233,13 +226,11 @@ class ServerSessionContext implements ServerSession {
    *
    * @param sequence The session sequence number at which to execute the query.
    * @param query The query to execute.
-   * @return The server session.
    */
-  ServerSessionContext registerSequenceQuery(long sequence, Runnable query) {
+  void registerSequenceQuery(long sequence, Runnable query) {
     // Add a query to be run once the session's sequence number reaches the given sequence number.
     List<Runnable> queries = this.sequenceQueries.computeIfAbsent(sequence, v -> new LinkedList<Runnable>());
     queries.add(query);
-    return this;
   }
 
   /**
@@ -247,13 +238,11 @@ class ServerSessionContext implements ServerSession {
    *
    * @param index The state machine index at which to execute the query.
    * @param query The query to execute.
-   * @return The server session.
    */
-  ServerSessionContext registerIndexQuery(long index, Runnable query) {
+  void registerIndexQuery(long index, Runnable query) {
     // Add a query to be run once the session's index reaches the given index.
     List<Runnable> queries = this.indexQueries.computeIfAbsent(index, v -> new LinkedList<>());
     queries.add(query);
-    return this;
   }
 
   /**
@@ -265,11 +254,9 @@ class ServerSessionContext implements ServerSession {
    *
    * @param sequence The result sequence number.
    * @param result The result.
-   * @return The server session.
    */
-  ServerSessionContext registerResult(long sequence, OperationResult result) {
+  void registerResult(long sequence, OperationResult result) {
     results.put(sequence, result);
-    return this;
   }
 
   /**
@@ -280,16 +267,14 @@ class ServerSessionContext implements ServerSession {
    * from memory as well.
    *
    * @param sequence The sequence to clear.
-   * @return The server session.
    */
-  ServerSessionContext clearResults(long sequence) {
+  void clearResults(long sequence) {
     if (sequence > commandLowWaterMark) {
       for (long i = commandLowWaterMark + 1; i <= sequence; i++) {
         results.remove(i);
         commandLowWaterMark = i;
       }
     }
-    return this;
   }
 
   /**
@@ -305,9 +290,8 @@ class ServerSessionContext implements ServerSession {
   /**
    * Sets the session connection.
    */
-  ServerSessionContext setConnection(Connection connection) {
+  void setConnection(Connection connection) {
     this.connection = connection;
-    return this;
   }
 
   /**

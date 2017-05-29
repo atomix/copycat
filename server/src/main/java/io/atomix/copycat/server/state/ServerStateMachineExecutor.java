@@ -326,7 +326,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    * Applies the given commit to the state machine.
    */
   private void applyCommand(long index, long sequence, long timestamp, Command command, ServerSessionContext session, CompletableFuture<OperationResult> future) {
-    ServerCommit commit = new ServerCommit(index, command, session, timestamp, new LogCleaner(server.getLog()));
+    ServerCommit commit = new ServerCommit(index, command, session, timestamp, server.getLog()::release);
     context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.COMMAND);
 
     long eventIndex = session.getEventIndex();
@@ -406,7 +406,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    * Applies a query to the state machine.
    */
   private void applyQuery(long index, long timestamp, ServerSessionContext session, Query query, CompletableFuture<OperationResult> future) {
-    ServerCommit commit = new ServerCommit(index, query, session, timestamp, new LogCleaner(server.getLog()));
+    ServerCommit commit = new ServerCommit(session.getLastApplied(), query, session, timestamp, i -> {});
     context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.QUERY);
 
     long eventIndex = session.getEventIndex();

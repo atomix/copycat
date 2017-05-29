@@ -18,23 +18,14 @@ package io.atomix.copycat.server.storage;
 /**
  * Log cleaner.
  */
-public class LogCleaner {
-  private final Log log;
-
-  public LogCleaner(Log log) {
-    this.log = log;
-  }
+@FunctionalInterface
+public interface LogCleaner {
 
   /**
    * Cleans the entry at the given index.
    *
    * @param index The index at which to clean the entry.
    */
-  public void clean(long index) {
-    try {
-      log.release(index);
-    } catch (IllegalStateException e) {
-      // Do nothing.
-    }
-  }
+  void clean(long index);
+
 }

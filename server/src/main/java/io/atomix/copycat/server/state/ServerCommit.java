@@ -119,9 +119,7 @@ final class ServerCommit implements Commit<Operation<?>> {
    * Cleans up the commit.
    */
   private void cleanup() {
-    if (operation instanceof Command) {
-      cleaner.clean(index);
-    }
+     cleaner.clean(index);
   }
 
   @Override
