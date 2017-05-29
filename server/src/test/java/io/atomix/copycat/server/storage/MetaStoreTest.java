@@ -17,10 +17,11 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
+import io.atomix.catalyst.buffer.FileBuffer;
+import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.serializer.CatalystSerializable;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -36,15 +37,11 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.*;
 
 /**
  * Metastore test.
@@ -82,6 +79,8 @@ public class MetaStoreTest {
     assertEquals(meta.loadTerm(), 1);
     assertEquals(meta.loadVote(), 2);
 
+    assertNull(meta.loadConfiguration());
+
     Collection<Member> members = new ArrayList<>(Arrays.asList(
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000)),
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001)),
@@ -101,19 +100,79 @@ public class MetaStoreTest {
    */
   public void testDeleteMetaStore() throws Throwable {
     MetaStore meta = createMetaStore();
-    assertEquals(meta.loadTerm(), 0);
-    assertEquals(meta.loadVote(), 0);
     meta.storeTerm(1);
     meta.storeVote(2);
-    assertEquals(meta.loadTerm(), 1);
-    assertEquals(meta.loadVote(), 2);
+
+    List<Member> members = new ArrayList<>(Arrays.asList(
+      new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))
+    ));
+    meta.storeConfiguration(new Configuration(1, 1, System.currentTimeMillis(), members));
+    meta.close();
+
     meta = createMetaStore();
     assertEquals(meta.loadTerm(), 1);
     assertEquals(meta.loadVote(), 2);
+    assertTrue(meta.loadConfiguration().members().equals(members));
+    meta.close();
+
     storage.deleteMetaStore("test");
+
     meta = createMetaStore();
     assertEquals(meta.loadTerm(), 0);
     assertEquals(meta.loadVote(), 0);
+    assertNull(meta.loadConfiguration());
+    meta.close();
+  }
+
+  /**
+   * Tests backward compatibility with pre 1.2.6 release. This can be removed in release where backward compabitlity
+   * code is removed.
+   */
+  public void testBackwardCompability() throws Throwable {
+    // create pre 1.2.6 xxx.meta file with term, vote and configuration
+    File storageDir = new File(String.format("target/test-logs/%s", testId));
+    storageDir.mkdirs();
+
+    File file = new File(String.format("target/test-logs/%s/test.meta", testId));
+    FileBuffer buffer = FileBuffer.allocate(file, 32);
+
+    buffer.writeLong(0, 1).flush();
+    buffer.writeInt(8, 2).flush();
+
+    List<Member> members = new ArrayList<>(Arrays.asList(
+      new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))
+    ));
+    Configuration configuration = new Configuration(1, 1, System.currentTimeMillis(), members);
+    Serializer serializer = new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization(), new StorageSerialization()).register(TestMember.class);
+    serializer.writeObject(configuration.members(), buffer.position(12)
+      .writeByte(1)
+      .writeLong(configuration.index())
+      .writeLong(configuration.term())
+      .writeLong(configuration.time()));
+    buffer.flush();
+    buffer.close();
+
+    //create metastore and check old data and further updates are preserved.
+    MetaStore meta = createMetaStore();
+    assertEquals(meta.loadTerm(), 1);
+    assertEquals(meta.loadVote(), 2);
+    assertTrue(meta.loadConfiguration().members().equals(members));
+
+    meta.storeTerm(3);
+    meta.storeVote(4);
+
+    members = new ArrayList<>(Arrays.asList(
+      new TestMember(Member.Type.ACTIVE, new Address("localhost", 5001), new Address("localhost", 6001))
+    ));
+    configuration = new Configuration(1, 1, System.currentTimeMillis(), members);
+    meta.storeConfiguration(configuration);
+    meta.close();
+
+    meta = createMetaStore();
+    assertEquals(meta.loadTerm(), 3);
+    assertEquals(meta.loadVote(), 4);
+    assertTrue(meta.loadConfiguration().members().equals(members));
+    meta.close();
   }
 
   @BeforeMethod

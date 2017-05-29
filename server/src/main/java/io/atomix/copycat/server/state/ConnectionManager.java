@@ -31,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 public final class ConnectionManager {
   private final Client client;
   private final Map<Address, Connection> connections = new HashMap<>();
+  private final Map<Address, CompletableFuture<Connection>> connectionFutures = new HashMap<>();
 
   public ConnectionManager(Client client) {
     this.client = client;
@@ -66,14 +67,14 @@ public final class ConnectionManager {
    * @return A completable future to be called once the connection has been created.
    */
   private CompletableFuture<Connection> createConnection(Address address) {
-    return client.connect(address).thenApply(connection -> {
-      connection.onClose(c -> {
-        if (connections.get(address) == c) {
-          connections.remove(address);
-        }
+    return connectionFutures.computeIfAbsent(address, a -> {
+      CompletableFuture<Connection> future = client.connect(address).thenApply(connection -> {
+        connection.onClose(c -> connections.remove(address, c));
+        connections.put(address, connection);
+        return connection;
       });
-      connections.put(address, connection);
-      return connection;
+      future.whenComplete((connection, error) -> connectionFutures.remove(address));
+      return future;
     });
   }
 
@@ -84,6 +85,10 @@ public final class ConnectionManager {
    */
   public CompletableFuture<Void> close() {
     CompletableFuture[] futures = new CompletableFuture[connections.size()];
+
+    for (CompletableFuture<Connection> future : this.connectionFutures.values()) {
+      future.cancel(false);
+    }
 
     int i = 0;
     for (Connection connection : connections.values()) {
