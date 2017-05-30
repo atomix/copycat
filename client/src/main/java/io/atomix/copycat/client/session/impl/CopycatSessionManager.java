@@ -115,10 +115,12 @@ public class CopycatSessionManager {
         }
         break;
       case EXPIRED:
-        clientState.setState(CopycatClient.State.SUSPENDED);
+        clientState.setState(CopycatClient.State.CLOSED);
+        sessions.values().forEach(CopycatSessionState::close);
         break;
       case CLOSED:
         clientState.setState(CopycatClient.State.CLOSED);
+        sessions.values().forEach(CopycatSessionState::close);
         break;
     }
   }

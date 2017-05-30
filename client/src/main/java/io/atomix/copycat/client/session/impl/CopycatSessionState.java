@@ -15,7 +15,13 @@
  */
 package io.atomix.copycat.client.session.impl;
 
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.copycat.client.session.CopycatSession;
+
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * Client state.
@@ -32,7 +38,7 @@ public final class CopycatSessionState {
   private long responseIndex;
   private long eventIndex;
   private long connection;
-
+  private final Set<Listener<CopycatSession.State>> changeListeners = new CopyOnWriteArraySet<>();
 
   CopycatSessionState(long sessionId, String name, String type) {
     this.sessionId = sessionId;
@@ -70,6 +76,15 @@ public final class CopycatSessionState {
   }
 
   /**
+   * Returns the session state.
+   *
+   * @return The session state.
+   */
+  public CopycatSession.State getState() {
+    return isOpen() ? CopycatSession.State.OPEN : CopycatSession.State.CLOSED;
+  }
+
+  /**
    * Returns a boolean indicating whether the session is open.
    *
    * @return Whether the session is open.
@@ -83,6 +98,28 @@ public final class CopycatSessionState {
    */
   void close() {
     open.set(false);
+    changeListeners.forEach(l -> l.accept(CopycatSession.State.CLOSED));
+  }
+
+  /**
+   * Registers a state change listener on the session manager.
+   *
+   * @param callback The state change listener callback.
+   * @return The state change listener.
+   */
+  public Listener<CopycatSession.State> onStateChange(Consumer<CopycatSession.State> callback) {
+    Listener<CopycatSession.State> listener = new Listener<CopycatSession.State>() {
+      @Override
+      public void accept(CopycatSession.State state) {
+        callback.accept(state);
+      }
+      @Override
+      public void close() {
+        changeListeners.remove(this);
+      }
+    };
+    changeListeners.add(listener);
+    return listener;
   }
 
   /**

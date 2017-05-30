@@ -63,11 +63,6 @@ public class DefaultCopycatSession implements CopycatSession {
   }
 
   @Override
-  public long id() {
-    return state.getSessionId();
-  }
-
-  @Override
   public String name() {
     return state.getSessionName();
   }
@@ -75,6 +70,16 @@ public class DefaultCopycatSession implements CopycatSession {
   @Override
   public String type() {
     return state.getSessionType();
+  }
+
+  @Override
+  public State state() {
+    return state.getState();
+  }
+
+  @Override
+  public Listener<State> onStateChange(Consumer<State> callback) {
+    return state.onStateChange(s -> context.execute(() -> callback.accept(s)));
   }
 
   @Override
@@ -171,19 +176,19 @@ public class DefaultCopycatSession implements CopycatSession {
   @Override
   public int hashCode() {
     int hashCode = 31;
-    long id = id();
+    long id = state.getSessionId();
     hashCode = 37 * hashCode + (int) (id ^ (id >>> 32));
     return hashCode;
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof DefaultCopycatSession && ((DefaultCopycatSession) object).id() == id();
+    return object instanceof DefaultCopycatSession && ((DefaultCopycatSession) object).state.getSessionId() == state.getSessionId();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[id=%d]", getClass().getSimpleName(), id());
+    return String.format("%s[id=%d]", getClass().getSimpleName(), state.getSessionId());
   }
 
 }

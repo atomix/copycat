@@ -18,7 +18,6 @@ package io.atomix.copycat.client.session;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.Builder;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
@@ -35,11 +34,21 @@ import java.util.function.Consumer;
 public interface CopycatSession {
 
   /**
-   * Returns the unique session identifier.
-   *
-   * @return The session identifier.
+   * Indicates the session's state.
    */
-  long id();
+  enum State {
+
+    /**
+     * Indicates that the session is open.
+     */
+    OPEN,
+
+    /**
+     * Indicates that the session is closed.
+     */
+    CLOSED
+
+  }
 
   /**
    * Returns the client proxy name.
@@ -54,6 +63,21 @@ public interface CopycatSession {
    * @return The client proxy type.
    */
   String type();
+
+  /**
+   * Returns the session state.
+   *
+   * @return The session state.
+   */
+  State state();
+
+  /**
+   * Registers a session state change listener.
+   *
+   * @param callback The callback to call when the session state changes.
+   * @return The session state change listener context.
+   */
+  Listener<State> onStateChange(Consumer<State> callback);
 
   /**
    * Returns the session thread context.
