@@ -48,7 +48,7 @@
                 <configuration>
                     <instructions>
                         <Export-Package>
-                            io.atomix.copycat.*
+                            io.atomix.*
                         </Export-Package>
                         <Import-Package>
                             !sun.nio.ch,!sun.misc,*
