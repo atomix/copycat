@@ -22,6 +22,7 @@ import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.LogCleaner;
 import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
@@ -38,32 +39,31 @@ import java.util.function.Consumer;
 class ServerSessionContext implements ServerSession {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
   private final long id;
+  private final String name;
+  private final String type;
   private final long client;
-  private final Log log;
   private final ServerStateMachineExecutor executor;
   private volatile State state = State.OPEN;
   private Connection connection;
   private final String messageType;
-  private volatile long references;
   private long requestSequence;
   private long commandSequence;
   private long lastApplied;
   private long commandLowWaterMark;
   private long eventIndex;
   private long completeIndex;
-  private long closeIndex;
   private final Map<Long, List<Runnable>> sequenceQueries = new HashMap<>();
   private final Map<Long, List<Runnable>> indexQueries = new HashMap<>();
   private final Map<Long, OperationResult> results = new HashMap<>();
   private final Queue<EventHolder> events = new LinkedList<>();
   private EventHolder event;
-  private boolean unregistering;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, long client, Log log, ServerStateMachineExecutor executor) {
+  ServerSessionContext(long id, String name, String type, long client, ServerStateMachineExecutor executor) {
     this.id = id;
+    this.name = name;
+    this.type = type;
     this.client = client;
-    this.log = Assert.notNull(log, "log");
     this.eventIndex = id;
     this.completeIndex = id;
     this.lastApplied = id;
@@ -74,6 +74,24 @@ class ServerSessionContext implements ServerSession {
   @Override
   public long id() {
     return id;
+  }
+
+  /**
+   * Returns the session name.
+   *
+   * @return The session name.
+   */
+  public String name() {
+    return name;
+  }
+
+  /**
+   * Returns the session type.
+   *
+   * @return The session type.
+   */
+  public String type() {
+    return type;
   }
 
   /**

@@ -35,7 +35,7 @@ public final class ProtocolSerialization implements SerializableTypeResolver {
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
     put(Address.class, -1);
     put(Event.class, -2);
-    put(NoOpCommand.class, -45);
+    put(NoOpCommand.class, -47);
   }};
 
   @Override

@@ -57,7 +57,7 @@ public class CopycatSessionManager {
   private final CopycatConnection connection;
   private final ThreadContext threadContext;
   private final ScheduledExecutorService threadPoolExecutor;
-  private final AddressSelectorManager selectorManager = new AddressSelectorManager();
+  private final AddressSelectorManager selectorManager;
   private final ConnectionStrategy strategy;
   private final Duration sessionTimeout;
   private final Duration unstableTimeout;
@@ -67,9 +67,10 @@ public class CopycatSessionManager {
   private Duration interval;
   private Scheduled keepAlive;
 
-  public CopycatSessionManager(CopycatClientState clientState, ClientConnectionManager connectionManager, ThreadContext threadContext, ScheduledExecutorService threadPoolExecutor, ConnectionStrategy connectionStrategy, Duration sessionTimeout, Duration unstableTimeout) {
+  public CopycatSessionManager(CopycatClientState clientState, ClientConnectionManager connectionManager, AddressSelectorManager selectorManager, ThreadContext threadContext, ScheduledExecutorService threadPoolExecutor, ConnectionStrategy connectionStrategy, Duration sessionTimeout, Duration unstableTimeout) {
     this.clientState = Assert.notNull(clientState, "clientState");
     this.connectionManager = Assert.notNull(connectionManager, "connectionManager");
+    this.selectorManager = Assert.notNull(selectorManager, "selectorManager");
     this.connection = new CopycatClientConnection(connectionManager, selectorManager.createSelector(CommunicationStrategies.ANY));
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.threadPoolExecutor = Assert.notNull(threadPoolExecutor, "threadPoolExecutor");

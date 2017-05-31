@@ -38,6 +38,14 @@ public interface ServerState extends Managed<ServerState> {
   CopycatServer.State type();
 
   /**
+   * Handles a metadata request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<MetadataResponse> metadata(MetadataRequest request);
+
+  /**
    * Handles a register request.
    *
    * @param request The request to handle.

@@ -65,6 +65,11 @@ class InactiveState extends AbstractState {
   }
 
   @Override
+  public CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
+    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
+  }
+
+  @Override
   public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }

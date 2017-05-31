@@ -50,6 +50,26 @@ class ReserveState extends InactiveState {
   }
 
   @Override
+  public CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    if (context.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(MetadataResponse.builder()
+        .withStatus(Response.Status.ERROR)
+        .withError(CopycatError.Type.NO_LEADER_ERROR)
+        .build()));
+    } else {
+      return this.<MetadataRequest, MetadataResponse>forward(MetadataRequest.NAME, request)
+        .exceptionally(error -> MetadataResponse.builder()
+          .withStatus(Response.Status.ERROR)
+          .withError(CopycatError.Type.NO_LEADER_ERROR)
+          .build())
+        .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
   public CompletableFuture<AppendResponse> append(AppendRequest request) {
     context.checkThread();
     logRequest(request);

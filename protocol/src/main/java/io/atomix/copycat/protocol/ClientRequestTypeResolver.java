@@ -38,6 +38,7 @@ public final class ClientRequestTypeResolver implements SerializableTypeResolver
     put(UnregisterRequest.class, -9);
     put(OpenSessionRequest.class, -10);
     put(CloseSessionRequest.class, -11);
+    put(MetadataRequest.class, -12);
   }};
 
   @Override

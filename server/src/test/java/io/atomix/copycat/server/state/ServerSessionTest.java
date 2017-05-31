@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.server.storage.Log;
 import org.testng.annotations.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,7 +35,7 @@ public class ServerSessionTest {
    */
   public void testInitializeSession() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, 1, mock(Log.class), mock(ServerStateMachineExecutor.class));
+    ServerSessionContext session = new ServerSessionContext(10, "test", "test", 1, mock(ServerStateMachineExecutor.class));
     assertEquals(session.id(), 10);
     assertEquals(session.getLastCompleted(), 9);
     assertEquals(session.getLastApplied(), 9);
@@ -47,7 +46,7 @@ public class ServerSessionTest {
    */
   public void testSequenceIndexQuery() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, 1, mock(Log.class), mock(ServerStateMachineExecutor.class));
+    ServerSessionContext session = new ServerSessionContext(10, "test", "test", 1, mock(ServerStateMachineExecutor.class));
     AtomicBoolean complete = new AtomicBoolean();
     session.registerIndexQuery(10, () -> complete.set(true));
     assertFalse(complete.get());
@@ -62,7 +61,7 @@ public class ServerSessionTest {
    */
   public void testSequenceSequenceQuery() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, 1, mock(Log.class), mock(ServerStateMachineExecutor.class));
+    ServerSessionContext session = new ServerSessionContext(10, "test", "test", 1, mock(ServerStateMachineExecutor.class));
     AtomicBoolean complete = new AtomicBoolean();
     session.registerSequenceQuery(10, () -> complete.set(true));
     assertFalse(complete.get());
@@ -77,7 +76,7 @@ public class ServerSessionTest {
    */
   public void testCacheResponse() throws Throwable {
     ServerStateMachineContext context = mock(ServerStateMachineContext.class);
-    ServerSessionContext session = new ServerSessionContext(10, 1, mock(Log.class), mock(ServerStateMachineExecutor.class));
+    ServerSessionContext session = new ServerSessionContext(10, "test", "test", 1, mock(ServerStateMachineExecutor.class));
     session.registerResult(2, new OperationResult(2, 2, "Hello world!"));
     assertEquals(session.getResult(2).result, "Hello world!");
     session.clearResults(3);

@@ -26,9 +26,10 @@ import io.atomix.copycat.error.InternalException;
 import io.atomix.copycat.error.UnknownClientException;
 import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.error.UnknownStateMachineException;
+import io.atomix.copycat.metadata.CopycatClientMetadata;
+import io.atomix.copycat.metadata.CopycatSessionMetadata;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.LogCleaner;
 import io.atomix.copycat.server.storage.entry.*;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.session.Session;
@@ -36,7 +37,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
@@ -238,6 +241,8 @@ public class ServerStateMachineManager implements AutoCloseable {
         ((CompletableFuture<T>) apply((OpenSessionEntry) entry)).whenComplete(callback);
       } else if (entry instanceof CloseSessionEntry) {
         ((CompletableFuture<T>) apply((CloseSessionEntry) entry)).whenComplete(callback);
+      } else if (entry instanceof MetadataEntry) {
+        ((CompletableFuture<T>) apply((MetadataEntry) entry)).whenComplete(callback);
       } else if (entry instanceof RegisterEntry) {
         ((CompletableFuture<T>) apply((RegisterEntry) entry)).whenComplete(callback);
       } else if (entry instanceof KeepAliveEntry) {
@@ -487,7 +492,7 @@ public class ServerStateMachineManager implements AutoCloseable {
     }
 
     // Create and register the session.
-    ServerSessionContext session = new ServerSessionContext(entry.getIndex(), entry.getClient(), log, stateMachineExecutor);
+    ServerSessionContext session = new ServerSessionContext(entry.getIndex(), entry.getName(), entry.getType(), entry.getClient(), stateMachineExecutor);
     sessionManager.registerSession(session);
 
     // Return the session ID for commands.
@@ -517,6 +522,25 @@ public class ServerStateMachineManager implements AutoCloseable {
     // Get the state machine executor associated with the session and unregister the session.
     ServerStateMachineExecutor stateMachineExecutor = session.getStateMachineExecutor();
     return stateMachineExecutor.unregister(index, timestamp, session).thenApplyAsync(v -> v, threadContext);
+  }
+
+  /**
+   * Applies a metadata entry to the state machine.
+   */
+  private CompletableFuture<MetadataResult> apply(MetadataEntry entry) {
+    updateTimestamp(entry);
+
+    Set<CopycatClientMetadata> clients = new HashSet<>();
+    for (ClientContext client : clientManager.getClients()) {
+      clients.add(new CopycatClientMetadata(client.id()));
+    }
+
+    Set<CopycatSessionMetadata> sessions = new HashSet<>();
+    for (ServerSessionContext session : sessionManager.getSessions()) {
+      sessions.add(new CopycatSessionMetadata(session.id(), session.name(), session.type()));
+    }
+
+    return CompletableFuture.completedFuture(new MetadataResult(clients, sessions));
   }
 
   /**

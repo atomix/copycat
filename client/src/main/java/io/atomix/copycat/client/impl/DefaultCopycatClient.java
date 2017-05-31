@@ -24,8 +24,10 @@ import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.CopycatClient;
+import io.atomix.copycat.client.CopycatMetadata;
 import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.client.session.impl.CopycatSessionManager;
+import io.atomix.copycat.client.util.AddressSelectorManager;
 import io.atomix.copycat.client.util.ClientConnectionManager;
 
 import java.time.Duration;
@@ -46,6 +48,9 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Collection<Address> cluster;
   private final CopycatClientState state;
   private final ThreadContext threadContext;
+  private final ClientConnectionManager connectionManager;
+  private final CopycatMetadata metadata;
+  private final AddressSelectorManager selectorManager = new AddressSelectorManager();
   private final CopycatSessionManager sessionManager;
   private volatile CompletableFuture<CopycatClient> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
@@ -54,7 +59,9 @@ public class DefaultCopycatClient implements CopycatClient {
     this.cluster = Assert.notNull(cluster, "cluster");
     this.threadContext = new ThreadPoolContext(threadPoolExecutor, serializer.clone());
     this.state = new CopycatClientState(clientId);
-    this.sessionManager = new CopycatSessionManager(state, new ClientConnectionManager(client), threadContext, threadPoolExecutor, connectionStrategy, sessionTimeout, unstableTimeout);
+    this.connectionManager = new ClientConnectionManager(client);
+    this.metadata = new DefaultCopycatMetadata(connectionManager, selectorManager);
+    this.sessionManager = new CopycatSessionManager(state, connectionManager, selectorManager, threadContext, threadPoolExecutor, connectionStrategy, sessionTimeout, unstableTimeout);
   }
 
   @Override
@@ -65,6 +72,11 @@ public class DefaultCopycatClient implements CopycatClient {
   @Override
   public Listener<State> onStateChange(Consumer<State> callback) {
     return state.onStateChange(callback);
+  }
+
+  @Override
+  public CopycatMetadata metadata() {
+    return metadata;
   }
 
   @Override
@@ -121,7 +133,7 @@ public class DefaultCopycatClient implements CopycatClient {
       return CompletableFuture.completedFuture(null);
 
     if (closeFuture == null) {
-      closeFuture = sessionManager.close();
+      closeFuture = sessionManager.close().whenComplete((r, e) -> connectionManager.close());
     }
     return closeFuture;
   }

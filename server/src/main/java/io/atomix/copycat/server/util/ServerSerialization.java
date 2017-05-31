@@ -32,23 +32,23 @@ import java.util.Map;
 public final class ServerSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
-    put(AppendRequest.class, -21);
-    put(ConfigureRequest.class, -22);
-    put(InstallRequest.class, -23);
-    put(JoinRequest.class, -24);
-    put(LeaveRequest.class, -25);
-    put(PollRequest.class, -26);
-    put(ReconfigureRequest.class, -27);
-    put(VoteRequest.class, -28);
-    put(AppendResponse.class, -29);
-    put(ConfigureResponse.class, -30);
-    put(InstallResponse.class, -31);
-    put(JoinResponse.class, -32);
-    put(LeaveResponse.class, -33);
-    put(PollResponse.class, -34);
-    put(ReconfigureResponse.class, -35);
-    put(VoteResponse.class, -36);
-    put(ServerMember.class, -37);
+    put(AppendRequest.class, -23);
+    put(ConfigureRequest.class, -24);
+    put(InstallRequest.class, -25);
+    put(JoinRequest.class, -26);
+    put(LeaveRequest.class, -27);
+    put(PollRequest.class, -28);
+    put(ReconfigureRequest.class, -29);
+    put(VoteRequest.class, -30);
+    put(AppendResponse.class, -31);
+    put(ConfigureResponse.class, -32);
+    put(InstallResponse.class, -33);
+    put(JoinResponse.class, -34);
+    put(LeaveResponse.class, -35);
+    put(PollResponse.class, -36);
+    put(ReconfigureResponse.class, -37);
+    put(VoteResponse.class, -38);
+    put(ServerMember.class, -39);
   }};
 
   @Override

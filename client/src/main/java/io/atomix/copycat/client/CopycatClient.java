@@ -274,6 +274,13 @@ public interface CopycatClient {
   Listener<State> onStateChange(Consumer<State> callback);
 
   /**
+   * Returns the Copycat metadata.
+   *
+   * @return The Copycat metadata.
+   */
+  CopycatMetadata metadata();
+
+  /**
    * Returns the client execution context.
    * <p>
    * The thread context is the event loop that this client uses to communicate with Copycat servers.

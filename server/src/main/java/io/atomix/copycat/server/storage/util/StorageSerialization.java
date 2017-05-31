@@ -31,13 +31,13 @@ import java.util.Map;
 public final class StorageSerialization implements SerializableTypeResolver {
   @SuppressWarnings("unchecked")
   private static final Map<Class<? extends Request>, Integer> TYPES = new HashMap() {{
-    put(CommandEntry.class, -38);
-    put(ConfigurationEntry.class, -39);
-    put(KeepAliveEntry.class, -40);
-    put(InitializeEntry.class, -41);
-    put(QueryEntry.class, -42);
-    put(RegisterEntry.class, -43);
-    put(UnregisterEntry.class, -44);
+    put(CommandEntry.class, -40);
+    put(ConfigurationEntry.class, -41);
+    put(KeepAliveEntry.class, -42);
+    put(InitializeEntry.class, -43);
+    put(QueryEntry.class, -44);
+    put(RegisterEntry.class, -45);
+    put(UnregisterEntry.class, -46);
   }};
 
   @Override

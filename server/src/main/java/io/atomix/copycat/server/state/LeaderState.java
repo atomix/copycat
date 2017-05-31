@@ -474,6 +474,32 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
+  public CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
+    context.checkThread();
+    logRequest(request);
+
+    CompletableFuture<MetadataResponse> future = new CompletableFuture<>();
+    context.getStateMachine().<MetadataResult>apply(new MetadataEntry()).whenComplete((result, error) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (error == null) {
+          future.complete(logResponse(MetadataResponse.builder()
+            .withStatus(Response.Status.OK)
+            .withClients(result.clients)
+            .withSessions(result.sessions)
+            .build()));
+        } else {
+          future.complete(logResponse(MetadataResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+    return future;
+  }
+
+  @Override
   public CompletableFuture<CommandResponse> command(final CommandRequest request) {
     context.checkThread();
     logRequest(request);

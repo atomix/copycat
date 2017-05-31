@@ -68,4 +68,9 @@ public abstract class ClientEntry<T extends ClientEntry<T>> extends TimestampedE
     client = buffer.readLong();
   }
 
+  @Override
+  public String toString() {
+    return String.format("%s[index=%d, term=%d, client=%s, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getTimestamp());
+  }
+
 }
