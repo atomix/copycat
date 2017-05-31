@@ -45,10 +45,14 @@ public interface CopycatError {
       case 5:
         return Type.ILLEGAL_MEMBER_STATE_ERROR;
       case 6:
-        return Type.UNKNOWN_SESSION_ERROR;
+        return Type.UNKNOWN_CLIENT_ERROR;
       case 7:
-        return Type.INTERNAL_ERROR;
+        return Type.UNKNOWN_SESSION_ERROR;
       case 8:
+        return Type.UNKNOWN_STATE_MACHINE_ERROR;
+      case 9:
+        return Type.INTERNAL_ERROR;
+      case 10:
         return Type.CONFIGURATION_ERROR;
       default:
         throw new IllegalArgumentException("invalid error identifier: " + id);
