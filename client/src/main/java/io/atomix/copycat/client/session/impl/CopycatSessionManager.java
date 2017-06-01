@@ -102,27 +102,29 @@ public class CopycatSessionManager {
    * @param state The session manager state.
    */
   private void setState(State state) {
-    this.state = state;
-    switch (state) {
-      case OPEN:
-        clientState.setState(CopycatClient.State.CONNECTED);
-        break;
-      case UNSTABLE:
-        clientState.setState(CopycatClient.State.SUSPENDED);
-        if (unstableTime == null) {
-          unstableTime = System.currentTimeMillis();
-        } else if (System.currentTimeMillis() - unstableTime > unstableTimeout.toMillis()) {
-          setState(State.EXPIRED);
-        }
-        break;
-      case EXPIRED:
-        clientState.setState(CopycatClient.State.CLOSED);
-        sessions.values().forEach(CopycatSessionState::close);
-        break;
-      case CLOSED:
-        clientState.setState(CopycatClient.State.CLOSED);
-        sessions.values().forEach(CopycatSessionState::close);
-        break;
+    if (this.state != state) {
+      this.state = state;
+      switch (state) {
+        case OPEN:
+          clientState.setState(CopycatClient.State.CONNECTED);
+          break;
+        case UNSTABLE:
+          clientState.setState(CopycatClient.State.SUSPENDED);
+          if (unstableTime == null) {
+            unstableTime = System.currentTimeMillis();
+          } else if (System.currentTimeMillis() - unstableTime > unstableTimeout.toMillis()) {
+            setState(State.EXPIRED);
+          }
+          break;
+        case EXPIRED:
+          clientState.setState(CopycatClient.State.CLOSED);
+          sessions.values().forEach(CopycatSessionState::close);
+          break;
+        case CLOSED:
+          clientState.setState(CopycatClient.State.CLOSED);
+          sessions.values().forEach(CopycatSessionState::close);
+          break;
+      }
     }
   }
 

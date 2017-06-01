@@ -97,8 +97,9 @@ public final class CopycatSessionState {
    * Closes the session.
    */
   void close() {
-    open.set(false);
-    changeListeners.forEach(l -> l.accept(CopycatSession.State.CLOSED));
+    if (open.compareAndSet(true, false)) {
+      changeListeners.forEach(l -> l.accept(CopycatSession.State.CLOSED));
+    }
   }
 
   /**

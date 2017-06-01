@@ -83,8 +83,10 @@ public final class CopycatClientState {
    * @return The session state.
    */
   public CopycatClientState setState(CopycatClient.State state) {
-    this.state = state;
-    changeListeners.forEach(l -> l.accept(state));
+    if (this.state != state) {
+      this.state = state;
+      changeListeners.forEach(l -> l.accept(state));
+    }
     return this;
   }
 
