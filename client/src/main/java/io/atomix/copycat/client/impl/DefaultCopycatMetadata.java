@@ -15,6 +15,8 @@
  */
 package io.atomix.copycat.client.impl;
 
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.CommunicationStrategies;
 import io.atomix.copycat.metadata.CopycatClientMetadata;
 import io.atomix.copycat.client.CopycatMetadata;
@@ -26,6 +28,7 @@ import io.atomix.copycat.protocol.MetadataRequest;
 import io.atomix.copycat.protocol.MetadataResponse;
 import io.atomix.copycat.protocol.Response;
 
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -34,10 +37,22 @@ import java.util.stream.Collectors;
  * Default Copycat metadata.
  */
 public class DefaultCopycatMetadata implements CopycatMetadata {
+  private final AddressSelectorManager selectorManager;
   private final CopycatClientConnection connection;
 
   public DefaultCopycatMetadata(ClientConnectionManager connectionManager, AddressSelectorManager selectorManager) {
+    this.selectorManager = Assert.notNull(selectorManager, "selectorManager");
     this.connection = new CopycatClientConnection(connectionManager, selectorManager.createSelector(CommunicationStrategies.LEADER));
+  }
+
+  @Override
+  public Address leader() {
+    return selectorManager.leader();
+  }
+
+  @Override
+  public Collection<Address> servers() {
+    return selectorManager.servers();
   }
 
   /**

@@ -33,6 +33,24 @@ public final class AddressSelectorManager {
   private volatile Collection<Address> servers = Collections.emptyList();
 
   /**
+   * Returns the current cluster leader.
+   *
+   * @return The current cluster leader.
+   */
+  public Address leader() {
+    return leader;
+  }
+
+  /**
+   * Returns the set of servers in the cluster.
+   *
+   * @return The set of servers in the cluster.
+   */
+  public Collection<Address> servers() {
+    return servers;
+  }
+
+  /**
    * Creates a new address selector.
    *
    * @param selectionStrategy The server selection strategy.

@@ -15,9 +15,11 @@
  */
 package io.atomix.copycat.client;
 
+import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.metadata.CopycatClientMetadata;
 import io.atomix.copycat.metadata.CopycatSessionMetadata;
 
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -25,6 +27,20 @@ import java.util.concurrent.CompletableFuture;
  * Copycat metadata.
  */
 public interface CopycatMetadata {
+
+  /**
+   * Returns the current cluster leader.
+   *
+   * @return The current cluster leader.
+   */
+  Address leader();
+
+  /**
+   * Returns the set of known servers in the cluster.
+   *
+   * @return The set of known servers in the cluster.
+   */
+  Collection<Address> servers();
 
   /**
    * Returns a list of clients connected to the cluster.
