@@ -81,7 +81,6 @@ final class ClientSessionListener {
    * Handles a publish request.
    *
    * @param request The publish request to handle.
-   * @return A completable future to be completed with the publish response.
    */
   @SuppressWarnings("unchecked")
   private void handlePublish(PublishRequest request) {
@@ -96,6 +95,11 @@ final class ClientSessionListener {
 
     // If the request event index has already been processed, return.
     if (request.eventIndex() <= state.getEventIndex()) {
+      state.getLogger().trace("{} - Duplicate event index: {}", state.getSessionId(), request.previousIndex());
+      connection.send(ResetRequest.builder()
+        .withSession(state.getSessionId())
+        .withIndex(state.getEventIndex())
+        .build());
       return;
     }
 
