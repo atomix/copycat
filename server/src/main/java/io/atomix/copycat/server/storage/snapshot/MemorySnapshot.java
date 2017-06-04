@@ -17,6 +17,7 @@ package io.atomix.copycat.server.storage.snapshot;
 
 import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.util.Assert;
+import io.atomix.copycat.server.storage.StorageLevel;
 
 /**
  * In-memory snapshot backed by a {@link HeapBuffer}.
@@ -74,6 +75,20 @@ final class MemorySnapshot extends Snapshot {
     descriptor.lock();
     buffer.flip().position(SnapshotDescriptor.BYTES).mark();
     return super.complete();
+  }
+
+  @Override
+  public Snapshot persist() {
+    if (store.storage.level() != StorageLevel.MEMORY) {
+      try (Snapshot newSnapshot = store.createSnapshot(id(), index())) {
+        try (SnapshotWriter newSnapshotWriter = newSnapshot.writer()) {
+          newSnapshotWriter.write(buffer.array(), buffer.position(), buffer.remaining());
+        }
+        newSnapshot.complete();
+        return newSnapshot;
+      }
+    }
+    return this;
   }
 
   @Override

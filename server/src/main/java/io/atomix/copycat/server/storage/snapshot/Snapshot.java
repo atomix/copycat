@@ -164,6 +164,17 @@ public abstract class Snapshot implements AutoCloseable {
   }
 
   /**
+   * Persists the snapshot to disk if necessary.
+   * <p>
+   * If the snapshot store is backed by disk, the snapshot will be persisted.
+   *
+   * @return The persisted snapshot.
+   */
+  public Snapshot persist() {
+    return this;
+  }
+
+  /**
    * Closes the snapshot.
    */
   @Override

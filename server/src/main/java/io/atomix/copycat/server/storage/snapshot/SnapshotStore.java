@@ -179,6 +179,22 @@ public class SnapshotStore implements AutoCloseable {
   }
 
   /**
+   * Creates a temporary in-memory snapshot.
+   *
+   * @param id The in-memory snapshot identifier.
+   * @param index The snapshot index.
+   * @return The snapshot.
+   */
+  public Snapshot createTemporarySnapshot(long id, long index) {
+    SnapshotDescriptor descriptor = SnapshotDescriptor.builder()
+      .withId(id)
+      .withIndex(index)
+      .withTimestamp(System.currentTimeMillis())
+      .build();
+    return createSnapshot(descriptor, StorageLevel.MEMORY);
+  }
+
+  /**
    * Creates a new snapshot.
    *
    * @param id The snapshot identifier.
@@ -191,14 +207,14 @@ public class SnapshotStore implements AutoCloseable {
       .withIndex(index)
       .withTimestamp(System.currentTimeMillis())
       .build();
-    return createSnapshot(descriptor);
+    return createSnapshot(descriptor, storage.level());
   }
 
   /**
    * Creates a new snapshot buffer.
    */
-  private Snapshot createSnapshot(SnapshotDescriptor descriptor) {
-    if (storage.level() == StorageLevel.MEMORY) {
+  private Snapshot createSnapshot(SnapshotDescriptor descriptor, StorageLevel storageLevel) {
+    if (storageLevel == StorageLevel.MEMORY) {
       return createMemorySnapshot(descriptor);
     } else {
       return createDiskSnapshot(descriptor);
@@ -233,7 +249,7 @@ public class SnapshotStore implements AutoCloseable {
 
     // Only store the snapshot if no existing snapshot exists.
     Snapshot existingSnapshot = stateMachineSnapshots.get(snapshot.id());
-    if (existingSnapshot == null || existingSnapshot.index() < snapshot.index()) {
+    if (existingSnapshot == null || existingSnapshot.index() <= snapshot.index()) {
       stateMachineSnapshots.put(snapshot.id(), snapshot);
       indexSnapshots.put(snapshot.index(), snapshot);
 
