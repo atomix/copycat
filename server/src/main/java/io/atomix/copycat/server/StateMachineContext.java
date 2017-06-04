@@ -34,6 +34,13 @@ import java.time.Clock;
 public interface StateMachineContext {
 
   /**
+   * Returns the state machine identifier.
+   *
+   * @return The unique state machine identifier.
+   */
+  long id();
+
+  /**
    * Returns the current state machine index.
    * <p>
    * The state index is indicative of the index of the current {@link Command}

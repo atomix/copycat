@@ -487,7 +487,7 @@ public class ServerStateMachineManager implements AutoCloseable {
       if (stateMachineSupplier == null) {
         return Futures.exceptionalFuture(new UnknownStateMachineException("Unknown state machine type " + entry.getType()));
       }
-      stateMachineExecutor = new ServerStateMachineExecutor(stateMachineSupplier.get(), state, new ThreadPoolContext(threadPool, threadContext.serializer().clone()));
+      stateMachineExecutor = new ServerStateMachineExecutor(index, stateMachineSupplier.get(), state, new ThreadPoolContext(threadPool, threadContext.serializer().clone()), new ThreadPoolContext(threadPool, threadContext.serializer().clone()));
       stateMachines.put(entry.getName(), stateMachineExecutor);
     }
 

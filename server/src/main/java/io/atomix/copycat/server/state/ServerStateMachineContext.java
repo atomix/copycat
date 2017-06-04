@@ -34,14 +34,17 @@ class ServerStateMachineContext implements StateMachineContext {
   enum Type {
     COMMAND,
     QUERY,
+    SNAPSHOT,
   }
 
+  private final long id;
   private final ServerClock clock = new ServerClock();
   private final ServerStateMachineSessions sessions;
   private Type type;
   private long index;
 
-  public ServerStateMachineContext(ServerStateMachineSessions sessions) {
+  public ServerStateMachineContext(long id, ServerStateMachineSessions sessions) {
+    this.id = id;
     this.sessions = sessions;
   }
 
@@ -69,6 +72,11 @@ class ServerStateMachineContext implements StateMachineContext {
    */
   Type type() {
     return type;
+  }
+
+  @Override
+  public long id() {
+    return id;
   }
 
   @Override

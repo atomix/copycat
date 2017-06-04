@@ -84,7 +84,9 @@ final class MemorySnapshot extends Snapshot {
         try (SnapshotWriter newSnapshotWriter = newSnapshot.writer()) {
           newSnapshotWriter.write(buffer.array(), buffer.position(), buffer.remaining());
         }
-        newSnapshot.complete();
+        if (descriptor.locked()) {
+          newSnapshot.complete();
+        }
         return newSnapshot;
       }
     }
