@@ -26,7 +26,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Persists server snapshots via the {@link Storage} module.
@@ -46,7 +50,7 @@ import java.util.*;
  *   Snapshot snapshot = snapshots.snapshot(1);
  *   }
  * </pre>
- * To create a new {@link Snapshot}, use the {@link #createSnapshot(long)} method. Each snapshot must
+ * To create a new {@link Snapshot}, use the {@link #createSnapshot(long, long)} method. Each snapshot must
  * be created with a unique {@code index} which represents the index of the server state machine at
  * the point at which the snapshot was taken. Snapshot indices are used to sort snapshots loaded from
  * disk and apply them at the correct point in the state machine.
@@ -75,8 +79,8 @@ public class SnapshotStore implements AutoCloseable {
   private final String name;
   final Storage storage;
   private final Serializer serializer;
-  private final TreeMap<Long, Snapshot> snapshots = new TreeMap<>();
-  private Snapshot currentSnapshot;
+  private final Map<Long, Snapshot> indexSnapshots = new ConcurrentHashMap<>();
+  private final Map<Long, Snapshot> stateMachineSnapshots = new ConcurrentHashMap<>();
 
   public SnapshotStore(String name, Storage storage, Serializer serializer) {
     this.name = Assert.notNull(name, "name");
@@ -90,11 +94,20 @@ public class SnapshotStore implements AutoCloseable {
    */
   private void open() {
     for (Snapshot snapshot : loadSnapshots()) {
-      snapshots.put(snapshot.index(), snapshot);
+      Snapshot existingSnapshot = stateMachineSnapshots.get(snapshot.id());
+      if (existingSnapshot == null || existingSnapshot.index() < snapshot.index()) {
+        stateMachineSnapshots.put(snapshot.id(), snapshot);
+
+        // If a newer snapshot was found, delete the old snapshot if necessary.
+        if (existingSnapshot != null && !storage.retainStaleSnapshots()) {
+          existingSnapshot.close();
+          existingSnapshot.delete();
+        }
+      }
     }
 
-    if (!snapshots.isEmpty()) {
-      currentSnapshot = snapshots.lastEntry().getValue();
+    for (Snapshot snapshot : stateMachineSnapshots.values()) {
+      indexSnapshots.put(snapshot.index(), snapshot);
     }
   }
 
@@ -108,39 +121,23 @@ public class SnapshotStore implements AutoCloseable {
   }
 
   /**
-   * Returns the most recent completed snapshot.
-   * <p>
-   * The current snapshot is the last {@link Snapshot} successfully written <em>and</em>
-   * {@link Snapshot#complete() completed}. It represents the most recent snapshot successfully
-   * written to disk and from which the server state can be restored.
+   * Returns the last snapshot for the given state machine identifier.
    *
-   * @return The most recent completed snapshot.
+   * @param id The state machine identifier for which to return the snapshot.
+   * @return The latest snapshot for the given state machine.
    */
-  public Snapshot currentSnapshot() {
-    return currentSnapshot;
+  public Snapshot getSnapshotById(long id) {
+    return stateMachineSnapshots.get(id);
   }
 
   /**
-   * Returns a collection of all snapshots stored on disk.
-   * <p>
-   * Snapshots will be loaded from the underlying {@link Storage} when the snapshot store is created.
-   * The returned collection of {@link Snapshot}s will include any stored {@link Snapshot#complete() complete}
-   * snapshots. Both stored and new incomplete snapshots will be excluded from this list.
+   * Returns the snapshot at the given index.
    *
-   * @return A collection of all snapshots.
+   * @param index The index for which to return the snapshot.
+   * @return The snapshot at the given index.
    */
-  public Collection<Snapshot> snapshots() {
-    return snapshots.values();
-  }
-
-  /**
-   * Returns a snapshot by index.
-   *
-   * @param index The snapshot index.
-   * @return The snapshot.
-   */
-  public Snapshot snapshot(long index) {
-    return snapshots.get(index);
+  public Snapshot getSnapshotByIndex(long index) {
+    return indexSnapshots.get(index);
   }
 
   /**
@@ -184,11 +181,13 @@ public class SnapshotStore implements AutoCloseable {
   /**
    * Creates a new snapshot.
    *
+   * @param id The snapshot identifier.
    * @param index The snapshot index.
    * @return The snapshot.
    */
-  public Snapshot createSnapshot(long index) {
+  public Snapshot createSnapshot(long id, long index) {
     SnapshotDescriptor descriptor = SnapshotDescriptor.builder()
+      .withId(id)
       .withIndex(index)
       .withTimestamp(System.currentTimeMillis())
       .build();
@@ -220,7 +219,7 @@ public class SnapshotStore implements AutoCloseable {
    * Creates a disk snapshot.
    */
   private Snapshot createDiskSnapshot(SnapshotDescriptor descriptor) {
-    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), descriptor.index(), descriptor.timestamp()));
+    SnapshotFile file = new SnapshotFile(SnapshotFile.createSnapshotFile(name, storage.directory(), descriptor.id(), descriptor.index(), descriptor.timestamp()));
     Snapshot snapshot = new FileSnapshot(file, this);
     LOGGER.debug("Created disk snapshot: {}", snapshot);
     return snapshot;
@@ -229,25 +228,28 @@ public class SnapshotStore implements AutoCloseable {
   /**
    * Completes writing a snapshot.
    */
-  protected void completeSnapshot(Snapshot snapshot) {
+  protected synchronized void completeSnapshot(Snapshot snapshot) {
     Assert.notNull(snapshot, "snapshot");
-    snapshots.put(snapshot.index(), snapshot);
 
-    if (currentSnapshot == null || snapshot.index() > currentSnapshot.index()) {
-      currentSnapshot = snapshot;
-    }
+    // Only store the snapshot if no existing snapshot exists.
+    Snapshot existingSnapshot = stateMachineSnapshots.get(snapshot.id());
+    if (existingSnapshot == null || existingSnapshot.index() < snapshot.index()) {
+      stateMachineSnapshots.put(snapshot.id(), snapshot);
+      indexSnapshots.put(snapshot.index(), snapshot);
 
-    // Delete old snapshots if necessary.
-    if (!storage.retainStaleSnapshots()) {
-      Iterator<Map.Entry<Long, Snapshot>> iterator = snapshots.entrySet().iterator();
-      while (iterator.hasNext()) {
-        Snapshot oldSnapshot = iterator.next().getValue();
-        if (oldSnapshot.index() < currentSnapshot.index()) {
-          iterator.remove();
-          oldSnapshot.close();
-          oldSnapshot.delete();
+      // Delete the old snapshot if necessary.
+      if (existingSnapshot != null) {
+        indexSnapshots.remove(existingSnapshot.index());
+        if (!storage.retainStaleSnapshots()) {
+          existingSnapshot.close();
+          existingSnapshot.delete();
         }
       }
+    }
+    // If the snapshot was old, delete it if necessary.
+    else if (!storage.retainStaleSnapshots()) {
+      snapshot.close();
+      snapshot.delete();
     }
   }
 

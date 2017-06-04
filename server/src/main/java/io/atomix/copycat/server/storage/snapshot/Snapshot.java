@@ -60,6 +60,13 @@ public abstract class Snapshot implements AutoCloseable {
   }
 
   /**
+   * Returns the identifier of the state machine to which the snapshot belongs.
+   *
+   * @return The snapshot identifier.
+   */
+  public abstract long id();
+
+  /**
    * Returns the snapshot index.
    * <p>
    * The snapshot index is the index of the state machine at the point at which the snapshot was written.

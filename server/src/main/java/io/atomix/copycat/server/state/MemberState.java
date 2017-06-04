@@ -28,7 +28,6 @@ final class MemberState {
   private final ServerMember member;
   private long term;
   private long configIndex;
-  private long snapshotIndex;
   private long nextSnapshotIndex;
   private int nextSnapshotOffset;
   private long matchIndex;
@@ -111,26 +110,6 @@ final class MemberState {
    */
   MemberState setConfigIndex(long configIndex) {
     this.configIndex = configIndex;
-    return this;
-  }
-
-  /**
-   * Returns the member's snapshot index.
-   *
-   * @return The member's snapshot index.
-   */
-  long getSnapshotIndex() {
-    return snapshotIndex;
-  }
-
-  /**
-   * Sets the member's snapshot index.
-   *
-   * @param snapshotIndex The member's snapshot index.
-   * @return The member state.
-   */
-  MemberState setSnapshotIndex(long snapshotIndex) {
-    this.snapshotIndex = snapshotIndex;
     return this;
   }
 

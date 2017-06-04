@@ -58,17 +58,22 @@ public class FileSnapshotStoreTest extends AbstractSnapshotStoreTest {
   public void testStoreLoadSnapshot() {
     SnapshotStore store = createSnapshotStore();
 
-    Snapshot snapshot = store.createSnapshot(1);
+    Snapshot snapshot = store.createSnapshot(1, 2);
     try (SnapshotWriter writer = snapshot.writer()) {
       writer.writeLong(10);
     }
     snapshot.complete();
-    assertNotNull(store.currentSnapshot());
+    assertNotNull(store.getSnapshotById(1));
+    assertNotNull(store.getSnapshotByIndex(2));
     store.close();
 
     store = createSnapshotStore();
-    assertNotNull(store.currentSnapshot());
-    assertEquals(store.currentSnapshot().index(), 1);
+    assertNotNull(store.getSnapshotById(1));
+    assertNotNull(store.getSnapshotByIndex(2));
+    assertEquals(store.getSnapshotById(1).id(), 1);
+    assertEquals(store.getSnapshotById(1).index(), 2);
+    assertEquals(store.getSnapshotByIndex(1).id(), 1);
+    assertEquals(store.getSnapshotByIndex(1).index(), 2);
   }
 
   @BeforeMethod

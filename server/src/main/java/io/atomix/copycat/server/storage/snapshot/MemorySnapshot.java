@@ -38,6 +38,11 @@ final class MemorySnapshot extends Snapshot {
   }
 
   @Override
+  public long id() {
+    return descriptor.id();
+  }
+
+  @Override
   public long index() {
     return descriptor.index();
   }

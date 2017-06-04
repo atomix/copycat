@@ -55,6 +55,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
   }
 
   private Buffer buffer;
+  private final long id;
   private final long index;
   private final long timestamp;
   private boolean locked;
@@ -64,10 +65,20 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   public SnapshotDescriptor(Buffer buffer) {
     this.buffer = Assert.notNull(buffer, "buffer");
+    this.id = buffer.readLong();
     this.index = buffer.readLong();
     this.timestamp = buffer.readLong();
     this.locked = buffer.readBoolean();
     buffer.skip(BYTES - buffer.position());
+  }
+
+  /**
+   * Returns the snapshot identifier.
+   *
+   * @return The snapshot identifier.
+   */
+  public long id() {
+    return id;
   }
 
   /**
@@ -104,7 +115,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   public void lock() {
     buffer.flush()
-      .writeBoolean(16, true)
+      .writeBoolean(24, true)
       .flush();
     locked = true;
   }
@@ -114,6 +125,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   SnapshotDescriptor copyTo(Buffer buffer) {
     this.buffer = buffer
+      .writeLong(id)
       .writeLong(index)
       .writeLong(timestamp)
       .writeBoolean(locked)
@@ -146,13 +158,24 @@ public final class SnapshotDescriptor implements AutoCloseable {
     }
 
     /**
-     * Sets the segment index.
+     * Sets the snapshot identifier.
      *
-     * @param index The segment index.
-     * @return The segment descriptor builder.
+     * @param id The snapshot identifier.
+     * @return The snapshot builder.
+     */
+    public Builder withId(long id) {
+      buffer.writeLong(0, id);
+      return this;
+    }
+
+    /**
+     * Sets the snapshot index.
+     *
+     * @param index The snapshot index.
+     * @return The snapshot builder.
      */
     public Builder withIndex(long index) {
-      buffer.writeLong(0, index);
+      buffer.writeLong(8, index);
       return this;
     }
 
@@ -163,14 +186,14 @@ public final class SnapshotDescriptor implements AutoCloseable {
      * @return The snapshot builder.
      */
     public Builder withTimestamp(long timestamp) {
-      buffer.writeLong(8, timestamp);
+      buffer.writeLong(16, timestamp);
       return this;
     }
 
     /**
-     * Builds the segment descriptor.
+     * Builds the snapshot descriptor.
      *
-     * @return The built segment descriptor.
+     * @return The built snapshot descriptor.
      */
     public SnapshotDescriptor build() {
       return new SnapshotDescriptor(buffer);

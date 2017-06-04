@@ -31,6 +31,8 @@ import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
@@ -41,7 +43,7 @@ import java.util.stream.Collectors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class PassiveState extends ReserveState {
-  private Snapshot pendingSnapshot;
+  private final Map<Long, Snapshot> pendingSnapshots = new HashMap<>();
   private int nextSnapshotOffset;
 
   public PassiveState(ServerContext context) {
@@ -352,6 +354,9 @@ class PassiveState extends ReserveState {
         .build()));
     }
 
+    // Get the pending snapshot for the associated snapshot ID.
+    Snapshot pendingSnapshot = pendingSnapshots.get(request.id());
+
     // If a snapshot is currently being received and the snapshot versions don't match, simply
     // close the existing snapshot. This is a naive implementation that assumes that the leader
     // will be responsible in sending the correct snapshot to this server. Leaders must dictate
@@ -375,7 +380,7 @@ class PassiveState extends ReserveState {
           .build()));
       }
 
-      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.index());
+      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.id(), request.index());
       nextSnapshotOffset = 0;
     }
 
@@ -395,7 +400,7 @@ class PassiveState extends ReserveState {
     // If the snapshot is complete, store the snapshot and reset state, otherwise update the next snapshot offset.
     if (request.complete()) {
       pendingSnapshot.complete();
-      pendingSnapshot = null;
+      pendingSnapshots.remove(request.id());
       nextSnapshotOffset = 0;
     } else {
       nextSnapshotOffset++;
@@ -408,10 +413,9 @@ class PassiveState extends ReserveState {
 
   @Override
   public CompletableFuture<Void> close() {
-    if (pendingSnapshot != null) {
+    for (Snapshot pendingSnapshot : pendingSnapshots.values()) {
       pendingSnapshot.close();
       pendingSnapshot.delete();
-      pendingSnapshot = null;
     }
     return super.close();
   }

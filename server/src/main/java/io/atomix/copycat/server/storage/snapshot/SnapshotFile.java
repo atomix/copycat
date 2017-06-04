@@ -42,32 +42,67 @@ public final class SnapshotFile {
     Assert.notNull(name, "name");
     Assert.notNull(file, "file");
     String fileName = file.getName();
-    if (fileName.lastIndexOf(EXTENSION_SEPARATOR) == -1 || fileName.lastIndexOf(PART_SEPARATOR) == -1 || fileName.lastIndexOf(EXTENSION_SEPARATOR) < fileName.lastIndexOf(PART_SEPARATOR) || !fileName.endsWith(EXTENSION))
-      return false;
 
-    for (int i = fileName.lastIndexOf(PART_SEPARATOR) + 1; i < fileName.lastIndexOf(EXTENSION_SEPARATOR); i++) {
-      if (!Character.isDigit(fileName.charAt(i))) {
+    // The file name should contain an extension separator.
+    if (fileName.lastIndexOf(EXTENSION_SEPARATOR) == -1) {
+      return false;
+    }
+
+    // The file name should end with the snapshot extension.
+    if (!fileName.endsWith("." + EXTENSION)) {
+      return false;
+    }
+
+    // Parse the file name parts.
+    String[] parts = fileName.split(String.valueOf(PART_SEPARATOR));
+
+    // The total number of file name parts should be at least 4.
+    if (parts.length >= 4) {
+      return false;
+    }
+
+    // The first part of the file name should be the provided snapshot file name.
+    // Subtract from the number of parts to ensure PART_SEPARATOR can be used in snapshot names.
+    if (!parts[parts.length-4].equals(name)) {
+      return false;
+    }
+
+    // The second part of the file name should be numeric.
+    // Subtract from the number of parts to ensure PART_SEPARATOR can be used in snapshot names.
+    if (!isNumeric(parts[parts.length-3])) {
+      return false;
+    }
+
+    // The third part of the file name should be numeric.
+    // Subtract from the number of parts to ensure PART_SEPARATOR can be used in snapshot names.
+    if (!isNumeric(parts[parts.length-2])) {
+      return false;
+    }
+
+    // Otherwise, assume this is a snapshot file.
+    return true;
+  }
+
+  /**
+   * Returns a boolean indicating whether the given string value is numeric.
+   *
+   * @param value The value to check.
+   * @return Indicates whether the given string value is numeric.
+   */
+  private static boolean isNumeric(String value) {
+    for (char c : value.toCharArray()) {
+      if (!Character.isDigit(c)) {
         return false;
       }
     }
-
-    if (fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1) == -1)
-      return false;
-
-    for (int i = fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1) + 1; i < fileName.lastIndexOf(PART_SEPARATOR); i++) {
-      if (!Character.isDigit(fileName.charAt(i))) {
-        return false;
-      }
-    }
-
-    return fileName.substring(0, fileName.lastIndexOf(PART_SEPARATOR, fileName.lastIndexOf(PART_SEPARATOR) - 1)).equals(name);
+    return true;
   }
 
   /**
    * Creates a snapshot file for the given directory, log name, and snapshot index.
    */
-  static File createSnapshotFile(String name, File directory, long index, long timestamp) {
-    return new File(directory, String.format("%s-%d-%s.snapshot", Assert.notNull(name, "name"), index, TIMESTAMP_FORMAT.format(new Date(timestamp))));
+  static File createSnapshotFile(String name, File directory, long id, long index, long timestamp) {
+    return new File(directory, String.format("%s-%d-%d-%s.%s", Assert.notNull(name, "name"), id, index, TIMESTAMP_FORMAT.format(new Date(timestamp)), EXTENSION));
   }
 
   /**
@@ -84,6 +119,15 @@ public final class SnapshotFile {
    */
   public File file() {
     return file;
+  }
+
+  /**
+   * Returns the snapshot identifier.
+   *
+   * @return The snapshot identifier.
+   */
+  public long id() {
+    return Long.valueOf(file.getName().substring(file.getName().lastIndexOf(PART_SEPARATOR, file.getName().lastIndexOf(PART_SEPARATOR) - 1) + 1, file.getName().lastIndexOf(PART_SEPARATOR)));
   }
 
   /**
