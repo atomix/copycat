@@ -44,7 +44,7 @@ final class MemberState {
   private boolean configuring;
   private boolean installing;
   private volatile int failures;
-  private LogReader reader;
+  private volatile LogReader reader;
   private final TimeBuffer timeBuffer = new TimeBuffer(8);
 
   public MemberState(ServerMember member, ClusterState cluster, ThreadContext context) {
