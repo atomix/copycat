@@ -39,9 +39,9 @@ public class DefaultCopycatMetadata implements CopycatMetadata {
   private final AddressSelectorManager selectorManager;
   private final CopycatClientConnection connection;
 
-  public DefaultCopycatMetadata(ClientConnectionManager connectionManager, AddressSelectorManager selectorManager) {
+  public DefaultCopycatMetadata(String clientId, ClientConnectionManager connectionManager, AddressSelectorManager selectorManager) {
     this.selectorManager = Assert.notNull(selectorManager, "selectorManager");
-    this.connection = new CopycatClientConnection(connectionManager, selectorManager.createSelector(CommunicationStrategies.LEADER));
+    this.connection = new CopycatClientConnection(clientId, connectionManager, selectorManager.createSelector(CommunicationStrategies.LEADER));
   }
 
   @Override

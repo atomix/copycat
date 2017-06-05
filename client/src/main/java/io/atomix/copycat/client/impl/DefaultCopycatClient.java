@@ -61,7 +61,7 @@ public class DefaultCopycatClient implements CopycatClient {
     this.cluster = Assert.notNull(cluster, "cluster");
     this.threadContext = new ThreadPoolContext(threadPoolExecutor, serializer.clone());
     this.connectionManager = new ClientConnectionManager(client);
-    this.metadata = new DefaultCopycatMetadata(connectionManager, selectorManager);
+    this.metadata = new DefaultCopycatMetadata(clientId, connectionManager, selectorManager);
     this.sessionManager = new CopycatSessionManager(clientId, connectionManager, selectorManager, threadContext, threadPoolExecutor);
   }
 

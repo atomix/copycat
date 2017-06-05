@@ -53,7 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class CopycatSessionManager {
-  private static final Logger LOG = LoggerFactory.getLogger(CopycatSessionManager.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(CopycatSessionManager.class);
   private final String clientId;
   private final ClientConnectionManager connectionManager;
   private final CopycatConnection connection;
@@ -68,7 +68,7 @@ public class CopycatSessionManager {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.connectionManager = Assert.notNull(connectionManager, "connectionManager");
     this.selectorManager = Assert.notNull(selectorManager, "selectorManager");
-    this.connection = new CopycatClientConnection(connectionManager, selectorManager.createSelector(CommunicationStrategies.ANY));
+    this.connection = new CopycatClientConnection(clientId, connectionManager, selectorManager.createSelector(CommunicationStrategies.ANY));
     this.threadContext = Assert.notNull(threadContext, "threadContext");
     this.threadPoolExecutor = Assert.notNull(threadPoolExecutor, "threadPoolExecutor");
   }
@@ -122,14 +122,14 @@ public class CopycatSessionManager {
    * @return A completable future to be completed once the session has been opened.
    */
   public CompletableFuture<CopycatSession> openSession(String name, String type, CommunicationStrategy communicationStrategy, Duration timeout) {
-    LOG.trace("Opening session; name: {}, type: {}", name, type);
+    LOGGER.trace("Opening session; name: {}, type: {}", name, type);
     OpenSessionRequest request = OpenSessionRequest.builder()
       .withType(type)
       .withName(name)
       .withTimeout(timeout.toMillis())
       .build();
 
-    LOG.trace("Sending {}", request);
+    LOGGER.trace("{} - Sending {}", clientId, request);
     CompletableFuture<CopycatSession> future = new CompletableFuture<>();
     ThreadContext threadContext = new ThreadPoolContext(threadPoolExecutor, this.threadContext.serializer().clone());
     Runnable callback = () -> connection.<OpenSessionRequest, OpenSessionResponse>sendAndReceive(OpenSessionRequest.NAME, request).whenCompleteAsync((response, error) -> {
@@ -142,6 +142,7 @@ public class CopycatSessionManager {
           CopycatConnection sessionConnection = new CopycatSessionConnection(state, connectionManager, selectorManager.createSelector(communicationStrategy), threadContext);
           leaderConnection.open().thenCompose(v -> sessionConnection.open()).whenComplete((connectResult, connectError) -> {
             if (connectError == null) {
+              keepAliveSessions();
               future.complete(new DefaultCopycatSession(state, leaderConnection, sessionConnection, threadContext, this));
             } else {
               future.completeExceptionally(connectError);
@@ -175,12 +176,12 @@ public class CopycatSessionManager {
       return Futures.exceptionalFuture(new UnknownSessionException("Unknown session: " + sessionId));
     }
 
-    LOG.trace("Closing session {}", sessionId);
+    LOGGER.trace("Closing session {}", sessionId);
     CloseSessionRequest request = CloseSessionRequest.builder()
       .withSession(sessionId)
       .build();
 
-    LOG.trace("Sending {}", request);
+    LOGGER.trace("Sending {}", request);
     CompletableFuture<Void> future = new CompletableFuture<>();
     Runnable callback = () -> connection.<CloseSessionRequest, CloseSessionResponse>sendAndReceive(CloseSessionRequest.NAME, request).whenComplete((response, error) -> {
       if (error == null) {
@@ -243,10 +244,10 @@ public class CopycatSessionManager {
       .withConnections(new long[]{sessionState.getConnection()})
       .build();
 
-    LOG.trace("{} - Sending {}", clientId, request);
+    LOGGER.trace("{} - Sending {}", clientId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>sendAndReceive(KeepAliveRequest.NAME, request).whenComplete((response, error) -> {
         if (error == null) {
-          LOG.trace("{} - Received {}", clientId, response);
+          LOGGER.trace("{} - Received {}", clientId, response);
           if (response.status() == Response.Status.OK) {
             future.complete(null);
           } else {
@@ -292,11 +293,11 @@ public class CopycatSessionManager {
       .withConnections(connections)
       .build();
 
-    LOG.trace("{} - Sending {}", clientId, request);
+    LOGGER.trace("{} - Sending {}", clientId, request);
     connection.<KeepAliveRequest, KeepAliveResponse>sendAndReceive(KeepAliveRequest.NAME, request).whenComplete((response, error) -> {
       if (open.get()) {
         if (error == null) {
-          LOG.trace("{} - Received {}", clientId, response);
+          LOGGER.trace("{} - Received {}", clientId, response);
           // If the request was successful, update the address selector and schedule the next keep-alive.
           if (response.status() == Response.Status.OK) {
             selectorManager.resetAll(response.leader(), response.members());

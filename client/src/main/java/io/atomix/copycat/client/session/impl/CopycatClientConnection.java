@@ -26,13 +26,16 @@ import org.slf4j.LoggerFactory;
 public class CopycatClientConnection extends CopycatConnection {
   private static final Logger LOGGER = LoggerFactory.getLogger(CopycatClientConnection.class);
 
-  public CopycatClientConnection(ClientConnectionManager connections, AddressSelector selector) {
+  private final String clientId;
+
+  public CopycatClientConnection(String clientId, ClientConnectionManager connections, AddressSelector selector) {
     super(connections, selector);
+    this.clientId = clientId;
   }
 
   @Override
   protected String name() {
-    return "client";
+    return clientId;
   }
 
   @Override
