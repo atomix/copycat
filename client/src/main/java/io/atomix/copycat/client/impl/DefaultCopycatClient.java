@@ -66,6 +66,11 @@ public class DefaultCopycatClient implements CopycatClient {
   }
 
   @Override
+  public String id() {
+    return id;
+  }
+
+  @Override
   public CopycatMetadata metadata() {
     return metadata;
   }

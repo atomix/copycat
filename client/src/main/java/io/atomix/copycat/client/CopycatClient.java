@@ -88,6 +88,13 @@ public interface CopycatClient {
   }
 
   /**
+   * Returns the client identifier.
+   *
+   * @return The client identifier.
+   */
+  String id();
+
+  /**
    * Returns the Copycat metadata.
    *
    * @return The Copycat metadata.
