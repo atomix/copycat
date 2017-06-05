@@ -227,6 +227,9 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
         LOGGER.debug("{} - Completing snapshot {}", server.getCluster().member().address(), pendingSnapshot.index());
         pendingSnapshot.complete();
 
+        // Update the snapshot index to ensure we don't simply install the same snapshot.
+        snapshotIndex = pendingSnapshot.index();
+
         // Reset the pending snapshot.
         pendingSnapshot = null;
       }
