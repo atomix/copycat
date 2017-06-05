@@ -288,6 +288,9 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
         listener.register(session);
       }
 
+      // Commit the index, causing events to be sent to clients if necessary.
+      commit();
+
       // Complete the future.
       future.complete(session.id());
     });
@@ -340,6 +343,9 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       // Set the last applied index for the session. This will cause queries to be triggered if enqueued.
       session.setLastApplied(index);
 
+      // Commit the index, causing events to be sent to clients if necessary.
+      commit();
+
       // Complete the future.
       future.complete(null);
     });
@@ -378,7 +384,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
         listener.close(session);
       }
 
-      // Commit the index, causing event messages to be sent.
+      // Commit the index, causing events to be sent to clients if necessary.
       commit();
 
       // Complete the future.

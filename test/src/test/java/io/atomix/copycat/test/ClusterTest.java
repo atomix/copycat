@@ -1242,7 +1242,6 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test state machine.
    */
   public static class TestStateMachine extends StateMachine implements SessionListener, Snapshottable {
-    private Commit<TestCommand> last;
     private Commit<TestExpire> expire;
     private Commit<TestClose> close;
 
@@ -1258,14 +1257,16 @@ public class ClusterTest extends ConcurrentTestCase {
 
     @Override
     public void expire(ServerSession session) {
-      if (expire != null)
+      if (expire != null) {
         expire.session().publish("expired");
+      }
     }
 
     @Override
     public void close(ServerSession session) {
-      if (close != null && !session.equals(close.session()))
+      if (close != null && !session.equals(close.session())) {
         close.session().publish("closed");
+      }
     }
 
     @Override
@@ -1279,7 +1280,6 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     public long command(Commit<TestCommand> commit) {
-      last = commit;
       return commit.index();
     }
 
