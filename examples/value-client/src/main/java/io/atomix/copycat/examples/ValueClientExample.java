@@ -18,7 +18,6 @@ package io.atomix.copycat.examples;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.client.CommunicationStrategies;
-import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.session.CopycatSession;
 
@@ -56,9 +55,6 @@ public class ValueClientExample {
 
     CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
-      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
-      .withServerSelectionStrategy(CommunicationStrategies.LEADER)
-      .withSessionTimeout(Duration.ofSeconds(15))
       .build();
 
     client.serializer().register(SetCommand.class, 1);
@@ -70,11 +66,13 @@ public class ValueClientExample {
     CopycatSession session = client.sessionBuilder()
       .withType("value")
       .withName("test")
+      .withCommunicationStrategy(CommunicationStrategies.LEADER)
+      .withTimeout(Duration.ofSeconds(15))
       .build();
 
     recursiveSet(session);
 
-    while (client.state() != CopycatClient.State.CLOSED) {
+    while (session.state() != CopycatSession.State.CLOSED) {
       try {
         Thread.sleep(1000);
       } catch (InterruptedException e) {

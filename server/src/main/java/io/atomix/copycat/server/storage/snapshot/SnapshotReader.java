@@ -15,13 +15,13 @@
  */
 package io.atomix.copycat.server.storage.snapshot;
 
-import java.nio.charset.Charset;
-
 import io.atomix.catalyst.buffer.Buffer;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.Bytes;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
+
+import java.nio.charset.Charset;
 
 /**
  * Reads bytes from a state machine {@link Snapshot}.
@@ -45,6 +45,11 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
     this.buffer = Assert.notNull(buffer, "buffer");
     this.snapshot = Assert.notNull(snapshot, "snapshot");
     this.serializer = Assert.notNull(serializer, "serializer");
+  }
+
+  @Override
+  public long position() {
+    return buffer.position();
   }
 
   @Override

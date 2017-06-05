@@ -30,7 +30,6 @@ import io.atomix.copycat.protocol.ClientRequestTypeResolver;
 import io.atomix.copycat.protocol.ClientResponseTypeResolver;
 import io.atomix.copycat.util.ProtocolSerialization;
 
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -199,10 +198,7 @@ public interface CopycatClient {
     private String clientId = UUID.randomUUID().toString();
     private Transport transport;
     private Serializer serializer;
-    private Duration sessionTimeout = Duration.ZERO;
-    private Duration unstableTimeout = Duration.ZERO;
     private int threadPoolSize = Runtime.getRuntime().availableProcessors();
-    private CommunicationStrategy communicationStrategy = CommunicationStrategies.ANY;
 
     private Builder(Collection<Address> cluster) {
       this.cluster = Assert.notNull(cluster, "cluster");
@@ -259,17 +255,6 @@ public interface CopycatClient {
      */
     public Builder withThreadPoolSize(int threadPoolSize) {
       this.threadPoolSize = Assert.argNot(threadPoolSize, threadPoolSize <= 0, "threadPoolSize must be positive");
-      return this;
-    }
-
-    /**
-     * Sets the server selection strategy.
-     *
-     * @param communicationStrategy The server selection strategy.
-     * @return The client builder.
-     */
-    public Builder withServerSelectionStrategy(CommunicationStrategy communicationStrategy) {
-      this.communicationStrategy = Assert.notNull(communicationStrategy, "serverSelectionStrategy");
       return this;
     }
 

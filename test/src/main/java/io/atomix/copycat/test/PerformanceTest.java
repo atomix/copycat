@@ -307,7 +307,6 @@ public class PerformanceTest implements Runnable {
   private CopycatClient createClient() throws Exception {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
-      .withServerSelectionStrategy(SERVER_SELECTION_STRATEGY)
       .build();
     client.serializer().disableWhitelist();
     CountDownLatch latch = new CountDownLatch(1);

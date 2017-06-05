@@ -22,7 +22,6 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.CommunicationStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.server.Commit;
@@ -418,7 +417,6 @@ public class FuzzTest implements Runnable {
   private CopycatClient createClient() throws Exception {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
-      .withServerSelectionStrategy(CommunicationStrategies.values()[randomNumber(CommunicationStrategies.values().length)])
       .build();
     client.serializer().disableWhitelist();
     CountDownLatch latch = new CountDownLatch(1);
