@@ -104,7 +104,7 @@ public class LogWriter implements Writer {
   @Override
   public LogWriter truncate(long index) {
     // Delete all segments with first indexes greater than the given index.
-    while (index < currentWriter.firstIndex()) {
+    while (index < currentWriter.firstIndex() - 1) {
       currentWriter.close();
       segments.removeSegment(currentSegment);
       currentSegment = segments.lastSegment();

@@ -192,7 +192,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       try (SnapshotWriter writer = pendingSnapshot.writer()) {
         writer.writeInt(sessions.sessions.size());
         for (ServerSessionContext session : sessions.sessions.values()) {
-          // TODO: Need to write more session state than this?
           writer.writeLong(session.id());
           writer.writeLong(session.timeout());
           writer.writeLong(session.getTimestamp());
@@ -252,6 +251,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
           long sessionTimestamp = reader.readLong();
           ServerSessionContext session = new ServerSessionContext(sessionId, context.name(), context.type(), sessionTimeout, this);
           session.setTimestamp(sessionTimestamp);
+          session.setLastApplied(snapshot.index());
           sessions.sessions.put(sessionId, session);
         }
         stateMachine.install(reader);

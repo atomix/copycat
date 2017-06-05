@@ -77,8 +77,8 @@ class PassiveState extends ReserveState {
   private void truncateUncommittedEntries() {
     if (type() == CopycatServer.State.PASSIVE) {
       final LogWriter writer = context.getLogWriter();
+      writer.lock();
       try {
-        writer.lock();
         writer.truncate(context.getCommitIndex());
       } finally {
         writer.unlock();

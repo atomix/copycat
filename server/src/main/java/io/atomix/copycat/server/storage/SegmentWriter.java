@@ -156,6 +156,15 @@ public class SegmentWriter implements Writer {
   }
 
   /**
+   * Returns a boolean indicating whether the segment is empty.
+   *
+   * @return Indicates whether the segment is empty.
+   */
+  public boolean isEmpty() {
+    return lastEntry == null;
+  }
+
+  /**
    * Returns a boolean indicating whether the segment is full.
    *
    * @return Indicates whether the segment is full.
