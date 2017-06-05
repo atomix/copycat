@@ -16,7 +16,6 @@
 package io.atomix.copycat.client;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.metadata.CopycatClientMetadata;
 import io.atomix.copycat.metadata.CopycatSessionMetadata;
 
 import java.util.Collection;
@@ -41,13 +40,6 @@ public interface CopycatMetadata {
    * @return The set of known servers in the cluster.
    */
   Collection<Address> servers();
-
-  /**
-   * Returns a list of clients connected to the cluster.
-   *
-   * @return A completable future to be completed with a list of clients connected to the cluster.
-   */
-  CompletableFuture<Set<CopycatClientMetadata>> getClients();
 
   /**
    * Returns a list of open sessions.

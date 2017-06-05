@@ -20,7 +20,6 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
-import io.atomix.copycat.metadata.CopycatClientMetadata;
 import io.atomix.copycat.metadata.CopycatSessionMetadata;
 
 import java.util.Arrays;
@@ -52,17 +51,7 @@ public class MetadataResponse extends AbstractResponse {
     return new Builder(request);
   }
 
-  private Set<CopycatClientMetadata> clients;
   private Set<CopycatSessionMetadata> sessions;
-
-  /**
-   * Returns the client metadata.
-   *
-   * @return Client metadata.
-   */
-  public Set<CopycatClientMetadata> clients() {
-    return clients;
-  }
 
   /**
    * Returns the session metadata.
@@ -78,12 +67,6 @@ public class MetadataResponse extends AbstractResponse {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
-      int clientCount = buffer.readInt();
-      clients = new HashSet<>();
-      for (int i = 0; i < clientCount; i++) {
-        clients.add(new CopycatClientMetadata(buffer.readLong()));
-      }
-
       int sessionCount = buffer.readInt();
       sessions = new HashSet<>();
       for (int i = 0; i < sessionCount; i++) {
@@ -100,11 +83,6 @@ public class MetadataResponse extends AbstractResponse {
     if (status == Status.ERROR) {
       buffer.writeByte(error.id());
     } else {
-      buffer.writeInt(clients.size());
-      for (CopycatClientMetadata client : clients) {
-        buffer.writeLong(client.id());
-      }
-
       buffer.writeInt(sessions.size());
       for (CopycatSessionMetadata session : sessions) {
         buffer.writeLong(session.id());
@@ -120,27 +98,6 @@ public class MetadataResponse extends AbstractResponse {
   public static class Builder extends AbstractResponse.Builder<Builder, MetadataResponse> {
     public Builder(MetadataResponse request) {
       super(request);
-    }
-
-    /**
-     * Sets the client metadata.
-     *
-     * @param clients The client metadata.
-     * @return The metadata response builder.
-     */
-    public Builder withClients(CopycatClientMetadata... clients) {
-      return withClients(Arrays.asList(Assert.notNull(clients, "clients")));
-    }
-
-    /**
-     * Sets the client metadata.
-     *
-     * @param clients The client metadata.
-     * @return The metadata response builder.
-     */
-    public Builder withClients(Collection<CopycatClientMetadata> clients) {
-      response.clients = new HashSet<>(Assert.notNull(clients, "clients"));
-      return this;
     }
 
     /**
@@ -167,7 +124,6 @@ public class MetadataResponse extends AbstractResponse {
     @Override
     public MetadataResponse build() {
       super.build();
-      Assert.notNull(response.clients, "clients");
       Assert.notNull(response.sessions, "sessions");
       return response;
     }

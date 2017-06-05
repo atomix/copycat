@@ -17,8 +17,17 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
-import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.ConfigureRequest;
+import io.atomix.copycat.server.protocol.ConfigureResponse;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.util.Quorum;
 
 import java.time.Duration;
@@ -120,13 +129,11 @@ final class FollowerState extends ActiveState {
 
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
-    long lastIndex = context.getLog().lastIndex();
-    Entry lastEntry = lastIndex > 0 ? context.getLog().get(lastIndex) : null;
+    final Indexed<?> lastEntry = context.getLogWriter().lastEntry();
 
     final long lastTerm;
     if (lastEntry != null) {
-      lastTerm = lastEntry.getTerm();
-      lastEntry.close();
+      lastTerm = lastEntry.term();
     } else {
       lastTerm = 0;
     }
@@ -140,7 +147,7 @@ final class FollowerState extends ActiveState {
       PollRequest request = PollRequest.builder()
         .withTerm(context.getTerm())
         .withCandidate(context.getCluster().member().id())
-        .withLogIndex(lastIndex)
+        .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
         .withLogTerm(lastTerm)
         .build();
       context.getConnections().getConnection(member.serverAddress()).thenAccept(connection -> {

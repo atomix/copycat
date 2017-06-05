@@ -15,23 +15,41 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.util.reference.ReferenceManager;
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
 
 /**
  * Close session entry.
  */
 public class CloseSessionEntry extends SessionEntry<CloseSessionEntry> {
 
-  public CloseSessionEntry() {
+  public CloseSessionEntry(long timestamp, long session) {
+    super(timestamp, session);
   }
 
-  public CloseSessionEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<CloseSessionEntry> type() {
+    return Type.CLOSE_SESSION;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getTimestamp());
+    return String.format("%s[session=%d, timestamp=%d]", getClass().getSimpleName(), session, timestamp);
   }
 
+  /**
+   * Close session entry serializer.
+   */
+  public static class Serializer implements SessionEntry.Serializer<CloseSessionEntry> {
+    @Override
+    public void writeObject(BufferOutput output, CloseSessionEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeLong(entry.session);
+    }
+
+    @Override
+    public CloseSessionEntry readObject(BufferInput input, Class<CloseSessionEntry> type) {
+      return new CloseSessionEntry(input.readLong(), input.readLong());
+    }
+  }
 }

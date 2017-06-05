@@ -15,7 +15,6 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.copycat.metadata.CopycatClientMetadata;
 import io.atomix.copycat.metadata.CopycatSessionMetadata;
 
 import java.util.Set;
@@ -24,11 +23,9 @@ import java.util.Set;
  * Metadata result.
  */
 final class MetadataResult {
-  final Set<CopycatClientMetadata> clients;
   final Set<CopycatSessionMetadata> sessions;
 
-  MetadataResult(Set<CopycatClientMetadata> clients, Set<CopycatSessionMetadata> sessions) {
-    this.clients = clients;
+  MetadataResult(Set<CopycatSessionMetadata> sessions) {
     this.sessions = sessions;
   }
 }

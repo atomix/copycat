@@ -36,7 +36,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class KeepAliveRequest extends ClientRequest {
+public class KeepAliveRequest extends AbstractRequest {
   public static final String NAME = "keep-alive";
 
   /**
@@ -154,29 +154,30 @@ public class KeepAliveRequest extends ClientRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), client, commandSequences, eventIndexes);
+    return Objects.hash(getClass(), sessionIds, commandSequences, eventIndexes, connections);
   }
 
   @Override
   public boolean equals(Object object) {
     if (object instanceof KeepAliveRequest) {
       KeepAliveRequest request = (KeepAliveRequest) object;
-      return request.client == client
+      return Arrays.equals(request.sessionIds, sessionIds)
         && Arrays.equals(request.commandSequences, commandSequences)
-        && Arrays.equals(request.eventIndexes, eventIndexes);
+        && Arrays.equals(request.eventIndexes, eventIndexes)
+        && Arrays.equals(request.connections, connections);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[client=%s, sessionIds=%s, commandSequences=%s, eventIndexes=%s, connections=%s]", getClass().getSimpleName(), client, Arrays.toString(sessionIds), Arrays.toString(commandSequences), Arrays.toString(eventIndexes), Arrays.toString(connections));
+    return String.format("%s[sessionIds=%s, commandSequences=%s, eventIndexes=%s, connections=%s]", getClass().getSimpleName(), Arrays.toString(sessionIds), Arrays.toString(commandSequences), Arrays.toString(eventIndexes), Arrays.toString(connections));
   }
 
   /**
    * Keep alive request builder.
    */
-  public static class Builder extends ClientRequest.Builder<Builder, KeepAliveRequest> {
+  public static class Builder extends AbstractRequest.Builder<Builder, KeepAliveRequest> {
     protected Builder(KeepAliveRequest request) {
       super(request);
     }

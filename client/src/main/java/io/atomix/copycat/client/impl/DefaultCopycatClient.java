@@ -15,14 +15,12 @@
  */
 package io.atomix.copycat.client.impl;
 
-import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.concurrent.ThreadPoolContext;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Client;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.client.ConnectionStrategy;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.CopycatMetadata;
 import io.atomix.copycat.client.session.CopycatSession;
@@ -30,12 +28,10 @@ import io.atomix.copycat.client.session.impl.CopycatSessionManager;
 import io.atomix.copycat.client.util.AddressSelectorManager;
 import io.atomix.copycat.client.util.ClientConnectionManager;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.Consumer;
 
 /**
  * Default Copycat client implementation.
@@ -45,8 +41,8 @@ import java.util.function.Consumer;
 public class DefaultCopycatClient implements CopycatClient {
   private static final String DEFAULT_HOST = "0.0.0.0";
   private static final int DEFAULT_PORT = 8700;
+  private final String id;
   private final Collection<Address> cluster;
-  private final CopycatClientState state;
   private final ThreadContext threadContext;
   private final ClientConnectionManager connectionManager;
   private final CopycatMetadata metadata;
@@ -55,23 +51,18 @@ public class DefaultCopycatClient implements CopycatClient {
   private volatile CompletableFuture<CopycatClient> openFuture;
   private volatile CompletableFuture<Void> closeFuture;
 
-  public DefaultCopycatClient(String clientId, Collection<Address> cluster, Client client, ScheduledExecutorService threadPoolExecutor, Serializer serializer, ConnectionStrategy connectionStrategy, Duration sessionTimeout, Duration unstableTimeout) {
+  public DefaultCopycatClient(
+    String clientId,
+    Collection<Address> cluster,
+    Client client,
+    ScheduledExecutorService threadPoolExecutor,
+    Serializer serializer) {
+    this.id = Assert.notNull(clientId, "clientId");
     this.cluster = Assert.notNull(cluster, "cluster");
     this.threadContext = new ThreadPoolContext(threadPoolExecutor, serializer.clone());
-    this.state = new CopycatClientState(clientId);
     this.connectionManager = new ClientConnectionManager(client);
     this.metadata = new DefaultCopycatMetadata(connectionManager, selectorManager);
-    this.sessionManager = new CopycatSessionManager(state, connectionManager, selectorManager, threadContext, threadPoolExecutor, connectionStrategy, sessionTimeout, unstableTimeout);
-  }
-
-  @Override
-  public State state() {
-    return state.getState();
-  }
-
-  @Override
-  public Listener<State> onStateChange(Consumer<State> callback) {
-    return state.onStateChange(callback);
+    this.sessionManager = new CopycatSessionManager(clientId, connectionManager, selectorManager, threadContext, threadPoolExecutor);
   }
 
   @Override
@@ -91,35 +82,30 @@ public class DefaultCopycatClient implements CopycatClient {
 
   @Override
   public synchronized CompletableFuture<CopycatClient> connect(Collection<Address> cluster) {
-    if (state.getState() != State.CLOSED)
-      return CompletableFuture.completedFuture(this);
+    CompletableFuture<CopycatClient> future = new CompletableFuture<>();
 
-    if (openFuture == null) {
-      openFuture = new CompletableFuture<>();
-
-      // If the provided cluster list is null or empty, use the default list.
-      if (cluster == null || cluster.isEmpty()) {
-        cluster = this.cluster;
-      }
-
-      // If the default list is null or empty, use the default host:port.
-      if (cluster == null || cluster.isEmpty()) {
-        cluster = Collections.singletonList(new Address(DEFAULT_HOST, DEFAULT_PORT));
-      }
-
-      // Reset the connection list to allow the selection strategy to prioritize connections.
-      sessionManager.resetConnections(null, cluster);
-
-      // Register the session manager.
-      sessionManager.open().whenCompleteAsync((result, error) -> {
-        if (error == null) {
-          openFuture.complete(this);
-        } else {
-          openFuture.completeExceptionally(error);
-        }
-      }, threadContext);
+    // If the provided cluster list is null or empty, use the default list.
+    if (cluster == null || cluster.isEmpty()) {
+      cluster = this.cluster;
     }
-    return openFuture;
+
+    // If the default list is null or empty, use the default host:port.
+    if (cluster == null || cluster.isEmpty()) {
+      cluster = Collections.singletonList(new Address(DEFAULT_HOST, DEFAULT_PORT));
+    }
+
+    // Reset the connection list to allow the selection strategy to prioritize connections.
+    sessionManager.resetConnections(null, cluster);
+
+    // Register the session manager.
+    sessionManager.open().whenCompleteAsync((result, error) -> {
+      if (error == null) {
+        future.complete(this);
+      } else {
+        future.completeExceptionally(error);
+      }
+    }, threadContext);
+    return future;
   }
 
   @Override
@@ -129,13 +115,7 @@ public class DefaultCopycatClient implements CopycatClient {
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    if (state.getState() == State.CLOSED)
-      return CompletableFuture.completedFuture(null);
-
-    if (closeFuture == null) {
-      closeFuture = sessionManager.close().whenComplete((r, e) -> connectionManager.close());
-    }
-    return closeFuture;
+    return sessionManager.close().whenComplete((e, r) -> connectionManager.close());
   }
 
   /**
@@ -144,28 +124,22 @@ public class DefaultCopycatClient implements CopycatClient {
    * @return A completable future to be completed once the client's session has been killed.
    */
   public synchronized CompletableFuture<Void> kill() {
-    if (state.getState() == State.CLOSED)
-      return CompletableFuture.completedFuture(null);
-
-    if (closeFuture == null) {
-      closeFuture = sessionManager.kill();
-    }
-    return closeFuture;
+    return sessionManager.kill();
   }
 
   @Override
   public int hashCode() {
-    return 23 + 37 * state.getUuid().hashCode();
+    return 23 + 37 * id.hashCode();
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof DefaultCopycatClient && ((DefaultCopycatClient) object).state.getUuid().equals(state.getUuid());
+    return object instanceof DefaultCopycatClient && ((DefaultCopycatClient) object).id.equals(id);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[id=%d, uuid=%s]", getClass().getSimpleName(), state.getId(), state.getUuid());
+    return String.format("%s[id=%s]", getClass().getSimpleName(), id);
   }
 
   /**
@@ -174,7 +148,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private class SessionBuilder extends CopycatSession.Builder {
     @Override
     public CopycatSession build() {
-      return sessionManager.openSession(name, type, communicationStrategy).join();
+      return sessionManager.openSession(name, type, communicationStrategy, timeout).join();
     }
   }
 

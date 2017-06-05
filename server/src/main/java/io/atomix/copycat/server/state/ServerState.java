@@ -17,9 +17,38 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Managed;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.CloseSessionRequest;
+import io.atomix.copycat.protocol.CloseSessionResponse;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.KeepAliveRequest;
+import io.atomix.copycat.protocol.KeepAliveResponse;
+import io.atomix.copycat.protocol.MetadataRequest;
+import io.atomix.copycat.protocol.MetadataResponse;
+import io.atomix.copycat.protocol.OpenSessionRequest;
+import io.atomix.copycat.protocol.OpenSessionResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.ResetRequest;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.ConfigureRequest;
+import io.atomix.copycat.server.protocol.ConfigureResponse;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.LeaveRequest;
+import io.atomix.copycat.server.protocol.LeaveResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.ReconfigureResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -46,14 +75,6 @@ public interface ServerState extends Managed<ServerState> {
   CompletableFuture<MetadataResponse> metadata(MetadataRequest request);
 
   /**
-   * Handles a register request.
-   *
-   * @param request The request to handle.
-   * @return A completable future to be completed with the request response.
-   */
-  CompletableFuture<RegisterResponse> register(RegisterRequest request);
-
-  /**
    * Handles a connect request.
    *
    * @param request The request to handle.
@@ -62,28 +83,20 @@ public interface ServerState extends Managed<ServerState> {
   CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection);
 
   /**
-   * Handles a keep alive request.
-   *
-   * @param request The request to handle.
-   * @return A completable future to be completed with the request response.
-   */
-  CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
-
-  /**
-   * Handles an unregister request.
-   *
-   * @param request The request to handle.
-   * @return A completable future to be completed with the request response.
-   */
-  CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
-
-  /**
    * Handles an open session request.
    *
    * @param request The request to handle.
    * @return A completable future to be completed with the request response.
    */
   CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request);
+
+  /**
+   * Handles a keep alive request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request);
 
   /**
    * Handles a close session request.

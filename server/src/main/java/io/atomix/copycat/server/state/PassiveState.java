@@ -19,13 +19,22 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.CopycatException;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.OperationResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.ResetRequest;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.protocol.AppendRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;
 import io.atomix.copycat.server.protocol.InstallRequest;
 import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
@@ -67,7 +76,13 @@ class PassiveState extends ReserveState {
    */
   private void truncateUncommittedEntries() {
     if (type() == CopycatServer.State.PASSIVE) {
-      context.getLog().truncate(Math.min(context.getCommitIndex(), context.getLog().lastIndex()));
+      final LogWriter writer = context.getLogWriter();
+      try {
+        writer.lock();
+        writer.truncate(context.getCommitIndex());
+      } finally {
+        writer.unlock();
+      }
     }
   }
 
@@ -128,36 +143,10 @@ class PassiveState extends ReserveState {
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(context.getLogWriter().lastIndex())
         .build();
     } else {
-      return checkGlobalIndex(request);
-    }
-  }
-
-  /**
-   * Checks whether the log needs to be truncated based on the globalIndex.
-   */
-  protected AppendResponse checkGlobalIndex(AppendRequest request) {
-    // If the globalIndex has changed and is not present in the local log, truncate the log.
-    // This ensures that if major compaction progressed on any server beyond the entries in this
-    // server's log that this server receives all entries after compaction.
-    // If the current global index is 0 then do not perform the index check. This ensures that
-    // servers don't truncate their logs at startup.
-    // Ensure that the globalIndex is updated here to prevent endlessly truncating the log
-    // if the AppendRequest is rejected.
-    long currentGlobalIndex = context.getGlobalIndex();
-    long nextGlobalIndex = request.globalIndex();
-    if (currentGlobalIndex > 0 && nextGlobalIndex > currentGlobalIndex && nextGlobalIndex > context.getLog().lastIndex()) {
-      context.setGlobalIndex(nextGlobalIndex);
-      context.reset();
-    }
-
-    // If an entry was provided, check the entry against the local log.
-    if (request.logIndex() != 0) {
       return checkPreviousEntry(request);
-    } else {
-      return appendEntries(request);
     }
   }
 
@@ -165,21 +154,14 @@ class PassiveState extends ReserveState {
    * Checks the previous entry in the append request for consistency.
    */
   protected AppendResponse checkPreviousEntry(AppendRequest request) {
-    if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
+    final long lastIndex = context.getLogWriter().lastIndex();
+    if (request.logIndex() != 0 && request.logIndex() > lastIndex) {
+      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), lastIndex);
       return AppendResponse.builder()
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
-        .build();
-    } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(lastIndex)
         .build();
     }
     return appendEntries(request);
@@ -192,26 +174,43 @@ class PassiveState extends ReserveState {
     // Get the last entry index or default to the request log index.
     long lastEntryIndex = request.logIndex();
     if (!request.entries().isEmpty()) {
-      lastEntryIndex = request.entries().get(request.entries().size() - 1).getIndex();
+      lastEntryIndex = request.entries().get(request.entries().size() - 1).index();
     }
 
     // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
     long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
 
-    // Append entries to the log starting at the last log index.
-    for (Entry entry : request.entries()) {
-      // If the entry index is greater than the last index and less than the commit index, append the entry.
-      // We perform no additional consistency checks here since passive members may only receive committed entries.
-      if (context.getLog().lastIndex() < entry.getIndex() && entry.getIndex() <= commitIndex) {
-        context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-        LOGGER.trace("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
+    // Get the server log reader/writer.
+    final LogReader reader = context.getLogReader();
+    final LogWriter writer = context.getLogWriter();
+
+    // If the request entries are non-empty, write them to the log.
+    if (!request.entries().isEmpty()) {
+      writer.lock();
+      try {
+        for (Indexed<? extends Entry> entry : request.entries()) {
+          // If the entry index is greater than the commitIndex, break the loop.
+          if (entry.index() > commitIndex) {
+            break;
+          }
+
+          // Read the existing entry from the log. If the entry does not exist in the log,
+          // append it. If the entry's term is different than the term of the entry in the log,
+          // overwrite the entry in the log. This will force the log to be truncated if necessary.
+          Indexed<? extends Entry<?>> existing = reader.get(entry.index());
+          if (existing == null || existing.term() != entry.term()) {
+            writer.append(entry);
+            LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+          }
+        }
+      } finally {
+        writer.unlock();
       }
     }
 
     // Update the context commit and global indices.
     long previousCommitIndex = context.getCommitIndex();
     context.setCommitIndex(commitIndex);
-    context.setGlobalIndex(request.globalIndex());
 
     if (context.getCommitIndex() > previousCommitIndex) {
       LOGGER.trace("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
@@ -224,7 +223,7 @@ class PassiveState extends ReserveState {
       .withStatus(Response.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(context.getLog().lastIndex())
+      .withLogIndex(lastEntryIndex)
       .build();
   }
 
@@ -233,8 +232,8 @@ class PassiveState extends ReserveState {
     context.checkThread();
     logRequest(request);
 
-    // If the query was submitted with RYW or monotonic read consistency, attempt to apply the query to the local state machine.
-    if (request.query().consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
+    // If the query was submitted with sequential read consistency, attempt to apply the query to the local state machine.
+    if (request.consistency() == Query.ConsistencyLevel.SEQUENTIAL) {
 
       // If this server has not yet applied entries up to the client's session ID, forward the
       // query to the leader. This ensures that a follower does not tell the client its session
@@ -246,18 +245,19 @@ class PassiveState extends ReserveState {
 
       // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
       // Forward the request to the leader.
-      if (context.getLog().lastIndex() < context.getCommitIndex()) {
+      if (context.getLogWriter().lastIndex() < context.getCommitIndex()) {
         LOGGER.trace("{} - State out of sync, forwarding query to leader", context.getCluster().member().address());
         return queryForward(request);
       }
 
-      QueryEntry entry = context.getLog().create(QueryEntry.class)
-        .setIndex(request.index())
-        .setTerm(context.getTerm())
-        .setTimestamp(System.currentTimeMillis())
-        .setSession(request.session())
-        .setSequence(request.sequence())
-        .setQuery(request.query());
+      final Indexed<QueryEntry> entry = new Indexed<>(
+        request.index(),
+        context.getTerm(),
+        new QueryEntry(
+          System.currentTimeMillis(),
+          request.session(),
+          request.sequence(),
+          request.bytes()), 0);
 
       return applyQuery(entry).thenApply(this::logResponse);
     } else {
@@ -288,20 +288,19 @@ class PassiveState extends ReserveState {
   /**
    * Performs a local query.
    */
-  protected CompletableFuture<QueryResponse> queryLocal(QueryEntry entry) {
+  protected CompletableFuture<QueryResponse> queryLocal(Indexed<QueryEntry> entry) {
     return applyQuery(entry);
   }
 
   /**
    * Applies a query to the state machine.
    */
-  protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry) {
+  protected CompletableFuture<QueryResponse> applyQuery(Indexed<QueryEntry> entry) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // indexes will be the last applied index.
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
     context.getStateMachine().<OperationResult>apply(entry).whenComplete((result, error) -> {
       completeOperation(result, QueryResponse.builder(), error, future);
-      entry.release();
     });
     return future;
   }

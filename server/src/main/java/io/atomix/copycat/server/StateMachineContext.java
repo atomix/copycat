@@ -41,6 +41,20 @@ public interface StateMachineContext {
   long id();
 
   /**
+   * Returns the state machine name.
+   *
+   * @return The state machine name.
+   */
+  String name();
+
+  /**
+   * Returns the state machine type.
+   *
+   * @return The state machine type.
+   */
+  String type();
+
+  /**
    * Returns the current state machine index.
    * <p>
    * The state index is indicative of the index of the current {@link Command}

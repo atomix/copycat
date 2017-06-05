@@ -23,13 +23,42 @@ import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.CloseSessionRequest;
+import io.atomix.copycat.protocol.CloseSessionResponse;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.KeepAliveRequest;
+import io.atomix.copycat.protocol.KeepAliveResponse;
+import io.atomix.copycat.protocol.OpenSessionRequest;
+import io.atomix.copycat.protocol.OpenSessionResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.ResetRequest;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.ConfigureRequest;
+import io.atomix.copycat.server.protocol.ConfigureResponse;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.LeaveRequest;
+import io.atomix.copycat.server.protocol.LeaveResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.ReconfigureResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.LogWriter;
+import io.atomix.copycat.server.storage.Reader;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
@@ -37,14 +66,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * Manages the volatile state and state transitions of a Copycat server.
@@ -66,6 +93,8 @@ public class ServerContext implements AutoCloseable {
   protected final Serializer serializer;
   private MetaStore meta;
   private Log log;
+  private LogWriter writer;
+  private LogReader reader;
   private SnapshotStore snapshot;
   private ServerStateMachineManager stateMachine;
   protected final ScheduledExecutorService threadPool;
@@ -390,7 +419,7 @@ public class ServerContext implements AutoCloseable {
     long previousCommitIndex = this.commitIndex;
     if (commitIndex > previousCommitIndex) {
       this.commitIndex = commitIndex;
-      log.commit(Math.min(commitIndex, log.lastIndex()));
+      writer.commit(Math.min(commitIndex, writer.lastIndex()));
       long configurationIndex = cluster.getConfiguration().index();
       if (configurationIndex > previousCommitIndex && configurationIndex <= commitIndex) {
         cluster.commit();
@@ -406,28 +435,6 @@ public class ServerContext implements AutoCloseable {
    */
   long getCommitIndex() {
     return commitIndex;
-  }
-
-  /**
-   * Sets the global index.
-   *
-   * @param globalIndex The global index.
-   * @return The Raft context.
-   */
-  ServerContext setGlobalIndex(long globalIndex) {
-    Assert.argNot(globalIndex < 0, "global index must be positive");
-    this.globalIndex = Math.max(this.globalIndex, globalIndex);
-    log.compactor().majorIndex(this.globalIndex - 1);
-    return this;
-  }
-
-  /**
-   * Returns the global index.
-   *
-   * @return The global index.
-   */
-  long getGlobalIndex() {
-    return globalIndex;
   }
 
   /**
@@ -485,6 +492,24 @@ public class ServerContext implements AutoCloseable {
   }
 
   /**
+   * Returns the server log writer.
+   *
+   * @return The log writer.
+   */
+  LogWriter getLogWriter() {
+    return writer;
+  }
+
+  /**
+   * Returns the server log reader.
+   *
+   * @return The log reader.
+   */
+  LogReader getLogReader() {
+    return reader;
+  }
+
+  /**
    * Resets the state log.
    *
    * @return The server context.
@@ -504,6 +529,8 @@ public class ServerContext implements AutoCloseable {
 
     // Open the log.
     log = storage.openLog(name);
+    writer = log.writer();
+    reader = log.createReader(1, Reader.Mode.ALL);
 
     // Open the snapshot store.
     snapshot = storage.openSnapshotStore(name);
@@ -537,11 +564,9 @@ public class ServerContext implements AutoCloseable {
 
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.registerHandler(RegisterRequest.NAME, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
     connection.registerHandler(ConnectRequest.NAME, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
-    connection.registerHandler(KeepAliveRequest.NAME, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
-    connection.registerHandler(UnregisterRequest.NAME, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
     connection.registerHandler(OpenSessionRequest.NAME, (Function<OpenSessionRequest, CompletableFuture<OpenSessionResponse>>) request -> state.openSession(request));
+    connection.registerHandler(KeepAliveRequest.NAME, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
     connection.registerHandler(CloseSessionRequest.NAME, (Function<CloseSessionRequest, CompletableFuture<CloseSessionResponse>>) request -> state.closeSession(request));
     connection.registerHandler(ResetRequest.NAME, (Consumer<ResetRequest>) request -> state.reset(request));
     connection.registerHandler(CommandRequest.NAME, (Function<CommandRequest, CompletableFuture<CommandResponse>>) request -> state.command(request));
@@ -559,11 +584,9 @@ public class ServerContext implements AutoCloseable {
     // Handlers for all request types are registered since requests can be proxied between servers.
     // Note we do not use method references here because the "state" variable changes over time.
     // We have to use lambdas to ensure the request handler points to the current state.
-    connection.registerHandler(RegisterRequest.NAME, (Function<RegisterRequest, CompletableFuture<RegisterResponse>>) request -> state.register(request));
     connection.registerHandler(ConnectRequest.NAME, (Function<ConnectRequest, CompletableFuture<ConnectResponse>>) request -> state.connect(request, connection));
-    connection.registerHandler(KeepAliveRequest.NAME, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
-    connection.registerHandler(UnregisterRequest.NAME, (Function<UnregisterRequest, CompletableFuture<UnregisterResponse>>) request -> state.unregister(request));
     connection.registerHandler(OpenSessionRequest.NAME, (Function<OpenSessionRequest, CompletableFuture<OpenSessionResponse>>) request -> state.openSession(request));
+    connection.registerHandler(KeepAliveRequest.NAME, (Function<KeepAliveRequest, CompletableFuture<KeepAliveResponse>>) request -> state.keepAlive(request));
     connection.registerHandler(CloseSessionRequest.NAME, (Function<CloseSessionRequest, CompletableFuture<CloseSessionResponse>>) request -> state.closeSession(request));
     connection.registerHandler(ResetRequest.NAME, (Consumer<ResetRequest>) request -> state.reset(request));
     connection.registerHandler(ConfigureRequest.NAME, (Function<ConfigureRequest, CompletableFuture<ConfigureResponse>>) request -> state.configure(request));

@@ -17,11 +17,24 @@ package io.atomix.copycat.server;
 
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 /**
  * Test state machine.
  */
 public class TestStateMachine extends StateMachine {
+
+  @Override
+  public void snapshot(SnapshotWriter writer) {
+
+  }
+
+  @Override
+  public void install(SnapshotReader reader) {
+
+  }
+
   /**
    * Test command.
    */

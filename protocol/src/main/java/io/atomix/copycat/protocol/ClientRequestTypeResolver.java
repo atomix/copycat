@@ -34,11 +34,9 @@ public final class ClientRequestTypeResolver implements SerializableTypeResolver
     put(KeepAliveRequest.class, -5);
     put(PublishRequest.class, -6);
     put(QueryRequest.class, -7);
-    put(RegisterRequest.class, -8);
-    put(UnregisterRequest.class, -9);
-    put(OpenSessionRequest.class, -10);
-    put(CloseSessionRequest.class, -11);
-    put(MetadataRequest.class, -12);
+    put(OpenSessionRequest.class, -8);
+    put(CloseSessionRequest.class, -9);
+    put(MetadataRequest.class, -10);
   }};
 
   @Override

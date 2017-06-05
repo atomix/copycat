@@ -15,36 +15,46 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.util.reference.ReferenceManager;
-import io.atomix.copycat.server.storage.compaction.Compaction;
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
 
 /**
  * Indicates a leader change has occurred.
  * <p>
  * The {@code InitializeEntry} is logged by a leader at the beginning of its term to indicate that
- * a leadership change has occurred. Importantly, initialize entries are logged with a {@link #getTimestamp() timestamp}
+ * a leadership change has occurred. Importantly, initialize entries are logged with a {@link #timestamp() timestamp}
  * which can be used by server state machines to reset session timeouts following leader changes. Initialize entries
  * are always the first entry to be committed at the start of a leader's term.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class InitializeEntry extends TimestampedEntry<InitializeEntry> {
-
-  public InitializeEntry() {
-  }
-
-  public InitializeEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  public InitializeEntry(long timestamp) {
+    super(timestamp);
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
-    return Compaction.Mode.FULL;
+  public Type<InitializeEntry> type() {
+    return Type.INITIALIZE;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, timestamp=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getTimestamp());
+    return String.format("%s[timestamp=%s]", getClass().getSimpleName(), timestamp());
   }
 
+  /**
+   * Initialize entry serializer.
+   */
+  public static class Serializer implements TimestampedEntry.Serializer<InitializeEntry> {
+    @Override
+    public void writeObject(BufferOutput output, InitializeEntry entry) {
+      output.writeLong(entry.timestamp);
+    }
+
+    @Override
+    public InitializeEntry readObject(BufferInput input, Class<InitializeEntry> type) {
+      return new InitializeEntry(input.readLong());
+    }
+  }
 }

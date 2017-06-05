@@ -17,15 +17,9 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceManager;
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 
 /**
- * Stores a state machine {@link Command}.
+ * Stores a state machine command.
  * <p>
  * The {@code CommandEntry} is used to store an individual state machine command from an individual
  * client along with information relevant to sequencing the command in the server state machine.
@@ -33,61 +27,37 @@ import io.atomix.copycat.server.storage.compaction.Compaction;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandEntry extends OperationEntry<CommandEntry> {
-  private Command command;
 
-  public CommandEntry() {
-  }
-
-  public CommandEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  public CommandEntry(long timestamp, long session, long sequence, byte[] bytes) {
+    super(timestamp, session, sequence, bytes);
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
-    return Compaction.Mode.valueOf(command.compaction().name());
-  }
-
-  @Override
-  public Operation getOperation() {
-    return command;
-  }
-
-  /**
-   * Returns the command.
-   *
-   * @return The command.
-   */
-  public Command getCommand() {
-    return command;
-  }
-
-  /**
-   * Sets the command.
-   *
-   * @param command The command.
-   * @return The command entry.
-   * @throws NullPointerException if {@code command} is null
-   */
-  public CommandEntry setCommand(Command command) {
-    this.command = Assert.notNull(command, "command");
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    serializer.writeObject(command, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    command = serializer.readObject(buffer);
+  public Type<CommandEntry> type() {
+    return Type.COMMAND;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, timestamp=%d, command=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), command);
+    return String.format("%s[session=%d, sequence=%d, timestamp=%d, command=byte[%d]]", getClass().getSimpleName(), session(), sequence(), timestamp(), bytes.length);
   }
 
+  /**
+   * Command entry serializer.
+   */
+  public static class Serializer implements OperationEntry.Serializer<CommandEntry> {
+    @Override
+    public void writeObject(BufferOutput output, CommandEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeLong(entry.session);
+      output.writeLong(entry.sequence);
+      output.writeInt(entry.bytes.length);
+      output.write(entry.bytes);
+    }
+
+    @Override
+    public CommandEntry readObject(BufferInput input, Class<CommandEntry> type) {
+      return new CommandEntry(input.readLong(), input.readLong(), input.readLong(), input.readBytes(input.readInt()));
+    }
+  }
 }

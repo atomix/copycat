@@ -35,7 +35,7 @@ final class FollowerAppender extends AbstractAppender {
   public void appendEntries() {
     if (open) {
       for (MemberState member : context.getClusterState().getAssignedPassiveMemberStates()) {
-        appendEntries(member);
+        member.context.execute(() -> appendEntries(member));
       }
     }
   }
@@ -48,8 +48,9 @@ final class FollowerAppender extends AbstractAppender {
   @Override
   protected void appendEntries(MemberState member) {
     // Prevent recursive, asynchronous appends from being executed if the appender has been closed.
-    if (!open)
+    if (!open) {
       return;
+    }
 
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
@@ -61,7 +62,7 @@ final class FollowerAppender extends AbstractAppender {
     }
     // If no AppendRequest is already being sent, send an AppendRequest.
     else if (member.canAppend() && hasMoreEntries(member)) {
-      sendAppendRequest(member, buildAppendRequest(member, Math.min(context.getCommitIndex(), context.getLog().lastIndex())));
+      sendAppendRequest(member, buildAppendRequest(member, Math.min(context.getCommitIndex(), context.getLogWriter().lastIndex())));
     }
   }
 

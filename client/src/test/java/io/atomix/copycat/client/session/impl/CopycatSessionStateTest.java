@@ -42,7 +42,7 @@ public class CopycatSessionStateTest {
    */
   public void testSessionStateDefaults() {
     String sessionName = UUID.randomUUID().toString();
-    CopycatSessionState state = new CopycatSessionState(1, sessionName, "test");
+    CopycatSessionState state = new CopycatSessionState(1, sessionName, "test", 1000);
     assertEquals(state.getSessionId(), 0);
     assertEquals(state.getSessionName(), sessionName);
     assertEquals(state.getSessionType(), "test");
@@ -56,7 +56,7 @@ public class CopycatSessionStateTest {
    * Tests updating client session state.
    */
   public void testSessionState() {
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     assertEquals(state.getSessionId(), 1);
     assertEquals(state.getResponseIndex(), 1);
     assertEquals(state.getEventIndex(), 1);

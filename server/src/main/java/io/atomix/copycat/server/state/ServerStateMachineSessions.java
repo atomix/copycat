@@ -25,8 +25,13 @@ import java.util.*;
  * State machine sessions.
  */
 class ServerStateMachineSessions implements Sessions {
+  private final ServerSessionManager sessionManager;
   final Map<Long, ServerSessionContext> sessions = new HashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
+
+  public ServerStateMachineSessions(ServerSessionManager sessionManager) {
+    this.sessionManager = sessionManager;
+  }
 
   /**
    * Adds a session to the sessions list.
@@ -35,6 +40,7 @@ class ServerStateMachineSessions implements Sessions {
    */
   void add(ServerSessionContext session) {
     sessions.put(session.id(), session);
+    sessionManager.registerSession(session);
   }
 
   /**
@@ -44,6 +50,7 @@ class ServerStateMachineSessions implements Sessions {
    */
   void remove(ServerSessionContext session) {
     sessions.remove(session.id());
+    sessionManager.unregisterSession(session.id());
   }
 
   @Override

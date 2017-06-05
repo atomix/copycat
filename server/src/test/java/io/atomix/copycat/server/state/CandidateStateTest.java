@@ -19,8 +19,8 @@ import io.atomix.catalyst.transport.Server;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.protocol.AppendRequest;
-import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.VoteResponse;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -29,7 +29,9 @@ import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Candidate state tests.
@@ -54,7 +56,6 @@ public class CandidateStateTest extends AbstractStateTest<CandidateState> {
         .withLeader(leader)
         .withEntries(Collections.EMPTY_LIST)
         .withCommitIndex(0)
-        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();

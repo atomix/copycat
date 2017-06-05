@@ -16,6 +16,7 @@
 
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
@@ -25,8 +26,8 @@ import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.error.ApplicationException;
+import io.atomix.copycat.error.UnknownSessionException;
 import io.atomix.copycat.server.Commit;
-import io.atomix.copycat.server.Snapshottable;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.session.SessionListener;
@@ -38,9 +39,14 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -51,13 +57,11 @@ import java.util.function.Function;
  */
 class ServerStateMachineExecutor implements StateMachineExecutor {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerStateMachineExecutor.class);
-
-  // TODO: Make this configurable
-  private static final int SNAPSHOT_COMMAND_COUNT = 10000;
+  private static final long SNAPSHOT_INTERVAL_MILLIS = 1000 * 60 * 10;
 
   private final StateMachine stateMachine;
   private final ServerContext server;
-  private final ServerStateMachineSessions sessions = new ServerStateMachineSessions();
+  private final ServerStateMachineSessions sessions;
   private final ServerStateMachineContext context;
   private final ThreadContext stateMachineExecutor;
   private final ThreadContext snapshotExecutor;
@@ -65,16 +69,18 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private final List<ServerScheduledTask> scheduledTasks = new ArrayList<>();
   private final List<ServerScheduledTask> complete = new ArrayList<>();
   private final Map<Class, Function> operations = new HashMap<>();
-  private final AtomicInteger commandCount = new AtomicInteger();
   private volatile Snapshot pendingSnapshot;
+  private long snapshotTime;
   private long snapshotIndex;
+  private long timestamp;
 
-  ServerStateMachineExecutor(long id, StateMachine stateMachine, ServerContext server, ThreadContext stateMachineExecutor, ThreadContext snapshotExecutor) {
+  ServerStateMachineExecutor(long id, String name, String type, StateMachine stateMachine, ServerContext server, ServerSessionManager sessionManager, ThreadContext stateMachineExecutor, ThreadContext snapshotExecutor) {
     this.stateMachine = stateMachine;
     this.server = server;
+    this.sessions = new ServerStateMachineSessions(sessionManager);
     this.stateMachineExecutor = stateMachineExecutor;
     this.snapshotExecutor = snapshotExecutor;
-    this.context = new ServerStateMachineContext(id, sessions);
+    this.context = new ServerStateMachineContext(id, name, type, sessions);
     init();
   }
 
@@ -106,54 +112,94 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   /**
    * Executes scheduled callbacks based on the provided time.
    */
-  void tick(long index, long timestamp) {
-    stateMachineExecutor.execute(() -> {
-      // Only create an iterator if there are actually tasks scheduled.
-      if (!scheduledTasks.isEmpty()) {
+  private void tick(long index, long timestamp) {
+    this.timestamp = Math.max(this.timestamp, timestamp);
 
-        // Iterate through scheduled tasks until we reach a task that has not met its scheduled time.
-        // The tasks list is sorted by time on insertion.
-        Iterator<ServerScheduledTask> iterator = scheduledTasks.iterator();
-        while (iterator.hasNext()) {
-          ServerScheduledTask task = iterator.next();
-          if (task.complete(timestamp)) {
-            context.update(index, Instant.ofEpochMilli(task.time), ServerStateMachineContext.Type.COMMAND);
-            task.execute();
-            complete.add(task);
-            iterator.remove();
-          } else {
-            break;
-          }
-        }
+    // Only create an iterator if there are actually tasks scheduled.
+    if (!scheduledTasks.isEmpty()) {
 
-        // Iterate through tasks that were completed and reschedule them.
-        for (ServerScheduledTask task : complete) {
-          task.reschedule(timestamp);
+      // Iterate through scheduled tasks until we reach a task that has not met its scheduled time.
+      // The tasks list is sorted by time on insertion.
+      Iterator<ServerScheduledTask> iterator = scheduledTasks.iterator();
+      while (iterator.hasNext()) {
+        ServerScheduledTask task = iterator.next();
+        if (task.complete(this.timestamp)) {
+          context.update(index, Instant.ofEpochMilli(task.time), ServerStateMachineContext.Type.COMMAND);
+          task.execute();
+          complete.add(task);
+          iterator.remove();
+        } else {
+          break;
         }
-        complete.clear();
       }
 
-      // If the pending snapshot is non-null, attempt to complete the snapshot.
-      if (pendingSnapshot != null) {
-        completeSnapshot(index);
+      // Iterate through tasks that were completed and reschedule them.
+      for (ServerScheduledTask task : complete) {
+        task.reschedule(this.timestamp);
       }
+      complete.clear();
+    }
 
-      // If a snapshot exists prior to the given index and hasn't yet been installed, install the snapshot.
-      maybeInstallSnapshot(index);
-    });
+    // If the pending snapshot is non-null, attempt to complete the snapshot.
+    if (pendingSnapshot != null) {
+      maybeCompleteSnapshot(index);
+    }
+
+    // If a snapshot exists prior to the given index and hasn't yet been installed, install the snapshot.
+    maybeInstallSnapshot(index);
+
+    // Expire sessions that have timed out.
+    expireSessions(index, this.timestamp);
+  }
+
+  /**
+   * Expires sessions that have timed out.
+   */
+  private void expireSessions(long index, long timestamp) {
+    // Iterate through registered sessions.
+    for (ServerSessionContext session : sessions.sessions.values()) {
+
+      // If the current timestamp minus the session timestamp is greater than the session timeout, expire the session.
+      if (timestamp - session.getTimestamp() > session.timeout()) {
+
+        // Remove the session from the sessions list.
+        sessions.remove(session);
+
+        // Update the state machine context with the keep-alive entry's index. This ensures that events published
+        // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
+        context.update(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
+
+        // Expire the session.
+        session.expire();
+
+        // Iterate through and invoke session listeners.
+        for (SessionListener listener : sessions.listeners) {
+          listener.expire(session);
+          listener.close(session);
+        }
+      }
+    }
   }
 
   /**
    * Takes a snapshot of the state machine.
    */
-  private synchronized void takeSnapshot(long index, long timestamp) {
-    if (pendingSnapshot == null && stateMachine instanceof Snapshottable) {
+  private synchronized void maybeTakeSnapshot(long index, long timestamp) {
+    if (pendingSnapshot == null && snapshotTime == 0 || System.currentTimeMillis() - snapshotTime > SNAPSHOT_INTERVAL_MILLIS) {
       LOGGER.info("{} - Taking snapshot {}", server.getCluster().member().address(), index);
       context.update(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.SNAPSHOT);
       pendingSnapshot = server.getSnapshotStore().createTemporarySnapshot(context.id(), index);
       try (SnapshotWriter writer = pendingSnapshot.writer()) {
-        ((Snapshottable) stateMachine).snapshot(writer);
+        writer.writeInt(sessions.sessions.size());
+        for (ServerSessionContext session : sessions.sessions.values()) {
+          // TODO: Need to write more session state than this?
+          writer.writeLong(session.id());
+          writer.writeLong(session.timeout());
+          writer.writeLong(session.getTimestamp());
+        }
+        stateMachine.snapshot(writer);
       }
+      snapshotTime = System.currentTimeMillis();
 
       snapshotExecutor.execute(() -> {
         synchronized (this) {
@@ -168,7 +214,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   /**
    * Completes a state machine snapshot.
    */
-  private synchronized void completeSnapshot(long index) {
+  private synchronized void maybeCompleteSnapshot(long index) {
     if (pendingSnapshot != null) {
       // Compute the lowest completed index for all sessions that belong to this state machine.
       long lastCompleted = index;
@@ -193,11 +239,19 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private void maybeInstallSnapshot(long index) {
     Snapshot snapshot = server.getSnapshotStore().getSnapshotById(context.id());
     if (snapshot != null && snapshot.index() > snapshotIndex && snapshot.index() <= index) {
-      if (stateMachine instanceof Snapshottable) {
-        LOGGER.info("{} - Installing snapshot {}", server.getCluster().member().address(), snapshot.index());
-        try (SnapshotReader reader = snapshot.reader()) {
-          ((Snapshottable) stateMachine).install(reader);
+      LOGGER.info("{} - Installing snapshot {}", server.getCluster().member().address(), snapshot.index());
+      try (SnapshotReader reader = snapshot.reader()) {
+        int sessionCount = reader.readInt();
+        sessions.sessions.clear();
+        for (int i = 0; i < sessionCount; i++) {
+          long sessionId = reader.readLong();
+          long sessionTimeout = reader.readLong();
+          long sessionTimestamp = reader.readLong();
+          ServerSessionContext session = new ServerSessionContext(sessionId, context.name(), context.type(), sessionTimeout, this);
+          session.setTimestamp(sessionTimestamp);
+          sessions.sessions.put(sessionId, session);
         }
+        stateMachine.install(reader);
       }
       snapshotIndex = snapshot.index();
     }
@@ -210,9 +264,15 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    * @param timestamp The timestamp of the registration.
    * @param session The session to register.
    */
-  CompletableFuture<Void> register(long index, long timestamp, ServerSessionContext session) {
-    CompletableFuture<Void> future = new CompletableFuture<>();
+  CompletableFuture<Long> openSession(long index, long timestamp, ServerSessionContext session) {
+    CompletableFuture<Long> future = new CompletableFuture<>();
     stateMachineExecutor.execute(() -> {
+      // Update the session's timestamp to prevent it from being expired.
+      session.setTimestamp(timestamp);
+
+      // Trigger time-based events in the state machine.
+      tick(index, timestamp);
+
       // Update the state machine context with the keep-alive entry's index. This ensures that events published
       // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
       context.update(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
@@ -226,7 +286,7 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       }
 
       // Complete the future.
-      future.complete(null);
+      future.complete(session.id());
     });
     return future;
   }
@@ -243,6 +303,12 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   CompletableFuture<Void> keepAlive(long index, long timestamp, ServerSessionContext session, long commandSequence, long eventIndex) {
     CompletableFuture<Void> future = new CompletableFuture<>();
     stateMachineExecutor.execute(() -> {
+      // Update the session's timestamp to prevent it from being expired.
+      session.setTimestamp(timestamp);
+
+      // Trigger time-based events in the state machine.
+      tick(index, timestamp);
+
       // Update the state machine context with the keep-alive entry's index. This ensures that events published
       // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
       context.update(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
@@ -278,60 +344,36 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   }
 
   /**
-   * Expires the given session.
-   *
-   * @param index The index of the expiration.
-   * @param timestamp The timestamp of the expiration.
-   * @param session The session to expire.
-   */
-  CompletableFuture<Void> expire(long index, long timestamp, ServerSessionContext session) {
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    stateMachineExecutor.execute(() -> {
-
-      // Remove the session from the sessions list.
-      sessions.remove(session);
-
-      // Update the state machine context with the keep-alive entry's index. This ensures that events published
-      // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
-      context.update(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
-
-      // Iterate through and invoke session listeners.
-      for (SessionListener listener : sessions.listeners) {
-        listener.expire(session);
-        listener.close(session);
-      }
-
-      // Commit the index, causing event messages to be sent.
-      commit();
-
-      // Complete the future.
-      future.complete(null);
-    });
-    return future;
-  }
-
-  /**
    * Unregister the given session.
    *
    * @param index The index of the unregister.
    * @param timestamp The timestamp of the unregister.
    * @param session The session to unregister.
    */
-  CompletableFuture<Void> unregister(long index, long timestamp, ServerSessionContext session) {
+  CompletableFuture<Void> closeSession(long index, long timestamp, ServerSessionContext session) {
     CompletableFuture<Void> future = new CompletableFuture<>();
     stateMachineExecutor.execute(() -> {
+      // Update the session's timestamp to prevent it from being expired.
+      session.setTimestamp(timestamp);
+
+      // Trigger time-based events in the state machine.
+      tick(index, timestamp);
+
       // Update the state machine context with the keep-alive entry's index. This ensures that events published
       // as a result of asynchronous callbacks will be executed at the proper index with SEQUENTIAL consistency.
       context.update(index, Instant.ofEpochMilli(timestamp), ServerStateMachineContext.Type.COMMAND);
+
+      // Remove the session from the sessions list.
+      sessions.remove(session);
+
+      // Close the session.
+      session.close();
 
       // Iterate through and invoke session listeners.
       for (SessionListener listener : sessions.listeners) {
         listener.unregister(session);
         listener.close(session);
       }
-
-      // Remove the session from the sessions list.
-      sessions.remove(session);
 
       // Commit the index, causing event messages to be sent.
       commit();
@@ -359,19 +401,31 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    * @param timestamp The timestamp of the command.
    * @param sequence The command sequence number.
    * @param session The session that submitted the command.
-   * @param command The command to execute.
+   * @param bytes The command to execute.
    * @return A future to be completed with the command result.
    */
-  CompletableFuture<OperationResult> executeCommand(long index, long timestamp, long sequence, ServerSessionContext session, Command command) {
+  CompletableFuture<OperationResult> executeCommand(long index, long sequence, long timestamp, ServerSessionContext session, byte[] bytes) {
     CompletableFuture<OperationResult> future = new CompletableFuture<>();
-    stateMachineExecutor.execute(() -> executeCommand(index, timestamp, sequence, session, command, future));
+    stateMachineExecutor.execute(() -> executeCommand(index, sequence, timestamp, session, bytes, future));
     return future;
   }
 
   /**
    * Executes a command on the state machine thread.
    */
-  private void executeCommand(long index, long timestamp, long sequence, ServerSessionContext session, Command command, CompletableFuture<OperationResult> future) {
+  private void executeCommand(long index, long sequence, long timestamp, ServerSessionContext session, byte[] bytes, CompletableFuture<OperationResult> future) {
+    // Update the session's timestamp to prevent it from being expired.
+    session.setTimestamp(timestamp);
+
+    // Trigger time-based events in the state machine.
+    tick(index, timestamp);
+
+    // If the session is not open, fail the request.
+    if (!session.state().active()) {
+      future.completeExceptionally(new UnknownSessionException("Unknown session: " + session.id()));
+      return;
+    }
+
     // If the command's sequence number is less than the next session sequence number then that indicates that
     // we've received a command that was previously applied to the state machine. Ensure linearizability by
     // returning the cached response instead of applying it to the user defined state machine.
@@ -381,19 +435,16 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
     // If we've made it this far, the command must have been applied in the proper order as sequenced by the
     // session. This should be the case for most commands applied to the state machine.
     else {
-      // Take a snapshot if the command count has surpassed the snapshot command count.
-      if (commandCount.incrementAndGet() >= SNAPSHOT_COMMAND_COUNT) {
-        takeSnapshot(index, timestamp);
-        commandCount.set(0);
-      }
-
       // Execute the command in the state machine thread. Once complete, the CompletableFuture callback will be completed
       // in the state machine thread. Register the result in that thread and then complete the future in the caller's thread.
-      applyCommand(index, sequence, timestamp, command, session, future);
+      applyCommand(index, sequence, timestamp, bytes, session, future);
 
       // Update the session timestamp and command sequence number. This is done in the caller's thread since all
       // timestamp/index/sequence checks are done in this thread prior to executing operations on the state machine thread.
       session.setCommandSequence(sequence);
+
+      // Take a snapshot if the command count has surpassed the snapshot command count.
+      maybeTakeSnapshot(index, timestamp);
     }
   }
 
@@ -411,8 +462,15 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   /**
    * Applies the given commit to the state machine.
    */
-  private void applyCommand(long index, long sequence, long timestamp, Command command, ServerSessionContext session, CompletableFuture<OperationResult> future) {
-    ServerCommit commit = new ServerCommit(index, command, session, timestamp, server.getLog()::release);
+  private void applyCommand(long index, long sequence, long timestamp, byte[] bytes, ServerSessionContext session, CompletableFuture<OperationResult> future) {
+    // No-op commands will be empty.
+    if (bytes.length == 0) {
+      future.complete(new OperationResult(index, session.getEventIndex(), null));
+      return;
+    }
+
+    Command command = stateMachineExecutor.serializer().readObject(HeapBuffer.wrap(bytes));
+    ServerCommit commit = new ServerCommit(index, command, session, timestamp);
     context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.COMMAND);
 
     long eventIndex = session.getEventIndex();
@@ -446,53 +504,67 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
    * @param sequence The query sequence number.
    * @param timestamp The timestamp of the query.
    * @param session The session that submitted the query.
-   * @param query The query to execute.
+   * @param bytes The query to execute.
    * @return A future to be completed with the query result.
    */
-  CompletableFuture<OperationResult> executeQuery(long index, long sequence, long timestamp, ServerSessionContext session, Query query) {
+  CompletableFuture<OperationResult> executeQuery(long index, long sequence, long timestamp, ServerSessionContext session, byte[] bytes) {
     CompletableFuture<OperationResult> future = new CompletableFuture<>();
-    stateMachineExecutor.execute(() -> executeQuery(index, sequence, timestamp, session, query, future));
+    stateMachineExecutor.execute(() -> executeQuery(index, sequence, timestamp, session, bytes, future));
     return future;
   }
 
   /**
    * Executes a query on the state machine thread.
    */
-  private void executeQuery(long index, long sequence, long timestamp, ServerSessionContext session, Query query, CompletableFuture<OperationResult> future) {
-    sequenceQuery(index, sequence, timestamp, session, query, future);
+  private void executeQuery(long index, long sequence, long timestamp, ServerSessionContext session, byte[] bytes, CompletableFuture<OperationResult> future) {
+    // If the session is not open, fail the request.
+    if (!session.state().active()) {
+      future.completeExceptionally(new UnknownSessionException("Unknown session: " + session.id()));
+      return;
+    }
+
+    // Otherwise, sequence the query.
+    sequenceQuery(index, sequence, timestamp, session, bytes, future);
   }
 
   /**
    * Sequences the given query.
    */
-  private void sequenceQuery(long index, long sequence, long timestamp, ServerSessionContext session, Query query, CompletableFuture<OperationResult> future) {
+  private void sequenceQuery(long index, long sequence, long timestamp, ServerSessionContext session, byte[] bytes, CompletableFuture<OperationResult> future) {
     // If the query's sequence number is greater than the session's current sequence number, queue the request for
     // handling once the state machine is caught up.
     if (sequence > session.getCommandSequence()) {
-      session.registerSequenceQuery(sequence, () -> indexQuery(index, timestamp, session, query, future));
+      session.registerSequenceQuery(sequence, () -> indexQuery(index, timestamp, session, bytes, future));
     } else {
-      indexQuery(index, timestamp, session, query, future);
+      indexQuery(index, timestamp, session, bytes, future);
     }
   }
 
   /**
    * Ensures the given query is applied after the appropriate index.
    */
-  private void indexQuery(long index, long timestamp, ServerSessionContext session, Query query, CompletableFuture<OperationResult> future) {
+  private void indexQuery(long index, long timestamp, ServerSessionContext session, byte[] bytes, CompletableFuture<OperationResult> future) {
     // If the query index is greater than the session's last applied index, queue the request for handling once the
     // state machine is caught up.
     if (index > session.getLastApplied()) {
-      session.registerIndexQuery(index, () -> applyQuery(index, timestamp, session, query, future));
+      session.registerIndexQuery(index, () -> applyQuery(index, timestamp, session, bytes, future));
     } else {
-      applyQuery(index, timestamp, session, query, future);
+      applyQuery(index, timestamp, session, bytes, future);
     }
   }
 
   /**
    * Applies a query to the state machine.
    */
-  private void applyQuery(long index, long timestamp, ServerSessionContext session, Query query, CompletableFuture<OperationResult> future) {
-    ServerCommit commit = new ServerCommit(session.getLastApplied(), query, session, timestamp, i -> {});
+  private void applyQuery(long index, long timestamp, ServerSessionContext session, byte[] bytes, CompletableFuture<OperationResult> future) {
+    // If the session is not open, fail the request.
+    if (!session.state().active()) {
+      future.completeExceptionally(new UnknownSessionException("Unknown session: " + session.id()));
+      return;
+    }
+
+    Query query = stateMachineExecutor.serializer().readObject(HeapBuffer.wrap(bytes));
+    ServerCommit commit = new ServerCommit(session.getLastApplied(), query, session, timestamp);
     context.update(commit.index(), commit.time(), ServerStateMachineContext.Type.QUERY);
 
     long eventIndex = session.getEventIndex();
@@ -513,7 +585,6 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
   private <T extends Operation<U>, U> U applyCommit(Commit commit) {
     // If the commit operation is a no-op command, complete the operation.
     if (commit.operation() instanceof NoOpCommand) {
-      commit.close();
       return null;
     }
 
@@ -569,20 +640,20 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
 
   @Override
   public void execute(Runnable callback) {
-    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
+    Assert.state(context.context() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
     tasks.add(callback);
   }
 
   @Override
   public Scheduled schedule(Duration delay, Runnable callback) {
-    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
+    Assert.state(context.context() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
     LOGGER.trace("Scheduled callback {} with delay {}", callback, delay);
     return new ServerScheduledTask(callback, delay.toMillis()).schedule();
   }
 
   @Override
   public Scheduled schedule(Duration initialDelay, Duration interval, Runnable callback) {
-    Assert.state(context.type() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
+    Assert.state(context.context() == ServerStateMachineContext.Type.COMMAND, "callbacks can only be scheduled during command execution");
     LOGGER.trace("Scheduled repeating callback {} with initial delay {} and interval {}", callback, initialDelay, interval);
     return new ServerScheduledTask(callback, initialDelay.toMillis(), interval.toMillis()).schedule();
   }

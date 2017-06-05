@@ -28,7 +28,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class OpenSessionResponse extends ClientResponse {
+public class OpenSessionResponse extends AbstractResponse {
 
   /**
    * Returns a new register client response builder.
@@ -51,6 +51,7 @@ public class OpenSessionResponse extends ClientResponse {
   }
 
   private long session;
+  private long timeout;
 
   /**
    * Returns the registered session ID.
@@ -61,12 +62,22 @@ public class OpenSessionResponse extends ClientResponse {
     return session;
   }
 
+  /**
+   * Returns the session timeout.
+   *
+   * @return The session timeout.
+   */
+  public long timeout() {
+    return timeout;
+  }
+
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
       session = buffer.readLong();
+      timeout = buffer.readLong();
     } else {
       error = CopycatError.forId(buffer.readByte());
       session = 0;
@@ -78,6 +89,7 @@ public class OpenSessionResponse extends ClientResponse {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
       buffer.writeLong(session);
+      buffer.writeLong(timeout);
     } else {
       buffer.writeByte(error.id());
     }
@@ -85,7 +97,7 @@ public class OpenSessionResponse extends ClientResponse {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, session);
+    return Objects.hash(getClass(), status, session, timeout);
   }
 
   @Override
@@ -93,20 +105,21 @@ public class OpenSessionResponse extends ClientResponse {
     if (object instanceof OpenSessionResponse) {
       OpenSessionResponse response = (OpenSessionResponse) object;
       return response.status == status
-        && response.session == session;
+        && response.session == session
+        && response.timeout == timeout;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, error=%s, session=%d]", getClass().getSimpleName(), status, error, session);
+    return String.format("%s[status=%s, error=%s, session=%d, timeout=%d]", getClass().getSimpleName(), status, error, session, timeout);
   }
 
   /**
    * Register response builder.
    */
-  public static class Builder extends ClientResponse.Builder<Builder, OpenSessionResponse> {
+  public static class Builder extends AbstractResponse.Builder<Builder, OpenSessionResponse> {
     protected Builder(OpenSessionResponse response) {
       super(response);
     }
@@ -120,6 +133,17 @@ public class OpenSessionResponse extends ClientResponse {
      */
     public Builder withSession(long session) {
       response.session = Assert.argNot(session, session < 1, "session must be positive");
+      return this;
+    }
+
+    /**
+     * Sets the session timeout.
+     *
+     * @param timeout The session timeout.
+     * @return The response builder.
+     */
+    public Builder withTimeout(long timeout) {
+      response.timeout = timeout;
       return this;
     }
   }

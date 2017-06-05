@@ -54,7 +54,7 @@ public class CopycatSessionSubmitterTest {
         .withResult("Hello world!")
         .build()));
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 
@@ -77,7 +77,7 @@ public class CopycatSessionSubmitterTest {
       .thenReturn(future1)
       .thenReturn(future2);
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 
@@ -127,7 +127,7 @@ public class CopycatSessionSubmitterTest {
         .withResult("Hello world!")
         .build()));
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 
@@ -148,7 +148,7 @@ public class CopycatSessionSubmitterTest {
       .thenReturn(future1)
       .thenReturn(future2);
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 
@@ -194,7 +194,7 @@ public class CopycatSessionSubmitterTest {
       .thenReturn(future1)
       .thenReturn(future2);
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 
@@ -232,7 +232,7 @@ public class CopycatSessionSubmitterTest {
     Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(future);
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 
@@ -259,7 +259,7 @@ public class CopycatSessionSubmitterTest {
     Mockito.<CompletableFuture<QueryResponse>>when(connection.sendAndReceive(QueryRequest.NAME, any(QueryRequest.class)))
       .thenReturn(future);
 
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     CopycatSessionManager manager = mock(CopycatSessionManager.class);
     ThreadContext threadContext = new TestContext();
 

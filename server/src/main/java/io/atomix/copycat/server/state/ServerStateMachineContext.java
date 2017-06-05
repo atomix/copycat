@@ -38,22 +38,26 @@ class ServerStateMachineContext implements StateMachineContext {
   }
 
   private final long id;
+  private final String name;
+  private final String type;
   private final ServerClock clock = new ServerClock();
   private final ServerStateMachineSessions sessions;
-  private Type type;
+  private Type context;
   private long index;
 
-  public ServerStateMachineContext(long id, ServerStateMachineSessions sessions) {
+  ServerStateMachineContext(long id, String name, String type, ServerStateMachineSessions sessions) {
     this.id = id;
+    this.name = name;
+    this.type = type;
     this.sessions = sessions;
   }
 
   /**
    * Updates the state machine context.
    */
-  void update(long index, Instant instant, Type type) {
+  void update(long index, Instant instant, Type context) {
     this.index = index;
-    this.type = type;
+    this.context = context;
     clock.set(instant);
   }
 
@@ -70,13 +74,23 @@ class ServerStateMachineContext implements StateMachineContext {
   /**
    * Returns the current context type.
    */
-  Type type() {
-    return type;
+  Type context() {
+    return context;
   }
 
   @Override
   public long id() {
     return id;
+  }
+
+  @Override
+  public String name() {
+    return name;
+  }
+
+  @Override
+  public String type() {
+    return type;
   }
 
   @Override
@@ -90,7 +104,7 @@ class ServerStateMachineContext implements StateMachineContext {
   }
 
   @Override
-  public Sessions sessions() {
+  public ServerStateMachineSessions sessions() {
     return sessions;
   }
 

@@ -15,75 +15,29 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceManager;
-import io.atomix.copycat.Operation;
-import io.atomix.copycat.Query;
-
 /**
- * Represents a state machine {@link Query}.
+ * Represents a state machine query.
  * <p>
  * The {@code QueryEntry} is a special entry that is typically not ever written to the Raft log.
  * Query entries are simply used to represent the context within which a query is applied to the
- * state machine. Query entry {@link #getSequence() sequence} numbers and {@link #getIndex() indexes}
+ * state machine. Query entry {@link #sequence() sequence} numbers and indexes
  * are used to sequence queries as they're applied to the user state machine.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class QueryEntry extends OperationEntry<QueryEntry> {
-  private Query query;
 
-  public QueryEntry() {
-  }
-
-  public QueryEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  public QueryEntry(long timestamp, long session, long sequence, byte[] bytes) {
+    super(timestamp, session, sequence, bytes);
   }
 
   @Override
-  public Operation getOperation() {
-    return query;
-  }
-
-  /**
-   * Returns the query.
-   *
-   * @return The query.
-   */
-  public Query getQuery() {
-    return query;
-  }
-
-  /**
-   * Sets the query.
-   *
-   * @param query The query.
-   * @return The query entry.
-   * @throws NullPointerException if {@code query} is null
-   */
-  public QueryEntry setQuery(Query query) {
-    this.query = Assert.notNull(query, "query");
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    serializer.writeObject(query, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    query = serializer.readObject(buffer);
+  public Type<QueryEntry> type() {
+    return Type.QUERY;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, sequence=%d, timestamp=%d, query=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getSequence(), getTimestamp(), query);
+    return String.format("%s[session=%d, sequence=%d, timestamp=%d, query=byte[%d]]", getClass().getSimpleName(), session(), sequence(), timestamp(), bytes.length);
   }
-
 }

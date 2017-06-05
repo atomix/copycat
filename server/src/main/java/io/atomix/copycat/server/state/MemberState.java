@@ -15,8 +15,11 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.server.storage.Log;
+import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.Reader;
 
 /**
  * Cluster member state.
@@ -26,6 +29,7 @@ import io.atomix.copycat.server.storage.Log;
 final class MemberState {
   private static final int MAX_APPENDS = 2;
   private final ServerMember member;
+  final ThreadContext context;
   private long term;
   private long configIndex;
   private long nextSnapshotIndex;
@@ -39,11 +43,13 @@ final class MemberState {
   private long appendTime;
   private boolean configuring;
   private boolean installing;
-  private int failures;
+  private volatile int failures;
+  private LogReader reader;
   private final TimeBuffer timeBuffer = new TimeBuffer(8);
 
-  public MemberState(ServerMember member, ClusterState cluster) {
+  public MemberState(ServerMember member, ClusterState cluster, ThreadContext context) {
     this.member = Assert.notNull(member, "member").setCluster(cluster);
+    this.context = Assert.notNull(context, "context");
   }
 
   /**
@@ -53,7 +59,7 @@ final class MemberState {
     nextSnapshotIndex = 0;
     nextSnapshotOffset = 0;
     matchIndex = 0;
-    nextIndex = log.lastIndex() + 1;
+    nextIndex = log.writer().lastIndex() + 1;
     heartbeatTime = 0;
     heartbeatStartTime = 0;
     appending = 0;
@@ -62,6 +68,15 @@ final class MemberState {
     installing = false;
     appendSucceeded = false;
     failures = 0;
+
+    switch (member.type()) {
+      case PASSIVE:
+        reader = log.createReader(log.writer().lastIndex() + 1, Reader.Mode.COMMITS);
+        break;
+      case ACTIVE:
+        reader = log.createReader(log.writer().lastIndex() + 1, Reader.Mode.ALL);
+        break;
+    }
   }
 
   /**
@@ -71,6 +86,15 @@ final class MemberState {
    */
   public ServerMember getMember() {
     return member;
+  }
+
+  /**
+   * Returns the member log reader.
+   *
+   * @return The member log reader.
+   */
+  LogReader getLogReader() {
+    return reader;
   }
 
   /**

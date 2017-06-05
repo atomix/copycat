@@ -18,6 +18,8 @@ package io.atomix.copycat.examples;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.StateMachine;
 import io.atomix.copycat.server.StateMachineExecutor;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
 /**
  * Value state machine.
@@ -25,7 +27,17 @@ import io.atomix.copycat.server.StateMachineExecutor;
  * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
  */
 public class ValueStateMachine extends StateMachine {
-  private Commit<SetCommand> value;
+  private Object value;
+
+  @Override
+  public void snapshot(SnapshotWriter writer) {
+
+  }
+
+  @Override
+  public void install(SnapshotReader reader) {
+
+  }
 
   @Override
   protected void configure(StateMachineExecutor executor) {
@@ -38,44 +50,23 @@ public class ValueStateMachine extends StateMachine {
    * Sets the value.
    */
   private Object set(Commit<SetCommand> commit) {
-    try {
-      Commit<SetCommand> previous = value;
-      value = commit;
-      if (previous != null) {
-        Object result = previous.operation().value();
-        previous.close();
-        return result;
-      }
-      return null;
-    } catch (Exception e) {
-      commit.close();
-      throw e;
-    }
+    Object previous = value;
+    value = commit;
+    return previous;
   }
 
   /**
    * Gets the value.
    */
   private Object get(Commit<GetQuery> commit) {
-    try {
-      return value != null ? value.operation().value() : null;
-    } finally {
-      commit.close();
-    }
+    return value;
   }
 
   /**
    * Deletes the value.
    */
   private void delete(Commit<DeleteCommand> commit) {
-    try {
-      if (value != null) {
-        value.close();
-        value = null;
-      }
-    } finally {
-      commit.close();
-    }
+    value = null;
   }
 
 }

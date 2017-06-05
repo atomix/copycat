@@ -25,6 +25,7 @@ import io.atomix.copycat.client.CommunicationStrategies;
 import io.atomix.copycat.client.CommunicationStrategy;
 import io.atomix.copycat.client.CopycatClient;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -34,17 +35,49 @@ import java.util.function.Consumer;
 public interface CopycatSession {
 
   /**
-   * Indicates the session's state.
+   * Indicates the state of the client's communication with the Copycat cluster.
+   * <p>
+   * Throughout the lifetime of a client, the client will transition through various states according to its
+   * ability to communicate with the cluster within the context of a {@link CopycatSession}. In some cases, client
+   * state changes may be indicative of a loss of guarantees. Users of the client should
+   * {@link CopycatSession#onStateChange(Consumer) watch the state of the client} to determine when guarantees
+   * are lost and react to changes in the client's ability to communicate with the cluster.
+   * <p>
+   * <pre>
+   *   {@code
+   *   client.onStateChange(state -> {
+   *     switch (state) {
+   *       case CONNECTED:
+   *         // The client is healthy
+   *         break;
+   *       case SUSPENDED:
+   *         // The client cannot connect to the cluster and operations may be unsafe
+   *         break;
+   *       case CLOSED:
+   *         // The client has been closed and pending operations have failed
+   *         break;
+   *     }
+   *   });
+   *   }
+   * </pre>
+   * So long as the client is in the {@link #CONNECTED} state, all guarantees with respect to reads and writes will
+   * be maintained, and a loss of the {@code CONNECTED} state may indicate a loss of linearizability. See the specific
+   * states for more info.
    */
   enum State {
 
     /**
-     * Indicates that the session is open.
+     * Indicates that the client is connected and its session is open.
      */
-    OPEN,
+    CONNECTED,
 
     /**
-     * Indicates that the session is closed.
+     * Indicates that the client is suspended and its session may or may not be expired.
+     */
+    SUSPENDED,
+
+    /**
+     * Indicates that the client is closed.
      */
     CLOSED
 
@@ -206,6 +239,7 @@ public interface CopycatSession {
     protected String name;
     protected String type;
     protected CommunicationStrategy communicationStrategy = CommunicationStrategies.LEADER;
+    protected Duration timeout = Duration.ofMillis(0);
 
     /**
      * Sets the session name.
@@ -238,6 +272,30 @@ public interface CopycatSession {
      */
     public Builder withCommunicationStrategy(CommunicationStrategy communicationStrategy) {
       this.communicationStrategy = Assert.notNull(communicationStrategy, "communicationStrategy");
+      return this;
+    }
+
+    /**
+     * Sets the session timeout.
+     *
+     * @param timeout The session timeout.
+     * @return The session builder.
+     * @throws IllegalArgumentException if the session timeout is not positive
+     */
+    public Builder withTimeout(long timeout) {
+      return withTimeout(Duration.ofMillis(timeout));
+    }
+
+    /**
+     * Sets the session timeout.
+     *
+     * @param timeout The session timeout.
+     * @return The session builder.
+     * @throws IllegalArgumentException if the session timeout is not positive
+     * @throws NullPointerException if the timeout is null
+     */
+    public Builder withTimeout(Duration timeout) {
+      this.timeout = Assert.argNot(Assert.notNull(timeout, "timeout"), timeout.isNegative(), "timeout must be positive");
       return this;
     }
   }

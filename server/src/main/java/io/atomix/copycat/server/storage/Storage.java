@@ -22,7 +22,10 @@ import io.atomix.copycat.server.storage.snapshot.SnapshotStore;
 import io.atomix.copycat.server.storage.system.MetaStore;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
+import java.util.function.Predicate;
 
 import static java.lang.Math.max;
 
@@ -274,10 +277,8 @@ public class Storage {
    * @param name The metastore name.
    */
   public void deleteMetaStore(String name) {
-    StorageCleaner cleaner = new StorageCleaner(this);
-    cleaner.cleanFiles(f -> f.getName().equals(String.format("%s.meta", name)) ||
-      f.getName().equals(String.format("%s.conf", name))
-    );
+    deleteFiles(f -> f.getName().equals(String.format("%s.meta", name)) ||
+      f.getName().equals(String.format("%s.conf", name)));
   }
 
   /**
@@ -302,8 +303,7 @@ public class Storage {
    * @param name The snapshot store name.
    */
   public void deleteSnapshotStore(String name) {
-    StorageCleaner cleaner = new StorageCleaner(this);
-    cleaner.cleanFiles(f -> SnapshotFile.isSnapshotFile(name, f));
+    deleteFiles(f -> SnapshotFile.isSnapshotFile(name, f));
   }
 
   /**
@@ -319,7 +319,7 @@ public class Storage {
    * @return The opened log.
    */
   public Log openLog(String name) {
-    return new Log(name, this, ThreadContext.currentContextOrThrow().serializer().clone());
+    return new Log(name, this);
   }
 
   /**
@@ -331,8 +331,23 @@ public class Storage {
    * @param name The log name.
    */
   public void deleteLog(String name) {
-    StorageCleaner cleaner = new StorageCleaner(this);
-    cleaner.cleanFiles(f -> SegmentFile.isSegmentFile(name, f));
+    deleteFiles(f -> SegmentFile.isSegmentFile(name, f));
+  }
+
+  /**
+   * Deletes file in the storage directory that match the given predicate.
+   */
+  private void deleteFiles(Predicate<File> predicate) {
+    directory.mkdirs();
+
+    // Iterate through all files in the storage directory.
+    for (File file : directory.listFiles(f -> f.isFile() && predicate.test(f))) {
+      try {
+        Files.delete(file.toPath());
+      } catch (IOException e) {
+        // Ignore the exception.
+      }
+    }
   }
 
   @Override

@@ -21,7 +21,6 @@ import io.atomix.catalyst.transport.local.LocalServerRegistry;
 import io.atomix.catalyst.transport.local.LocalTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.ConnectionStrategies;
 import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.impl.DefaultCopycatClient;
 import io.atomix.copycat.client.session.CopycatSession;
@@ -52,7 +51,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -180,8 +178,9 @@ public class ClusterTest extends ConcurrentTestCase {
   public void testClientKeepAlive() throws Throwable {
     createServers(3);
     CopycatClient client = createClient();
+    CopycatSession session = createSession(client);
     Thread.sleep(Duration.ofSeconds(10).toMillis());
-    threadAssertTrue(client.state() == CopycatClient.State.CONNECTED);
+    threadAssertTrue(session.state() == CopycatSession.State.CONNECTED);
   }
 
   /**
@@ -1065,35 +1064,6 @@ public class ClusterTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests state transition with recovery
-   */
-  public void testStateTransitionWithRecovery() throws Throwable {
-    createServers(3);
-    final CopycatClient client = createClient();
-    final AtomicReference<CopycatClient.State> prev =
-        new AtomicReference<>(CopycatClient.State.CONNECTED);
-    Listener<CopycatClient.State> stateListener = client.onStateChange(s -> {
-      switch (s) {
-        case CONNECTED:
-          threadAssertEquals(CopycatClient.State.SUSPENDED,
-              prev.getAndSet(CopycatClient.State.CONNECTED));
-          resume();
-          break;
-        case SUSPENDED:
-          threadAssertEquals(CopycatClient.State.CONNECTED,
-              prev.getAndSet(CopycatClient.State.SUSPENDED));
-          resume();
-          break;
-        case CLOSED:
-          threadFail("State not allowed");
-      }
-    });
-    ((DefaultCopycatClient) client).kill().thenAccept(v -> resume());
-    await(5000, 3);
-    stateListener.close();
-  }
-
-  /**
    * Tests a session expiring.
    */
   private void testSessionExpire(int nodes) throws Throwable {
@@ -1224,7 +1194,6 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new LocalTransport(registry))
-      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .build();
     client.serializer().disableWhitelist();
     client.connect(members.stream().map(Member::clientAddress).collect(Collectors.toList())).thenRun(this::resume);
@@ -1310,36 +1279,23 @@ public class ClusterTest extends ConcurrentTestCase {
     }
 
     public long command(Commit<TestCommand> commit) {
-      try {
-        return commit.index();
-      } finally {
-        if (last != null)
-          last.close();
-        last = commit;
-      }
+      last = commit;
+      return commit.index();
     }
 
     public long query(Commit<TestQuery> commit) {
-      try {
         return commit.index();
-      } finally {
-        commit.close();
-      }
     }
 
     public long event(Commit<TestEvent> commit) {
-      try {
-        if (commit.operation().own()) {
-          commit.session().publish("test", commit.index());
-        } else {
-          for (ServerSession session : sessions) {
-            session.publish("test", commit.index());
-          }
+      if (commit.operation().own()) {
+        commit.session().publish("test", commit.index());
+      } else {
+        for (ServerSession session : sessions) {
+          session.publish("test", commit.index());
         }
-        return commit.index();
-      } finally {
-        commit.close();
       }
+      return commit.index();
     }
 
     public void close(Commit<TestClose> commit) {

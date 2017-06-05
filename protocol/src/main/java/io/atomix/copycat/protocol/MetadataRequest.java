@@ -18,7 +18,7 @@ package io.atomix.copycat.protocol;
 /**
  * Cluster metadata request.
  */
-public class MetadataRequest extends ClientRequest {
+public class MetadataRequest extends SessionRequest {
   public static final String NAME = "metadata";
 
   /**
@@ -43,7 +43,7 @@ public class MetadataRequest extends ClientRequest {
   /**
    * Metadata request builder.
    */
-  public static class Builder extends AbstractRequest.Builder<Builder, MetadataRequest> {
+  public static class Builder extends SessionRequest.Builder<Builder, MetadataRequest> {
     public Builder(MetadataRequest request) {
       super(request);
     }

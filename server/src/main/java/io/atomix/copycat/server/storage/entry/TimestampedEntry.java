@@ -15,24 +15,16 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
-
 /**
  * Base class for timestamped entries.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class TimestampedEntry<T extends TimestampedEntry<T>> extends Entry<T> {
-  private long timestamp;
+  protected final long timestamp;
 
-  protected TimestampedEntry() {
-  }
-
-  protected TimestampedEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  protected TimestampedEntry(long timestamp) {
+    this.timestamp = timestamp;
   }
 
   /**
@@ -40,37 +32,18 @@ public abstract class TimestampedEntry<T extends TimestampedEntry<T>> extends En
    *
    * @return The entry timestamp.
    */
-  public long getTimestamp() {
+  public long timestamp() {
     return timestamp;
-  }
-
-  /**
-   * Sets the entry timestamp.
-   *
-   * @param timestamp The entry timestamp.
-   * @return The entry.
-   */
-  @SuppressWarnings("unchecked")
-  public T setTimestamp(long timestamp) {
-    this.timestamp = timestamp;
-    return (T) this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeLong(timestamp);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    timestamp = buffer.readLong();
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), timestamp);
+    return String.format("%s[timestamp=%d]", getClass().getSimpleName(), timestamp);
   }
 
+  /**
+   * Timestamped entry serializer.
+   */
+  public interface Serializer<T extends TimestampedEntry> extends Entry.Serializer<T> {
+  }
 }

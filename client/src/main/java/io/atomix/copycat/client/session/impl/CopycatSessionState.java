@@ -20,7 +20,6 @@ import io.atomix.copycat.client.session.CopycatSession;
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -32,7 +31,9 @@ public final class CopycatSessionState {
   private final long sessionId;
   private final String name;
   private final String type;
-  private final AtomicBoolean open = new AtomicBoolean(true);
+  private final long timeout;
+  private volatile CopycatSession.State state = CopycatSession.State.CONNECTED;
+  private Long suspendedTime;
   private long commandRequest;
   private long commandResponse;
   private long responseIndex;
@@ -40,10 +41,11 @@ public final class CopycatSessionState {
   private long connection;
   private final Set<Listener<CopycatSession.State>> changeListeners = new CopyOnWriteArraySet<>();
 
-  CopycatSessionState(long sessionId, String name, String type) {
+  CopycatSessionState(long sessionId, String name, String type, long timeout) {
     this.sessionId = sessionId;
     this.name = name;
     this.type = type;
+    this.timeout = timeout;
     this.responseIndex = sessionId;
     this.eventIndex = sessionId;
   }
@@ -76,29 +78,43 @@ public final class CopycatSessionState {
   }
 
   /**
+   * Returns the session timeout.
+   *
+   * @return The session timeout.
+   */
+  public long getSessionTimeout() {
+    return timeout;
+  }
+
+  /**
    * Returns the session state.
    *
    * @return The session state.
    */
   public CopycatSession.State getState() {
-    return isOpen() ? CopycatSession.State.OPEN : CopycatSession.State.CLOSED;
+    return state;
   }
 
   /**
-   * Returns a boolean indicating whether the session is open.
+   * Updates the session state.
    *
-   * @return Whether the session is open.
+   * @param state The updates session state.
    */
-  public boolean isOpen() {
-    return open.get();
-  }
-
-  /**
-   * Closes the session.
-   */
-  void close() {
-    if (open.compareAndSet(true, false)) {
-      changeListeners.forEach(l -> l.accept(CopycatSession.State.CLOSED));
+  public void setState(CopycatSession.State state) {
+    if (this.state != state) {
+      this.state = state;
+      if (state == CopycatSession.State.SUSPENDED) {
+        if (suspendedTime == null) {
+          suspendedTime = System.currentTimeMillis();
+        }
+      } else {
+        suspendedTime = null;
+      }
+      changeListeners.forEach(l -> l.accept(state));
+    } else if (this.state == CopycatSession.State.SUSPENDED) {
+      if (System.currentTimeMillis() - suspendedTime > timeout) {
+        setState(CopycatSession.State.CLOSED);
+      }
     }
   }
 

@@ -39,7 +39,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventBeforeCommand() throws Throwable {
-    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -64,7 +64,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAfterCommand() throws Throwable {
-    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -89,7 +89,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAtCommand() throws Throwable {
-    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request = PublishRequest.builder()
@@ -114,7 +114,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAfterAllCommands() throws Throwable {
-    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000));
     long sequence = sequencer.nextRequest();
 
     PublishRequest request1 = PublishRequest.builder()
@@ -146,7 +146,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing an event that arrives before a command response.
    */
   public void testSequenceEventAbsentCommand() throws Throwable {
-    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000));
 
     PublishRequest request1 = PublishRequest.builder()
       .withSession(1)
@@ -170,7 +170,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing callbacks with the sequencer.
    */
   public void testSequenceResponses() throws Throwable {
-    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test"));
+    CopycatSessionSequencer sequencer = new CopycatSessionSequencer(new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000));
     long sequence1 = sequencer.nextRequest();
     long sequence2 = sequencer.nextRequest();
     assertTrue(sequence2 == sequence1 + 1);
@@ -197,7 +197,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing responses with a missing PublishRequest.
    */
   public void testSequenceMissingEvent() throws Throwable {
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     state.setCommandRequest(2)
       .setResponseIndex(15)
       .setEventIndex(5);
@@ -230,7 +230,7 @@ public class CopycatSessionSequencerTest {
    * Tests sequencing multiple responses that indicate missing events.
    */
   public void testSequenceMultipleMissingEvents() throws Throwable {
-    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test");
+    CopycatSessionState state = new CopycatSessionState(1, UUID.randomUUID().toString(), "test", 1000);
     state.setCommandRequest(2)
       .setResponseIndex(15)
       .setEventIndex(5);

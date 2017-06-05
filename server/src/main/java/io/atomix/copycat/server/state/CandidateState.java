@@ -22,7 +22,7 @@ import io.atomix.copycat.server.protocol.AppendRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;
 import io.atomix.copycat.server.protocol.VoteRequest;
 import io.atomix.copycat.server.protocol.VoteResponse;
-import io.atomix.copycat.server.storage.entry.Entry;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.util.Quorum;
 
 import java.time.Duration;
@@ -73,7 +73,9 @@ final class CandidateState extends ActiveState {
 
     // Because of asynchronous execution, the candidate state could have already been closed. In that case,
     // simply skip the election.
-    if (isClosed()) return;
+    if (isClosed()) {
+      return;
+    }
 
     // Cancel the current timer task and purge the election timer of cancelled tasks.
     if (currentTimer != null) {
@@ -122,13 +124,11 @@ final class CandidateState extends ActiveState {
 
     // First, load the last log entry to get its term. We load the entry
     // by its index since the index is required by the protocol.
-    long lastIndex = context.getLog().lastIndex();
-    Entry lastEntry = lastIndex != 0 ? context.getLog().get(lastIndex) : null;
+    final Indexed<?> lastEntry = context.getLogWriter().lastEntry();
 
     final long lastTerm;
     if (lastEntry != null) {
-      lastTerm = lastEntry.getTerm();
-      lastEntry.close();
+      lastTerm = lastEntry.term();
     } else {
       lastTerm = 0;
     }
@@ -142,7 +142,7 @@ final class CandidateState extends ActiveState {
       VoteRequest request = VoteRequest.builder()
         .withTerm(context.getTerm())
         .withCandidate(context.getCluster().member().id())
-        .withLogIndex(lastIndex)
+        .withLogIndex(lastEntry != null ? lastEntry.index() : 0)
         .withLogTerm(lastTerm)
         .build();
 

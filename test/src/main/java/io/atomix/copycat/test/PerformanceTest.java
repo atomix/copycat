@@ -20,7 +20,9 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
-import io.atomix.copycat.client.*;
+import io.atomix.copycat.client.CommunicationStrategies;
+import io.atomix.copycat.client.CommunicationStrategy;
+import io.atomix.copycat.client.CopycatClient;
 import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.CopycatServer;
@@ -37,10 +39,19 @@ import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.*;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -296,7 +307,6 @@ public class PerformanceTest implements Runnable {
   private CopycatClient createClient() throws Exception {
     CopycatClient client = CopycatClient.builder()
       .withTransport(new NettyTransport())
-      .withConnectionStrategy(ConnectionStrategies.FIBONACCI_BACKOFF)
       .withServerSelectionStrategy(SERVER_SELECTION_STRATEGY)
       .build();
     client.serializer().disableWhitelist();
@@ -311,7 +321,7 @@ public class PerformanceTest implements Runnable {
    * Performance test state machine.
    */
   public class PerformanceStateMachine extends StateMachine implements SessionListener, Snapshottable {
-    private Map<String, Commit<Put>> map = new HashMap<>();
+    private Map<String, String> map = new HashMap<>();
 
     @Override
     public void register(ServerSession session) {
@@ -335,52 +345,40 @@ public class PerformanceTest implements Runnable {
 
     @Override
     public void snapshot(SnapshotWriter writer) {
+      writer.writeInt(map.size());
+      for (Map.Entry<String, String> entry : map.entrySet()) {
+        writer.writeString(entry.getKey());
+        writer.writeString(entry.getValue());
+      }
     }
 
     @Override
     public void install(SnapshotReader reader) {
+      map = new HashMap<>();
+      int size = reader.readInt();
+      for (int i = 0; i < size; i++) {
+        String key = reader.readString();
+        String value = reader.readString();
+        map.put(key, value);
+      }
     }
 
     public long put(Commit<Put> commit) {
-      try {
-        Commit<Put> old = map.put(commit.operation().key, commit);
-        if (old != null) {
-          old.close();
-        }
-        return commit.index();
-      } catch (Exception e) {
-        commit.close();
-        throw e;
-      }
+      map.put(commit.operation().key, commit.operation().value);
+      return commit.index();
     }
 
     public String get(Commit<Get> commit) {
-      try {
-        Commit<Put> value = map.get(commit.operation().key);
-        return value != null ? value.operation().value : null;
-      } finally {
-        commit.close();
-      }
+      return map.get(commit.operation().key);
     }
 
     public long remove(Commit<Remove> commit) {
-      try {
-        Commit<Put> removed = map.remove(commit.operation().key);
-        if (removed != null) {
-          removed.close();
-        }
-        return commit.index();
-      } finally {
-        commit.close();
-      }
+      map.remove(commit.operation().key);
+      return commit.index();
     }
 
     public long index(Commit<Index> commit) {
-      try {
-        return commit.index();
-      } finally {
-        commit.close();
-      }
+      return commit.index();
     }
   }
 

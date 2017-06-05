@@ -90,7 +90,7 @@ public final class SegmentDescriptor implements AutoCloseable {
     return new Builder(buffer);
   }
 
-  private Buffer buffer;
+  Buffer buffer;
   private final long id;
   private final long version;
   private final long index;

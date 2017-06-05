@@ -16,12 +16,12 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.CatalystThreadFactory;
+import io.atomix.catalyst.concurrent.SingleThreadContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.local.LocalServerRegistry;
 import io.atomix.catalyst.transport.local.LocalTransport;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
-import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.AbstractResponse;
 import io.atomix.copycat.protocol.ClientRequestTypeResolver;
@@ -30,12 +30,12 @@ import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.TestStateMachine;
 import io.atomix.copycat.server.Testing.ThrowableRunnable;
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
 import io.atomix.copycat.server.storage.TestEntry;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.system.Configuration;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
 import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import net.jodah.concurrentunit.ConcurrentTestCase;
@@ -74,8 +74,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
       new ClientRequestTypeResolver(),
       new ClientResponseTypeResolver(),
       new ProtocolSerialization(),
-      new ServerSerialization(),
-      new StorageSerialization()
+      new ServerSerialization()
     ).disableWhitelist();
 
     storageDir = Files.createTempDirectory("copycat-test");
@@ -120,18 +119,15 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
    */
   protected void append(int entries, long term) throws Throwable {
     for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = serverContext.getLog().create(TestEntry.class)) {
-        entry.setTerm(term);
-        serverContext.getLog().append(entry);
-      }
+      serverContext.getLogWriter().append(term, new TestEntry());
     }
   }
 
   /**
    * Gets the entry at the given index.
    */
-  protected <T extends Entry> T get(long index) throws Throwable {
-    return serverContext.getLog().get(index);
+  protected <T extends Entry<T>> Indexed<T> get(long index) throws Throwable {
+    return serverContext.getLogReader().get(index);
   }
 
   /**
@@ -147,19 +143,6 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
       }
     });
     await();
-  }
-
-  /**
-   * Creates and returns the given number of entries in the given term.
-   */
-  protected List<TestEntry> entries(int entries, long term) {
-    List<TestEntry> result = new ArrayList<>();
-    for (int i = 0; i < entries; i++) {
-      try (TestEntry entry = serverContext.getLog().create(TestEntry.class)) {
-        result.add(entry.setTerm(term));
-      }
-    }
-    return result;
   }
 
   protected void assertNoLeaderError(AbstractResponse response) {
@@ -178,7 +161,7 @@ public abstract class AbstractStateTest<T extends AbstractState> extends Concurr
   private List<Member> createMembers(int nodes) {
     List<Member> members = new ArrayList<>();
     for (int i = 0; i < nodes; i++) {
-      members.add(new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i), Instant.now()));
+      members.add(new ServerMember(Member.Type.ACTIVE, Member.Status.AVAILABLE, new Address("localhost", 5000 + i), new Address("localhost", 6000 + i), Instant.now()));
     }
     return members;
   }

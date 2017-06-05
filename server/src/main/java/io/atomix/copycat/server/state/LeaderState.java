@@ -15,18 +15,50 @@
  */
 package io.atomix.copycat.server.state;
 
+import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Scheduled;
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.Command;
-import io.atomix.copycat.Query;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.CopycatException;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.CloseSessionRequest;
+import io.atomix.copycat.protocol.CloseSessionResponse;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.KeepAliveRequest;
+import io.atomix.copycat.protocol.KeepAliveResponse;
+import io.atomix.copycat.protocol.MetadataRequest;
+import io.atomix.copycat.protocol.MetadataResponse;
+import io.atomix.copycat.protocol.OpenSessionRequest;
+import io.atomix.copycat.protocol.OpenSessionResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
-import io.atomix.copycat.server.storage.entry.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.LeaveRequest;
+import io.atomix.copycat.server.protocol.LeaveResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.ReconfigureResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogWriter;
+import io.atomix.copycat.server.storage.entry.CloseSessionEntry;
+import io.atomix.copycat.server.storage.entry.CommandEntry;
+import io.atomix.copycat.server.storage.entry.ConfigurationEntry;
+import io.atomix.copycat.server.storage.entry.InitializeEntry;
+import io.atomix.copycat.server.storage.entry.KeepAliveEntry;
+import io.atomix.copycat.server.storage.entry.MetadataEntry;
+import io.atomix.copycat.server.storage.entry.OpenSessionEntry;
+import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.time.Duration;
@@ -86,12 +118,13 @@ final class LeaderState extends ActiveState {
   private void appendInitialEntries() {
     final long term = context.getTerm();
 
-    // Append a no-op entry to reset session timeouts and commit entries from prior terms.
-    try (InitializeEntry entry = context.getLog().create(InitializeEntry.class)) {
-      entry.setTerm(term)
-        .setTimestamp(appender.time());
-      Assert.state(context.getLog().append(entry) == appender.index(), "Initialize entry not appended at the start of the leader's term");
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      Indexed<InitializeEntry> indexed = writer.append(term, new InitializeEntry(appender.time()));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), indexed.index());
+    } finally {
+      writer.unlock();
     }
 
     // Append a configuration entry to propagate the leader's cluster configuration.
@@ -144,52 +177,6 @@ final class LeaderState extends ActiveState {
   }
 
   /**
-   * Checks to determine whether any sessions have expired.
-   * <p>
-   * Copycat allows only leaders to explicitly unregister sessions due to expiration. This ensures
-   * that sessions cannot be expired by lengthy election periods or other disruptions to time.
-   * To do so, the leader periodically iterates through registered sessions and checks for sessions
-   * that have been marked suspicious. The internal state machine marks sessions as suspicious when
-   * keep alive entries are not committed for longer than the session timeout. Once the leader marks
-   * a session as suspicious, it will log and replicate an {@link UnregisterEntry} to unregister the session.
-   */
-  private void checkSessions() {
-    long term = context.getTerm();
-
-    // Iterate through all currently registered sessions.
-    for (ClientContext client : context.getStateMachine().getClients().getClients()) {
-      // If the session isn't already being unregistered by this leader and a keep-alive entry hasn't
-      // been committed for the session in some time, log and commit a new UnregisterEntry.
-      if (client.state() == ClientContext.State.SUSPICIOUS && !client.isUnregistering()) {
-        LOGGER.debug("{} - Detected expired client: {}", context.getCluster().member().address(), client.id());
-
-        // Log the unregister entry, indicating that the session was explicitly unregistered by the leader.
-        // This will result in state machine expire() methods being called when the entry is applied.
-        final long index;
-        try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-          entry.setTerm(term)
-            .setClient(client.id())
-            .setExpired(true)
-            .setTimestamp(System.currentTimeMillis());
-          index = context.getLog().append(entry);
-          LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
-        }
-
-        // Commit the unregister entry and apply it to the state machine.
-        appender.appendEntries(index).whenComplete((result, error) -> {
-          if (isOpen()) {
-            context.getStateMachine().apply(index);
-          }
-        });
-
-        // Mark the session as being unregistered in order to ensure this leader doesn't attempt
-        // to unregister it again.
-        client.unregister();
-      }
-    }
-  }
-
-  /**
    * Returns a boolean value indicating whether a configuration is currently being committed.
    *
    * @return Indicates whether a configuration is currently being committed.
@@ -214,21 +201,26 @@ final class LeaderState extends ActiveState {
    * Commits the given configuration.
    */
   protected CompletableFuture<Long> configure(Collection<Member> members) {
-    final long index;
-    try (ConfigurationEntry entry = context.getLog().create(ConfigurationEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setTimestamp(System.currentTimeMillis())
-        .setMembers(members);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
+    context.checkThread();
 
-      // Store the index of the configuration entry in order to prevent other configurations from
-      // being logged and committed concurrently. This is an important safety property of Raft.
-      configuring = index;
-      context.getClusterState().configure(new Configuration(entry.getIndex(), entry.getTerm(), entry.getTimestamp(), entry.getMembers()));
+    final long term = context.getTerm();
+
+    final LogWriter writer = context.getLogWriter();
+    final Indexed<ConfigurationEntry> entry;
+    try {
+      writer.lock();
+      entry = writer.append(term, new ConfigurationEntry(System.currentTimeMillis(), members));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
-    return appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    // Store the index of the configuration entry in order to prevent other configurations from
+    // being logged and committed concurrently. This is an important safety property of Raft.
+    configuring = entry.index();
+    context.getClusterState().configure(new Configuration(entry.index(), entry.term(), entry.entry().timestamp(), entry.entry().members()));
+
+    return appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         // Reset the configuration index to allow new configuration changes to be committed.
@@ -268,7 +260,7 @@ final class LeaderState extends ActiveState {
     // Add the joining member to the members list. If the joining member's type is ACTIVE, join the member in the
     // PROMOTABLE state to allow it to get caught up without impacting the quorum size.
     Collection<Member> members = context.getCluster().members();
-    members.add(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), Instant.now()));
+    members.add(new ServerMember(member.type(), member.status(), member.serverAddress(), member.clientAddress(), Instant.now()));
 
     CompletableFuture<JoinResponse> future = new CompletableFuture<>();
     configure(members).whenComplete((index, error) -> {
@@ -465,7 +457,7 @@ final class LeaderState extends ActiveState {
         .withStatus(Response.Status.OK)
         .withTerm(context.getTerm())
         .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
+        .withLogIndex(context.getLogWriter().lastIndex())
         .build()));
     } else {
       context.setLeader(request.leader()).transition(CopycatServer.State.FOLLOWER);
@@ -479,13 +471,16 @@ final class LeaderState extends ActiveState {
     logRequest(request);
 
     CompletableFuture<MetadataResponse> future = new CompletableFuture<>();
-    context.getStateMachine().<MetadataResult>apply(new MetadataEntry()).whenComplete((result, error) -> {
+    Indexed<MetadataEntry> entry = new Indexed<>(
+      context.getStateMachine().getLastApplied(),
+      context.getTerm(),
+      new MetadataEntry(System.currentTimeMillis(), request.session()), 0);
+    context.getStateMachine().<MetadataResult>apply(entry).whenComplete((result, error) -> {
       context.checkThread();
       if (isOpen()) {
         if (error == null) {
           future.complete(logResponse(MetadataResponse.builder()
             .withStatus(Response.Status.OK)
-            .withClients(result.clients)
             .withSessions(result.sessions)
             .build()));
         } else {
@@ -528,29 +523,27 @@ final class LeaderState extends ActiveState {
 
     final CompletableFuture<CommandResponse> future = new CompletableFuture<>();
 
-    final Command command = request.command();
     final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
 
-    // Create a CommandEntry and append it to the log.
-    try (CommandEntry entry = context.getLog().create(CommandEntry.class)) {
-      entry.setTerm(term)
-        .setSession(request.session())
-        .setTimestamp(timestamp)
-        .setSequence(request.sequence())
-        .setCommand(command);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
+    final Indexed<CommandEntry> entry;
+
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new CommandEntry(timestamp, request.session(), request.sequence(), request.bytes()));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
     // Replicate the command to followers.
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         // If the command was successfully committed, apply it to the state machine.
         if (commitError == null) {
-          context.getStateMachine().<OperationResult>apply(index).whenComplete((result, error) -> {
+          context.getStateMachine().<OperationResult>apply(entry.index()).whenComplete((result, error) -> {
             if (isOpen()) {
               completeOperation(result, CommandResponse.builder(), error, future);
             }
@@ -568,42 +561,35 @@ final class LeaderState extends ActiveState {
 
   @Override
   public CompletableFuture<QueryResponse> query(final QueryRequest request) {
-    Query query = request.query();
-
     final long timestamp = System.currentTimeMillis();
 
     context.checkThread();
     logRequest(request);
 
-    QueryEntry entry = context.getLog().create(QueryEntry.class)
-      .setIndex(request.index())
-      .setTerm(context.getTerm())
-      .setTimestamp(timestamp)
-      .setSession(request.session())
-      .setSequence(request.sequence())
-      .setQuery(query);
+    final Indexed<QueryEntry> entry = new Indexed<>(
+      request.index(),
+      context.getTerm(),
+      new QueryEntry(
+        System.currentTimeMillis(),
+        request.session(),
+        request.sequence(),
+        request.bytes()), 0);
 
-    return query(entry).thenApply(this::logResponse);
-  }
-
-  /**
-   * Applies the given query entry to the state machine according to the query's consistency level.
-   */
-  private CompletableFuture<QueryResponse> query(QueryEntry entry) {
-    Query.ConsistencyLevel consistency = entry.getQuery().consistency();
-    if (consistency == null)
-      return queryLinearizable(entry);
-
-    switch (consistency) {
+    final CompletableFuture<QueryResponse> future;
+    switch (request.consistency()) {
       case SEQUENTIAL:
-        return queryLocal(entry);
+        future = queryLocal(entry);
+        break;
       case LINEARIZABLE_LEASE:
-        return queryBoundedLinearizable(entry);
+        future = queryBoundedLinearizable(entry);
+        break;
       case LINEARIZABLE:
-        return queryLinearizable(entry);
+        future = queryLinearizable(entry);
+        break;
       default:
-        throw new IllegalStateException("unknown consistency level");
+        future = Futures.exceptionalFuture(new IllegalStateException("Unknown consistency level: " + request.consistency()));
     }
+    return future.thenApply(this::logResponse);
   }
 
   /**
@@ -612,7 +598,7 @@ final class LeaderState extends ActiveState {
    * Bounded linearizable queries succeed as long as this server remains the leader. This is possible
    * since the leader will step down in the event it fails to contact a majority of the cluster.
    */
-  private CompletableFuture<QueryResponse> queryBoundedLinearizable(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> queryBoundedLinearizable(Indexed<QueryEntry> entry) {
     return applyQuery(entry);
   }
 
@@ -622,7 +608,7 @@ final class LeaderState extends ActiveState {
    * Linearizable queries are first sequenced with commands and then applied to the state machine. Once
    * applied, we verify the node's leadership prior to responding successfully to the query.
    */
-  private CompletableFuture<QueryResponse> queryLinearizable(QueryEntry entry) {
+  private CompletableFuture<QueryResponse> queryLinearizable(Indexed<QueryEntry> entry) {
     return applyQuery(entry)
       .thenCompose(response -> appender.appendEntries()
         .thenApply(index -> response)
@@ -630,80 +616,6 @@ final class LeaderState extends ActiveState {
           .withStatus(Response.Status.ERROR)
           .withError(CopycatError.Type.QUERY_ERROR)
           .build()));
-  }
-
-  @Override
-  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
-    final long timestamp = System.currentTimeMillis();
-    final long index;
-
-    // If the client submitted a session timeout, use the client's timeout, otherwise use the configured
-    // default server session timeout.
-    final long timeout;
-    if (request.timeout() != 0) {
-      timeout = request.timeout();
-    } else {
-      timeout = context.getSessionTimeout().toMillis();
-    }
-
-    context.checkThread();
-    logRequest(request);
-
-    // The timeout is logged in the RegisterEntry to ensure that all nodes see a consistent timeout for the session.
-    try (RegisterEntry entry = context.getLog().create(RegisterEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setTimestamp(timestamp)
-        .setTimeout(timeout);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
-    }
-
-    CompletableFuture<RegisterResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
-      if (isOpen()) {
-        if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((clientId, sessionError) -> {
-            if (isOpen()) {
-              if (sessionError == null) {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.OK)
-                  .withClientId((Long) clientId)
-                  .withTimeout(timeout)
-                  .withLeader(context.getCluster().member().clientAddress())
-                  .withMembers(context.getCluster().members().stream()
-                    .map(Member::clientAddress)
-                    .filter(m -> m != null)
-                    .collect(Collectors.toList())).build()));
-              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) sessionError.getCause()).getType())
-                  .build()));
-              } else if (sessionError instanceof CopycatException) {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) sessionError).getType())
-                  .build()));
-              } else {
-                future.complete(logResponse(RegisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
-                  .build()));
-              }
-              checkSessions();
-            }
-          });
-        } else {
-          future.complete(logResponse(RegisterResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-      }
-    });
-
-    return future;
   }
 
   @Override
@@ -726,31 +638,99 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+  public CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request) {
+    final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
+
+    // If the client submitted a session timeout, use the client's timeout, otherwise use the configured
+    // default server session timeout.
+    final long timeout;
+    if (request.timeout() != 0) {
+      timeout = request.timeout();
+    } else {
+      timeout = context.getSessionTimeout().toMillis();
+    }
 
     context.checkThread();
     logRequest(request);
 
-    try (KeepAliveEntry entry = context.getLog().create(KeepAliveEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setClient(request.client())
-        .setSessionIds(request.sessionIds())
-        .setCommandSequences(request.commandSequences())
-        .setEventIndexes(request.eventIndexes())
-        .setConnections(request.connections())
-        .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
+    final Indexed<OpenSessionEntry> entry;
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new OpenSessionEntry(timestamp, request.name(), request.type(), timeout));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
-    CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    CompletableFuture<OpenSessionResponse> future = new CompletableFuture<>();
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((sessionResult, sessionError) -> {
+          context.getStateMachine().<Long>apply(entry.index()).whenComplete((sessionId, sessionError) -> {
+            if (isOpen()) {
+              if (sessionError == null) {
+                future.complete(logResponse(OpenSessionResponse.builder()
+                  .withStatus(Response.Status.OK)
+                  .withSession(sessionId)
+                  .withTimeout(timeout)
+                  .build()));
+              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
+                future.complete(logResponse(OpenSessionResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((CopycatException) sessionError.getCause()).getType())
+                  .build()));
+              } else if (sessionError instanceof CopycatException) {
+                future.complete(logResponse(OpenSessionResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(((CopycatException) sessionError).getType())
+                  .build()));
+              } else {
+                future.complete(logResponse(OpenSessionResponse.builder()
+                  .withStatus(Response.Status.ERROR)
+                  .withError(CopycatError.Type.INTERNAL_ERROR)
+                  .build()));
+              }
+            }
+          });
+        } else {
+          future.complete(logResponse(OpenSessionResponse.builder()
+            .withStatus(Response.Status.ERROR)
+            .withError(CopycatError.Type.INTERNAL_ERROR)
+            .build()));
+        }
+      }
+    });
+
+    return future;
+  }
+
+  @Override
+  public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
+    final long term = context.getTerm();
+    final long timestamp = System.currentTimeMillis();
+
+    context.checkThread();
+    logRequest(request);
+
+    final Indexed<KeepAliveEntry> entry;
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new KeepAliveEntry(timestamp, request.sessionIds(), request.commandSequences(), request.eventIndexes(), request.connections()));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
+    }
+
+    CompletableFuture<KeepAliveResponse> future = new CompletableFuture<>();
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
+      context.checkThread();
+      if (isOpen()) {
+        if (commitError == null) {
+          context.getStateMachine().apply(entry.index()).whenComplete((sessionResult, sessionError) -> {
             if (isOpen()) {
               if (sessionError == null) {
                 future.complete(logResponse(KeepAliveResponse.builder()
@@ -779,7 +759,6 @@ final class LeaderState extends ActiveState {
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
-              checkSessions();
             }
           });
         } else {
@@ -796,163 +775,29 @@ final class LeaderState extends ActiveState {
   }
 
   @Override
-  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
-    final long timestamp = System.currentTimeMillis();
-    final long index;
-
-    ClientContext client = context.getStateMachine().getClients().getClient(request.client());
-    if (client == null) {
-      return CompletableFuture.completedFuture(logResponse(UnregisterResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_CLIENT_ERROR)
-        .build()));
-    }
-
-    context.checkThread();
-    logRequest(request);
-
-    try (UnregisterEntry entry = context.getLog().create(UnregisterEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setClient(client.id())
-        .setExpired(false)
-        .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
-    }
-
-    CompletableFuture<UnregisterResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
-      if (isOpen()) {
-        if (commitError == null) {
-          context.getStateMachine().apply(index).whenComplete((unregisterResult, unregisterError) -> {
-            if (isOpen()) {
-              if (unregisterError == null) {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.OK)
-                  .build()));
-              } else if (unregisterError instanceof CompletionException && unregisterError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) unregisterError.getCause()).getType())
-                  .build()));
-              } else if (unregisterError instanceof CopycatException) {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) unregisterError).getType())
-                  .build()));
-              } else {
-                future.complete(logResponse(UnregisterResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
-                  .build()));
-              }
-              checkSessions();
-            }
-          });
-        } else {
-          future.complete(logResponse(UnregisterResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-      }
-    });
-
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request) {
-    final long timestamp = System.currentTimeMillis();
-    final long index;
-
-    ClientContext client = context.getStateMachine().getClients().getClient(request.client());
-    if (client == null) {
-      return CompletableFuture.completedFuture(logResponse(OpenSessionResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_CLIENT_ERROR)
-        .build()));
-    }
-
-    context.checkThread();
-    logRequest(request);
-
-    try (OpenSessionEntry entry = context.getLog().create(OpenSessionEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setClient(client.id())
-        .setType(request.type())
-        .setName(request.name())
-        .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
-    }
-
-    CompletableFuture<OpenSessionResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
-      context.checkThread();
-      if (isOpen()) {
-        if (commitError == null) {
-          context.getStateMachine().<Long>apply(index).whenComplete((sessionId, sessionError) -> {
-            if (isOpen()) {
-              if (sessionError == null) {
-                future.complete(logResponse(OpenSessionResponse.builder()
-                  .withStatus(Response.Status.OK)
-                  .withSession(sessionId)
-                  .build()));
-              } else if (sessionError instanceof CompletionException && sessionError.getCause() instanceof CopycatException) {
-                future.complete(logResponse(OpenSessionResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) sessionError.getCause()).getType())
-                  .build()));
-              } else if (sessionError instanceof CopycatException) {
-                future.complete(logResponse(OpenSessionResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(((CopycatException) sessionError).getType())
-                  .build()));
-              } else {
-                future.complete(logResponse(OpenSessionResponse.builder()
-                  .withStatus(Response.Status.ERROR)
-                  .withError(CopycatError.Type.INTERNAL_ERROR)
-                  .build()));
-              }
-              checkSessions();
-            }
-          });
-        } else {
-          future.complete(logResponse(OpenSessionResponse.builder()
-            .withStatus(Response.Status.ERROR)
-            .withError(CopycatError.Type.INTERNAL_ERROR)
-            .build()));
-        }
-      }
-    });
-
-    return future;
-  }
-
-  @Override
   public CompletableFuture<CloseSessionResponse> closeSession(CloseSessionRequest request) {
+    final long term = context.getTerm();
     final long timestamp = System.currentTimeMillis();
-    final long index;
 
     context.checkThread();
     logRequest(request);
 
-    try (CloseSessionEntry entry = context.getLog().create(CloseSessionEntry.class)) {
-      entry.setTerm(context.getTerm())
-        .setSession(request.session())
-        .setTimestamp(timestamp);
-      index = context.getLog().append(entry);
-      LOGGER.trace("{} - Appended {}", context.getCluster().member().address(), entry);
+    final Indexed<CloseSessionEntry> entry;
+    final LogWriter writer = context.getLogWriter();
+    try {
+      writer.lock();
+      entry = writer.append(term, new CloseSessionEntry(timestamp, request.session()));
+      LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
+    } finally {
+      writer.unlock();
     }
 
     CompletableFuture<CloseSessionResponse> future = new CompletableFuture<>();
-    appender.appendEntries(index).whenComplete((commitIndex, commitError) -> {
+    appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
       context.checkThread();
       if (isOpen()) {
         if (commitError == null) {
-          context.getStateMachine().<Long>apply(index).whenComplete((closeResult, closeError) -> {
+          context.getStateMachine().<Long>apply(entry.index()).whenComplete((closeResult, closeError) -> {
             if (isOpen()) {
               if (closeError == null) {
                 future.complete(logResponse(CloseSessionResponse.builder()
@@ -974,7 +819,6 @@ final class LeaderState extends ActiveState {
                   .withError(CopycatError.Type.INTERNAL_ERROR)
                   .build()));
               }
-              checkSessions();
             }
           });
         } else {

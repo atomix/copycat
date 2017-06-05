@@ -15,24 +15,38 @@
  */
 package io.atomix.copycat.server.state;
 
-import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.util.Assert;
+import io.atomix.catalyst.concurrent.CatalystThreadFactory;
+import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.concurrent.Listeners;
-import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.concurrent.Scheduled;
+import io.atomix.catalyst.concurrent.SingleThreadContext;
+import io.atomix.catalyst.transport.Address;
+import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
 import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.LeaveRequest;
+import io.atomix.copycat.server.protocol.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.ReconfigureResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -48,6 +62,7 @@ import java.util.stream.Collectors;
 final class ClusterState implements Cluster, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(ClusterState.class);
   private final ServerContext context;
+  private final CatalystThreadFactory threadFactory;
   private final ServerMember member;
   private volatile Configuration configuration;
   private final Map<Integer, MemberState> membersMap = new ConcurrentHashMap<>();
@@ -65,8 +80,9 @@ final class ClusterState implements Cluster, AutoCloseable {
 
   ClusterState(Member.Type type, Address serverAddress, Address clientAddress, ServerContext context) {
     Instant time = Instant.now();
-    this.member = new ServerMember(type, serverAddress, clientAddress, time).setCluster(this);
+    this.member = new ServerMember(type, Member.Status.AVAILABLE, serverAddress, clientAddress, time).setCluster(this);
     this.context = Assert.notNull(context, "context");
+    this.threadFactory = new CatalystThreadFactory("copycat-server-" + serverAddress + "-appender-%d");
 
     // If a configuration is stored, use the stored configuration, otherwise configure the server with the user provided configuration.
     configuration = context.getMetaStore().loadConfiguration();
@@ -80,7 +96,7 @@ final class ClusterState implements Cluster, AutoCloseable {
           this.members.add(this.member);
         } else {
           // If the member state doesn't already exist, create it.
-          MemberState state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), updateTime), this);
+          MemberState state = new MemberState(new ServerMember(member.type(), member.status(), member.serverAddress(), member.clientAddress(), updateTime), this, new SingleThreadContext(threadFactory, context.serializer.clone()));
           state.resetState(context.getLog());
           this.members.add(state.getMember());
           this.remoteMembers.add(state);
@@ -305,7 +321,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // Create a set of active members.
         Set<Member> activeMembers = cluster.stream()
           .filter(m -> !m.equals(member.serverAddress()))
-          .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, member.updated()))
+          .map(m -> new ServerMember(Member.Type.ACTIVE, Member.Status.AVAILABLE, m, null, member.updated()))
           .collect(Collectors.toSet());
 
         // Add the local member to the set of active members.
@@ -328,7 +344,7 @@ final class ClusterState implements Cluster, AutoCloseable {
       // Create a set of cluster members, excluding the local member which is joining a cluster.
       Set<Member> activeMembers = cluster.stream()
         .filter(m -> !m.equals(member.serverAddress()))
-        .map(m -> new ServerMember(Member.Type.ACTIVE, m, null, member.updated()))
+        .map(m -> new ServerMember(Member.Type.ACTIVE, Member.Status.AVAILABLE, m, null, member.updated()))
         .collect(Collectors.toSet());
 
       // If the set of members in the cluster is empty when the local member is excluded,
@@ -382,7 +398,7 @@ final class ClusterState implements Cluster, AutoCloseable {
 
       context.getConnections().getConnection(member.getMember().serverAddress()).thenCompose(connection -> {
         JoinRequest request = JoinRequest.builder()
-          .withMember(new ServerMember(member().type(), member().serverAddress(), member().clientAddress(), member().updated()))
+          .withMember(new ServerMember(member().type(), member().status(), member().serverAddress(), member().clientAddress(), member().updated()))
           .build();
         return connection.<JoinRequest, JoinResponse>sendAndReceive(JoinRequest.NAME, request);
       }).whenComplete((response, error) -> {
@@ -631,7 +647,7 @@ final class ClusterState implements Cluster, AutoCloseable {
         // If the member state doesn't already exist, create it.
         MemberState state = membersMap.get(member.id());
         if (state == null) {
-          state = new MemberState(new ServerMember(member.type(), member.serverAddress(), member.clientAddress(), time), this);
+          state = new MemberState(new ServerMember(member.type(), member.status(), member.serverAddress(), member.clientAddress(), time), this, new SingleThreadContext(threadFactory, context.serializer.clone()));
           state.resetState(context.getLog());
           this.members.add(state.getMember());
           this.remoteMembers.add(state);

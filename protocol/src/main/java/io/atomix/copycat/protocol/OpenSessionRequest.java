@@ -17,7 +17,6 @@ package io.atomix.copycat.protocol;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.SerializationException;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
@@ -26,7 +25,7 @@ import java.util.Objects;
 /**
  * Open session request.
  */
-public class OpenSessionRequest extends ClientRequest {
+public class OpenSessionRequest extends AbstractRequest {
   public static final String NAME = "open-session";
 
   /**
@@ -51,6 +50,7 @@ public class OpenSessionRequest extends ClientRequest {
 
   private String name;
   private String type;
+  private long timeout;
 
   /**
    * Returns the state machine name.
@@ -70,11 +70,21 @@ public class OpenSessionRequest extends ClientRequest {
     return type;
   }
 
+  /**
+   * Returns the session timeout.
+   *
+   * @return The session timeout.
+   */
+  public long timeout() {
+    return timeout;
+  }
+
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     name = buffer.readString();
     type = buffer.readString();
+    timeout = buffer.readLong();
   }
 
   @Override
@@ -82,33 +92,32 @@ public class OpenSessionRequest extends ClientRequest {
     super.writeObject(buffer, serializer);
     buffer.writeString(name);
     buffer.writeString(type);
+    buffer.writeLong(timeout);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), name, type);
+    return Objects.hash(getClass(), name, type, timeout);
   }
 
   @Override
   public boolean equals(Object object) {
     if (object instanceof OpenSessionRequest) {
       OpenSessionRequest request = (OpenSessionRequest) object;
-      return request.client == client
-        && request.name.equals(name)
-        && request.type.equals(type);
+      return request.name.equals(name) && request.type.equals(type) && request.timeout == timeout;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[client=%s, name=%s, type=%s]", getClass().getSimpleName(), client, name, type);
+    return String.format("%s[name=%s, type=%s, timeout=%d]", getClass().getSimpleName(), name, type, timeout);
   }
 
   /**
    * Open session request builder.
    */
-  public static class Builder extends ClientRequest.Builder<Builder, OpenSessionRequest> {
+  public static class Builder extends AbstractRequest.Builder<Builder, OpenSessionRequest> {
     protected Builder(OpenSessionRequest request) {
       super(request);
     }
@@ -134,6 +143,18 @@ public class OpenSessionRequest extends ClientRequest {
      */
     public Builder withType(String type) {
       request.type = Assert.notNull(type, "type");
+      return this;
+    }
+
+    /**
+     * Sets the session timeout.
+     *
+     * @param timeout The session timeout.
+     * @return The open session request builder.
+     * @throws IllegalArgumentException if {@code timeout} is not positive
+     */
+    public Builder withTimeout(long timeout) {
+      request.timeout = Assert.argNot(timeout, timeout < 0, "timeout must be positive");
       return this;
     }
 

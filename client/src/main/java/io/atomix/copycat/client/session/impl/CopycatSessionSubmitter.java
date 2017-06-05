@@ -15,17 +15,24 @@
  */
 package io.atomix.copycat.client.session.impl;
 
+import io.atomix.catalyst.buffer.HeapBuffer;
 import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.transport.TransportException;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
-import io.atomix.copycat.NoOpCommand;
 import io.atomix.copycat.Query;
+import io.atomix.copycat.client.session.CopycatSession;
 import io.atomix.copycat.error.CommandException;
 import io.atomix.copycat.error.CopycatError;
 import io.atomix.copycat.error.QueryException;
 import io.atomix.copycat.error.UnknownSessionException;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.OperationRequest;
+import io.atomix.copycat.protocol.OperationResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.session.ClosedSessionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,6 +74,7 @@ final class CopycatSessionSubmitter {
   private final ThreadContext context;
   private final Map<Long, OperationAttempt> attempts = new LinkedHashMap<>();
   private final AtomicLong keepAliveIndex = new AtomicLong();
+  private final HeapBuffer buffer = HeapBuffer.allocate();
 
   public CopycatSessionSubmitter(CopycatConnection leaderConnection, CopycatConnection sessionConnection, CopycatSessionState state, CopycatSessionSequencer sequencer, CopycatSessionManager manager, ThreadContext context) {
     this.leaderConnection = Assert.notNull(leaderConnection, "leaderConnection");
@@ -94,10 +102,13 @@ final class CopycatSessionSubmitter {
    * Submits a command to the cluster.
    */
   private <T> void submitCommand(Command<T> command, CompletableFuture<T> future) {
+    context.serializer().writeObject(command, buffer.clear());
+    buffer.flip();
+    byte[] bytes = buffer.readBytes((int) buffer.remaining());
     CommandRequest request = CommandRequest.builder()
       .withSession(state.getSessionId())
       .withSequence(state.nextCommandRequest())
-      .withCommand(command)
+      .withBytes(bytes)
       .build();
     submitCommand(request, future);
   }
@@ -126,11 +137,15 @@ final class CopycatSessionSubmitter {
    * Submits a query to the cluster.
    */
   private <T> void submitQuery(Query<T> query, CompletableFuture<T> future) {
+    context.serializer().writeObject(query, buffer.clear());
+    buffer.flip();
+    byte[] bytes = buffer.readBytes((int) buffer.remaining());
     QueryRequest request = QueryRequest.builder()
       .withSession(state.getSessionId())
       .withSequence(state.getCommandRequest())
       .withIndex(state.getResponseIndex())
-      .withQuery(query)
+      .withBytes(bytes)
+      .withConsistency(query.consistency())
       .build();
     submitQuery(request, future);
   }
@@ -148,7 +163,7 @@ final class CopycatSessionSubmitter {
    * @param attempt The attempt to submit.
    */
   private <T extends OperationRequest, U extends OperationResponse, V> void submit(OperationAttempt<T, U, V> attempt) {
-    if (!state.isOpen()) {
+    if (state.getState() == CopycatSession.State.CLOSED) {
       attempt.fail(new ClosedSessionException("session closed"));
     } else {
       LOG.trace("{} - Sending {}", state.getSessionId(), attempt.request);
@@ -363,10 +378,11 @@ final class CopycatSessionSubmitter {
     public void fail(Throwable cause) {
       super.fail(cause);
       if (!CLOSED_PREDICATE.test(cause)) {
+        state.setState(CopycatSession.State.CLOSED);
         CommandRequest request = CommandRequest.builder()
           .withSession(this.request.session())
           .withSequence(this.request.sequence())
-          .withCommand(new NoOpCommand())
+          .withBytes(new byte[0])
           .build();
         context.execute(() -> submit(new CommandAttempt<>(sequence, this.attempt + 1, request, future)));
       }

@@ -13,19 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.atomix.copycat.server.storage;
+package io.atomix.copycat.server.storage.util;
+
+import io.atomix.catalyst.buffer.BufferInput;
+import io.atomix.catalyst.buffer.BufferOutput;
 
 /**
- * Log cleaner.
+ * Storage type serializer.
  */
-@FunctionalInterface
-public interface LogCleaner {
+public interface StorageSerializer<T> {
 
   /**
-   * Cleans the entry at the given index.
+   * Writes the object to the given output.
    *
-   * @param index The index at which to clean the entry.
+   * @param output The output to which to write the object.
+   * @param object The object to write.
    */
-  void clean(long index);
+  void writeObject(BufferOutput output, T object);
+
+  /**
+   * Reads the object from the given input.
+   *
+   * @param input The input from which to read the object.
+   * @param type The object type.
+   * @return The object.
+   */
+  T readObject(BufferInput input, Class<T> type);
 
 }

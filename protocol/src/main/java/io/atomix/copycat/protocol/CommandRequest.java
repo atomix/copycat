@@ -15,13 +15,9 @@
  */
 package io.atomix.copycat.protocol;
 
-import io.atomix.catalyst.buffer.BufferInput;
-import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.Command;
-import io.atomix.copycat.Operation;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -63,37 +59,9 @@ public class CommandRequest extends OperationRequest {
     return new Builder(request);
   }
 
-  private Command command;
-
-  /**
-   * Returns the command.
-   *
-   * @return The command.
-   */
-  public Command command() {
-    return command;
-  }
-
-  @Override
-  public Operation operation() {
-    return command;
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    command = serializer.readObject(buffer);
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    serializer.writeObject(command, buffer);
-  }
-
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, command);
+    return Objects.hash(getClass(), session, sequence, bytes);
   }
 
   @Override
@@ -102,14 +70,14 @@ public class CommandRequest extends OperationRequest {
       CommandRequest request = (CommandRequest) object;
       return request.session == session
         && request.sequence == sequence
-        && request.command.equals(command);
+        && Arrays.equals(request.bytes, bytes);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, command=%s]", getClass().getSimpleName(), session, sequence, command);
+    return String.format("%s[session=%d, sequence=%d, bytes=byte[%d]]", getClass().getSimpleName(), session, sequence, bytes.length);
   }
 
   /**
@@ -118,28 +86,6 @@ public class CommandRequest extends OperationRequest {
   public static class Builder extends OperationRequest.Builder<Builder, CommandRequest> {
     protected Builder(CommandRequest request) {
       super(request);
-    }
-
-    /**
-     * Sets the request command.
-     *
-     * @param command The request command.
-     * @return The request builder.
-     * @throws NullPointerException if {@code command} is null
-     */
-    public Builder withCommand(Command command) {
-      request.command = Assert.notNull(command, "command");
-      return this;
-    }
-
-    /**
-     * @throws IllegalStateException if session or sequence are less than 1, or command is null
-     */
-    @Override
-    public CommandRequest build() {
-      super.build();
-      Assert.stateNot(request.command == null, "command cannot be null");
-      return request;
     }
   }
 

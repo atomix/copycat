@@ -25,7 +25,6 @@ import io.atomix.catalyst.transport.Address;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.system.Configuration;
 import io.atomix.copycat.server.storage.system.MetaStore;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
 import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import org.testng.annotations.AfterMethod;
@@ -34,14 +33,24 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Metastore test.
@@ -60,7 +69,7 @@ public class MetaStoreTest {
     storage = Storage.builder()
       .withDirectory(new File(String.format("target/test-logs/%s", testId)))
       .build();
-    return new MetaStore("test", storage, new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization(), new StorageSerialization()).register(TestMember.class));
+    return new MetaStore("test", storage, new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization()).register(TestMember.class));
   }
 
   /**
@@ -143,7 +152,7 @@ public class MetaStoreTest {
       new TestMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000))
     ));
     Configuration configuration = new Configuration(1, 1, System.currentTimeMillis(), members);
-    Serializer serializer = new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization(), new StorageSerialization()).register(TestMember.class);
+    Serializer serializer = new Serializer().resolve(new ProtocolSerialization(), new ServerSerialization()).register(TestMember.class);
     serializer.writeObject(configuration.members(), buffer.position(12)
       .writeByte(1)
       .writeLong(configuration.index())

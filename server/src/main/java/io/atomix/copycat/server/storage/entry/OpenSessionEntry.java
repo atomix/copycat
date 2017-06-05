@@ -17,21 +17,25 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
 
 /**
  * Open session entry.
  */
-public class OpenSessionEntry extends ClientEntry<OpenSessionEntry> {
-  private String name;
-  private String type;
+public class OpenSessionEntry extends TimestampedEntry<OpenSessionEntry> {
+  private final String name;
+  private final String type;
+  private final long timeout;
 
-  public OpenSessionEntry() {
+  public OpenSessionEntry(long timestamp, String name, String type, long timeout) {
+    super(timestamp);
+    this.name = name;
+    this.type = type;
+    this.timeout = timeout;
   }
 
-  public OpenSessionEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<OpenSessionEntry> type() {
+    return Type.OPEN_SESSION;
   }
 
   /**
@@ -39,58 +43,48 @@ public class OpenSessionEntry extends ClientEntry<OpenSessionEntry> {
    *
    * @return The session's state machine name.
    */
-  public String getName() {
+  public String name() {
     return name;
   }
 
   /**
-   * Sets the session's state machine name.
+   * Returns the session state machine type name.
    *
-   * @param name The session's state machine name.
-   * @return The open session entry.
+   * @return The session's state machine type name.
    */
-  public OpenSessionEntry setName(String name) {
-    this.name = name;
-    return this;
-  }
-
-  /**
-   * Returns the session state machine type.
-   *
-   * @return The session's state machine type.
-   */
-  public String getType() {
+  public String typeName() {
     return type;
   }
 
   /**
-   * Sets the session's state machine type.
+   * Returns the session timeout.
    *
-   * @param type The session's state machine type.
-   * @return The open session entry.
+   * @return The session timeout.
    */
-  public OpenSessionEntry setType(String type) {
-    this.type = type;
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    buffer.writeString(name);
-    buffer.writeString(type);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    name = buffer.readString();
-    type = buffer.readString();
+  public long timeout() {
+    return timeout;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, client=%s, name=%s, type=%s, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), getName(), getType(), getTimestamp());
+    return String.format("%s[name=%s, type=%s, timeout=%d, timestamp=%d]", getClass().getSimpleName(), name, type, timeout, timestamp);
   }
 
+  /**
+   * Open session entry serializer.
+   */
+  public static class Serializer implements TimestampedEntry.Serializer<OpenSessionEntry> {
+    @Override
+    public void writeObject(BufferOutput output, OpenSessionEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeString(entry.name);
+      output.writeString(entry.type);
+      output.writeLong(entry.timeout);
+    }
+
+    @Override
+    public OpenSessionEntry readObject(BufferInput input, Class<OpenSessionEntry> type) {
+      return new OpenSessionEntry(input.readLong(), input.readString(), input.readString(), input.readLong());
+    }
+  }
 }

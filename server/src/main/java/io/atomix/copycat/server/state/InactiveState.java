@@ -17,9 +17,39 @@ package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.concurrent.Futures;
 import io.atomix.catalyst.transport.Connection;
-import io.atomix.copycat.protocol.*;
+import io.atomix.copycat.protocol.CloseSessionRequest;
+import io.atomix.copycat.protocol.CloseSessionResponse;
+import io.atomix.copycat.protocol.CommandRequest;
+import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.ConnectRequest;
+import io.atomix.copycat.protocol.ConnectResponse;
+import io.atomix.copycat.protocol.KeepAliveRequest;
+import io.atomix.copycat.protocol.KeepAliveResponse;
+import io.atomix.copycat.protocol.MetadataRequest;
+import io.atomix.copycat.protocol.MetadataResponse;
+import io.atomix.copycat.protocol.OpenSessionRequest;
+import io.atomix.copycat.protocol.OpenSessionResponse;
+import io.atomix.copycat.protocol.QueryRequest;
+import io.atomix.copycat.protocol.QueryResponse;
+import io.atomix.copycat.protocol.ResetRequest;
+import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.ConfigureRequest;
+import io.atomix.copycat.server.protocol.ConfigureResponse;
+import io.atomix.copycat.server.protocol.InstallRequest;
+import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.LeaveRequest;
+import io.atomix.copycat.server.protocol.LeaveResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.ReconfigureRequest;
+import io.atomix.copycat.server.protocol.ReconfigureResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
 import io.atomix.copycat.server.storage.system.Configuration;
 
 import java.util.concurrent.CompletableFuture;
@@ -70,22 +100,12 @@ class InactiveState extends AbstractState {
   }
 
   @Override
-  public CompletableFuture<RegisterResponse> register(RegisterRequest request) {
-    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
-  }
-
-  @Override
   public CompletableFuture<ConnectResponse> connect(ConnectRequest request, Connection connection) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 
   @Override
   public CompletableFuture<KeepAliveResponse> keepAlive(KeepAliveRequest request) {
-    return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
-  }
-
-  @Override
-  public CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request) {
     return Futures.exceptionalFuture(new IllegalStateException("inactive state"));
   }
 

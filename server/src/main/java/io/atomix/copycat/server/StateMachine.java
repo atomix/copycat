@@ -213,7 +213,7 @@ import java.util.function.Function;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class StateMachine {
+public abstract class StateMachine implements Snapshottable {
   protected StateMachineExecutor executor;
   protected StateMachineContext context;
   protected Clock clock;

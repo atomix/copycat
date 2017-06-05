@@ -16,20 +16,31 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.protocol.CommandRequest;
-import io.atomix.copycat.protocol.QueryRequest;
 import io.atomix.copycat.protocol.CommandResponse;
+import io.atomix.copycat.protocol.QueryRequest;
 import io.atomix.copycat.protocol.QueryResponse;
 import io.atomix.copycat.protocol.Response.Status;
-import io.atomix.copycat.server.TestStateMachine.TestCommand;
-import io.atomix.copycat.server.TestStateMachine.TestQuery;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.JoinRequest;
+import io.atomix.copycat.server.protocol.JoinResponse;
+import io.atomix.copycat.server.protocol.LeaveRequest;
+import io.atomix.copycat.server.protocol.LeaveResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.TestEntry;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.util.Collections;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Passive state tests.
@@ -62,7 +73,6 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLogIndex(0)
         .withLogTerm(0)
         .withCommitIndex(0)
-        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -85,7 +95,6 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLeader(leader)
         .withEntries(Collections.EMPTY_LIST)
         .withCommitIndex(0)
-        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -111,7 +120,6 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLogIndex(2)
         .withLogTerm(2)
         .withCommitIndex(0)
-        .withGlobalIndex(0)
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -133,8 +141,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLogIndex(0)
         .withLogTerm(0)
         .withCommitIndex(1)
-        .withGlobalIndex(0)
-        .withEntries(new TestEntry().setIndex(1).setTerm(1))
+        .addEntry(new Indexed<>(1, 1, new TestEntry(), 1))
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -144,7 +151,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       assertEquals(response.term(), 1L);
       assertEquals(response.logIndex(), 1L);
 
-      assertEquals(serverContext.getLog().length(), 1L);
+      assertEquals(serverContext.getLogWriter().lastIndex(), 1L);
       assertNotNull(get(1));
     });
   }
@@ -160,8 +167,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
         .withLogIndex(0)
         .withLogTerm(0)
         .withCommitIndex(2)
-        .withGlobalIndex(0)
-        .withEntries(new TestEntry().setIndex(2).setTerm(1))
+        .addEntry(new Indexed<>(2, 1, new TestEntry(), 1))
         .build();
 
       AppendResponse response = state.append(request).get();
@@ -171,43 +177,14 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
       assertEquals(response.term(), 1L);
       assertEquals(response.logIndex(), 2L);
 
-      assertEquals(serverContext.getLog().length(), 2L);
+      assertEquals(serverContext.getLogWriter().lastIndex(), 2L);
       assertNotNull(get(2));
-    });
-  }
-
-  public void testAppendSkippedEntries() throws Throwable {
-    runOnServer(() -> {
-      serverContext.setTerm(1);
-      append(1, 1);
-
-      AppendRequest request = AppendRequest.builder()
-        .withTerm(1)
-        .withLeader(serverContext.getClusterState().getActiveMemberStates().iterator().next().getMember().id())
-        .withLogIndex(1)
-        .withLogTerm(1)
-        .withCommitIndex(4)
-        .withGlobalIndex(0)
-        .withEntries(new TestEntry().setIndex(2).setTerm(1), new TestEntry().setIndex(4).setTerm(1))
-        .build();
-
-      AppendResponse response = state.append(request).get();
-
-      assertEquals(response.status(), Status.OK);
-      assertTrue(response.succeeded());
-      assertEquals(response.term(), 1L);
-      assertEquals(response.logIndex(), 4L);
-
-      assertEquals(serverContext.getLog().length(), 4L);
-      assertNotNull(get(2));
-      assertNull(get(3));
-      assertNotNull(get(4));
     });
   }
 
   public void testCommandWithoutLeader() throws Throwable {
     runOnServer(() -> {
-      CommandRequest request = CommandRequest.builder().withSession(1).withCommand(new TestCommand("test")).build();
+      CommandRequest request = CommandRequest.builder().withSession(1).withBytes(new byte[0]).build();
       CommandResponse response = state.command(request).get();
       assertNoLeaderError(response);
     });
@@ -231,7 +208,7 @@ public class PassiveStateTest extends AbstractStateTest<PassiveState> {
 
   public void testQueryWithoutLeader() throws Throwable {
     runOnServer(() -> {
-      QueryRequest request = QueryRequest.builder().withSession(1).withQuery(new TestQuery()).build();
+      QueryRequest request = QueryRequest.builder().withSession(1).withBytes(new byte[0]).build();
       QueryResponse response = state.query(request).get();
       assertNoLeaderError(response);
     });

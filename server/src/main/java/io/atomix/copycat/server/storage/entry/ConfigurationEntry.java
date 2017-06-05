@@ -17,13 +17,15 @@ package io.atomix.copycat.server.storage.entry;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
+import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.catalyst.util.reference.ReferenceManager;
 import io.atomix.copycat.server.cluster.Member;
-import io.atomix.copycat.server.storage.compaction.Compaction;
+import io.atomix.copycat.server.state.ServerMember;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Stores a cluster configuration.
@@ -36,18 +38,16 @@ import java.util.Collection;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
-  private Collection<Member> members;
+  private final Collection<Member> members;
 
-  public ConfigurationEntry() {
-  }
-
-  public ConfigurationEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  public ConfigurationEntry(long timestamp, Collection<Member> members) {
+    super(timestamp);
+    this.members = Assert.notNull(members, "members");
   }
 
   @Override
-  public Compaction.Mode getCompactionMode() {
-    return Compaction.Mode.FULL;
+  public Type<ConfigurationEntry> type() {
+    return Type.CONFIGURATION;
   }
 
   /**
@@ -55,37 +55,55 @@ public class ConfigurationEntry extends TimestampedEntry<ConfigurationEntry> {
    *
    * @return The members.
    */
-  public Collection<Member> getMembers() {
+  public Collection<Member> members() {
     return members;
-  }
-
-  /**
-   * Sets the members.
-   *
-   * @param members The members.
-   * @return The configuration entry.
-   * @throws NullPointerException if {@code members} is null
-   */
-  public ConfigurationEntry setMembers(Collection<Member> members) {
-    this.members = Assert.notNull(members, "members");
-    return this;
-  }
-
-  @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
-    super.writeObject(buffer, serializer);
-    serializer.writeObject(members, buffer);
-  }
-
-  @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
-    super.readObject(buffer, serializer);
-    members = serializer.readObject(buffer);
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, timestamp=%d, members=%s]", getClass().getSimpleName(), getIndex(), getTerm(), getTimestamp(), members);
+    return String.format("%s[timestamp=%d, members=%s]", getClass().getSimpleName(), timestamp(), members);
   }
 
+  /**
+   * Configuration entry serializer.
+   */
+  public static class Serializer implements TimestampedEntry.Serializer<ConfigurationEntry> {
+    @Override
+    public void writeObject(BufferOutput output, ConfigurationEntry entry) {
+      output.writeLong(entry.timestamp);
+      output.writeInt(entry.members.size());
+      for (Member member : entry.members) {
+        output.writeByte(member.type().ordinal());
+        output.writeByte(member.status().ordinal());
+        output.writeString(member.serverAddress().host()).writeInt(member.serverAddress().port());
+        if (member.clientAddress() != null) {
+          output.writeBoolean(true)
+            .writeString(member.clientAddress().host())
+            .writeInt(member.clientAddress().port());
+        } else {
+          output.writeBoolean(false);
+        }
+        output.writeLong(member.updated().toEpochMilli());
+      }
+    }
+
+    @Override
+    public ConfigurationEntry readObject(BufferInput input, Class<ConfigurationEntry> type) {
+      long timestamp = input.readLong();
+      int size = input.readInt();
+      List<Member> members = new ArrayList<>(size);
+      for (int i = 0; i < size; i++) {
+        Member.Type memberType = Member.Type.values()[input.readByte()];
+        Member.Status memberStatus = Member.Status.values()[input.readByte()];
+        Address serverAddress = new Address(input.readString(), input.readInt());
+        Address clientAddress = null;
+        if (input.readBoolean()) {
+          clientAddress = new Address(input.readString(), input.readInt());
+        }
+        Instant updated = Instant.ofEpochMilli(input.readLong());
+        members.add(new ServerMember(memberType, memberStatus, serverAddress, clientAddress, updated));
+      }
+      return new ConfigurationEntry(timestamp, members);
+    }
+  }
 }

@@ -19,7 +19,6 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.Operation;
 
 /**
  * Client operation request.
@@ -34,6 +33,7 @@ import io.atomix.copycat.Operation;
  */
 public abstract class OperationRequest extends SessionRequest {
   protected long sequence;
+  protected byte[] bytes;
 
   /**
    * Returns the request sequence number.
@@ -49,18 +49,24 @@ public abstract class OperationRequest extends SessionRequest {
    *
    * @return The request operation.
    */
-  public abstract Operation operation();
+  public byte[] bytes() {
+    return bytes;
+  }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     sequence = buffer.readLong();
+    bytes = new byte[buffer.readInt()];
+    buffer.read(bytes);
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(sequence);
+    buffer.writeInt(bytes.length);
+    buffer.write(bytes);
   }
 
   /**
@@ -84,10 +90,24 @@ public abstract class OperationRequest extends SessionRequest {
       return (T) this;
     }
 
+    /**
+     * Sets the request bytes.
+     *
+     * @param bytes The request operation bytes.
+     * @return The request builder.
+     * @throws NullPointerException if the request {@code bytes} are {@code null}
+     */
+    @SuppressWarnings("unchecked")
+    public T withBytes(byte[] bytes) {
+      request.bytes = Assert.notNull(bytes, "bytes");
+      return (T) this;
+    }
+
     @Override
     public U build() {
       super.build();
       Assert.stateNot(request.sequence < 0, "sequence cannot be less than 0");
+      Assert.notNull(request.bytes, "bytes");
       return request;
     }
   }

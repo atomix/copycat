@@ -53,8 +53,9 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
   ServerMember() {
   }
 
-  public ServerMember(Member.Type type, Address serverAddress, Address clientAddress, Instant updated) {
+  public ServerMember(Member.Type type, Member.Status status, Address serverAddress, Address clientAddress, Instant updated) {
     this.type = Assert.notNull(type, "type");
+    this.status = Assert.notNull(status, "status");
     this.serverAddress = Assert.notNull(serverAddress, "serverAddress");
     this.clientAddress = clientAddress;
     this.updated = Assert.notNull(updated, "updated");
@@ -230,7 +231,7 @@ public final class ServerMember implements Member, CatalystSerializable, AutoClo
     cluster.getContext().getServerState().reconfigure(ReconfigureRequest.builder()
       .withIndex(cluster.getConfiguration().index())
       .withTerm(cluster.getConfiguration().term())
-      .withMember(new ServerMember(type, serverAddress(), clientAddress(), updated))
+      .withMember(new ServerMember(type, status, serverAddress(), clientAddress(), updated))
       .build()).whenComplete((response, error) -> {
       if (error == null) {
         if (response.status() == Response.Status.OK) {

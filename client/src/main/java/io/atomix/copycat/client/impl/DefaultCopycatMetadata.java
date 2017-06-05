@@ -18,12 +18,11 @@ package io.atomix.copycat.client.impl;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.client.CommunicationStrategies;
-import io.atomix.copycat.metadata.CopycatClientMetadata;
 import io.atomix.copycat.client.CopycatMetadata;
-import io.atomix.copycat.metadata.CopycatSessionMetadata;
 import io.atomix.copycat.client.session.impl.CopycatClientConnection;
 import io.atomix.copycat.client.util.AddressSelectorManager;
 import io.atomix.copycat.client.util.ClientConnectionManager;
+import io.atomix.copycat.metadata.CopycatSessionMetadata;
 import io.atomix.copycat.protocol.MetadataRequest;
 import io.atomix.copycat.protocol.MetadataResponse;
 import io.atomix.copycat.protocol.Response;
@@ -74,11 +73,6 @@ public class DefaultCopycatMetadata implements CopycatMetadata {
       }
     });
     return future;
-  }
-
-  @Override
-  public CompletableFuture<Set<CopycatClientMetadata>> getClients() {
-    return getMetadata().thenApply(MetadataResponse::clients);
   }
 
   @Override

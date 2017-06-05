@@ -19,9 +19,9 @@ import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.Operation;
 import io.atomix.copycat.Query;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -67,7 +67,7 @@ public class QueryRequest extends OperationRequest {
   }
 
   private long index;
-  private Query query;
+  private Query.ConsistencyLevel consistency;
 
   /**
    * Returns the query index.
@@ -79,36 +79,31 @@ public class QueryRequest extends OperationRequest {
   }
 
   /**
-   * Returns the query.
+   * Returns the query consistency level.
    *
-   * @return The query.
+   * @return The query consistency level.
    */
-  public Query query() {
-    return query;
-  }
-
-  @Override
-  public Operation operation() {
-    return query;
+  public Query.ConsistencyLevel consistency() {
+    return consistency;
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
     index = buffer.readLong();
-    query = serializer.readObject(buffer);
+    consistency = Query.ConsistencyLevel.values()[buffer.readByte()];
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
     buffer.writeLong(index);
-    serializer.writeObject(query, buffer);
+    buffer.writeByte(consistency.ordinal());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, sequence, index, query);
+    return Objects.hash(getClass(), session, sequence, index, bytes);
   }
 
   @Override
@@ -117,14 +112,15 @@ public class QueryRequest extends OperationRequest {
       QueryRequest request = (QueryRequest) object;
       return request.session == session
         && request.sequence == sequence
-        && request.query.equals(query);
+        && request.consistency == consistency
+        && Arrays.equals(request.bytes, bytes);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, sequence=%d, index=%d, query=%s]", getClass().getSimpleName(), session, sequence, index, query);
+    return String.format("%s[session=%d, sequence=%d, index=%d, consistency=%s, bytes=byte[%d]]", getClass().getSimpleName(), session, sequence, index, consistency, bytes.length);
   }
 
   /**
@@ -148,14 +144,13 @@ public class QueryRequest extends OperationRequest {
     }
 
     /**
-     * Sets the request query.
+     * Sets the query consistency level.
      *
-     * @param query The request query.
+     * @param consistency The query consistency level.
      * @return The request builder.
-     * @throws NullPointerException if {@code query} is null
      */
-    public Builder withQuery(Query query) {
-      request.query = Assert.notNull(query, "query");
+    public Builder withConsistency(Query.ConsistencyLevel consistency) {
+      request.consistency = Assert.notNull(consistency, "consistency");
       return this;
     }
 
@@ -166,7 +161,7 @@ public class QueryRequest extends OperationRequest {
     public QueryRequest build() {
       super.build();
       Assert.stateNot(request.index < 0, "index cannot be less than 0");
-      Assert.stateNot(request.query == null, "query cannot be null");
+      Assert.notNull(request.consistency, "consistency");
       return request;
     }
   }

@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,9 +17,6 @@ package io.atomix.copycat.server.storage;
 
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
-import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.reference.ReferenceManager;
-import io.atomix.copycat.server.storage.compaction.Compaction;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 /**
@@ -28,54 +25,34 @@ import io.atomix.copycat.server.storage.entry.Entry;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class TestEntry extends Entry<TestEntry> {
-  /** Padding to vary the stored size of an entry */
-  private Compaction.Mode compaction = Compaction.Mode.QUORUM;
-  private int paddingSize;
-  private byte[] padding = new byte[0];
+  private final byte[] bytes;
 
   public TestEntry() {
+    this(new byte[0]);
   }
 
-  public TestEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
-  }
-
-  @Override
-  public void readObject(BufferInput<?> buffer, Serializer serializer) {
-    setTerm(buffer.readLong());
-    compaction = Compaction.Mode.values()[buffer.readByte()];
-    paddingSize = buffer.readInt();
-    padding = new byte[paddingSize];
-    buffer.read(padding);
+  public TestEntry(byte[] bytes) {
+    this.bytes = bytes;
   }
 
   @Override
-  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(getTerm()).writeByte(compaction.ordinal()).writeInt(paddingSize).write(padding);
-  }
+  public Type<TestEntry> type() {
+    return new Type<>(10, TestEntry.class, new Serializer<TestEntry>() {
+      @Override
+      public void writeObject(BufferOutput output, TestEntry object) {
+        output.writeInt(bytes.length);
+      }
 
-  public byte[] getPadding() {
-    return padding;
-  }
-
-  public void setPadding(int paddingSize) {
-    this.paddingSize = paddingSize;
-    this.padding = new byte[paddingSize];
-  }
-
-  @Override
-  public Compaction.Mode getCompactionMode() {
-    return compaction;
-  }
-
-  public TestEntry setCompactionMode(Compaction.Mode mode) {
-    this.compaction = mode;
-    return this;
+      @Override
+      public TestEntry readObject(BufferInput input, Class<TestEntry> type) {
+        return new TestEntry(new byte[input.readInt()]);
+      }
+    });
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, compaction=%s]", getClass().getSimpleName(), getIndex(), getTerm(), compaction);
+    return String.format("%s[bytes=byte[%d]]", getClass().getSimpleName(), bytes.length);
   }
 
 }

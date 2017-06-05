@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.AbstractRequest;
+import io.atomix.copycat.server.storage.Indexed;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.ArrayList;
@@ -62,9 +63,8 @@ public class AppendRequest extends AbstractRequest {
   private int leader;
   private long logIndex;
   private long logTerm;
-  private List<Entry> entries;
+  private List<Indexed<? extends Entry<?>>> entries;
   private long commitIndex = -1;
-  private long globalIndex = -1;
 
   /**
    * Returns the requesting node's current term.
@@ -107,7 +107,7 @@ public class AppendRequest extends AbstractRequest {
    *
    * @return A list of log entries.
    */
-  public List<? extends Entry> entries() {
+  public List<Indexed<? extends Entry<?>>> entries() {
     return entries;
   }
 
@@ -120,54 +120,37 @@ public class AppendRequest extends AbstractRequest {
     return commitIndex;
   }
 
-  /**
-   * Returns the leader's global index.
-   *
-   * @return The leader global index.
-   */
-  public long globalIndex() {
-    return globalIndex;
-  }
-
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
-    buffer.writeLong(term)
-      .writeInt(leader)
-      .writeLong(logIndex)
-      .writeLong(logTerm)
-      .writeLong(commitIndex)
-      .writeLong(globalIndex);
-
+    buffer.writeLong(term);
+    buffer.writeInt(leader);
+    buffer.writeLong(logIndex);
+    buffer.writeLong(logTerm);
     buffer.writeInt(entries.size());
-    for (Entry entry : entries) {
-      buffer.writeLong(entry.getIndex()).writeLong(entry.getTerm());
-      serializer.writeObject(entry, buffer);
+    for (Indexed entry : entries) {
+      new Indexed.Serializer().writeObject(buffer, entry);
     }
+    buffer.writeLong(commitIndex);
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     term = buffer.readLong();
     leader = buffer.readInt();
     logIndex = buffer.readLong();
     logTerm = buffer.readLong();
-    commitIndex = buffer.readLong();
-    globalIndex = buffer.readLong();
-
-    int numEntries = buffer.readInt();
-    entries = new ArrayList<>(numEntries);
-    for (int i = 0; i < numEntries; i++) {
-      long index = buffer.readLong();
-      long term = buffer.readLong();
-      Entry entry = serializer.readObject(buffer);
-      entry.setIndex(index).setTerm(term);
-      entries.add(entry);
+    final int size = buffer.readInt();
+    entries = new ArrayList<>(size);
+    for (int i = 0; i < size; i++) {
+      entries.add(new Indexed.Serializer().readObject(buffer, Indexed.class));
     }
+    commitIndex = buffer.readLong();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, logIndex, logTerm, entries, commitIndex, globalIndex);
+    return Objects.hash(getClass(), term, leader, logIndex, logTerm, entries, commitIndex);
   }
 
   @Override
@@ -179,15 +162,14 @@ public class AppendRequest extends AbstractRequest {
         && request.logIndex == logIndex
         && request.logTerm == logTerm
         && request.entries.equals(entries)
-        && request.commitIndex == commitIndex
-        && request.globalIndex == globalIndex;
+        && request.commitIndex == commitIndex;
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%s, logIndex=%d, logTerm=%d, entries=[%d], commitIndex=%d, globalIndex=%d]", getClass().getSimpleName(), term, leader, logIndex, logTerm, entries.size(), commitIndex, globalIndex);
+    return String.format("%s[term=%d, leader=%s, logIndex=%d, logTerm=%d, entries=[%d], commitIndex=%d]", getClass().getSimpleName(), term, leader, logIndex, logTerm, entries.size(), commitIndex);
   }
 
   /**
@@ -253,7 +235,7 @@ public class AppendRequest extends AbstractRequest {
      * @return The append request builder.
      * @throws NullPointerException if {@code entries} is null
      */
-    public Builder withEntries(Entry... entries) {
+    public Builder withEntries(Indexed<? extends Entry<?>>... entries) {
       return withEntries(Arrays.asList(Assert.notNull(entries, "entries")));
     }
 
@@ -265,8 +247,8 @@ public class AppendRequest extends AbstractRequest {
      * @throws NullPointerException if {@code entries} is null
      */
     @SuppressWarnings("unchecked")
-    public Builder withEntries(List<? extends Entry> entries) {
-      request.entries = (List<Entry>) Assert.notNull(entries, "entries");
+    public Builder withEntries(List<Indexed<? extends Entry<?>>> entries) {
+      request.entries = Assert.notNull(entries, "entries");
       return this;
     }
 
@@ -277,7 +259,7 @@ public class AppendRequest extends AbstractRequest {
      * @return The request builder.
      * @throws NullPointerException if {@code entry} is {@code null}
      */
-    public Builder addEntry(Entry entry) {
+    public Builder addEntry(Indexed<? extends Entry<?>> entry) {
       request.entries.add(Assert.notNull(entry, "entry"));
       return this;
     }
@@ -291,18 +273,6 @@ public class AppendRequest extends AbstractRequest {
      */
     public Builder withCommitIndex(long index) {
       request.commitIndex = Assert.argNot(index, index < 0, "commit index must not be negative");
-      return this;
-    }
-
-    /**
-     * Sets the request global index.
-     *
-     * @param index The request global index.
-     * @return The append request builder.
-     * @throws IllegalArgumentException if index is not positive
-     */
-    public Builder withGlobalIndex(long index) {
-      request.globalIndex = Assert.argNot(index, index < 0, "global index must not be negative");
       return this;
     }
 
@@ -322,7 +292,6 @@ public class AppendRequest extends AbstractRequest {
       }
       Assert.stateNot(request.entries == null, "entries cannot be null");
       Assert.stateNot(request.commitIndex < 0, "commit index must not be negative");
-      Assert.stateNot(request.globalIndex < 0, "global index must not be negative");
       return request;
     }
 

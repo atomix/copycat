@@ -15,16 +15,18 @@
  */
 package io.atomix.copycat.server.storage.entry;
 
-import io.atomix.catalyst.util.reference.ReferenceManager;
-
 /**
  * Metadata entry.
  */
-public class MetadataEntry extends ClientEntry<MetadataEntry> {
-  public MetadataEntry() {
+public class MetadataEntry extends SessionEntry<MetadataEntry> {
+
+  public MetadataEntry(long timestamp, long session) {
+    super(timestamp, session);
   }
 
-  public MetadataEntry(ReferenceManager<Entry<?>> referenceManager) {
-    super(referenceManager);
+  @Override
+  public Type<MetadataEntry> type() {
+    return Type.METADATA;
   }
+
 }

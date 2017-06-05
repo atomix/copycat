@@ -18,7 +18,15 @@ package io.atomix.copycat.server.state;
 import io.atomix.copycat.protocol.Request;
 import io.atomix.copycat.protocol.Response;
 import io.atomix.copycat.server.CopycatServer;
-import io.atomix.copycat.server.protocol.*;
+import io.atomix.copycat.server.protocol.AppendRequest;
+import io.atomix.copycat.server.protocol.AppendResponse;
+import io.atomix.copycat.server.protocol.PollRequest;
+import io.atomix.copycat.server.protocol.PollResponse;
+import io.atomix.copycat.server.protocol.VoteRequest;
+import io.atomix.copycat.server.protocol.VoteResponse;
+import io.atomix.copycat.server.storage.Indexed;
+import io.atomix.copycat.server.storage.LogReader;
+import io.atomix.copycat.server.storage.LogWriter;
 import io.atomix.copycat.server.storage.entry.Entry;
 
 import java.util.concurrent.CompletableFuture;
@@ -56,37 +64,40 @@ abstract class ActiveState extends PassiveState {
 
   @Override
   protected AppendResponse checkPreviousEntry(AppendRequest request) {
-    if (request.logIndex() != 0 && context.getLog().isEmpty()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
-        .build();
-    } else if (request.logIndex() != 0 && context.getLog().lastIndex() != 0 && request.logIndex() > context.getLog().lastIndex()) {
-      LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), context.getLog().lastIndex());
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(context.getLog().lastIndex())
-        .build();
-    }
+    // If the request log index is positive, ensure it aligns with the local log.
+    if (request.logIndex() != 0) {
+      final long lastIndex = context.getLogWriter().lastIndex();
+      if (request.logIndex() > lastIndex) {
+        LOGGER.debug("{} - Rejected {}: Previous index ({}) is greater than the local log's last index ({})", context.getCluster().member().address(), request, request.logIndex(), lastIndex);
+        return AppendResponse.builder()
+          .withStatus(Response.Status.OK)
+          .withTerm(context.getTerm())
+          .withSucceeded(false)
+          .withLogIndex(lastIndex)
+          .build();
+      }
 
-    // If the previous entry term doesn't match the local previous term then reject the request.
-    long term = context.getLog().term(request.logIndex());
-    if (term == 0 || term != request.logTerm()) {
-      LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, term);
-      return AppendResponse.builder()
-        .withStatus(Response.Status.OK)
-        .withTerm(context.getTerm())
-        .withSucceeded(false)
-        .withLogIndex(request.logIndex() <= context.getLog().lastIndex() ? request.logIndex() - 1 : context.getLog().lastIndex())
-        .build();
-    } else {
-      return appendEntries(request);
+      final LogReader reader = context.getLogReader();
+
+      // Lock the reader.
+      reader.lock();
+      try {
+        // If the previous entry term doesn't match the local previous term then reject the request.
+        Indexed<? extends Entry<?>> entry = reader.get(request.logIndex());
+        if (entry == null || entry.term() != request.logTerm()) {
+          LOGGER.debug("{} - Rejected {}: Request log term does not match local log term {} for the same entry", context.getCluster().member().address(), request, entry != null ? entry.term() : "unknown");
+          return AppendResponse.builder()
+            .withStatus(Response.Status.OK)
+            .withTerm(context.getTerm())
+            .withSucceeded(false)
+            .withLogIndex(request.logIndex() <= lastIndex ? request.logIndex() - 1 : lastIndex)
+            .build();
+        }
+      } finally {
+        reader.unlock();
+      }
     }
+    return appendEntries(request);
   }
 
   @Override
@@ -94,40 +105,38 @@ abstract class ActiveState extends PassiveState {
     // Get the last entry index or default to the request log index.
     long lastEntryIndex = request.logIndex();
     if (!request.entries().isEmpty()) {
-      lastEntryIndex = request.entries().get(request.entries().size() - 1).getIndex();
+      lastEntryIndex = request.entries().get(request.entries().size() - 1).index();
     }
 
     // Ensure the commitIndex is not increased beyond the index of the last entry in the request.
     long commitIndex = Math.max(context.getCommitIndex(), Math.min(request.commitIndex(), lastEntryIndex));
 
-    // Iterate through request entries and append them to the log.
-    for (Entry entry : request.entries()) {
-      // If the entry index is greater than the last log index, skip missing entries.
-      if (context.getLog().lastIndex() < entry.getIndex()) {
-        context.getLog().skip(entry.getIndex() - context.getLog().lastIndex() - 1).append(entry);
-        LOGGER.trace("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
-      } else if (entry.getIndex() > context.getCommitIndex()) {
-        // Compare the term of the received entry with the matching entry in the log.
-        long term = context.getLog().term(entry.getIndex());
-        if (term != 0) {
-          if (entry.getTerm() != term) {
-            // We found an invalid entry in the log. Remove the invalid entry and append the new entry.
-            // If appending to the log fails, apply commits and reply false to the append request.
-            LOGGER.debug("{} - Appended entry term does not match local log, removing incorrect entries", context.getCluster().member().address());
-            context.getLog().truncate(entry.getIndex() - 1).append(entry);
-            LOGGER.trace("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
+    // Get the server log reader/writer.
+    final LogReader reader = context.getLogReader();
+    final LogWriter writer = context.getLogWriter();
+
+    // If the request entries are non-empty, write them to the log.
+    if (!request.entries().isEmpty()) {
+      writer.lock();
+      try {
+        for (Indexed<? extends Entry> entry : request.entries()) {
+          // Read the existing entry from the log. If the entry does not exist in the log,
+          // append it. If the entry's term is different than the term of the entry in the log,
+          // overwrite the entry in the log. This will force the log to be truncated if necessary.
+          Indexed<? extends Entry<?>> existing = reader.get(entry.index());
+          if (existing == null || existing.term() != entry.term()) {
+            writer.append(entry);
+            LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
           }
-        } else {
-          context.getLog().truncate(entry.getIndex() - 1).append(entry);
-          LOGGER.trace("{} - Appended {} to log at index {}", context.getCluster().member().address(), entry, entry.getIndex());
         }
+      } finally {
+        writer.unlock();
       }
     }
 
     // If we've made it this far, apply commits and send a successful response.
     long previousCommitIndex = context.getCommitIndex();
     context.setCommitIndex(commitIndex);
-    context.setGlobalIndex(request.globalIndex());
 
     if (context.getCommitIndex() > previousCommitIndex) {
       LOGGER.trace("{} - Committed entries up to index {}", context.getCluster().member().address(), commitIndex);
@@ -140,7 +149,7 @@ abstract class ActiveState extends PassiveState {
       .withStatus(Response.Status.OK)
       .withTerm(context.getTerm())
       .withSucceeded(true)
-      .withLogIndex(context.getLog().lastIndex())
+      .withLogIndex(lastEntryIndex)
       .build();
   }
 
@@ -272,19 +281,18 @@ abstract class ActiveState extends PassiveState {
    * Returns a boolean value indicating whether the given candidate's log is up-to-date.
    */
   boolean isLogUpToDate(long lastIndex, long lastTerm, Request request) {
+    // Read the last entry from the log.
+    final Indexed<?> lastEntry = context.getLogWriter().lastEntry();
+
     // If the log is empty then vote for the candidate.
-    if (context.getLog().isEmpty()) {
+    if (lastEntry == null) {
       LOGGER.trace("{} - Accepted {}: candidate's log is up-to-date", context.getCluster().member().address(), request);
       return true;
     }
 
-    // Read the last entry index and term from the log.
-    long localLastIndex = context.getLog().lastIndex();
-    long localLastTerm = context.getLog().term(localLastIndex);
-
     // If the candidate's last log term is lower than the local log's last entry term, reject the request.
-    if (lastTerm < localLastTerm) {
-      LOGGER.trace("{} - Rejected {}: candidate's last log entry ({}) is at a lower term than the local log ({})", context.getCluster().member().address(), request, lastTerm, localLastTerm);
+    if (lastTerm < lastEntry.term()) {
+      LOGGER.trace("{} - Rejected {}: candidate's last log entry ({}) is at a lower term than the local log ({})", context.getCluster().member().address(), request, lastTerm, lastEntry.term());
       return false;
     }
 
@@ -292,8 +300,8 @@ abstract class ActiveState extends PassiveState {
     // candidate's last index is less than the local log's last index. If the candidate's last log term is
     // greater than the local log's last term then it's considered up to date, and if both have the same term
     // then the candidate's last index must be greater than the local log's last index.
-    if (lastTerm == localLastTerm && lastIndex < localLastIndex) {
-      LOGGER.trace("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().member().address(), request, lastIndex, localLastIndex);
+    if (lastTerm == lastEntry.term() && lastIndex < lastEntry.index()) {
+      LOGGER.trace("{} - Rejected {}: candidate's last log entry ({}) is at a lower index than the local log ({})", context.getCluster().member().address(), request, lastIndex, lastEntry.index());
       return false;
     }
 

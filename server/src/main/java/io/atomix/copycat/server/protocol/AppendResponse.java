@@ -174,7 +174,7 @@ public class AppendResponse extends AbstractResponse {
      * @throws IllegalArgumentException if {@code index} is negative
      */
     public Builder withLogIndex(long index) {
-      response.logIndex = Assert.argNot(index, index < 0, "term must not be negative");
+      response.logIndex = Assert.argNot(index, index < 0, "index must not be negative");
       return this;
     }
 

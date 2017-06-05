@@ -16,7 +16,11 @@
 package io.atomix.copycat.server;
 
 import io.atomix.catalyst.buffer.PooledHeapAllocator;
-import io.atomix.catalyst.concurrent.*;
+import io.atomix.catalyst.concurrent.CatalystThreadFactory;
+import io.atomix.catalyst.concurrent.Futures;
+import io.atomix.catalyst.concurrent.Listener;
+import io.atomix.catalyst.concurrent.SingleThreadContext;
+import io.atomix.catalyst.concurrent.ThreadContext;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Server;
@@ -35,14 +39,15 @@ import io.atomix.copycat.server.state.StateMachineRegistry;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
 import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executors;
@@ -1078,7 +1083,6 @@ public class CopycatServer {
       serializer.resolve(new ClientResponseTypeResolver());
       serializer.resolve(new ProtocolSerialization());
       serializer.resolve(new ServerSerialization());
-      serializer.resolve(new StorageSerialization());
 
       // If the storage is not configured, create a new Storage instance with the configured serializer.
       if (storage == null) {

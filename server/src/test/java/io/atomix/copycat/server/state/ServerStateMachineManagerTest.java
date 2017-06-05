@@ -33,7 +33,8 @@ import io.atomix.copycat.server.StateMachineExecutor;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
-import io.atomix.copycat.server.storage.util.StorageSerialization;
+import io.atomix.copycat.server.storage.snapshot.SnapshotReader;
+import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 import io.atomix.copycat.server.util.ServerSerialization;
 import io.atomix.copycat.util.ProtocolSerialization;
 import net.jodah.concurrentunit.ConcurrentTestCase;
@@ -65,8 +66,7 @@ public class ServerStateMachineManagerTest extends ConcurrentTestCase {
       new ClientRequestTypeResolver(),
       new ClientResponseTypeResolver(),
       new ProtocolSerialization(),
-      new ServerSerialization(),
-      new StorageSerialization()
+      new ServerSerialization()
     ).disableWhitelist();
 
     callerContext = new SingleThreadContext("caller", serializer.clone());
@@ -74,7 +74,7 @@ public class ServerStateMachineManagerTest extends ConcurrentTestCase {
     LocalServerRegistry registry = new LocalServerRegistry();
     transport = new LocalTransport(registry);
     Storage storage = new Storage(StorageLevel.MEMORY);
-    ServerMember member = new ServerMember(Member.Type.ACTIVE, new Address("localhost", 5000), new Address("localhost", 6000), Instant.now());
+    ServerMember member = new ServerMember(Member.Type.ACTIVE, Member.Status.AVAILABLE, new Address("localhost", 5000), new Address("localhost", 6000), Instant.now());
 
     new SingleThreadContext("test", serializer.clone()).execute(() -> {
       state = new ServerContext(
@@ -107,6 +107,16 @@ public class ServerStateMachineManagerTest extends ConcurrentTestCase {
    * Test state machine.
    */
   private class TestStateMachine extends StateMachine {
+    @Override
+    public void snapshot(SnapshotWriter writer) {
+
+    }
+
+    @Override
+    public void install(SnapshotReader reader) {
+
+    }
+
     @Override
     public void configure(StateMachineExecutor executor) {
       executor.register(TestCommand.class, this::testCommand);

@@ -165,12 +165,12 @@ public class DefaultCopycatSession implements CopycatSession {
 
   @Override
   public boolean isOpen() {
-    return state.isOpen();
+    return state.getState() != State.CLOSED;
   }
 
   @Override
   public CompletableFuture<Void> close() {
-    return sessionManager.closeSession(state.getSessionId()).whenComplete((result, error) -> state.close());
+    return sessionManager.closeSession(state.getSessionId()).whenComplete((result, error) -> state.setState(State.CLOSED));
   }
 
   @Override

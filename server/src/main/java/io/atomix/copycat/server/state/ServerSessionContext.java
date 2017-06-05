@@ -21,14 +21,16 @@ import io.atomix.catalyst.transport.Connection;
 import io.atomix.catalyst.util.Assert;
 import io.atomix.copycat.protocol.PublishRequest;
 import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.server.storage.Log;
-import io.atomix.copycat.server.storage.LogCleaner;
 import io.atomix.copycat.session.Event;
 import io.atomix.copycat.session.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.function.Consumer;
 
 /**
@@ -41,10 +43,11 @@ class ServerSessionContext implements ServerSession {
   private final long id;
   private final String name;
   private final String type;
-  private final long client;
+  private final long timeout;
   private final ServerStateMachineExecutor executor;
   private volatile State state = State.OPEN;
   private Connection connection;
+  private long timestamp;
   private final String messageType;
   private long requestSequence;
   private long commandSequence;
@@ -59,11 +62,11 @@ class ServerSessionContext implements ServerSession {
   private EventHolder event;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, String name, String type, long client, ServerStateMachineExecutor executor) {
+  ServerSessionContext(long id, String name, String type, long timeout, ServerStateMachineExecutor executor) {
     this.id = id;
     this.name = name;
     this.type = type;
-    this.client = client;
+    this.timeout = timeout;
     this.eventIndex = id;
     this.completeIndex = id;
     this.lastApplied = id;
@@ -95,12 +98,12 @@ class ServerSessionContext implements ServerSession {
   }
 
   /**
-   * Returns the session client ID.
+   * Returns the session timeout.
    *
-   * @return The session client ID.
+   * @return The session timeout.
    */
-  public long client() {
-    return client;
+  public long timeout() {
+    return timeout;
   }
 
   /**
@@ -110,6 +113,24 @@ class ServerSessionContext implements ServerSession {
    */
   ServerStateMachineExecutor getStateMachineExecutor() {
     return executor;
+  }
+
+  /**
+   * Returns the session update timestamp.
+   *
+   * @return The session update timestamp.
+   */
+  public long getTimestamp() {
+    return timestamp;
+  }
+
+  /**
+   * Updates the session timestamp.
+   *
+   * @param timestamp The session timestamp.
+   */
+  void setTimestamp(long timestamp) {
+    this.timestamp = Math.max(this.timestamp, timestamp);
   }
 
   @Override
@@ -341,7 +362,7 @@ class ServerSessionContext implements ServerSession {
     State state = this.state;
     Assert.stateNot(state == State.CLOSED, "session is closed");
     Assert.stateNot(state == State.EXPIRED, "session is expired");
-    Assert.state(executor.context().type() == ServerStateMachineContext.Type.COMMAND, "session events can only be published during command execution");
+    Assert.state(executor.context().context() == ServerStateMachineContext.Type.COMMAND, "session events can only be published during command execution");
 
     // If the client acked an index greater than the current event sequence number since we know the
     // client must have received it from another server.
@@ -443,6 +464,20 @@ class ServerSessionContext implements ServerSession {
 
     LOGGER.trace("{} - Sending {}", id, request);
     connection.send(messageType, request);
+  }
+
+  /**
+   * Expires the session.
+   */
+  void expire() {
+    setState(State.EXPIRED);
+  }
+
+  /**
+   * Closes the session.
+   */
+  void close() {
+    setState(State.CLOSED);
   }
 
   @Override

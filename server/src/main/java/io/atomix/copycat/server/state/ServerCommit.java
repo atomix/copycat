@@ -16,11 +16,9 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.util.Assert;
-import io.atomix.copycat.Command;
 import io.atomix.copycat.Operation;
 import io.atomix.copycat.server.Commit;
 import io.atomix.copycat.server.session.ServerSession;
-import io.atomix.copycat.server.storage.LogCleaner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,19 +32,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class ServerCommit implements Commit<Operation<?>> {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerCommit.class);
-  private final LogCleaner cleaner;
   private final AtomicInteger references = new AtomicInteger(1);
   private final long index;
   private final ServerSessionContext session;
   private final Instant instant;
   private final Operation operation;
 
-  public ServerCommit(long index, Operation operation, ServerSessionContext session, long timestamp, LogCleaner cleaner) {
+  public ServerCommit(long index, Operation operation, ServerSessionContext session, long timestamp) {
     this.index = index;
     this.session = session;
     this.instant = Instant.ofEpochMilli(timestamp);
     this.operation = operation;
-    this.cleaner = cleaner;
   }
 
   /**
@@ -85,49 +81,6 @@ final class ServerCommit implements Commit<Operation<?>> {
   public Operation<?> operation() {
     checkOpen();
     return operation;
-  }
-
-  @Override
-  public Commit<Operation<?>> acquire() {
-    references.incrementAndGet();
-    return this;
-  }
-
-  @Override
-  public boolean release() {
-    if (references.decrementAndGet() == 0) {
-      cleanup();
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  public int references() {
-    return references.get();
-  }
-
-  @Override
-  public void close() {
-    if (references.get() > 0) {
-      references.set(0);
-      cleanup();
-    }
-  }
-
-  /**
-   * Cleans up the commit.
-   */
-  private void cleanup() {
-     cleaner.clean(index);
-  }
-
-  @Override
-  protected void finalize() throws Throwable {
-    if (references.get() > 0) {
-      LOGGER.warn("An unreleased commit was garbage collected");
-    }
-    super.finalize();
   }
 
   @Override
