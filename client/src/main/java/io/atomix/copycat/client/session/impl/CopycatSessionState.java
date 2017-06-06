@@ -35,10 +35,10 @@ public final class CopycatSessionState {
   private volatile CopycatSession.State state = CopycatSession.State.CONNECTED;
   private Long suspendedTime;
   private long commandRequest;
-  private long commandResponse;
+  private volatile long commandResponse;
   private long responseIndex;
-  private long eventIndex;
-  private long connection;
+  private volatile long eventIndex;
+  private volatile long connection;
   private final Set<Listener<CopycatSession.State>> changeListeners = new CopyOnWriteArraySet<>();
 
   CopycatSessionState(long sessionId, String name, String type, long timeout) {

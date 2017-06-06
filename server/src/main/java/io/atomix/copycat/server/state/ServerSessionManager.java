@@ -16,6 +16,8 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.catalyst.transport.Connection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -28,18 +30,22 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class ServerSessionManager {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionManager.class);
+
   private final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
   private final Map<Long, TimestampedConnection> connections = new ConcurrentHashMap<>();
 
   /**
    * Registers a connection.
    */
-  void registerConnection(long sessionId, long connectionId, Connection connection) {
+  synchronized void registerConnection(long sessionId, long connectionId, Connection connection) {
     ServerSessionContext session = sessions.get(sessionId);
     TimestampedConnection existingConnection = connections.get(sessionId);
     if (existingConnection == null || existingConnection.id < connectionId) {
+      LOGGER.trace("Registered new connection {}:{}", sessionId, connectionId);
       connections.put(sessionId, new TimestampedConnection(connectionId, connection));
       if (session != null) {
+        LOGGER.trace("Set new connection {}:{}", sessionId, connectionId);
         session.setConnection(connection);
       }
     }
@@ -48,26 +54,35 @@ class ServerSessionManager {
   /**
    * Registers a connection.
    */
-  void registerConnection(long sessionId, long connectionId) {
+  synchronized void registerConnection(long sessionId, long connectionId) {
     TimestampedConnection connection = connections.get(sessionId);
     if (connection != null && connection.id < connectionId) {
+      LOGGER.trace("Unregistered connection {}:{}", sessionId, connection.id);
       connections.remove(sessionId, connection);
+
+      ServerSessionContext session = sessions.get(sessionId);
+      if (session != null) {
+        LOGGER.trace("Unset connection {}:{}", sessionId, connectionId);
+        session.setConnection(null);
+      }
     }
   }
 
   /**
    * Unregisters a connection.
    */
-  void unregisterConnection(Connection connection) {
+  synchronized void unregisterConnection(Connection connection) {
     Iterator<Map.Entry<Long, TimestampedConnection>> iterator = connections.entrySet().iterator();
     while (iterator.hasNext()) {
       Map.Entry<Long, TimestampedConnection> entry = iterator.next();
-      if (entry.getValue().connection.equals(connection)) {
+      if (entry.getValue().connection == connection) {
+        LOGGER.trace("Unregistered connection {}:{}", entry.getKey(), entry.getValue().id);
+        iterator.remove();
         ServerSessionContext session = sessions.get(entry.getKey());
         if (session != null) {
+          LOGGER.trace("Unset connection {}:{}", entry.getKey(), entry.getValue().id);
           session.setConnection(null);
         }
-        iterator.remove();
       }
     }
   }
@@ -75,10 +90,11 @@ class ServerSessionManager {
   /**
    * Registers a session.
    */
-  void registerSession(ServerSessionContext session) {
+  synchronized void registerSession(ServerSessionContext session) {
     sessions.put(session.id(), session);
     TimestampedConnection connection = connections.get(session.id());
     if (connection != null) {
+      LOGGER.trace("Set new connection {}:{}", session.id(), connection.id);
       session.setConnection(connection.connection);
     }
   }
@@ -86,7 +102,7 @@ class ServerSessionManager {
   /**
    * Unregisters a session.
    */
-  void unregisterSession(long sessionId) {
+  synchronized void unregisterSession(long sessionId) {
     sessions.remove(sessionId);
     connections.remove(sessionId);
   }
