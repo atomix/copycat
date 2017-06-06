@@ -80,7 +80,7 @@ public class PerformanceTest implements Runnable {
   private static final int NUM_CLIENTS = 5;
 
   private static final Query.ConsistencyLevel QUERY_CONSISTENCY = Query.ConsistencyLevel.LINEARIZABLE;
-  private static final CommunicationStrategy SERVER_SELECTION_STRATEGY = CommunicationStrategies.ANY;
+  private static final CommunicationStrategy COMMUNICATION_STRATEGY = CommunicationStrategies.ANY;
 
   private int port = 5000;
   private List<Member> members = new ArrayList<>();
@@ -142,6 +142,7 @@ public class PerformanceTest implements Runnable {
       CopycatSession session = clients[i].sessionBuilder()
         .withType("test")
         .withName("test")
+        .withCommunicationStrategy(COMMUNICATION_STRATEGY)
         .build();
       runSession(session, futures[i]);
     }

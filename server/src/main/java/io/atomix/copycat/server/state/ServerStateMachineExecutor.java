@@ -489,20 +489,21 @@ class ServerStateMachineExecutor implements StateMachineExecutor {
       // Execute the state machine operation and get the result.
       Object output = applyCommit(commit);
 
-      // Once the operation has been applied to the state machine, commit events published by the command.
-      // The state machine context will build a composite future for events published to all sessions.
-      commit();
-
       // Store the result for linearizability and complete the command.
       result = new OperationResult(index, eventIndex, output);
-      session.registerResult(sequence, result);
-      future.complete(result);
     } catch (Exception e) {
       // If an exception occurs during execution of the command, store the exception.
       result = new OperationResult(index, eventIndex, e);
     }
 
+    // Once the operation has been applied to the state machine, commit events published by the command.
+    // The state machine context will build a composite future for events published to all sessions.
+    commit();
+
+    // Register the result in the session to ensure retries receive the same output for the command.
     session.registerResult(sequence, result);
+
+    // Complete the command.
     future.complete(result);
   }
 

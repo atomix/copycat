@@ -19,14 +19,18 @@ import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.session.SessionListener;
 import io.atomix.copycat.server.session.Sessions;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * State machine sessions.
  */
 class ServerStateMachineSessions implements Sessions {
   private final ServerSessionManager sessionManager;
-  final Map<Long, ServerSessionContext> sessions = new HashMap<>();
+  final Map<Long, ServerSessionContext> sessions = new ConcurrentHashMap<>();
   final Set<SessionListener> listeners = new HashSet<>();
 
   public ServerStateMachineSessions(ServerSessionManager sessionManager) {

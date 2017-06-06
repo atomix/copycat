@@ -17,8 +17,7 @@ package io.atomix.copycat.test;
 
 import io.atomix.catalyst.concurrent.Listener;
 import io.atomix.catalyst.transport.Address;
-import io.atomix.catalyst.transport.local.LocalServerRegistry;
-import io.atomix.catalyst.transport.local.LocalTransport;
+import io.atomix.catalyst.transport.netty.NettyTransport;
 import io.atomix.copycat.Command;
 import io.atomix.copycat.Query;
 import io.atomix.copycat.client.CopycatClient;
@@ -62,7 +61,6 @@ import java.util.stream.Collectors;
 @Test
 public class ClusterTest extends ConcurrentTestCase {
   protected volatile int port;
-  protected volatile LocalServerRegistry registry;
   protected volatile List<Member> members;
   protected volatile List<CopycatClient> clients = new ArrayList<>();
   protected volatile List<CopycatServer> servers = new ArrayList<>();
@@ -1174,7 +1172,7 @@ public class ClusterTest extends ConcurrentTestCase {
   private CopycatServer createServer(Member member) {
     CopycatServer.Builder builder = CopycatServer.builder(member.clientAddress(), member.serverAddress())
       .withType(member.type())
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
         .withStorageLevel(StorageLevel.MEMORY)
         .withMaxSegmentSize(1024 * 1024)
@@ -1193,7 +1191,7 @@ public class ClusterTest extends ConcurrentTestCase {
    */
   private CopycatClient createClient() throws Throwable {
     CopycatClient client = CopycatClient.builder()
-      .withTransport(new LocalTransport(registry))
+      .withTransport(new NettyTransport())
       .build();
     client.serializer().disableWhitelist();
     client.connect(members.stream().map(Member::clientAddress).collect(Collectors.toList())).thenRun(this::resume);
@@ -1233,7 +1231,6 @@ public class ClusterTest extends ConcurrentTestCase {
 
     members = new ArrayList<>();
     port = 5000;
-    registry = new LocalServerRegistry();
     clients = new ArrayList<>();
     servers = new ArrayList<>();
   }

@@ -395,8 +395,10 @@ public class ServerStateMachineManager implements AutoCloseable {
       }
 
       Set<CopycatSessionMetadata> sessions = new HashSet<>();
-      for (ServerSessionContext s : session.getStateMachineExecutor().context().sessions().sessions.values()) {
-        sessions.add(new CopycatSessionMetadata(s.id(), s.name(), s.type()));
+      for (ServerSessionContext s : sessionManager.getSessions()) {
+        if (s.name().equals(session.name())) {
+          sessions.add(new CopycatSessionMetadata(s.id(), s.name(), s.type()));
+        }
       }
       return CompletableFuture.completedFuture(new MetadataResult(sessions));
     } else {
