@@ -112,7 +112,7 @@ public interface Query<T> extends Operation<T> {
    * @return The query consistency level.
    */
   default ConsistencyLevel consistency() {
-    return null;
+    return ConsistencyLevel.LINEARIZABLE;
   }
 
 }
