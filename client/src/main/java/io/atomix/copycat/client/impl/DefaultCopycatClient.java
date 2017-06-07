@@ -48,8 +48,6 @@ public class DefaultCopycatClient implements CopycatClient {
   private final CopycatMetadata metadata;
   private final AddressSelectorManager selectorManager = new AddressSelectorManager();
   private final CopycatSessionManager sessionManager;
-  private volatile CompletableFuture<CopycatClient> openFuture;
-  private volatile CompletableFuture<Void> closeFuture;
 
   public DefaultCopycatClient(
     String clientId,
@@ -120,16 +118,11 @@ public class DefaultCopycatClient implements CopycatClient {
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return sessionManager.close().whenComplete((e, r) -> connectionManager.close());
-  }
-
-  /**
-   * Kills the client.
-   *
-   * @return A completable future to be completed once the client's session has been killed.
-   */
-  public synchronized CompletableFuture<Void> kill() {
-    return sessionManager.kill();
+    return sessionManager.close()
+      .whenComplete((e, r) -> {
+        connectionManager.close();
+        threadContext.close();
+      });
   }
 
   @Override
