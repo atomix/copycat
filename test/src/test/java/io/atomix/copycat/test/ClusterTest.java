@@ -39,7 +39,15 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -1174,7 +1182,8 @@ public class ClusterTest extends ConcurrentTestCase {
       .withType(member.type())
       .withTransport(new NettyTransport())
       .withStorage(Storage.builder()
-        .withStorageLevel(StorageLevel.MEMORY)
+        .withStorageLevel(StorageLevel.DISK)
+        .withDirectory(new File(String.format("target/test-logs/%d", member.address().hashCode())))
         .withMaxSegmentSize(1024 * 1024)
         .withCompactionThreads(1)
         .build())
@@ -1228,6 +1237,23 @@ public class ClusterTest extends ConcurrentTestCase {
       } catch (Exception e) {
       }
     });
+
+    Path directory = Paths.get("target/test-logs/");
+    if (Files.exists(directory)) {
+      Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+          Files.delete(file);
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+          Files.delete(dir);
+          return FileVisitResult.CONTINUE;
+        }
+      });
+    }
 
     members = new ArrayList<>();
     port = 5000;

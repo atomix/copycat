@@ -398,7 +398,7 @@ class PassiveState extends ReserveState {
 
     // If the snapshot is complete, store the snapshot and reset state, otherwise update the next snapshot offset.
     if (request.complete()) {
-      pendingSnapshot.complete();
+      pendingSnapshot.persist().complete();
       pendingSnapshots.remove(request.id());
       nextSnapshotOffset = 0;
     } else {

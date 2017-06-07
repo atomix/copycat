@@ -71,26 +71,23 @@ final class MemorySnapshot extends Snapshot {
   }
 
   @Override
-  public Snapshot complete() {
-    descriptor.lock();
-    buffer.flip().position(SnapshotDescriptor.BYTES).mark();
-    return super.complete();
-  }
-
-  @Override
   public Snapshot persist() {
     if (store.storage.level() != StorageLevel.MEMORY) {
       try (Snapshot newSnapshot = store.createSnapshot(id(), index())) {
         try (SnapshotWriter newSnapshotWriter = newSnapshot.writer()) {
-          newSnapshotWriter.write(buffer.array(), buffer.position(), buffer.remaining());
-        }
-        if (descriptor.locked()) {
-          newSnapshot.complete();
+          buffer.flip();
+          newSnapshotWriter.write(buffer.array(), 0, buffer.remaining());
         }
         return newSnapshot;
       }
     }
     return this;
+  }
+
+  @Override
+  public Snapshot complete() {
+    descriptor.lock();
+    return super.complete();
   }
 
   @Override
