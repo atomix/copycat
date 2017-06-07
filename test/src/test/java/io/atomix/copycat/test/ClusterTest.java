@@ -1308,10 +1308,6 @@ public class ClusterTest extends ConcurrentTestCase {
    * Test command.
    */
   public static class TestCommand implements Command<Long> {
-    @Override
-    public CompactionMode compaction() {
-      return CompactionMode.QUORUM;
-    }
   }
 
   /**
@@ -1338,11 +1334,6 @@ public class ClusterTest extends ConcurrentTestCase {
 
     public TestEvent(boolean own) {
       this.own = own;
-    }
-
-    @Override
-    public CompactionMode compaction() {
-      return CompactionMode.QUORUM;
     }
 
     public boolean own() {

@@ -509,11 +509,6 @@ public class FuzzTest implements Runnable {
       this.key = key;
       this.value = value;
     }
-
-    @Override
-    public CompactionMode compaction() {
-      return CompactionMode.QUORUM;
-    }
   }
 
   public static class Get implements Query<String> {
@@ -549,11 +544,6 @@ public class FuzzTest implements Runnable {
 
     public Remove(String key) {
       this.key = key;
-    }
-
-    @Override
-    public CompactionMode compaction() {
-      return CompactionMode.TOMBSTONE;
     }
   }
 
