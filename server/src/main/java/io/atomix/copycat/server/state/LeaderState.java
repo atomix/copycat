@@ -658,7 +658,7 @@ final class LeaderState extends ActiveState {
     final LogWriter writer = context.getLogWriter();
     try {
       writer.lock();
-      entry = writer.append(term, new OpenSessionEntry(timestamp, request.name(), request.type(), timeout));
+      entry = writer.append(term, new OpenSessionEntry(timestamp, request.client(), request.name(), request.type(), timeout));
       LOGGER.debug("{} - Appended {}", context.getCluster().member().address(), entry);
     } finally {
       writer.unlock();

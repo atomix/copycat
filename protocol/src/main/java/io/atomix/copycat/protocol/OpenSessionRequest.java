@@ -48,9 +48,19 @@ public class OpenSessionRequest extends AbstractRequest {
     return new Builder(request);
   }
 
+  private String client;
   private String name;
   private String type;
   private long timeout;
+
+  /**
+   * Returns the client identifier.
+   *
+   * @return The client identifier.
+   */
+  public String client() {
+    return client;
+  }
 
   /**
    * Returns the state machine name.
@@ -82,6 +92,7 @@ public class OpenSessionRequest extends AbstractRequest {
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
+    client = buffer.readString();
     name = buffer.readString();
     type = buffer.readString();
     timeout = buffer.readLong();
@@ -90,6 +101,7 @@ public class OpenSessionRequest extends AbstractRequest {
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
+    buffer.writeString(client);
     buffer.writeString(name);
     buffer.writeString(type);
     buffer.writeLong(timeout);
@@ -120,6 +132,18 @@ public class OpenSessionRequest extends AbstractRequest {
   public static class Builder extends AbstractRequest.Builder<Builder, OpenSessionRequest> {
     protected Builder(OpenSessionRequest request) {
       super(request);
+    }
+
+    /**
+     * Sets the client identifier.
+     *
+     * @param client The client identifier.
+     * @return The open session request builder.
+     * @throws NullPointerException if {@code client} is {@code null}
+     */
+    public Builder withClient(String client) {
+      request.client = Assert.notNull(client, "client");
+      return this;
     }
 
     /**
@@ -164,6 +188,7 @@ public class OpenSessionRequest extends AbstractRequest {
     @Override
     public OpenSessionRequest build() {
       super.build();
+      Assert.notNull(request.client, "client");
       Assert.notNull(request.name, "name");
       Assert.notNull(request.type, "type");
       return request;

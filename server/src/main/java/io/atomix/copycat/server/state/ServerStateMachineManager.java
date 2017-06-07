@@ -358,6 +358,7 @@ public class ServerStateMachineManager implements AutoCloseable {
 
     ServerSessionContext session = new ServerSessionContext(
       entry.index(),
+      entry.entry().client(),
       entry.entry().name(),
       entry.entry().typeName(),
       entry.entry().timeout(),

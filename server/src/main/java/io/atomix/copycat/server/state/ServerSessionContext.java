@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 class ServerSessionContext implements ServerSession {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSessionContext.class);
   private final long id;
+  private final String client;
   private final String name;
   private final String type;
   private final long timeout;
@@ -62,8 +63,9 @@ class ServerSessionContext implements ServerSession {
   private EventHolder event;
   private final Listeners<State> changeListeners = new Listeners<>();
 
-  ServerSessionContext(long id, String name, String type, long timeout, ServerStateMachineExecutor executor) {
+  ServerSessionContext(long id, String client, String name, String type, long timeout, ServerStateMachineExecutor executor) {
     this.id = id;
+    this.client = client;
     this.name = name;
     this.type = type;
     this.timeout = timeout;
@@ -71,12 +73,21 @@ class ServerSessionContext implements ServerSession {
     this.completeIndex = id;
     this.lastApplied = id;
     this.executor = executor;
-    this.messageType = String.valueOf(id);
+    this.messageType = String.format("%s-%d", client, id);
   }
 
   @Override
   public long id() {
     return id;
+  }
+
+  /**
+   * Returns the client identifier.
+   *
+   * @return The client identifier.
+   */
+  public String client() {
+    return client;
   }
 
   /**

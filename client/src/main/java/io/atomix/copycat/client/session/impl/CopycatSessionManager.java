@@ -124,6 +124,7 @@ public class CopycatSessionManager {
   public CompletableFuture<CopycatSession> openSession(String name, String type, CommunicationStrategy communicationStrategy, Duration timeout) {
     LOGGER.trace("{} - Opening session; name: {}, type: {}", clientId, name, type);
     OpenSessionRequest request = OpenSessionRequest.builder()
+      .withClient(clientId)
       .withType(type)
       .withName(name)
       .withTimeout(timeout.toMillis())
@@ -142,7 +143,7 @@ public class CopycatSessionManager {
           CopycatConnection sessionConnection = new CopycatSessionConnection(state, connectionManager, selectorManager.createSelector(communicationStrategy), threadContext);
           leaderConnection.open().thenCompose(v -> sessionConnection.open()).whenComplete((connectResult, connectError) -> {
             if (connectError == null) {
-              future.complete(new DefaultCopycatSession(state, leaderConnection, sessionConnection, threadContext, this));
+              future.complete(new DefaultCopycatSession(clientId, state, leaderConnection, sessionConnection, threadContext, this));
             } else {
               future.completeExceptionally(connectError);
             }

@@ -47,7 +47,7 @@ public class LogTest {
     // Append a couple entries.
     Indexed indexed;
     assertEquals(writer.nextIndex(), 1);
-    indexed = writer.append(1, new OpenSessionEntry(System.currentTimeMillis(), "test1", "test", 1000));
+    indexed = writer.append(1, new OpenSessionEntry(System.currentTimeMillis(), "client", "test1", "test", 1000));
     assertEquals(indexed.index(), 1);
     assertEquals(indexed.term(), 1);
 

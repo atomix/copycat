@@ -46,10 +46,10 @@ final class CopycatSessionListener {
   private final Map<String, Set<Consumer>> eventListeners = new ConcurrentHashMap<>();
   private final CopycatSessionSequencer sequencer;
 
-  public CopycatSessionListener(CopycatConnection connection, CopycatSessionState state, CopycatSessionSequencer sequencer, ThreadContext context) {
+  public CopycatSessionListener(String clientId, CopycatConnection connection, CopycatSessionState state, CopycatSessionSequencer sequencer, ThreadContext context) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
-    this.eventType = String.valueOf(state.getSessionId());
+    this.eventType = String.format("%s-%d", clientId, state.getSessionId());
     this.context = Assert.notNull(context, "context");
     this.sequencer = Assert.notNull(sequencer, "sequencer");
     connection.registerHandler(eventType, this::handlePublish);
@@ -86,7 +86,6 @@ final class CopycatSessionListener {
    * Handles a publish request.
    *
    * @param request The publish request to handle.
-   * @return A completable future to be completed with the publish response.
    */
   @SuppressWarnings("unchecked")
   private void handlePublish(PublishRequest request) {
@@ -99,19 +98,23 @@ final class CopycatSessionListener {
       return;
     }
 
+    // Store eventIndex in a local variable to prevent multiple volatile reads.
+    long eventIndex = state.getEventIndex();
+
     // If the request event index has already been processed, return.
-    if (request.eventIndex() <= state.getEventIndex()) {
+    if (request.eventIndex() <= eventIndex) {
+      LOG.trace("{} - Duplicate event index {}", state.getSessionId(), request.eventIndex());
       return;
     }
 
     // If the request's previous event index doesn't equal the previous received event index,
     // respond with an undefined error and the last index received. This will cause the cluster
     // to resend events starting at eventIndex + 1.
-    if (request.previousIndex() != state.getEventIndex()) {
+    if (request.previousIndex() != eventIndex) {
       LOG.trace("{} - Inconsistent event index: {}", state.getSessionId(), request.previousIndex());
-      connection.send(eventType, ResetRequest.builder()
+      connection.send(ResetRequest.NAME, ResetRequest.builder()
         .withSession(state.getSessionId())
-        .withIndex(state.getEventIndex())
+        .withIndex(eventIndex)
         .build());
       return;
     }

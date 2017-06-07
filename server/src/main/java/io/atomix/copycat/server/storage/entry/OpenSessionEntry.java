@@ -22,12 +22,14 @@ import io.atomix.catalyst.buffer.BufferOutput;
  * Open session entry.
  */
 public class OpenSessionEntry extends TimestampedEntry<OpenSessionEntry> {
+  private final String client;
   private final String name;
   private final String type;
   private final long timeout;
 
-  public OpenSessionEntry(long timestamp, String name, String type, long timeout) {
+  public OpenSessionEntry(long timestamp, String client, String name, String type, long timeout) {
     super(timestamp);
+    this.client = client;
     this.name = name;
     this.type = type;
     this.timeout = timeout;
@@ -36,6 +38,15 @@ public class OpenSessionEntry extends TimestampedEntry<OpenSessionEntry> {
   @Override
   public Type<OpenSessionEntry> type() {
     return Type.OPEN_SESSION;
+  }
+
+  /**
+   * Returns the client identifier.
+   *
+   * @return The client identifier.
+   */
+  public String client() {
+    return client;
   }
 
   /**
@@ -67,7 +78,7 @@ public class OpenSessionEntry extends TimestampedEntry<OpenSessionEntry> {
 
   @Override
   public String toString() {
-    return String.format("%s[name=%s, type=%s, timeout=%d, timestamp=%d]", getClass().getSimpleName(), name, type, timeout, timestamp);
+    return String.format("%s[client=%s, name=%s, type=%s, timeout=%d, timestamp=%d]", getClass().getSimpleName(), client, name, type, timeout, timestamp);
   }
 
   /**
@@ -77,6 +88,7 @@ public class OpenSessionEntry extends TimestampedEntry<OpenSessionEntry> {
     @Override
     public void writeObject(BufferOutput output, OpenSessionEntry entry) {
       output.writeLong(entry.timestamp);
+      output.writeString(entry.client);
       output.writeString(entry.name);
       output.writeString(entry.type);
       output.writeLong(entry.timeout);
@@ -84,7 +96,7 @@ public class OpenSessionEntry extends TimestampedEntry<OpenSessionEntry> {
 
     @Override
     public OpenSessionEntry readObject(BufferInput input, Class<OpenSessionEntry> type) {
-      return new OpenSessionEntry(input.readLong(), input.readString(), input.readString(), input.readLong());
+      return new OpenSessionEntry(input.readLong(), input.readString(), input.readString(), input.readString(), input.readLong());
     }
   }
 }

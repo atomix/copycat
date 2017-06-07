@@ -53,11 +53,11 @@ public class DefaultCopycatSession implements CopycatSession {
   private final CopycatSessionSubmitter sessionSubmitter;
   private final ThreadContext context;
 
-  public DefaultCopycatSession(CopycatSessionState state, CopycatConnection leaderConnection, CopycatConnection sessionConnection, ThreadContext threadContext, CopycatSessionManager sessionManager) {
+  public DefaultCopycatSession(String clientId, CopycatSessionState state, CopycatConnection leaderConnection, CopycatConnection sessionConnection, ThreadContext threadContext, CopycatSessionManager sessionManager) {
     this.state = Assert.notNull(state, "state");
     this.sessionManager = Assert.notNull(sessionManager, "sessionManager");
     CopycatSessionSequencer sequencer = new CopycatSessionSequencer(state);
-    this.sessionListener = new CopycatSessionListener(sessionConnection, state, sequencer, threadContext);
+    this.sessionListener = new CopycatSessionListener(clientId, sessionConnection, state, sequencer, threadContext);
     this.sessionSubmitter = new CopycatSessionSubmitter(leaderConnection, sessionConnection, state, sequencer, sessionManager, threadContext);
     this.context = threadContext;
   }
