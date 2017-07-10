@@ -16,7 +16,7 @@
 package io.atomix.copycat.client.util;
 
 import io.atomix.catalyst.transport.Address;
-import io.atomix.copycat.client.ServerSelectionStrategies;
+import io.atomix.copycat.client.CommunicationStrategies;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;
@@ -36,13 +36,15 @@ public class AddressSelectorTest {
    * Tests iterating an address selector.
    */
   public void testIterate() throws Throwable {
+    AddressSelectorManager selectors = new AddressSelectorManager();
+
     Collection<Address> servers = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5001),
       new Address("localhost", 5002)
     );
 
-    AddressSelector selector = new AddressSelector(ServerSelectionStrategies.ANY);
+    AddressSelector selector = selectors.createSelector(CommunicationStrategies.ANY);
     selector.reset(null, servers);
     assertNull(selector.leader());
     assertEquals(selector.servers(), servers);
@@ -62,13 +64,15 @@ public class AddressSelectorTest {
    * Tests resetting an address selector.
    */
   public void testReset() throws Throwable {
+    AddressSelectorManager selectors = new AddressSelectorManager();
+
     Collection<Address> servers = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5001),
       new Address("localhost", 5002)
     );
 
-    AddressSelector selector = new AddressSelector(ServerSelectionStrategies.ANY);
+    AddressSelector selector = selectors.createSelector(CommunicationStrategies.ANY);
     selector.reset(null, servers);
     selector.next();
     selector.next();
@@ -85,13 +89,15 @@ public class AddressSelectorTest {
    * Tests updating the members in a selector.
    */
   public void testUpdate() throws Throwable {
+    AddressSelectorManager selectors = new AddressSelectorManager();
+
     Collection<Address> servers = Arrays.asList(
       new Address("localhost", 5000),
       new Address("localhost", 5001),
       new Address("localhost", 5002)
     );
 
-    AddressSelector selector = new AddressSelector(ServerSelectionStrategies.ANY);
+    AddressSelector selector = selectors.createSelector(CommunicationStrategies.ANY);
     selector.reset(null, servers);
     assertNull(selector.leader());
     assertEquals(selector.servers(), servers);

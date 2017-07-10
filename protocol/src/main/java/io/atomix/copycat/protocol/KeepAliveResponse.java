@@ -35,7 +35,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class KeepAliveResponse extends SessionResponse {
+public class KeepAliveResponse extends ClientResponse {
 
   /**
    * Returns a new keep alive response builder.
@@ -129,7 +129,7 @@ public class KeepAliveResponse extends SessionResponse {
   /**
    * Status response builder.
    */
-  public static class Builder extends SessionResponse.Builder<Builder, KeepAliveResponse> {
+  public static class Builder extends ClientResponse.Builder<Builder, KeepAliveResponse> {
 
     protected Builder(KeepAliveResponse response) {
       super(response);

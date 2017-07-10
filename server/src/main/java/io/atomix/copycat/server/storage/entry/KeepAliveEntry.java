@@ -22,11 +22,13 @@ import io.atomix.catalyst.util.reference.ReferenceManager;
 import io.atomix.copycat.protocol.KeepAliveRequest;
 import io.atomix.copycat.session.Session;
 
+import java.util.Arrays;
+
 /**
  * Stores a client keep-alive request.
  * <p>
  * The {@code KeepAliveEntry} is logged and replicated to the cluster to indicate that a client
- * has kept its {@link #getSession() session} alive. Each client must periodically submit a
+ * has kept its {@link #getClient() client} alive. Each client must periodically submit a
  * {@link KeepAliveRequest} which results in a keep-alive entry
  * being written to the Raft log. When a keep-alive is committed to the internal Raft state machine,
  * the session timeout for the associated {@link Session} will be
@@ -34,9 +36,11 @@ import io.atomix.copycat.session.Session;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
-  private long commandSequence;
-  private long eventIndex;
+public class KeepAliveEntry extends ClientEntry<KeepAliveEntry> {
+  private long[] sessionIds;
+  private long[] commandSequences;
+  private long[] eventIndexes;
+  private long[] connections;
 
   public KeepAliveEntry() {
   }
@@ -46,62 +50,140 @@ public class KeepAliveEntry extends SessionEntry<KeepAliveEntry> {
   }
 
   /**
-   * Returns the command sequence number.
+   * Returns the session identifiers.
    *
-   * @return The command sequence number.
+   * @return The session identifiers.
    */
-  public long getCommandSequence() {
-    return commandSequence;
+  public long[] getSessionIds() {
+    return sessionIds;
   }
 
   /**
-   * Sets the command sequence number.
+   * Sets the session identifiers.
    *
-   * @param commandSequence The command sequence number.
+   * @param sessionIds The session identifiers.
    * @return The keep alive entry.
    */
-  public KeepAliveEntry setCommandSequence(long commandSequence) {
-    this.commandSequence = commandSequence;
+  public KeepAliveEntry setSessionIds(long[] sessionIds) {
+    this.sessionIds = sessionIds;
     return this;
   }
 
   /**
-   * Returns the event index.
+   * Returns the command sequence numbers.
    *
-   * @return The event index.
+   * @return The command sequence numbers.
    */
-  public long getEventIndex() {
-    return eventIndex;
+  public long[] getCommandSequences() {
+    return commandSequences;
   }
 
   /**
-   * Sets the event index.
+   * Sets the command sequence numbers.
    *
-   * @param eventIndex The event index.
+   * @param commandSequence The command sequence numbers.
    * @return The keep alive entry.
    */
-  public KeepAliveEntry setEventIndex(long eventIndex) {
-    this.eventIndex = eventIndex;
+  public KeepAliveEntry setCommandSequences(long[] commandSequence) {
+    this.commandSequences = commandSequence;
+    return this;
+  }
+
+  /**
+   * Returns the event indexes.
+   *
+   * @return The event indexes.
+   */
+  public long[] getEventIndexes() {
+    return eventIndexes;
+  }
+
+  /**
+   * Sets the event indexes.
+   *
+   * @param eventIndexes The event indexes.
+   * @return The keep alive entry.
+   */
+  public KeepAliveEntry setEventIndexes(long[] eventIndexes) {
+    this.eventIndexes = eventIndexes;
+    return this;
+  }
+
+  /**
+   * Returns the connection IDs.
+   *
+   * @return The connection IDs.
+   */
+  public long[] getConnections() {
+    return connections;
+  }
+
+  /**
+   * Sets the connection IDs.
+   *
+   * @param connections The connection IDs.
+   * @return The keep alive entry.
+   */
+  public KeepAliveEntry setConnections(long[] connections) {
+    this.connections = connections;
     return this;
   }
 
   @Override
-  public void readObject(BufferInput buffer, Serializer serializer) {
+  public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    commandSequence = buffer.readLong();
-    eventIndex = buffer.readLong();
+    int sessionsLength = buffer.readInt();
+    sessionIds = new long[sessionsLength];
+    for (int i = 0; i < sessionsLength; i++) {
+      sessionIds[i] = buffer.readLong();
+    }
+
+    int commandSequencesLength = buffer.readInt();
+    commandSequences = new long[commandSequencesLength];
+    for (int i = 0; i < commandSequencesLength; i++) {
+      commandSequences[i] = buffer.readLong();
+    }
+
+    int eventIndexesLength = buffer.readInt();
+    eventIndexes = new long[eventIndexesLength];
+    for (int i = 0; i < eventIndexesLength; i++) {
+      eventIndexes[i] = buffer.readLong();
+    }
+
+    int connectionsLength = buffer.readInt();
+    connections = new long[connectionsLength];
+    for (int i = 0; i < connectionsLength; i++) {
+      connections[i] = buffer.readLong();
+    }
   }
 
   @Override
-  public void writeObject(BufferOutput buffer, Serializer serializer) {
+  public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(commandSequence);
-    buffer.writeLong(eventIndex);
+    buffer.writeInt(sessionIds.length);
+    for (long sessionId : sessionIds) {
+      buffer.writeLong(sessionId);
+    }
+
+    buffer.writeInt(commandSequences.length);
+    for (long commandSequence : commandSequences) {
+      buffer.writeLong(commandSequence);
+    }
+
+    buffer.writeInt(eventIndexes.length);
+    for (long eventIndex : eventIndexes) {
+      buffer.writeLong(eventIndex);
+    }
+
+    buffer.writeInt(connections.length);
+    for (long connection : connections) {
+      buffer.writeLong(connection);
+    }
   }
 
   @Override
   public String toString() {
-    return String.format("%s[index=%d, term=%d, session=%d, commandSequence=%d, eventIndex=%d, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getSession(), getCommandSequence(), getEventIndex(), getTimestamp());
+    return String.format("%s[index=%d, term=%d, client=%s, sessions=%s, commandSequences=%s, eventIndexes=%s, connections=%s, timestamp=%d]", getClass().getSimpleName(), getIndex(), getTerm(), getClient(), Arrays.toString(getSessionIds()), Arrays.toString(getCommandSequences()), Arrays.toString(getEventIndexes()), Arrays.toString(getConnections()), getTimestamp());
   }
 
 }

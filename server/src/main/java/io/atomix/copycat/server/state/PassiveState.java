@@ -26,12 +26,13 @@ import io.atomix.copycat.server.protocol.AppendRequest;
 import io.atomix.copycat.server.protocol.AppendResponse;
 import io.atomix.copycat.server.protocol.InstallRequest;
 import io.atomix.copycat.server.protocol.InstallResponse;
-import io.atomix.copycat.server.session.ServerSession;
 import io.atomix.copycat.server.storage.entry.Entry;
 import io.atomix.copycat.server.storage.entry.QueryEntry;
 import io.atomix.copycat.server.storage.snapshot.Snapshot;
 import io.atomix.copycat.server.storage.snapshot.SnapshotWriter;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
@@ -42,7 +43,7 @@ import java.util.stream.Collectors;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class PassiveState extends ReserveState {
-  private Snapshot pendingSnapshot;
+  private final Map<Long, Snapshot> pendingSnapshots = new HashMap<>();
   private int nextSnapshotOffset;
 
   public PassiveState(ServerContext context) {
@@ -72,9 +73,9 @@ class PassiveState extends ReserveState {
 
   @Override
   public void reset(ResetRequest request) {
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(request.session());
+    ServerSessionContext session = context.getStateMachine().getSessions().getSession(request.session());
     if (session != null) {
-      context.getStateMachine().executor().executor().execute(() -> session.resendEvents(request.index()));
+      session.getStateMachineExecutor().reset(request.index(), session);
     }
   }
 
@@ -91,7 +92,7 @@ class PassiveState extends ReserveState {
         .build()));
     } else {
       // Associate the connection with the appropriate session.
-      context.getStateMachine().executor().context().sessions().registerConnection(request.client(), connection);
+      context.getStateMachine().getSessions().registerConnection(request.session(), request.connection(), connection);
 
       return CompletableFuture.completedFuture(ConnectResponse.builder()
         .withStatus(Response.Status.OK)
@@ -258,7 +259,7 @@ class PassiveState extends ReserveState {
         .setSequence(request.sequence())
         .setQuery(request.query());
 
-      return queryLocal(entry).thenApply(this::logResponse);
+      return applyQuery(entry).thenApply(this::logResponse);
     } else {
       return queryForward(request);
     }
@@ -276,7 +277,7 @@ class PassiveState extends ReserveState {
     }
 
     LOGGER.trace("{} - Forwarding {}", context.getCluster().member().address(), request);
-    return this.<QueryRequest, QueryResponse>forward(request)
+    return this.<QueryRequest, QueryResponse>forward(QueryRequest.NAME, request)
       .exceptionally(error -> QueryResponse.builder()
         .withStatus(Response.Status.ERROR)
         .withError(CopycatError.Type.NO_LEADER_ERROR)
@@ -288,76 +289,17 @@ class PassiveState extends ReserveState {
    * Performs a local query.
    */
   protected CompletableFuture<QueryResponse> queryLocal(QueryEntry entry) {
-    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
-    sequenceQuery(entry, future);
-    return future;
-  }
-
-  /**
-   * Sequences the given query.
-   */
-  private void sequenceQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
-    // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
-    if (session == null) {
-      future.complete(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
-    } else {
-      sequenceQuery(entry, session, future);
-    }
-  }
-
-  /**
-   * Sequences the given query.
-   */
-  private void sequenceQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
-    // If the query's sequence number is greater than the session's current sequence number, queue the request for
-    // handling once the state machine is caught up.
-    if (entry.getSequence() > session.getCommandSequence()) {
-      session.registerSequenceQuery(entry.getSequence(), () -> indexQuery(entry, future));
-    } else {
-      indexQuery(entry, future);
-    }
-  }
-
-  /**
-   * Ensures the given query is applied after the appropriate index.
-   */
-  private void indexQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
-    // Get the client's server session. If the session doesn't exist, return an unknown session error.
-    ServerSessionContext session = context.getStateMachine().executor().context().sessions().getSession(entry.getSession());
-    if (session == null) {
-      future.complete(logResponse(QueryResponse.builder()
-        .withStatus(Response.Status.ERROR)
-        .withError(CopycatError.Type.UNKNOWN_SESSION_ERROR)
-        .build()));
-    } else {
-      indexQuery(entry, session, future);
-    }
-  }
-
-  /**
-   * Ensures the given query is applied after the appropriate index.
-   */
-  private void indexQuery(QueryEntry entry, ServerSessionContext session, CompletableFuture<QueryResponse> future) {
-    // If the query index is greater than the session's last applied index, queue the request for handling once the
-    // state machine is caught up.
-    if (entry.getIndex() > session.getLastApplied()) {
-      session.registerIndexQuery(entry.getIndex(), () -> applyQuery(entry, future));
-    } else {
-      applyQuery(entry, future);
-    }
+    return applyQuery(entry);
   }
 
   /**
    * Applies a query to the state machine.
    */
-  protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry, CompletableFuture<QueryResponse> future) {
+  protected CompletableFuture<QueryResponse> applyQuery(QueryEntry entry) {
     // In the case of the leader, the state machine is always up to date, so no queries will be queued and all query
     // indexes will be the last applied index.
-    context.getStateMachine().<ServerStateMachine.Result>apply(entry).whenComplete((result, error) -> {
+    CompletableFuture<QueryResponse> future = new CompletableFuture<>();
+    context.getStateMachine().<OperationResult>apply(entry).whenComplete((result, error) -> {
       completeOperation(result, QueryResponse.builder(), error, future);
       entry.release();
     });
@@ -367,7 +309,7 @@ class PassiveState extends ReserveState {
   /**
    * Completes an operation.
    */
-  protected <T extends OperationResponse> void completeOperation(ServerStateMachine.Result result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
+  protected <T extends OperationResponse> void completeOperation(OperationResult result, OperationResponse.Builder<?, T> builder, Throwable error, CompletableFuture<T> future) {
     if (isOpen()) {
       if (result != null) {
         builder.withIndex(result.index);
@@ -412,6 +354,9 @@ class PassiveState extends ReserveState {
         .build()));
     }
 
+    // Get the pending snapshot for the associated snapshot ID.
+    Snapshot pendingSnapshot = pendingSnapshots.get(request.id());
+
     // If a snapshot is currently being received and the snapshot versions don't match, simply
     // close the existing snapshot. This is a naive implementation that assumes that the leader
     // will be responsible in sending the correct snapshot to this server. Leaders must dictate
@@ -435,7 +380,7 @@ class PassiveState extends ReserveState {
           .build()));
       }
 
-      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.index());
+      pendingSnapshot = context.getSnapshotStore().createSnapshot(request.id(), request.index());
       nextSnapshotOffset = 0;
     }
 
@@ -455,7 +400,7 @@ class PassiveState extends ReserveState {
     // If the snapshot is complete, store the snapshot and reset state, otherwise update the next snapshot offset.
     if (request.complete()) {
       pendingSnapshot.complete();
-      pendingSnapshot = null;
+      pendingSnapshots.remove(request.id());
       nextSnapshotOffset = 0;
     } else {
       nextSnapshotOffset++;
@@ -468,10 +413,9 @@ class PassiveState extends ReserveState {
 
   @Override
   public CompletableFuture<Void> close() {
-    if (pendingSnapshot != null) {
+    for (Snapshot pendingSnapshot : pendingSnapshots.values()) {
       pendingSnapshot.close();
       pendingSnapshot.delete();
-      pendingSnapshot = null;
     }
     return super.close();
   }

@@ -41,6 +41,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class CommandRequest extends OperationRequest {
+  public static final String NAME = "command";
 
   /**
    * Returns a new submit request builder.

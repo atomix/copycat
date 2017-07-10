@@ -209,11 +209,16 @@ public class Compactor implements AutoCloseable {
       for (CompactionTask task : tasks) {
         LOGGER.debug("Executing {}", task);
         ThreadContext taskThread = new ThreadPoolContext(executor, segments.serializer());
-        taskThread.execute(task).whenComplete((result, error) -> {
+        CompletableFuture<Void> taskFuture = new CompletableFuture<>();
+        taskThread.execute(() -> {
+          task.run();
+          taskFuture.complete(null);
+        });
+        taskFuture.whenComplete((result, error) -> {
           LOGGER.debug("{} complete", task);
           if (counter.incrementAndGet() == tasks.size()) {
             if (context != null) {
-              context.executor().execute(() -> future.complete(null));
+              context.execute(() -> future.complete(null));
             } else {
               future.complete(null);
             }

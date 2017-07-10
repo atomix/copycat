@@ -30,7 +30,7 @@ import java.util.Objects;
  * <p>
  * Session register responses are sent in response to {@link RegisterRequest}s
  * sent by a client. Upon the successful registration of a session, the register response will contain the
- * registered {@link #session()} identifier, the session {@link #timeout()}, and the current cluster
+ * registered {@link #clientId()} identifier, the session {@link #timeout()}, and the current cluster
  * {@link #leader()} and {@link #members()} to allow the client to make intelligent decisions about
  * connecting to and communicating with the cluster.
  *
@@ -58,7 +58,7 @@ public class RegisterResponse extends AbstractResponse {
     return new Builder(response);
   }
 
-  private long session;
+  private long clientId;
   private Address leader;
   private Collection<Address> members;
   private long timeout;
@@ -68,8 +68,8 @@ public class RegisterResponse extends AbstractResponse {
    *
    * @return The registered session ID.
    */
-  public long session() {
-    return session;
+  public long clientId() {
+    return clientId;
   }
 
   /**
@@ -104,13 +104,13 @@ public class RegisterResponse extends AbstractResponse {
     status = Status.forId(buffer.readByte());
     if (status == Status.OK) {
       error = null;
-      session = buffer.readLong();
+      clientId = buffer.readLong();
       timeout = buffer.readLong();
       leader = serializer.readObject(buffer);
       members = serializer.readObject(buffer);
     } else {
       error = CopycatError.forId(buffer.readByte());
-      session = 0;
+      clientId = 0;
       members = null;
     }
   }
@@ -119,7 +119,7 @@ public class RegisterResponse extends AbstractResponse {
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeByte(status.id());
     if (status == Status.OK) {
-      buffer.writeLong(session);
+      buffer.writeLong(clientId);
       buffer.writeLong(timeout);
       serializer.writeObject(leader, buffer);
       serializer.writeObject(members, buffer);
@@ -130,7 +130,7 @@ public class RegisterResponse extends AbstractResponse {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), status, session, leader, members);
+    return Objects.hash(getClass(), status, clientId, leader, members);
   }
 
   @Override
@@ -138,7 +138,7 @@ public class RegisterResponse extends AbstractResponse {
     if (object instanceof RegisterResponse) {
       RegisterResponse response = (RegisterResponse) object;
       return response.status == status
-        && response.session == session
+        && response.clientId == clientId
         && ((response.leader == null && leader == null)
         || (response.leader != null && leader != null && response.leader.equals(leader)))
         && ((response.members == null && members == null)
@@ -150,7 +150,7 @@ public class RegisterResponse extends AbstractResponse {
 
   @Override
   public String toString() {
-    return String.format("%s[status=%s, error=%s, session=%d, leader=%s, members=%s]", getClass().getSimpleName(), status, error, session, leader, members);
+    return String.format("%s[status=%s, error=%s, clientId=%d, leader=%s, members=%s]", getClass().getSimpleName(), status, error, clientId, leader, members);
   }
 
   /**
@@ -162,14 +162,14 @@ public class RegisterResponse extends AbstractResponse {
     }
 
     /**
-     * Sets the response session ID.
+     * Sets the response client ID.
      *
-     * @param session The session ID.
+     * @param clientId The client ID.
      * @return The register response builder.
      * @throws IllegalArgumentException if {@code session} is less than 1
      */
-    public Builder withSession(long session) {
-      response.session = Assert.argNot(session, session < 1, "session must be positive");
+    public Builder withClientId(long clientId) {
+      response.clientId = Assert.argNot(clientId, clientId < 1, "clientId must be positive");
       return this;
     }
 

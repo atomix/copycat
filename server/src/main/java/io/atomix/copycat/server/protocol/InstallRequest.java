@@ -37,6 +37,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class InstallRequest extends AbstractRequest {
+  public static final String NAME = "install";
 
   /**
    * Returns a new install request builder.
@@ -59,10 +60,11 @@ public class InstallRequest extends AbstractRequest {
 
   private long term;
   private int leader;
-  protected long index;
-  protected int offset;
-  protected byte[] data;
-  protected boolean complete;
+  private long id;
+  private long index;
+  private int offset;
+  private byte[] data;
+  private boolean complete;
 
   /**
    * Returns the requesting node's current term.
@@ -80,6 +82,15 @@ public class InstallRequest extends AbstractRequest {
    */
   public int leader() {
     return leader;
+  }
+
+  /**
+   * Returns the snapshot identifier.
+   *
+   * @return The snapshot identifier.
+   */
+  public long id() {
+    return id;
   }
 
   /**
@@ -122,25 +133,29 @@ public class InstallRequest extends AbstractRequest {
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     buffer.writeLong(term)
       .writeInt(leader)
+      .writeLong(id)
       .writeLong(index)
       .writeInt(offset)
-      .writeBoolean(complete);
-    serializer.writeObject(data, buffer);
+      .writeBoolean(complete)
+      .writeInt(data.length)
+      .write(data);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     term = buffer.readLong();
     leader = buffer.readInt();
+    id = buffer.readLong();
     index = buffer.readLong();
     offset = buffer.readInt();
     complete = buffer.readBoolean();
-    data = serializer.<byte[]>readObject(buffer);
+    data = new byte[buffer.readInt()];
+    buffer.read(data);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, index, offset, complete, data);
+    return Objects.hash(getClass(), term, leader, id, index, offset, complete, data);
   }
 
   @Override
@@ -149,6 +164,7 @@ public class InstallRequest extends AbstractRequest {
       InstallRequest request = (InstallRequest) object;
       return request.term == term
         && request.leader == leader
+        && request.id == id
         && request.index == index
         && request.offset == offset
         && request.complete == complete
@@ -159,7 +175,7 @@ public class InstallRequest extends AbstractRequest {
 
   @Override
   public String toString() {
-    return String.format("%s[term=%d, leader=%d, index=%d, offset=%d, data=%s, complete=%b]", getClass().getSimpleName(), term, leader, index, offset, data, complete);
+    return String.format("%s[term=%d, leader=%d, id=%d, index=%d, offset=%d, data=%s, complete=%b]", getClass().getSimpleName(), term, leader, id, index, offset, data, complete);
   }
 
   /**
@@ -191,6 +207,17 @@ public class InstallRequest extends AbstractRequest {
      */
     public Builder withLeader(int leader) {
       request.leader = leader;
+      return this;
+    }
+
+    /**
+     * Sets the request snapshot identifier.
+     *
+     * @param id The request snapshot identifier.
+     * @return The request builder.
+     */
+    public Builder withId(long id) {
+      request.id = Assert.argNot(id, id <= 0, "id must be positive");
       return this;
     }
 

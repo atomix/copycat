@@ -39,6 +39,11 @@ final class FileSnapshot extends Snapshot {
   }
 
   @Override
+  public long id() {
+    return file.id();
+  }
+
+  @Override
   public long index() {
     return file.index();
   }

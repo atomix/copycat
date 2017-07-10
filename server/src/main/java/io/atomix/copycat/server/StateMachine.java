@@ -213,7 +213,7 @@ import java.util.function.Function;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public abstract class StateMachine implements AutoCloseable {
+public abstract class StateMachine {
   protected StateMachineExecutor executor;
   protected StateMachineContext context;
   protected Clock clock;
@@ -255,7 +255,6 @@ public abstract class StateMachine implements AutoCloseable {
   /**
    * Closes the state machine.
    */
-  @Override
   public void close() {
 
   }

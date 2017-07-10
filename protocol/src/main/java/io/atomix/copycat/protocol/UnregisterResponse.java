@@ -32,7 +32,7 @@ import java.util.Objects;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class UnregisterResponse extends SessionResponse {
+public class UnregisterResponse extends ClientResponse {
 
   /**
    * Returns a new keep alive response builder.
@@ -94,7 +94,7 @@ public class UnregisterResponse extends SessionResponse {
   /**
    * Status response builder.
    */
-  public static class Builder extends SessionResponse.Builder<Builder, UnregisterResponse> {
+  public static class Builder extends ClientResponse.Builder<Builder, UnregisterResponse> {
     protected Builder(UnregisterResponse response) {
       super(response);
     }

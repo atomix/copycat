@@ -16,10 +16,7 @@
 package io.atomix.copycat.server;
 
 import io.atomix.catalyst.buffer.PooledHeapAllocator;
-import io.atomix.catalyst.concurrent.Futures;
-import io.atomix.catalyst.concurrent.Listener;
-import io.atomix.catalyst.concurrent.SingleThreadContext;
-import io.atomix.catalyst.concurrent.ThreadContext;
+import io.atomix.catalyst.concurrent.*;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.transport.Address;
 import io.atomix.catalyst.transport.Server;
@@ -34,6 +31,7 @@ import io.atomix.copycat.server.cluster.Cluster;
 import io.atomix.copycat.server.cluster.Member;
 import io.atomix.copycat.server.state.ConnectionManager;
 import io.atomix.copycat.server.state.ServerContext;
+import io.atomix.copycat.server.state.StateMachineRegistry;
 import io.atomix.copycat.server.storage.Log;
 import io.atomix.copycat.server.storage.Storage;
 import io.atomix.copycat.server.storage.StorageLevel;
@@ -44,11 +42,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -693,7 +691,7 @@ public class CopycatServer {
    */
   private CompletableFuture<Void> listen() {
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       internalServer.listen(cluster().member().serverAddress(), context::connectServer).whenComplete((internalResult, internalError) -> {
         if (internalError == null) {
           // If the client address is different than the server address, start a separate client server.
@@ -736,7 +734,7 @@ public class CopycatServer {
       return Futures.exceptionalFuture(new IllegalStateException("context not open"));
 
     CompletableFuture<Void> future = new CompletableFuture<>();
-    context.getThreadContext().executor().execute(() -> {
+    context.getThreadContext().execute(() -> {
       started = false;
       if (clientServer != null) {
         clientServer.close().whenCompleteAsync((clientResult, clientError) -> {
@@ -748,8 +746,8 @@ public class CopycatServer {
             } else {
               future.complete(null);
             }
-          }, context.getThreadContext().executor());
-        }, context.getThreadContext().executor());
+          }, context.getThreadContext());
+        }, context.getThreadContext());
       } else {
         internalServer.close().whenCompleteAsync((internalResult, internalError) -> {
           if (internalError != null) {
@@ -757,7 +755,7 @@ public class CopycatServer {
           } else {
             future.complete(null);
           }
-        }, context.getThreadContext().executor());
+        }, context.getThreadContext());
       }
 
       context.transition(CopycatServer.State.INACTIVE);
@@ -857,6 +855,7 @@ public class CopycatServer {
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(250);
     private static final Duration DEFAULT_SESSION_TIMEOUT = Duration.ofMillis(5000);
     private static final Duration DEFAULT_GLOBAL_SUSPEND_TIMEOUT = Duration.ofHours(1);
+    private static final int DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
 
     private String name = DEFAULT_NAME;
     private Member.Type type = Member.Type.ACTIVE;
@@ -864,13 +863,14 @@ public class CopycatServer {
     private Transport serverTransport;
     private Storage storage;
     private Serializer serializer;
-    private Supplier<StateMachine> stateMachineFactory;
     private Address clientAddress;
     private Address serverAddress;
     private Duration electionTimeout = DEFAULT_ELECTION_TIMEOUT;
     private Duration heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
     private Duration sessionTimeout = DEFAULT_SESSION_TIMEOUT;
     private Duration globalSuspendTimeout = DEFAULT_GLOBAL_SUSPEND_TIMEOUT;
+    private final StateMachineRegistry stateMachineRegistry = new StateMachineRegistry();
+    private int threadPoolSize = DEFAULT_THREAD_POOL_SIZE;
 
     private Builder(Address clientAddress, Address serverAddress) {
       this.clientAddress = Assert.notNull(clientAddress, "clientAddress");
@@ -966,12 +966,13 @@ public class CopycatServer {
     /**
      * Sets the Raft state machine factory.
      *
+     * @param type The state machine type name.
      * @param factory The Raft state machine factory.
      * @return The server builder.
      * @throws NullPointerException if the {@code factory} is {@code null}
      */
-    public Builder withStateMachine(Supplier<StateMachine> factory) {
-      this.stateMachineFactory = Assert.notNull(factory, "factory");
+    public Builder addStateMachine(String type, Supplier<StateMachine> factory) {
+      stateMachineRegistry.register(type, factory);
       return this;
     }
 
@@ -1034,12 +1035,24 @@ public class CopycatServer {
     }
 
     /**
+     * Sets the server thread pool size.
+     *
+     * @param threadPoolSize The server thread pool size.
+     * @return The server builder.
+     */
+    public Builder withThreadPoolSize(int threadPoolSize) {
+      this.threadPoolSize = Assert.arg(threadPoolSize, threadPoolSize > 0, "threadPoolSize must be positive");
+      return this;
+    }
+
+    /**
      * @throws ConfigurationException if a state machine, members or transport are not configured
      */
     @Override
     public CopycatServer build() {
-      if (stateMachineFactory == null)
-        throw new ConfigurationException("state machine not configured");
+      if (stateMachineRegistry.size() == 0) {
+        throw new ConfigurationException("No state machines registered");
+      }
 
       // If the transport is not configured, attempt to use the default Netty transport.
       if (serverTransport == null) {
@@ -1074,8 +1087,9 @@ public class CopycatServer {
 
       ConnectionManager connections = new ConnectionManager(serverTransport.client());
       ThreadContext threadContext = new SingleThreadContext(String.format("copycat-server-%s-%s", serverAddress, name), serializer);
+      ScheduledExecutorService threadPool = Executors.newScheduledThreadPool(threadPoolSize, new CatalystThreadFactory("copycat-" + name + "-state-%d"));
 
-      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, serializer, stateMachineFactory, connections, threadContext);
+      ServerContext context = new ServerContext(name, type, serverAddress, clientAddress, storage, serializer, stateMachineRegistry, connections, threadPool, threadContext);
       context.setElectionTimeout(electionTimeout)
         .setHeartbeatInterval(heartbeatInterval)
         .setSessionTimeout(sessionTimeout)

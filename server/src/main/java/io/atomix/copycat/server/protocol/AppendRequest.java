@@ -37,6 +37,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class AppendRequest extends AbstractRequest {
+  public static final String NAME = "append";
 
   /**
    * Returns a new append request builder.

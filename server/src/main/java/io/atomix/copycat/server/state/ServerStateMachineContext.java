@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2017-present Open Networking Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.server.StateMachineContext;
+import io.atomix.copycat.server.session.Sessions;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -37,13 +37,11 @@ class ServerStateMachineContext implements StateMachineContext {
   }
 
   private final ServerClock clock = new ServerClock();
-  private final ConnectionManager connections;
-  private final ServerSessionManager sessions;
+  private final ServerStateMachineSessions sessions;
   private Type type;
   private long index;
 
-  public ServerStateMachineContext(ConnectionManager connections, ServerSessionManager sessions) {
-    this.connections = connections;
+  public ServerStateMachineContext(ServerStateMachineSessions sessions) {
     this.sessions = sessions;
   }
 
@@ -84,15 +82,8 @@ class ServerStateMachineContext implements StateMachineContext {
   }
 
   @Override
-  public ServerSessionManager sessions() {
+  public Sessions sessions() {
     return sessions;
-  }
-
-  /**
-   * Returns the server connections.
-   */
-  ConnectionManager connections() {
-    return connections;
   }
 
   @Override

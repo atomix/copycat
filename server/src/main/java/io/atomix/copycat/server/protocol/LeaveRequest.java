@@ -25,6 +25,7 @@ package io.atomix.copycat.server.protocol;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class LeaveRequest extends ConfigurationRequest {
+  public static final String NAME = "leave";
 
   /**
    * Returns a new leave request builder.

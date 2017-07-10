@@ -16,6 +16,7 @@
 package io.atomix.copycat.server.state;
 
 import io.atomix.copycat.server.cluster.Member;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
 
 /**
  * Follower appender.
@@ -52,9 +53,8 @@ final class FollowerAppender extends AbstractAppender {
 
     // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
     // is less than the nextIndex, send a snapshot request.
-    if (context.getSnapshotStore().currentSnapshot() != null
-      && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
-      && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
+    Snapshot snapshot = context.getSnapshotStore().getSnapshotByIndex(member.getNextIndex());
+    if (snapshot != null) {
       if (member.canInstall()) {
         sendInstallRequest(member, buildInstallRequest(member));
       }

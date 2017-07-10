@@ -26,12 +26,15 @@ import io.atomix.copycat.server.protocol.ConfigureRequest;
 import io.atomix.copycat.server.protocol.ConfigureResponse;
 import io.atomix.copycat.server.protocol.InstallRequest;
 import io.atomix.copycat.server.protocol.InstallResponse;
+import io.atomix.copycat.server.storage.snapshot.Snapshot;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * The leader appender is responsible for sending {@link AppendRequest}s on behalf of a leader to followers.
@@ -199,13 +202,15 @@ final class LeaderAppender extends AbstractAppender {
         sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
-    // If the member's current snapshot index is less than the latest snapshot index and the latest snapshot index
-    // is less than the nextIndex, send a snapshot request.
-    else if (member.getMember().type() == Member.Type.ACTIVE && context.getSnapshotStore().currentSnapshot() != null
-      && context.getSnapshotStore().currentSnapshot().index() >= member.getNextIndex()
-      && context.getSnapshotStore().currentSnapshot().index() > member.getSnapshotIndex()) {
-      if (member.canInstall()) {
-        sendInstallRequest(member, buildInstallRequest(member));
+    // If there's a snapshot at the member's nextIndex, replicate the snapshot.
+    else if (member.getMember().type() == Member.Type.ACTIVE) {
+      Snapshot snapshot = context.getSnapshotStore().getSnapshotByIndex(member.getNextIndex());
+      if (snapshot != null) {
+        if (member.canInstall()) {
+          sendInstallRequest(member, buildInstallRequest(member));
+        }
+      } else if (member.canAppend()) {
+        sendAppendRequest(member, buildAppendRequest(member, context.getLog().lastIndex()));
       }
     }
     // If no AppendRequest is already being sent, send an AppendRequest.

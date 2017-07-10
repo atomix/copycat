@@ -75,11 +75,11 @@ public abstract class AbstractState implements ServerState {
   /**
    * Forwards the given request to the leader if possible.
    */
-  protected <T extends Request, U extends Response> CompletableFuture<U> forward(T request) {
+  protected <T extends Request, U extends Response> CompletableFuture<U> forward(String type, T request) {
     CompletableFuture<U> future = new CompletableFuture<>();
     context.getConnections().getConnection(context.getLeader().serverAddress()).whenComplete((connection, connectError) -> {
       if (connectError == null) {
-        connection.<T, U>sendAndReceive(request).whenComplete((response, responseError) -> {
+        connection.<T, U>sendAndReceive(type, request).whenComplete((response, responseError) -> {
           if (responseError == null) {
             future.complete(response);
           } else {

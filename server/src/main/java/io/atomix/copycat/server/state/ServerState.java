@@ -38,6 +38,14 @@ public interface ServerState extends Managed<ServerState> {
   CopycatServer.State type();
 
   /**
+   * Handles a metadata request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<MetadataResponse> metadata(MetadataRequest request);
+
+  /**
    * Handles a register request.
    *
    * @param request The request to handle.
@@ -68,6 +76,22 @@ public interface ServerState extends Managed<ServerState> {
    * @return A completable future to be completed with the request response.
    */
   CompletableFuture<UnregisterResponse> unregister(UnregisterRequest request);
+
+  /**
+   * Handles an open session request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request);
+
+  /**
+   * Handles a close session request.
+   *
+   * @param request The request to handle.
+   * @return A completable future to be completed with the request response.
+   */
+  CompletableFuture<CloseSessionResponse> closeSession(CloseSessionRequest request);
 
   /**
    * Handles a reset request.

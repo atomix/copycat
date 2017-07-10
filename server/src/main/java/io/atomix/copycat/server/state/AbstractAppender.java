@@ -124,6 +124,13 @@ abstract class AbstractAppender implements AutoCloseable {
 
     // Iterate through remaining entries in the log up to the last index.
     for (long i = index; i <= lastIndex; i++) {
+      // If a snapshot exists at this index, complete the request. This will ensure the snapshot
+      // is sent on the next index.
+      Snapshot snapshot = context.getSnapshotStore().getSnapshotByIndex(i);
+      if (snapshot != null) {
+        break;
+      }
+
       // Get the entry from the log and append it if it's not null. Entries in the log can be null
       // if they've been cleaned or compacted from the log. Each entry sent in the append request
       // has a unique index to handle gaps in the log.
@@ -193,7 +200,7 @@ abstract class AbstractAppender implements AutoCloseable {
     long timestamp = System.nanoTime();
 
     logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().address());
-    connection.<AppendRequest, AppendResponse>sendAndReceive(request).whenComplete((response, error) -> {
+    connection.<AppendRequest, AppendResponse>sendAndReceive(AppendRequest.NAME, request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the append to the member.
@@ -405,7 +412,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void sendConfigureRequest(Connection connection, MemberState member, ConfigureRequest request) {
     logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<ConfigureRequest, ConfigureResponse>sendAndReceive(request).whenComplete((response, error) -> {
+    connection.<ConfigureRequest, ConfigureResponse>sendAndReceive(ConfigureRequest.NAME, request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the configure to the member.
@@ -478,7 +485,7 @@ abstract class AbstractAppender implements AutoCloseable {
    * Builds an install request for the given member.
    */
   protected InstallRequest buildInstallRequest(MemberState member) {
-    Snapshot snapshot = context.getSnapshotStore().currentSnapshot();
+    Snapshot snapshot = context.getSnapshotStore().getSnapshotByIndex(member.getNextIndex());
     if (member.getNextSnapshotIndex() != snapshot.index()) {
       member.setNextSnapshotIndex(snapshot.index()).setNextSnapshotOffset(0);
     }
@@ -538,7 +545,7 @@ abstract class AbstractAppender implements AutoCloseable {
    */
   protected void sendInstallRequest(Connection connection, MemberState member, InstallRequest request) {
     logger.trace("{} - Sending {} to {}", context.getCluster().member().address(), request, member.getMember().serverAddress());
-    connection.<InstallRequest, InstallResponse>sendAndReceive(request).whenComplete((response, error) -> {
+    connection.<InstallRequest, InstallResponse>sendAndReceive(InstallRequest.NAME, request).whenComplete((response, error) -> {
       context.checkThread();
 
       // Complete the install to the member.
@@ -600,9 +607,10 @@ abstract class AbstractAppender implements AutoCloseable {
     // If the install request was completed successfully, set the member's snapshotIndex and reset
     // the next snapshot index/offset.
     if (request.complete()) {
-      member.setSnapshotIndex(request.index())
+      member
         .setNextSnapshotIndex(0)
-        .setNextSnapshotOffset(0);
+        .setNextSnapshotOffset(0)
+        .setNextIndex(request.index() + 1);
     }
     // If more install requests remain, increment the member's snapshot offset.
     else {

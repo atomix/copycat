@@ -41,33 +41,39 @@ public abstract class AbstractSnapshotStoreTest {
    */
   public void testWriteSnapshotChunks() {
     SnapshotStore store = createSnapshotStore();
-    Snapshot snapshot = store.createSnapshot(1);
+    Snapshot snapshot = store.createSnapshot(1, 2);
     assertEquals(snapshot.index(), 1);
     assertNotEquals(snapshot.timestamp(), 0);
-    assertNull(store.currentSnapshot());
+    assertNull(store.getSnapshotById(1));
+    assertNull(store.getSnapshotByIndex(2));
 
     try (SnapshotWriter writer = snapshot.writer()) {
       writer.writeLong(10);
     }
 
-    assertNull(store.currentSnapshot());
+    assertNull(store.getSnapshotById(1));
+    assertNull(store.getSnapshotByIndex(2));
 
     try (SnapshotWriter writer = snapshot.writer()) {
       writer.writeLong(11);
     }
 
-    assertNull(store.currentSnapshot());
+    assertNull(store.getSnapshotById(1));
+    assertNull(store.getSnapshotByIndex(2));
 
     try (SnapshotWriter writer = snapshot.writer()) {
       writer.writeLong(12);
     }
 
-    assertNull(store.currentSnapshot());
+    assertNull(store.getSnapshotById(1));
+    assertNull(store.getSnapshotByIndex(2));
     snapshot.complete();
-    assertNotNull(store.currentSnapshot());
-    assertEquals(store.currentSnapshot().index(), 1);
+    assertEquals(store.getSnapshotById(1).id(), 1);
+    assertEquals(store.getSnapshotById(1).index(), 2);
+    assertEquals(store.getSnapshotByIndex(1).id(), 1);
+    assertEquals(store.getSnapshotByIndex(1).index(), 2);
 
-    try (SnapshotReader reader = store.currentSnapshot().reader()) {
+    try (SnapshotReader reader = store.getSnapshotById(1).reader()) {
       assertEquals(reader.readLong(), 10);
       assertEquals(reader.readLong(), 11);
       assertEquals(reader.readLong(), 12);

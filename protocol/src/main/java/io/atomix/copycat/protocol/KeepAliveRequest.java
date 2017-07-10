@@ -20,6 +20,7 @@ import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
 import io.atomix.catalyst.util.Assert;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -29,13 +30,14 @@ import java.util.Objects;
  * a {@link RegisterRequest}. Once a session has been registered, clients are responsible for sending
  * keep alive requests to the cluster at a rate less than the provided {@link RegisterResponse#timeout()}.
  * Keep alive requests also server to acknowledge the receipt of responses and events by the client.
- * The {@link #commandSequence()} number indicates the highest command sequence number for which the client
- * has received a response, and the {@link #eventIndex()} number indicates the highest index for which the
+ * The {@link #commandSequences()} number indicates the highest command sequence number for which the client
+ * has received a response, and the {@link #eventIndexes()} numbers indicate the highest index for which the
  * client has received an event in proper sequence.
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class KeepAliveRequest extends SessionRequest {
+public class KeepAliveRequest extends ClientRequest {
+  public static final String NAME = "keep-alive";
 
   /**
    * Returns a new keep alive request builder.
@@ -57,101 +59,183 @@ public class KeepAliveRequest extends SessionRequest {
     return new Builder(request);
   }
 
-  private long commandSequence;
-  private long eventIndex;
+  private long[] sessionIds;
+  private long[] commandSequences;
+  private long[] eventIndexes;
+  private long[] connections;
 
   /**
-   * Returns the command sequence number.
+   * Returns the session identifiers.
    *
-   * @return The command sequence number.
+   * @return The session identifiers.
    */
-  public long commandSequence() {
-    return commandSequence;
+  public long[] sessionIds() {
+    return sessionIds;
   }
 
   /**
-   * Returns the event index.
+   * Returns the command sequence numbers.
    *
-   * @return The event index.
+   * @return The command sequence numbers.
    */
-  public long eventIndex() {
-    return eventIndex;
+  public long[] commandSequences() {
+    return commandSequences;
+  }
+
+  /**
+   * Returns the event indexes.
+   *
+   * @return The event indexes.
+   */
+  public long[] eventIndexes() {
+    return eventIndexes;
+  }
+
+  /**
+   * Returns the session connections.
+   *
+   * @return The session connections.
+   */
+  public long[] connections() {
+    return connections;
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    commandSequence = buffer.readLong();
-    eventIndex = buffer.readLong();
+    int sessionsLength = buffer.readInt();
+    sessionIds = new long[sessionsLength];
+    for (int i = 0; i < sessionsLength; i++) {
+      sessionIds[i] = buffer.readLong();
+    }
+
+    int commandSequencesLength = buffer.readInt();
+    commandSequences = new long[commandSequencesLength];
+    for (int i = 0; i < commandSequencesLength; i++) {
+      commandSequences[i] = buffer.readLong();
+    }
+
+    int eventIndexesLength = buffer.readInt();
+    eventIndexes = new long[eventIndexesLength];
+    for (int i = 0; i < eventIndexesLength; i++) {
+      eventIndexes[i] = buffer.readLong();
+    }
+
+    int connectionsLength = buffer.readInt();
+    connections = new long[connectionsLength];
+    for (int i = 0; i < connectionsLength; i++) {
+      connections[i] = buffer.readLong();
+    }
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeLong(commandSequence);
-    buffer.writeLong(eventIndex);
+    buffer.writeInt(sessionIds.length);
+    for (long sessionId : sessionIds) {
+      buffer.writeLong(sessionId);
+    }
+
+    buffer.writeInt(commandSequences.length);
+    for (long commandSequence : commandSequences) {
+      buffer.writeLong(commandSequence);
+    }
+
+    buffer.writeInt(eventIndexes.length);
+    for (long eventIndex : eventIndexes) {
+      buffer.writeLong(eventIndex);
+    }
+
+    buffer.writeInt(connections.length);
+    for (long connection : connections) {
+      buffer.writeLong(connection);
+    }
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), session, commandSequence);
+    return Objects.hash(getClass(), client, commandSequences, eventIndexes);
   }
 
   @Override
   public boolean equals(Object object) {
     if (object instanceof KeepAliveRequest) {
       KeepAliveRequest request = (KeepAliveRequest) object;
-      return request.session == session
-        && request.commandSequence == commandSequence
-        && request.eventIndex == eventIndex;
+      return request.client == client
+        && Arrays.equals(request.commandSequences, commandSequences)
+        && Arrays.equals(request.eventIndexes, eventIndexes);
     }
     return false;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[session=%d, commandSequence=%d, eventIndex=%d]", getClass().getSimpleName(), session, commandSequence, eventIndex);
+    return String.format("%s[client=%s, sessionIds=%s, commandSequences=%s, eventIndexes=%s, connections=%s]", getClass().getSimpleName(), client, Arrays.toString(sessionIds), Arrays.toString(commandSequences), Arrays.toString(eventIndexes), Arrays.toString(connections));
   }
 
   /**
    * Keep alive request builder.
    */
-  public static class Builder extends SessionRequest.Builder<Builder, KeepAliveRequest> {
+  public static class Builder extends ClientRequest.Builder<Builder, KeepAliveRequest> {
     protected Builder(KeepAliveRequest request) {
       super(request);
     }
 
     /**
-     * Sets the command sequence number.
+     * Sets the session identifiers.
      *
-     * @param commandSequence The command sequence number.
-     * @return The request builder.
-     * @throws IllegalArgumentException if {@code commandSequence} is less than 0
+     * @param sessionIds The session identifiers.
+     * @return The request builders.
+     * @throws NullPointerException if {@code sessionIds} is {@code null}
      */
-    public Builder withCommandSequence(long commandSequence) {
-      request.commandSequence = Assert.argNot(commandSequence, commandSequence < 0, "commandSequence cannot be negative");
+    public Builder withSessionIds(long[] sessionIds) {
+      request.sessionIds = Assert.notNull(sessionIds, "sessionIds");
       return this;
     }
 
     /**
-     * Sets the event index.
+     * Sets the command sequence numbers.
      *
-     * @param eventIndex The event index.
+     * @param commandSequences The command sequence numbers.
      * @return The request builder.
-     * @throws IllegalArgumentException if {@code eventIndex} is less than 0
+     * @throws NullPointerException if {@code commandSequences} is {@code null}
      */
-    public Builder withEventIndex(long eventIndex) {
-      request.eventIndex = Assert.argNot(eventIndex, eventIndex < 0, "eventIndex cannot be negative");
+    public Builder withCommandSequences(long[] commandSequences) {
+      request.commandSequences = Assert.notNull(commandSequences, "commandSequences");
       return this;
     }
 
     /**
-     * @throws IllegalStateException is session is not positive
+     * Sets the event indexes.
+     *
+     * @param eventIndexes The event indexes.
+     * @return The request builder.
+     * @throws NullPointerException if {@code eventIndexes} is {@code null}
      */
+    public Builder withEventIndexes(long[] eventIndexes) {
+      request.eventIndexes = Assert.notNull(eventIndexes, "eventIndexes");
+      return this;
+    }
+
+    /**
+     * Sets the client connections.
+     *
+     * @param connections The client connections.
+     * @return The request builder.
+     * @throws NullPointerException if {@code connections} is {@code null}
+     */
+    public Builder withConnections(long[] connections) {
+      request.connections = Assert.notNull(connections, "connections");
+      return this;
+    }
+
     @Override
     public KeepAliveRequest build() {
       super.build();
-      Assert.state(request.session > 0, "session must be positive");
+      Assert.notNull(request.sessionIds, "sessionIds");
+      Assert.notNull(request.commandSequences, "commandSequences");
+      Assert.notNull(request.eventIndexes, "eventIndexes");
+      Assert.notNull(request.connections, "connections");
       return request;
     }
   }

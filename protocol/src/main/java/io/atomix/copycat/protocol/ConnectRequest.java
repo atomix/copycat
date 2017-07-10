@@ -18,7 +18,6 @@ package io.atomix.copycat.protocol;
 import io.atomix.catalyst.buffer.BufferInput;
 import io.atomix.catalyst.buffer.BufferOutput;
 import io.atomix.catalyst.serializer.Serializer;
-import io.atomix.catalyst.util.Assert;
 
 import java.util.Objects;
 
@@ -33,6 +32,7 @@ import java.util.Objects;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class ConnectRequest extends AbstractRequest {
+  public static final String NAME = "connect";
 
   /**
    * Returns a new connect client request builder.
@@ -54,42 +54,54 @@ public class ConnectRequest extends AbstractRequest {
     return new Builder(request);
   }
 
-  private String client;
+  private long session;
+  private long connection;
 
   /**
-   * Returns the connecting client ID.
+   * Returns the connecting session ID.
    *
-   * @return The connecting client ID.
+   * @return The connecting session ID.
    */
-  public String client() {
-    return client;
+  public long session() {
+    return session;
+  }
+
+  /**
+   * Returns the connection ID.
+   *
+   * @return The connection ID.
+   */
+  public long connection() {
+    return connection;
   }
 
   @Override
   public void writeObject(BufferOutput<?> buffer, Serializer serializer) {
     super.writeObject(buffer, serializer);
-    buffer.writeString(client);
+    buffer.writeLong(session);
+    buffer.writeLong(connection);
   }
 
   @Override
   public void readObject(BufferInput<?> buffer, Serializer serializer) {
     super.readObject(buffer, serializer);
-    client = buffer.readString();
+    session = buffer.readLong();
+    connection = buffer.readLong();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), client);
+    return Objects.hash(getClass(), session);
   }
 
   @Override
   public boolean equals(Object object) {
-    return object instanceof ConnectRequest && ((ConnectRequest) object).client.equals(client);
+    return object instanceof ConnectRequest && ((ConnectRequest) object).session == session;
   }
 
   @Override
   public String toString() {
-    return String.format("%s[client=%s]", getClass().getSimpleName(), client);
+    return String.format("%s[session=%d, connection=%d]", getClass().getSimpleName(), session, connection);
   }
 
   /**
@@ -101,21 +113,25 @@ public class ConnectRequest extends AbstractRequest {
     }
 
     /**
-     * Sets the connecting client ID.
+     * Sets the connecting session ID.
      *
-     * @param clientId The connecting client ID.
+     * @param session The connecting session ID.
      * @return The connect request builder.
      */
-    public Builder withClientId(String clientId) {
-      request.client = Assert.notNull(clientId, "clientId");
+    public Builder withSession(long session) {
+      request.session = session;
       return this;
     }
 
-    @Override
-    public ConnectRequest build() {
-      super.build();
-      Assert.stateNot(request.client == null, "client cannot be null");
-      return request;
+    /**
+     * Sets the connection ID.
+     *
+     * @param connection The connection ID.
+     * @return The connect request builder.
+     */
+    public Builder withConnection(long connection) {
+      request.connection = connection;
+      return this;
     }
   }
 

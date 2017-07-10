@@ -45,10 +45,14 @@ public interface CopycatError {
       case 5:
         return Type.ILLEGAL_MEMBER_STATE_ERROR;
       case 6:
-        return Type.UNKNOWN_SESSION_ERROR;
+        return Type.UNKNOWN_CLIENT_ERROR;
       case 7:
-        return Type.INTERNAL_ERROR;
+        return Type.UNKNOWN_SESSION_ERROR;
       case 8:
+        return Type.UNKNOWN_STATE_MACHINE_ERROR;
+      case 9:
+        return Type.INTERNAL_ERROR;
+      case 10:
         return Type.CONFIGURATION_ERROR;
       default:
         throw new IllegalArgumentException("invalid error identifier: " + id);
@@ -125,9 +129,19 @@ public interface CopycatError {
     },
 
     /**
+     * Unknown client error.
+     */
+    UNKNOWN_CLIENT_ERROR(6) {
+      @Override
+      public CopycatException createException() {
+        return new UnknownClientException("Unknown client");
+      }
+    },
+
+    /**
      * Unknown session error.
      */
-    UNKNOWN_SESSION_ERROR(6) {
+    UNKNOWN_SESSION_ERROR(7) {
       @Override
       public CopycatException createException() {
         return new UnknownSessionException("unknown member session");
@@ -135,9 +149,19 @@ public interface CopycatError {
     },
 
     /**
+     * Unknown state machine error.
+     */
+    UNKNOWN_STATE_MACHINE_ERROR(8) {
+      @Override
+      public CopycatException createException() {
+        return new UnknownStateMachineException("Unknown state machine");
+      }
+    },
+
+    /**
      * Internal error.
      */
-    INTERNAL_ERROR(7) {
+    INTERNAL_ERROR(9) {
       @Override
       public CopycatException createException() {
         return new InternalException("internal Raft error");
@@ -147,7 +171,7 @@ public interface CopycatError {
     /**
      * Configuration error.
      */
-    CONFIGURATION_ERROR(8) {
+    CONFIGURATION_ERROR(10) {
       @Override
       public CopycatException createException() {
         return new ConfigurationException("configuration failed");
