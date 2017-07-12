@@ -40,15 +40,17 @@ final class ClientSessionManager {
   private final ThreadContext context;
   private final ConnectionStrategy strategy;
   private final Duration sessionTimeout;
+  private final int keepAlivesPerTimeoutInterval;
   private Duration interval;
   private Scheduled keepAlive;
 
-  ClientSessionManager(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
+  ClientSessionManager(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout, int keepAlivesPerTimeoutInterval) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
     this.context = Assert.notNull(context, "context");
     this.strategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
+    this.keepAlivesPerTimeoutInterval = Assert.arg(keepAlivesPerTimeoutInterval, keepAlivesPerTimeoutInterval > 0, "keepAlivesPerTimeoutInterval");
   }
 
   /**
@@ -94,7 +96,7 @@ final class ClientSessionManager {
       if (error == null) {
         state.getLogger().trace("Received {}", response);
         if (response.status() == Response.Status.OK) {
-          interval = Duration.ofMillis(response.timeout()).dividedBy(2);
+          interval = Duration.ofMillis(response.timeout()).dividedBy(keepAlivesPerTimeoutInterval);
           connection.reset(response.leader(), response.members());
           state.setSessionId(response.session())
             .setState(Session.State.OPEN);

@@ -57,6 +57,7 @@ public class DefaultCopycatClient implements CopycatClient {
   private final AddressSelector selector;
   private final Duration sessionTimeout;
   private final Duration unstabilityTimeout;
+  private final int keepAlivesPerTimeoutInterval;
   private final ConnectionStrategy connectionStrategy;
   private final RecoveryStrategy recoveryStrategy;
   private ClientSession session;
@@ -68,7 +69,10 @@ public class DefaultCopycatClient implements CopycatClient {
   private final Set<EventListener<?>> eventListeners = new CopyOnWriteArraySet<>();
   private Listener<Session.State> changeListener;
 
-  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext, ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout, Duration unstabilityTimeout) {
+  DefaultCopycatClient(String clientId, Collection<Address> cluster, Transport transport, ThreadContext ioContext,
+                       ThreadContext eventContext, ServerSelectionStrategy selectionStrategy, ConnectionStrategy
+                           connectionStrategy, RecoveryStrategy recoveryStrategy, Duration sessionTimeout, Duration
+                           unstabilityTimeout, int keepAlivesPerTimeoutInterval) {
     this.clientId = Assert.notNull(clientId, "clientId");
     this.cluster = Assert.notNull(cluster, "cluster");
     this.transport = Assert.notNull(transport, "transport");
@@ -78,7 +82,8 @@ public class DefaultCopycatClient implements CopycatClient {
     this.connectionStrategy = Assert.notNull(connectionStrategy, "connectionStrategy");
     this.recoveryStrategy = Assert.notNull(recoveryStrategy, "recoveryStrategy");
     this.sessionTimeout = Assert.notNull(sessionTimeout, "sessionTimeout");
-    this.unstabilityTimeout = Assert.notNull(unstabilityTimeout, "unstabilityTimeout");;
+    this.unstabilityTimeout = Assert.notNull(unstabilityTimeout, "unstabilityTimeout");
+    this.keepAlivesPerTimeoutInterval = keepAlivesPerTimeoutInterval;
   }
 
   @Override
@@ -128,7 +133,7 @@ public class DefaultCopycatClient implements CopycatClient {
    */
   private ClientSession newSession() {
     ClientSession session = new ClientSession(clientId, transport.client(), selector, ioContext, connectionStrategy, sessionTimeout,
-                                              unstabilityTimeout
+                                              unstabilityTimeout, keepAlivesPerTimeoutInterval
     );
 
     // Update the session change listener.
