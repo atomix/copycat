@@ -59,14 +59,14 @@ public class ClientSession implements Session {
   private final ClientSessionListener listener;
   private final ClientSessionSubmitter submitter;
 
-  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout, Duration unstabilityTimeout) {
-    this(new ClientConnection(id, client, selector), new ClientSessionState(id, unstabilityTimeout), context, connectionStrategy, sessionTimeout);
+  public ClientSession(String id, Client client, AddressSelector selector, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout, Duration unstabilityTimeout, int keepalivesPerTimeoutInterval) {
+    this(new ClientConnection(id, client, selector), new ClientSessionState(id, unstabilityTimeout), context, connectionStrategy, sessionTimeout, keepalivesPerTimeoutInterval);
   }
 
-  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout) {
+  private ClientSession(ClientConnection connection, ClientSessionState state, ThreadContext context, ConnectionStrategy connectionStrategy, Duration sessionTimeout, int keepalivesPerTimeoutInterval) {
     this.connection = Assert.notNull(connection, "connection");
     this.state = Assert.notNull(state, "state");
-    this.manager = new ClientSessionManager(connection, state, context, connectionStrategy, sessionTimeout);
+    this.manager = new ClientSessionManager(connection, state, context, connectionStrategy, sessionTimeout, keepalivesPerTimeoutInterval);
     ClientSequencer sequencer = new ClientSequencer(state);
     this.listener = new ClientSessionListener(connection, state, sequencer, context);
     this.submitter = new ClientSessionSubmitter(connection, state, sequencer, context);

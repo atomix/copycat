@@ -73,7 +73,7 @@ public class ClientSessionManagerTest {
     Executor executor = new MockExecutor();
     when(context.executor()).thenReturn(executor);
 
-    ClientSessionManager manager = new ClientSessionManager(connection, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF, Duration.ZERO);
+    ClientSessionManager manager = new ClientSessionManager(connection, state, context, ConnectionStrategies.EXPONENTIAL_BACKOFF, Duration.ZERO, 2);
     manager.open().join();
 
     assertEquals(state.getSessionId(), 1);

@@ -560,6 +560,7 @@ public interface CopycatClient {
     private Serializer serializer;
     private Duration sessionTimeout = Duration.ZERO;
     private Duration unstabilityTimeout = Duration.ZERO;
+    private int keepAlivesPerTimeoutInterval = 2;
     private ConnectionStrategy connectionStrategy = ConnectionStrategies.ONCE;
     private ServerSelectionStrategy serverSelectionStrategy = ServerSelectionStrategies.ANY;
     private RecoveryStrategy recoveryStrategy = RecoveryStrategies.CLOSE;
@@ -620,6 +621,19 @@ public interface CopycatClient {
      */
     public Builder withSessionTimeout(Duration sessionTimeout) {
       this.sessionTimeout = Assert.arg(Assert.notNull(sessionTimeout, "sessionTimeout"), sessionTimeout.toMillis() >= -1, "session timeout must be positive or -1");
+      return this;
+    }
+
+    /**
+     * Sets the number of keep-alives to send during a session timeout interval. Default value is 2.
+     *
+     * @param keepAlivesPerTimeoutInterval The number of keep-alives to send during a session timeout interval
+     * @return The client builder.
+     * @throws IllegalArgumentException if the keepAlivesPerTimeoutInterval is not positive
+     */
+    public Builder withKeepAlivesPerTimeoutInterval(int keepAlivesPerTimeoutInterval) {
+      Assert.arg(keepAlivesPerTimeoutInterval > 0, "keepAlivesPerTimeoutInterval must be positive");
+      this.keepAlivesPerTimeoutInterval = keepAlivesPerTimeoutInterval;
       return this;
     }
 
@@ -711,7 +725,8 @@ public interface CopycatClient {
         connectionStrategy,
         recoveryStrategy,
         sessionTimeout,
-        unstabilityTimeout
+        unstabilityTimeout,
+        keepAlivesPerTimeoutInterval
       );
     }
   }
